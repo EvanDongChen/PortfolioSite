@@ -11,56 +11,56 @@ const Projects = () => {
     {
       title: "Library Database Application",
       description: "Full-stack library platform with Flask and SQL. Automated 50% of manual tasks with complex database schema.",
-      image: "/images/library_database.png",
+      image: "/PortfolioSite/images/library_database.png",
       tags: ["Flask", "SQL", "JavaScript", "HTML/CSS"],
       link: "https://github.com/EvanDongChen/CMPT354-LibraryDataBase"
     },
     {
       title: "WanderWise",
       description: "AI-powered trip planner using React and Google APIs. Generates full-day plans in 5 seconds with real-time recommendations.",
-      image: "/images/wander_wise.png",
+      image: "/PortfolioSite/images/wander_wise.png",
       tags: ["React", "AWS Amplify", "Google APIs", "AI"],
       link: "https://www.youtube.com/watch?v=WI8YdPw-tSo"
     },
     {
       title: "Krill Krushers",
       description: "Unity 2D combat game inspired by vampire survivors. Created 50+ assets and won Best Entertainment Hack.",
-      image: "/images/krill_krushers.png",
+      image: "/PortfolioSite/images/krill_krushers.png",
       tags: ["Unity", "C#", "Game Development", "Team Leadership"],
       link: "https://evandongchen.github.io/Krill-Krushers/"
     },
     {
       title: "Bird Game",
       description: "Unity 2D roguelike with custom level generation. Designed 30+ original assets and core gameplay mechanics.",
-      image: "/images/bird_game.png",
+      image: "/PortfolioSite/images/bird_game.png",
       tags: ["Unity", "C#", "Game Design", "Aseprite"],
       link: "https://evandongchen.github.io/Bird-Game/"
     },
     {
       title: "Raccoon Game",
       description: "2.5D platformer game developed for Mountain Madness 2024. Won Most Mountainous award.",
-      image: "/images/racoon_game.png",
+      image: "/PortfolioSite/images/racoon_game.png",
       tags: ["Unity", "Game Development", "Hackathon", "Incomplete"],
       link: "https://github.com/emmyfong/racoongame"
     },
     {
       title: "Dream On, Sing On",
       description: "Web app for vocal/instrumental track separation with karaoke features. Displays synchronized lyrics for songs.",
-      image: "/images/dream_on_sing_on.png",
+      image: "/PortfolioSite/images/dream_on_sing_on.png",
       tags: ["React", "Python", "Spleeter", "Audio Processing", "Hackathon", "Incomplete"],
       link: "https://devpost.com/software/dream-on-sing-on"
     },
     {
       title: "SAM for Medical Segmentation",
       description: "Research project exploring Segment Anything Models for MRI brain tumor segmentation. Implemented fine-tuning and automated bounding box prompts.",
-      image: "/images/sam.png",
+      image: "/PortfolioSite/images/sam.png",
       tags: ["Python", "AI", "Research", "Medical Imaging"],
       link: "https://www.youtube.com/watch?v=DGHAxlcROsQ"
     },
     {
       title: "Pastry Panic",
       description: "Stack-based cake game with leaderboard. Built with Unity and integrated into a React website with SQL database.",
-      image: "/images/pastry_panic.png",
+      image: "/PortfolioSite/images/pastry_panic.png",
       tags: ["Unity", "C#", "React", "SQL", "JavaScript", "Hackathon", "Incomplete"],
       link: "https://devpost.com/software/pastry-panic"
     }
