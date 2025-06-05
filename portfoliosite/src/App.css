@@ -15,13 +15,15 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #1a1a1a;
+  background-color: rgba(26, 26, 26, 0.95);
+  position: relative;
 }
 
 .main-content {
   flex: 1;
   margin-top: 80px; /* Height of the header */
-  background-color: #1a1a1a;
+  position: relative;
+  z-index: 2;
 }
 
 /* Smooth scrolling */
@@ -37,7 +39,9 @@ section {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #1a1a1a;
+  position: relative;
+  z-index: 2;
+  background-color: transparent;
 }
 
 /* Responsive design */
@@ -56,7 +60,9 @@ section {
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
-  background-color: #1a1a1a;
+  position: relative;
+  z-index: 2;
+  background-color: transparent;
 }
 
 .logo {

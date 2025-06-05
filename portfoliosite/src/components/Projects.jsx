@@ -27,14 +27,14 @@ const Projects = () => {
       description: "Unity 2D combat game inspired by vampire survivors. Created 50+ assets and won Best Entertainment Hack.",
       image: "/images/krill_krushers.png",
       tags: ["Unity", "C#", "Game Development", "Team Leadership"],
-      link: "https://devpost.com/software/krill-krushers"
+      link: "https://evandongchen.github.io/Krill-Krushers/"
     },
     {
       title: "Bird Game",
       description: "Unity 2D roguelike with custom level generation. Designed 30+ original assets and core gameplay mechanics.",
       image: "/images/bird_game.png",
       tags: ["Unity", "C#", "Game Design", "Aseprite"],
-      link: "https://github.com/EvanDongChen/Bird-Game"
+      link: "https://evandongchen.github.io/Bird-Game/"
     },
     {
       title: "Raccoon Game",
