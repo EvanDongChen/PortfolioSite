@@ -30,6 +30,20 @@ const Projects = () => {
       link: "https://evandongchen.github.io/Krill-Krushers/"
     },
     {
+      title: "WitchDog",
+      description: "Real-time multiplayer trivia game built in Unity with Socket.IO networking and custom multi-phase gameplay.",
+      image: "/PortfolioSite/images/witch_dog.png",
+      tags: ["Unity", "C#", "Multiplayer", "Hackathon"],
+      link: "https://devpost.com/software/witch-dog"
+    },
+    {
+      title: "Chord Breakers",
+      description: "2D action game built in Unity with modular architecture, elemental combat, and AI using finite state machines.",
+      image: "/PortfolioSite/images/chord_breakers.png",
+      tags: ["Unity", "C#", "Game Development", "Hackathon"],
+      link: "https://angrycow05.itch.io/chord-breaker"
+    },
+    {
       title: "Bird Game",
       description: "Unity 2D roguelike with custom level generation. Designed 30+ original assets and core gameplay mechanics.",
       image: "/PortfolioSite/images/bird_game.png",
@@ -63,6 +77,22 @@ const Projects = () => {
       image: "/PortfolioSite/images/pastry_panic.png",
       tags: ["Unity", "C#", "React", "SQL", "JavaScript", "Hackathon", "Incomplete"],
       link: "https://devpost.com/software/pastry-panic"
+    }
+    ,
+    {
+      title: "Lizard Wizard",
+      description: "2D combat game where you combo elemental spells to defeat enemies. Built in Unity using C#.",
+      image: "/PortfolioSite/images/lizard_wizard.png",
+      tags: ["Unity", "C#", "Game Development", "2D", "Combat", "Elemental"],
+      link: "https://github.com/cna52/LizardWizard"
+    }
+    ,
+    {
+      title: "Money Mango",
+      description: "Personal finance Android app prototype built with Android Studio and Kotlin. Features OCR receipt parsing, manual entry, tags, spending goals, reminders, and analytics.",
+      image: "/PortfolioSite/images/money_mango.png",
+      tags: ["Android", "Kotlin", "ML Kit", "OCR", "Mobile", "Finance", "Notifications", "Analytics"],
+      link: "https://github.com/EvanDongChen/MoneyMango"
     }
   ]
 

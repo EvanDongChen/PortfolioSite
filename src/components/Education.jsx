@@ -5,7 +5,7 @@ const Education = () => {
     title: "Bachelor of Science, Computing Science Zhejiang Dual Degree",
     school: "Simon Fraser University, Burnaby, BC",
     period: "Sep 2023 – Expected Jun 2027",
-    description: "3.68 GPA, Dean's Honour Roll"
+    description: "3.62"
   }
 
   return (

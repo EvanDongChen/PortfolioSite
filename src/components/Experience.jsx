@@ -2,8 +2,8 @@ import './Experience.css'
 
 const Experience = () => {
   const skills = {
-    languages: ["C", "C#", "C++", "Python", "JavaScript", "HTML/CSS", "QML", "SQLite"],
-    tools: ["Unity", "Unity DevOps", "Visual Studio", "GitHub", "GitLab", "Linux", "Excel/Sheets"],
+    languages: ["C", "C#", "C++", "HTML/CSS", "Java", "JavaScript", "Kotlin", "Python", "QML", "SQL", "TypeScript"],
+    tools: ["CMake", "Node.js", "PyTorch", "React.js", "Unity", "Android Studio", "CI/CD", "Figma", "GitHub", "GitLab", "Linux", "MongoDB", "Plastic SCM", "Visual Studio"],
     practices: ["Agile Development", "Continuous Integration", "Git Version Control"]
   }
 
@@ -13,9 +13,9 @@ const Experience = () => {
       company: "Whitebox Coworking Remote",
       period: "May 2025 – Present",
       description: [
-        "Implemented React components for client website, enhancing UI consistency and responsiveness",
-        "Developing admin dashboard with CRUD capabilities for 3+ coworking locations",
-        "Building scalable backend database and APIs for real-time data flow"
+        "Built a full-stack coworking website and admin dashboard using Next.js, FastAPI, and MongoDB to manage locations, spaces, and image galleries",
+        "Architected a responsive, component-driven frontend with TypeScript and Tailwind CSS, including dynamic routing and robust loading/error handling",
+        "Implemented RESTful APIs and scalable data models to support content management and efficient CRUD operations"
       ]
     },
     {
@@ -23,9 +23,9 @@ const Experience = () => {
       company: "SFU Robot Soccer Club, Burnaby, BC",
       period: "Feb 2025 – Present",
       description: [
-        "Implemented QML-based UI components for game state visualization",
-        "Developed C++ path planning logic for robot navigation",
-        "Collaborated with 30+ developers using Git and ticketing systems"
+        "Developed modular QML UI components to visualize robot state and performance metrics",
+        "Wrote Boost.Test cases for pathfinding and grid modules to ensure stable robot behavior",
+        "Built C++ data pipelines to propagate robot state across modules, improving real-time responsiveness and team collaboration"
       ]
     }
   ]
@@ -34,6 +34,23 @@ const Experience = () => {
     <div className="experience-section">
       <h2>Experience</h2>
       
+      <div className="experience-timeline">
+        {experiences.map((exp, index) => (
+          <div key={index} className="experience-card">
+            <div className="experience-header">
+              <h3>{exp.title}</h3>
+              <span className="company">{exp.company}</span>
+              <span className="period">{exp.period}</span>
+            </div>
+            <ul className="description-list">
+              {exp.description.map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+
       <div className="skills-section">
         <h3>Technical Skills</h3>
         <div className="skills-list">
@@ -50,23 +67,6 @@ const Experience = () => {
             <span className="skill-items">{skills.practices.join(", ")}</span>
           </div>
         </div>
-      </div>
-
-      <div className="experience-timeline">
-        {experiences.map((exp, index) => (
-          <div key={index} className="experience-card">
-            <div className="experience-header">
-              <h3>{exp.title}</h3>
-              <span className="company">{exp.company}</span>
-              <span className="period">{exp.period}</span>
-            </div>
-            <ul className="description-list">
-              {exp.description.map((item, i) => (
-                <li key={i}>{item}</li>
-              ))}
-            </ul>
-          </div>
-        ))}
       </div>
     </div>
   )
