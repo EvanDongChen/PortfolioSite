@@ -9,6 +9,8 @@ import BackToTopButton from './components/BackToTopButton';
 import Star from './components/Star';
 import ShootingStar from './components/ShootingStar';
 import CursorNebula from './components/CursorNebula';
+
+const BASE_URL = import.meta.env.BASE_URL;
 import ThemeToggleButton from './components/ThemeToggleButton';
 import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from './components/Icons';
 import { Project, Bubble as BubbleType, Experience, Fish as FishType, Education, Star as StarType, ShootingStar as ShootingStarType } from './types';
@@ -33,84 +35,84 @@ const App: React.FC = () => {
     {
       title: 'Library Database Application',
       description: 'Full-stack library platform with Flask and SQL. Automated 50% of manual tasks with complex database schema.',
-      image: '/images/library_database.png',
+      image: `${BASE_URL}images/library_database.png`,
       tags: ['Flask', 'SQL', 'JavaScript', 'HTML/CSS'],
       codeUrl: 'https://github.com/EvanDongChen/CMPT354-LibraryDataBase',
     },
     {
       title: 'WanderWise',
       description: 'AI-powered trip planner using React and Google APIs. Generates full-day plans in 5 seconds with real-time recommendations.',
-      image: '/images/wander_wise.png',
+      image: `${BASE_URL}images/wander_wise.png`,
       tags: ['React', 'AWS Amplify', 'Google APIs', 'AI'],
       codeUrl: 'https://www.youtube.com/watch?v=WI8YdPw-tSo',
     },
     {
       title: 'Krill Krushers',
       description: 'Unity 2D combat game inspired by vampire survivors. Created 50+ assets and won Best Entertainment Hack.',
-      image: '/images/krill_krushers.png',
+      image: `${BASE_URL}images/krill_krushers.png`,
       tags: ['Unity', 'C#', 'Game Development', 'Team Leadership'],
       codeUrl: 'https://evandongchen.github.io/Krill-Krushers/',
     },
     {
       title: 'WitchDog',
       description: 'Real-time multiplayer trivia game built in Unity with Socket.IO networking and custom multi-phase gameplay.',
-      image: '/images/witch_dog.png',
+      image: `${BASE_URL}images/witch_dog.png`,
       tags: ['Unity', 'C#', 'Multiplayer', 'Hackathon'],
       codeUrl: 'https://devpost.com/software/witch-dog',
     },
     {
       title: 'Bird Game',
       description: 'Unity 2D roguelike with custom level generation. Designed 30+ original assets and core gameplay mechanics.',
-      image: '/images/bird_game.png',
+      image: `${BASE_URL}images/bird_game.png`,
       tags: ['Unity', 'C#', 'Game Design', 'Aseprite'],
       codeUrl: 'https://evandongchen.github.io/Bird-Game/',
     },
     {
       title: 'Raccoon Game',
       description: '2.5D platformer game developed for Mountain Madness 2024. Won Most Mountainous award.',
-      image: '/images/racoon_game.png',
+      image: `${BASE_URL}images/racoon_game.png`,
       tags: ['Unity', 'Game Development', 'Hackathon', 'Incomplete'],
       codeUrl: 'https://github.com/emmyfong/racoongame',
     },
     {
       title: 'Dream On, Sing On',
       description: 'Web app for vocal/instrumental track separation with karaoke features. Displays synchronized lyrics for songs.',
-      image: '/images/dream_on_sing_on.png',
+      image: `${BASE_URL}images/dream_on_sing_on.png`,
       tags: ['React', 'Python', 'Spleeter', 'Audio Processing', 'Hackathon', 'Incomplete'],
       codeUrl: 'https://devpost.com/software/dream-on-sing-on',
     },
     {
       title: 'SAM for Medical Segmentation',
       description: 'Research project exploring Segment Anything Models for MRI brain tumor segmentation. Implemented fine-tuning and automated bounding box prompts.',
-      image: '/images/sam.png',
+      image: `${BASE_URL}images/sam.png`,
       tags: ['Python', 'AI', 'Research', 'Medical Imaging'],
       codeUrl: 'https://www.youtube.com/watch?v=DGHAxlcROsQ',
     },
     {
       title: 'Lizard Wizard',
       description: '2D combat game where you combo elemental spells to defeat enemies. Built in Unity using C#.',
-      image: '/images/lizard_wizard.png',
+      image: `${BASE_URL}images/lizard_wizard.png`,
       tags: ['Unity', 'C#', 'Game Development', '2D', 'Combat', 'Elemental'],
       codeUrl: 'https://github.com/cna52/LizardWizard',
     },
     {
       title: 'Money Mango',
       description: 'Personal finance Android app prototype built with Android Studio and Kotlin. Features OCR receipt parsing, manual entry, tags, spending goals, reminders, and analytics.',
-      image: '/images/money_mango.png',
+      image: `${BASE_URL}images/money_mango.png`,
       tags: ['Android', 'Kotlin', 'ML Kit', 'OCR', 'Mobile', 'Finance', 'Notifications', 'Analytics'],
       codeUrl: 'https://github.com/EvanDongChen/MoneyMango',
     },
     {
       title: 'Pastry Panic',
       description: 'Stack-based cake game with leaderboard. Built with Unity and integrated into a React website with SQL database.',
-      image: '/images/pastry_panic.png',
+      image: `${BASE_URL}images/pastry_panic.png`,
       tags: ['Unity', 'C#', 'React', 'SQL', 'JavaScript', 'Hackathon', 'Incomplete'],
       codeUrl: 'https://devpost.com/software/pastry-panic',
     },
     {
       title: 'Chord Breakers',
       description: '2D action game built in Unity with modular architecture, elemental combat, and AI using finite state machines.',
-      image: '/images/chord_breakers.png',
+      image: `${BASE_URL}images/chord_breakers.png`,
       tags: ['Unity', 'C#', 'Game Development', 'Hackathon'],
       codeUrl: 'https://angrycow05.itch.io/chord-breaker',
     },
@@ -411,7 +413,7 @@ const App: React.FC = () => {
         <main className="container mx-auto px-6 md:px-10">
           <Section id="home" className="min-h-screen flex flex-col justify-center items-center text-center">
             <div className={`w-48 h-48 md:w-64 md:h-64 mb-8`}>
-              <img src="/images/profile.jpg" alt="Evan Chen" className={`rounded-full shadow-2xl border-4 ${theme === 'underwater' ? 'border-cyan-400/50' : 'border-indigo-400/50'} w-full h-full object-cover`} />
+              <img src={`${BASE_URL}images/profile.jpg`} alt="Evan Chen" className={`rounded-full shadow-2xl border-4 ${theme === 'underwater' ? 'border-cyan-400/50' : 'border-indigo-400/50'} w-full h-full object-cover`} />
             </div>
             <h1 className={`text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r ${colors.heroGradient} animate-fade-in-down`}>
               Evan Chen
