@@ -32,6 +32,7 @@ export interface Fish {
   id: number;
   x: number;
   y: number;
+  displayY: number;
   vx: number;
   vy: number;
   initialVx: number;

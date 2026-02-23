@@ -23,7 +23,6 @@ const App: React.FC = () => {
   const [stars, setStars] = useState<StarType[]>([]);
   const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [scrollY, setScrollY] = useState(0);
   const scrollYRef = useRef(0);
   const mousePosRef = useRef({ x: -1000, y: -1000 });
 
@@ -86,9 +85,7 @@ const App: React.FC = () => {
     photoSpinRef.current.isDragging = false;
   }, []);
 
-  useEffect(() => {
-    scrollYRef.current = scrollY;
-  }, [scrollY]);
+
 
   const projects: Project[] = [
     {
@@ -284,7 +281,7 @@ const App: React.FC = () => {
     const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
 
     const newFish: FishType = {
-      id, x, y, vx, vy, initialVx,
+      id, x, y, displayY: y - scrollYRef.current * 0.8, vx, vy, initialVx,
       rotation: Math.atan2(vy, vx) * (180 / Math.PI),
       scale, color1, color2,
       isFlipped,
@@ -316,7 +313,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleScroll = useCallback(() => {
-    setScrollY(window.scrollY);
+    scrollYRef.current = window.scrollY;
   }, []);
 
   useEffect(() => {
@@ -348,9 +345,9 @@ const App: React.FC = () => {
 
           let { x, y, vx, vy, rotation, initialVx } = fish;
 
-          const displayY = y - scrollYRef.current * 0.8;
+          const screenY = y - scrollYRef.current * 0.8;
           const dxMouse = x - mousePosRef.current.x;
-          const dyMouse = displayY - mousePosRef.current.y;
+          const dyMouse = screenY - mousePosRef.current.y;
           const distanceMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
 
           const isFleeing = distanceMouse < SCARE_RADIUS;
@@ -386,7 +383,8 @@ const App: React.FC = () => {
           if (delta < -180) delta += 360;
           rotation += delta * TURN_SPEED;
 
-          return { ...fish, x, y, vx, vy, rotation };
+          const displayY = y - scrollYRef.current * 0.8;
+          return { ...fish, x, y, displayY, vx, vy, rotation };
         })
           .filter(fish =>
             fish.x > -200 && fish.x < window.innerWidth + 200
@@ -469,7 +467,7 @@ const App: React.FC = () => {
               <Bubble key={bubble.id} {...bubble} />
             ))}
             {fishes.map(fish => (
-              <Fish key={fish.id} {...fish} y={fish.y - scrollY * 0.8} />
+              <Fish key={fish.id} {...fish} />
             ))}
           </>
         ) : (
