@@ -14,7 +14,7 @@ const Header: React.FC = () => {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
-  
+
   const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
     e.preventDefault();
     const targetId = href.substring(1);
@@ -26,8 +26,8 @@ const Header: React.FC = () => {
 
   const navLinks = [
     { name: 'Home', href: '#home' },
-    { name: 'Education', href: '#education' },
     { name: 'Experience', href: '#experience' },
+    { name: 'Education', href: '#education' },
     { name: 'Skills', href: '#skills' },
     { name: 'Projects', href: '#projects' },
     { name: 'Contact', href: '#contact' },
@@ -38,15 +38,14 @@ const Header: React.FC = () => {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled
           ? 'bg-slate-900/50 backdrop-blur-lg shadow-lg'
           : 'bg-transparent'
-      }`}
+        }`}
     >
       <nav className="container mx-auto px-6 md:px-10 py-4 flex justify-between items-center">
         <a href="#home" onClick={(e) => handleNavClick(e, '#home')} className="flex items-center">
-           <span className={`text-3xl font-bold ${navTextColor} hover:text-white transition-colors duration-300`}>EC</span>
+          <span className={`text-3xl font-bold ${navTextColor} hover:text-white transition-colors duration-300`}>EC</span>
         </a>
         <div className="hidden md:flex items-center space-x-8">
           {navLinks.map((link) => (
@@ -62,7 +61,7 @@ const Header: React.FC = () => {
           ))}
         </div>
         <div className="md:hidden">
-            {/* Mobile menu button can be added here */}
+          {/* Mobile menu button can be added here */}
         </div>
       </nav>
     </header>

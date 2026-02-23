@@ -27,11 +27,105 @@ const App: React.FC = () => {
   const scrollYRef = useRef(0);
   const mousePosRef = useRef({ x: -1000, y: -1000 });
 
+  // Spinnable profile photo
+  const [photoRotation, setPhotoRotation] = useState(0);
+  const photoSpinRef = useRef({ isDragging: false, lastX: 0, velocity: 0, rotation: 0, idleFrames: 0 });
+  const photoAnimRef = useRef<number>(0);
+
+  useEffect(() => {
+    const spin = photoSpinRef.current;
+    const animate = () => {
+      if (!spin.isDragging && Math.abs(spin.velocity) > 0.1) {
+        spin.velocity *= 0.97;
+        spin.rotation += spin.velocity;
+        spin.idleFrames = 0;
+        setPhotoRotation(spin.rotation);
+      } else if (!spin.isDragging) {
+        spin.velocity = 0;
+        spin.idleFrames++;
+
+        // After ~1 second of idle (60 frames), smoothly return to 0
+        if (spin.idleFrames > 60 && Math.abs(spin.rotation % 360) > 0.5) {
+          // Normalize rotation to nearest equivalent within [-180, 180]
+          let target = spin.rotation % 360;
+          if (target > 180) target -= 360;
+          if (target < -180) target += 360;
+          spin.rotation -= target * 0.06;
+          // Snap when close enough
+          if (Math.abs(spin.rotation % 360) < 0.5) {
+            spin.rotation = 0;
+          }
+          setPhotoRotation(spin.rotation);
+        }
+      }
+      photoAnimRef.current = requestAnimationFrame(animate);
+    };
+    photoAnimRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(photoAnimRef.current);
+  }, []);
+
+  const handlePhotoPointerDown = useCallback((e: React.PointerEvent) => {
+    const spin = photoSpinRef.current;
+    spin.isDragging = true;
+    spin.lastX = e.clientX;
+    spin.velocity = 0;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, []);
+
+  const handlePhotoPointerMove = useCallback((e: React.PointerEvent) => {
+    const spin = photoSpinRef.current;
+    if (!spin.isDragging) return;
+    const deltaX = e.clientX - spin.lastX;
+    spin.velocity = deltaX * 2;
+    spin.rotation += deltaX * 2;
+    spin.lastX = e.clientX;
+    setPhotoRotation(spin.rotation);
+  }, []);
+
+  const handlePhotoPointerUp = useCallback(() => {
+    photoSpinRef.current.isDragging = false;
+  }, []);
+
   useEffect(() => {
     scrollYRef.current = scrollY;
   }, [scrollY]);
 
   const projects: Project[] = [
+    {
+      title: 'Cramsino',
+      description: 'AI-powered study app that uses computer vision to detect focus and rewards studying with gacha-style card pulls. Won Best UI at JourneyHacks 2026.',
+      image: `${BASE_URL}images/cramsino.jpg`,
+      tags: ['Next.js', 'FastAPI', 'OpenCV', 'PostgreSQL', 'Hackathon'],
+      codeUrl: 'https://devpost.com/software/cramsino',
+    },
+    {
+      title: 'WitchDog',
+      description: 'Real-time multiplayer trivia game built in Unity with Socket.IO networking and custom multi-phase gameplay.',
+      image: `${BASE_URL}images/witch_dog.png`,
+      tags: ['Unity', 'C#', 'Multiplayer', 'Hackathon'],
+      codeUrl: 'https://devpost.com/software/witch-dog',
+    },
+    {
+      title: 'Money Mango',
+      description: 'Personal finance Android app prototype built with Android Studio and Kotlin. Features OCR receipt parsing, manual entry, tags, spending goals, reminders, and analytics.',
+      image: `${BASE_URL}images/money_mango.png`,
+      tags: ['Android', 'Kotlin', 'ML Kit', 'OCR', 'Mobile', 'Finance', 'Notifications', 'Analytics'],
+      codeUrl: 'https://github.com/EvanDongChen/MoneyMango',
+    },
+    {
+      title: 'Chord Breakers',
+      description: '2D action game built in Unity with modular architecture, elemental combat, and AI using finite state machines.',
+      image: `${BASE_URL}images/chord_breakers.png`,
+      tags: ['Unity', 'C#', 'Game Development', 'Hackathon'],
+      codeUrl: 'https://angrycow05.itch.io/chord-breaker',
+    },
+    {
+      title: 'SAM for Medical Segmentation',
+      description: 'Research project exploring Segment Anything Models for MRI brain tumor segmentation. Implemented fine-tuning and automated bounding box prompts.',
+      image: `${BASE_URL}images/sam.png`,
+      tags: ['Python', 'AI', 'Research', 'Medical Imaging'],
+      codeUrl: 'https://www.youtube.com/watch?v=DGHAxlcROsQ',
+    },
     {
       title: 'Library Database Application',
       description: 'Full-stack library platform with Flask and SQL. Automated 50% of manual tasks with complex database schema.',
@@ -54,11 +148,11 @@ const App: React.FC = () => {
       codeUrl: 'https://evandongchen.github.io/Krill-Krushers/',
     },
     {
-      title: 'WitchDog',
-      description: 'Real-time multiplayer trivia game built in Unity with Socket.IO networking and custom multi-phase gameplay.',
-      image: `${BASE_URL}images/witch_dog.png`,
-      tags: ['Unity', 'C#', 'Multiplayer', 'Hackathon'],
-      codeUrl: 'https://devpost.com/software/witch-dog',
+      title: 'Lizard Wizard',
+      description: '2D combat game where you combo elemental spells to defeat enemies. Built in Unity using C#.',
+      image: `${BASE_URL}images/lizard_wizard.png`,
+      tags: ['Unity', 'C#', 'Game Development', '2D', 'Combat', 'Elemental'],
+      codeUrl: 'https://github.com/cna52/LizardWizard',
     },
     {
       title: 'Bird Game',
@@ -82,42 +176,14 @@ const App: React.FC = () => {
       codeUrl: 'https://devpost.com/software/dream-on-sing-on',
     },
     {
-      title: 'SAM for Medical Segmentation',
-      description: 'Research project exploring Segment Anything Models for MRI brain tumor segmentation. Implemented fine-tuning and automated bounding box prompts.',
-      image: `${BASE_URL}images/sam.png`,
-      tags: ['Python', 'AI', 'Research', 'Medical Imaging'],
-      codeUrl: 'https://www.youtube.com/watch?v=DGHAxlcROsQ',
-    },
-    {
-      title: 'Lizard Wizard',
-      description: '2D combat game where you combo elemental spells to defeat enemies. Built in Unity using C#.',
-      image: `${BASE_URL}images/lizard_wizard.png`,
-      tags: ['Unity', 'C#', 'Game Development', '2D', 'Combat', 'Elemental'],
-      codeUrl: 'https://github.com/cna52/LizardWizard',
-    },
-    {
-      title: 'Money Mango',
-      description: 'Personal finance Android app prototype built with Android Studio and Kotlin. Features OCR receipt parsing, manual entry, tags, spending goals, reminders, and analytics.',
-      image: `${BASE_URL}images/money_mango.png`,
-      tags: ['Android', 'Kotlin', 'ML Kit', 'OCR', 'Mobile', 'Finance', 'Notifications', 'Analytics'],
-      codeUrl: 'https://github.com/EvanDongChen/MoneyMango',
-    },
-    {
       title: 'Pastry Panic',
       description: 'Stack-based cake game with leaderboard. Built with Unity and integrated into a React website with SQL database.',
       image: `${BASE_URL}images/pastry_panic.png`,
       tags: ['Unity', 'C#', 'React', 'SQL', 'JavaScript', 'Hackathon', 'Incomplete'],
       codeUrl: 'https://devpost.com/software/pastry-panic',
     },
-    {
-      title: 'Chord Breakers',
-      description: '2D action game built in Unity with modular architecture, elemental combat, and AI using finite state machines.',
-      image: `${BASE_URL}images/chord_breakers.png`,
-      tags: ['Unity', 'C#', 'Game Development', 'Hackathon'],
-      codeUrl: 'https://angrycow05.itch.io/chord-breaker',
-    },
   ];
-  
+
   const education: Education = {
     degree: 'Bachelor of Science, Computing Science',
     program: 'Zhejiang Dual Degree',
@@ -128,26 +194,34 @@ const App: React.FC = () => {
 
   const experiences: Experience[] = [
     {
-      role: 'Freelance Full-Stack Developer',
-      company: 'Whitebox Coworking Remote',
-      period: 'May 2025 - Present',
-      description: [
-        'Implemented RESTful APIs and scalable data models to support content management and efficient CRUD operations.',
-        'Developed front-end architecture with Tailwind CSS, including dynamic routing and robust loading/error handling.'
-      ],
+      role: 'Software Engineer Co-op',
+      company: 'OSI Maritime Systems, Burnaby, BC',
+      period: 'Jan 2026 - Present',
+      description: [],
     },
     {
       role: 'Software Developer',
-      company: 'SFU Robot Soccer Club, Burnaby, BC',
+      company: 'SFU Robot Soccer Club (SFURS), BC',
       period: 'Feb 2025 - Present',
       description: [
-        'Developed modular QML UI components to visualize robot state and performance metrics.',
-        'Wrote Boost.Test cases for pathfinding and grid modules to ensure stable robot behavior.',
-        'Built C++ data pipelines to propagate robot state across modules, improving real-time responsiveness and team collaboration.',
+        'Designed and implemented QML-based UI components supporting game state visualization.',
+        'Built a real-time C++ backend that models the game and exposes state to a Qt/QML UI.',
+        'Wrote unit tests with Boost.Test to validate core pathfinding and grid logic.',
+        'Refactored C++ logic for system scalability and code readability.',
+      ],
+    },
+    {
+      role: 'Full Stack Engineer',
+      company: 'Whitebox Coworking Inc., Remote',
+      period: 'May 2025 - Aug 2025',
+      description: [
+        'Built a web platform and internal tools using Next.js, FastAPI, and MongoDB to manage content.',
+        'Developed frontend with TypeScript and Tailwind CSS, implementing routing and state-driven logic.',
+        'Implemented RESTful APIs and data models to support content management workflows.',
       ],
     },
   ];
-  
+
   const skills = {
     languages: ['C', 'C#', 'C++', 'HTML/CSS', 'Java', 'JavaScript', 'Kotlin', 'Python', 'QML', 'SQL', 'TypeScript'],
     frameworksAndTools: ['CMake', 'Node.js', 'PyTorch', 'React.js', 'Unity', 'Android Studio', 'CI/CD', 'Figma', 'GitHub', 'GitLab', 'Linux', 'MongoDB', 'Plastic SCM', 'Visual Studio']
@@ -181,17 +255,17 @@ const App: React.FC = () => {
     const id = Date.now() + Math.random();
     const scale = Math.random() * 0.4 + 0.3;
     const speed = (Math.random() * 1 + 1);
-    
+
     let x, y, vx, vy, isFlipped;
 
     if (Math.random() > 0.5) {
-        x = -100;
-        vx = speed;
-        isFlipped = false;
+      x = -100;
+      vx = speed;
+      isFlipped = false;
     } else {
-        x = window.innerWidth + 100;
-        vx = -speed;
-        isFlipped = true;
+      x = window.innerWidth + 100;
+      vx = -speed;
+      isFlipped = true;
     }
 
     y = Math.random() * document.documentElement.scrollHeight;
@@ -199,13 +273,13 @@ const App: React.FC = () => {
     const initialVx = vx;
 
     const colors = [
-        ['#4facfe', '#00f2fe'],
-        ['#89f7fe', '#66a6ff'],
-        ['#DA22FF', '#9733EE'],
-        ['#00dbde', '#fc00ff'],
-        ['#5433FF', '#20BDFF'],
-        ['#48c6ef', '#6f86d6'],
-        ['#a779e9', '#4facfe'],
+      ['#4facfe', '#00f2fe'],
+      ['#89f7fe', '#66a6ff'],
+      ['#DA22FF', '#9733EE'],
+      ['#00dbde', '#fc00ff'],
+      ['#5433FF', '#20BDFF'],
+      ['#48c6ef', '#6f86d6'],
+      ['#a779e9', '#4facfe'],
     ];
     const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
 
@@ -262,66 +336,66 @@ const App: React.FC = () => {
     let animationFrameId: number;
 
     const animate = () => {
-      setFishes(currentFishes => 
+      setFishes(currentFishes =>
         currentFishes.map(fish => {
-            const SCARE_RADIUS = 150;
-            const FLEE_STRENGTH = 6;
-            const MAX_SPEED_FLEE = 5;
-            const MAX_SPEED_CRUISE = 2;
-            const TURN_SPEED = 0.1;
-            const RETURN_TO_HORIZONTAL_STRENGTH = 0.05;
-            const WANDER_STRENGTH = 0.1;
+          const SCARE_RADIUS = 150;
+          const FLEE_STRENGTH = 6;
+          const MAX_SPEED_FLEE = 5;
+          const MAX_SPEED_CRUISE = 2;
+          const TURN_SPEED = 0.1;
+          const RETURN_TO_HORIZONTAL_STRENGTH = 0.05;
+          const WANDER_STRENGTH = 0.1;
 
-            let { x, y, vx, vy, rotation, initialVx } = fish;
-            
-            const displayY = y - scrollYRef.current * 0.8;
-            const dxMouse = x - mousePosRef.current.x;
-            const dyMouse = displayY - mousePosRef.current.y;
-            const distanceMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
+          let { x, y, vx, vy, rotation, initialVx } = fish;
 
-            const isFleeing = distanceMouse < SCARE_RADIUS;
+          const displayY = y - scrollYRef.current * 0.8;
+          const dxMouse = x - mousePosRef.current.x;
+          const dyMouse = displayY - mousePosRef.current.y;
+          const distanceMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
 
-            if (isFleeing) {
-              const angle = Math.atan2(dyMouse, dxMouse);
-              vx += Math.cos(angle) * FLEE_STRENGTH;
-              vy += Math.sin(angle) * FLEE_STRENGTH;
+          const isFleeing = distanceMouse < SCARE_RADIUS;
 
-              const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-              if (currentSpeed > MAX_SPEED_FLEE) {
-                vx = (vx / currentSpeed) * MAX_SPEED_FLEE;
-                vy = (vy / currentSpeed) * MAX_SPEED_FLEE;
-              }
-            } else {
-              vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
-              vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
-              vy += (Math.random() - 0.5) * WANDER_STRENGTH;
+          if (isFleeing) {
+            const angle = Math.atan2(dyMouse, dxMouse);
+            vx += Math.cos(angle) * FLEE_STRENGTH;
+            vy += Math.sin(angle) * FLEE_STRENGTH;
 
-              const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-              if (currentSpeed > MAX_SPEED_CRUISE) {
-                vx = (vx / currentSpeed) * MAX_SPEED_CRUISE;
-                vy = (vy / currentSpeed) * MAX_SPEED_CRUISE;
-              }
+            const currentSpeed = Math.sqrt(vx * vx + vy * vy);
+            if (currentSpeed > MAX_SPEED_FLEE) {
+              vx = (vx / currentSpeed) * MAX_SPEED_FLEE;
+              vy = (vy / currentSpeed) * MAX_SPEED_FLEE;
             }
+          } else {
+            vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
+            vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
+            vy += (Math.random() - 0.5) * WANDER_STRENGTH;
 
-            x += vx;
-            y += vy;
+            const currentSpeed = Math.sqrt(vx * vx + vy * vy);
+            if (currentSpeed > MAX_SPEED_CRUISE) {
+              vx = (vx / currentSpeed) * MAX_SPEED_CRUISE;
+              vy = (vy / currentSpeed) * MAX_SPEED_CRUISE;
+            }
+          }
 
-            const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
-            let delta = targetRotation - rotation;
-            if (delta > 180) delta -= 360;
-            if (delta < -180) delta += 360;
-            rotation += delta * TURN_SPEED;
+          x += vx;
+          y += vy;
 
-            return { ...fish, x, y, vx, vy, rotation };
-          })
-          .filter(fish => 
+          const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
+          let delta = targetRotation - rotation;
+          if (delta > 180) delta -= 360;
+          if (delta < -180) delta += 360;
+          rotation += delta * TURN_SPEED;
+
+          return { ...fish, x, y, vx, vy, rotation };
+        })
+          .filter(fish =>
             fish.x > -200 && fish.x < window.innerWidth + 200
           )
       );
       animationFrameId = requestAnimationFrame(animate);
     };
     if (theme === 'underwater') {
-        animate();
+      animate();
     }
     return () => cancelAnimationFrame(animationFrameId);
   }, [theme]);
@@ -350,9 +424,9 @@ const App: React.FC = () => {
         duration: `${Math.random() * 2 + 1}s`,
       }));
       setStars(newStars);
-      
+
       const shootingStarInterval = setInterval(createShootingStar, 2000);
-      
+
       return () => {
         clearInterval(shootingStarInterval);
       };
@@ -361,7 +435,7 @@ const App: React.FC = () => {
       setShootingStars([]);
     }
   }, [theme, createShootingStar]);
-  
+
   const colors = theme === 'underwater' ? {
     text: 'text-cyan-100', textLighter: 'text-cyan-100/90', highlight: 'text-cyan-300',
     highlightStrong: 'text-cyan-200', border: 'border-cyan-400/20', timeline: 'bg-cyan-400/30',
@@ -382,12 +456,11 @@ const App: React.FC = () => {
 
 
   return (
-    <div className={`relative min-h-screen text-white overflow-x-hidden transition-colors duration-1000 ${
-        theme === 'underwater' 
-        ? 'bg-gradient-to-br from-[#000428] via-[#004e92] to-[#1CB5E0]'
-        : 'bg-gradient-to-br from-[#020111] via-[#0d1b2a] to-[#1b263b]'
-    }`}>
-      <div 
+    <div className={`relative min-h-screen text-white overflow-x-hidden transition-colors duration-1000 ${theme === 'underwater'
+      ? 'bg-gradient-to-br from-[#000428] via-[#004e92] to-[#1CB5E0]'
+      : 'bg-gradient-to-br from-[#020111] via-[#0d1b2a] to-[#1b263b]'
+      }`}>
+      <div
         className="fixed inset-0 w-full h-full z-0"
       >
         {theme === 'underwater' ? (
@@ -407,13 +480,34 @@ const App: React.FC = () => {
           </>
         )}
       </div>
-      
+
       <div className="relative z-10">
         <Header />
         <main className="container mx-auto px-6 md:px-10">
           <Section id="home" className="min-h-screen flex flex-col justify-center items-center text-center">
-            <div className={`w-48 h-48 md:w-64 md:h-64 mb-8`}>
-              <img src={`${BASE_URL}images/profile.jpg`} alt="Evan Chen" className={`rounded-full shadow-2xl border-4 ${theme === 'underwater' ? 'border-cyan-400/50' : 'border-indigo-400/50'} w-full h-full object-cover`} />
+            <div
+              className={`w-48 h-48 md:w-64 md:h-64 mb-8 cursor-grab active:cursor-grabbing select-none`}
+              style={{ perspective: '800px' }}
+              onPointerDown={handlePhotoPointerDown}
+              onPointerMove={handlePhotoPointerMove}
+              onPointerUp={handlePhotoPointerUp}
+              onPointerCancel={handlePhotoPointerUp}
+            >
+              <div
+                className={`w-full h-full rounded-full shadow-2xl border-4 ${theme === 'underwater' ? 'border-cyan-400/50' : 'border-indigo-400/50'} overflow-hidden`}
+                style={{
+                  transform: `rotateY(${photoRotation}deg)`,
+                  transition: photoSpinRef.current.isDragging ? 'none' : 'transform 0.05s linear',
+                  transformStyle: 'preserve-3d',
+                }}
+              >
+                <img
+                  src={`${BASE_URL}images/profile.jpg`}
+                  alt="Evan Chen"
+                  className="w-full h-full object-cover pointer-events-none"
+                  draggable={false}
+                />
+              </div>
             </div>
             <h1 className={`text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r ${colors.heroGradient} animate-fade-in-down`}>
               Evan Chen
@@ -424,32 +518,18 @@ const App: React.FC = () => {
             <p className={`mt-6 text-lg ${colors.textLighter} max-w-3xl animate-fade-in-up delay-200`}>
               A passionate CS student with experience in full-stack development, object-oriented programming, and game development. Check out my projects to see how I'm growing as a developer!
             </p>
-             <div className={`mt-8 flex flex-wrap justify-center items-center gap-x-6 gap-y-4 ${colors.highlightStrong}`}>
-                <a href="https://github.com/evandongchen" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-white transition-colors">
-                  <GitHubIcon className="w-6 h-6" /> GitHub
-                </a>
-                <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-indigo-400/50'}`}>•</span>
-                <a href="https://www.linkedin.com/in/evandongchen/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-white transition-colors">
-                  <LinkedInIcon className="w-6 h-6" /> LinkedIn
-                </a>
-                 <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-indigo-400/50'}`}>•</span>
-                <a href="mailto:evanchen0609@gmail.com" className="flex items-center gap-2 hover:text-white transition-colors">
-                  <MailIcon className="w-6 h-6" /> evanchen0609@gmail.com
-                </a>
-            </div>
-          </Section>
-          
-          <Section id="education" className="py-20">
-            <h2 className="text-4xl font-bold text-center mb-12">Education</h2>
-            <div className={`${colors.cardBg} backdrop-blur-md rounded-xl shadow-lg border ${colors.border} p-8 text-center max-w-3xl mx-auto`}>
-              <h3 className={`text-2xl font-bold ${colors.highlightStrong}`}>{education.degree}</h3>
-              <p className={`text-xl ${colors.highlight} mt-1`}>{education.program}</p>
-              <p className={`text-lg ${colors.textLighter} mt-4`}>{education.university}</p>
-              <div className={`flex justify-center items-center gap-6 mt-4 ${colors.highlightStrong}/80`}>
-                <span>{education.period}</span>
-                <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-indigo-400/50'}`}>•</span>
-                <span>{education.gpa}</span>
-              </div>
+            <div className={`mt-8 flex flex-wrap justify-center items-center gap-x-6 gap-y-4 ${colors.highlightStrong}`}>
+              <a href="https://github.com/evandongchen" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-white transition-colors">
+                <GitHubIcon className="w-6 h-6" /> GitHub
+              </a>
+              <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-indigo-400/50'}`}>•</span>
+              <a href="https://www.linkedin.com/in/evandongchen/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-white transition-colors">
+                <LinkedInIcon className="w-6 h-6" /> LinkedIn
+              </a>
+              <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-indigo-400/50'}`}>•</span>
+              <a href="mailto:evanchen0609@gmail.com" className="flex items-center gap-2 hover:text-white transition-colors">
+                <MailIcon className="w-6 h-6" /> evanchen0609@gmail.com
+              </a>
             </div>
           </Section>
 
@@ -474,7 +554,21 @@ const App: React.FC = () => {
               ))}
             </div>
           </Section>
-          
+
+          <Section id="education" className="py-20">
+            <h2 className="text-4xl font-bold text-center mb-12">Education</h2>
+            <div className={`${colors.cardBg} backdrop-blur-md rounded-xl shadow-lg border ${colors.border} p-8 text-center max-w-3xl mx-auto`}>
+              <h3 className={`text-2xl font-bold ${colors.highlightStrong}`}>{education.degree}</h3>
+              <p className={`text-xl ${colors.highlight} mt-1`}>{education.program}</p>
+              <p className={`text-lg ${colors.textLighter} mt-4`}>{education.university}</p>
+              <div className={`flex justify-center items-center gap-6 mt-4 ${colors.highlightStrong}/80`}>
+                <span>{education.period}</span>
+                <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-indigo-400/50'}`}>•</span>
+                <span>{education.gpa}</span>
+              </div>
+            </div>
+          </Section>
+
           <Section id="skills" className="py-20">
             <h2 className="text-4xl font-bold text-center mb-12">Technical Skills</h2>
             <div className={`${colors.cardBg} backdrop-blur-md rounded-xl shadow-lg border ${colors.border} p-8 max-w-4xl mx-auto`}>
@@ -549,12 +643,12 @@ const App: React.FC = () => {
             </div>
           </Section>
         </main>
-        
+
         <footer className="relative text-center pt-20 pb-6 overflow-hidden">
-            {theme === 'underwater' && <SandDune />}
-            <div className="relative z-10">
-              <p className={`${colors.highlightStrong}`}>&copy; 2025 Evan Chen. All rights reserved.</p>
-            </div>
+          {theme === 'underwater' && <SandDune />}
+          <div className="relative z-10">
+            <p className="text-white">&copy; 2026 Evan Chen. All rights reserved.</p>
+          </div>
         </footer>
       </div>
       <BackToTopButton />
