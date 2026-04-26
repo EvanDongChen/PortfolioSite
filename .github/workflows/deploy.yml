@@ -36,6 +36,9 @@ jobs:
         run: npm run build
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Add CNAME
+        run: echo 'evanchen.info' > ./dist/CNAME
         
       - name: Setup Pages
         uses: actions/configure-pages@v4
