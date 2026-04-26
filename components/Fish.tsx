@@ -1,18 +1,23 @@
 import React from 'react';
 import { Fish as FishType } from '../types';
 
-interface FishProps extends Omit<FishType, 'vx' | 'vy' | 'initialVx'> { }
+interface FishProps extends Omit<FishType, 'vx' | 'vy' | 'initialVx'> {
+  isNibbling?: boolean;
+}
 
-const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped }) => {
+const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false }) => {
+  const nibbleTilt = isNibbling ? (isFlipped ? -14 : 14) : 0;
+  const nibbleScale = isNibbling ? 1.2 : 1;
   const style: React.CSSProperties = {
     position: 'absolute',
     left: 0,
     top: 0,
-    transform: `translate(${x}px, ${displayY}px) rotate(${rotation}deg) ${isFlipped ? 'scaleY(-1)' : ''}`,
+    transform: `translate(${x}px, ${displayY}px) rotate(${rotation + nibbleTilt}deg) scale(${nibbleScale}) ${isFlipped ? 'scaleY(-1)' : ''}`,
     width: 120 * scale,
     height: 50 * scale,
     willChange: 'transform',
     pointerEvents: 'none',
+    transition: 'transform 140ms ease-out',
   };
 
   const gradientId = `fishGradient-${id}`;

@@ -19,11 +19,33 @@ import { useTheme } from './contexts/ThemeContext';
 
 const SCROLL_PARALLAX = 0.92;
 
+interface FishTrailParticle {
+  id: number;
+  x: number;
+  worldY: number;
+  size: number;
+  durationMs: number;
+  driftX: number;
+}
+
+interface FoodCrumbParticle {
+  id: number;
+  x: number;
+  worldY: number;
+  size: number;
+  durationMs: number;
+  driftX: number;
+  driftY: number;
+}
+
 const App: React.FC = () => {
   const { theme } = useTheme();
   const [bubbles, setBubbles] = useState<BubbleType[]>([]);
   const [fishes, setFishes] = useState<FishType[]>([]);
   const [fishFoods, setFishFoods] = useState<FishFoodType[]>([]);
+  const [trailParticles, setTrailParticles] = useState<FishTrailParticle[]>([]);
+  const [foodCrumbs, setFoodCrumbs] = useState<FoodCrumbParticle[]>([]);
+  const [nibblingFishIds, setNibblingFishIds] = useState<Record<number, boolean>>({});
   const [isFishFoodMode, setIsFishFoodMode] = useState(false);
   const [stars, setStars] = useState<StarType[]>([]);
   const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
@@ -33,6 +55,7 @@ const App: React.FC = () => {
   const scrollRafRef = useRef<number | null>(null);
   const mousePosRef = useRef({ x: -1000, y: -1000 });
   const fishFoodsRef = useRef<FishFoodType[]>([]);
+  const trailEmitRef = useRef<Record<number, number>>({});
 
   // Spinnable profile photo
   const [photoRotation, setPhotoRotation] = useState(0);
@@ -325,6 +348,55 @@ const App: React.FC = () => {
     fishFoodsRef.current = fishFoods;
   }, [fishFoods]);
 
+  const emitTrailBubble = useCallback((x: number, worldY: number) => {
+    const id = Date.now() + Math.random();
+    const durationMs = 650 + Math.random() * 450;
+    const newParticle: FishTrailParticle = {
+      id,
+      x,
+      worldY,
+      size: 3 + Math.random() * 4,
+      durationMs,
+      driftX: (Math.random() - 0.5) * 20,
+    };
+
+    setTrailParticles(prev => {
+      const next = [...prev, newParticle];
+      return next.length > 160 ? next.slice(next.length - 160) : next;
+    });
+
+    setTimeout(() => {
+      setTrailParticles(prev => prev.filter(p => p.id !== id));
+    }, durationMs + 100);
+  }, []);
+
+  const emitFoodCrumbs = useCallback((x: number, worldY: number) => {
+    const particles = Array.from({ length: 6 }, () => {
+      const id = Date.now() + Math.random();
+      const durationMs = 280 + Math.random() * 220;
+      const crumb: FoodCrumbParticle = {
+        id,
+        x: x + (Math.random() - 0.5) * 12,
+        worldY: worldY + (Math.random() - 0.5) * 8,
+        size: 2 + Math.random() * 2.5,
+        durationMs,
+        driftX: (Math.random() - 0.5) * 26,
+        driftY: -10 - Math.random() * 20,
+      };
+
+      setTimeout(() => {
+        setFoodCrumbs(prev => prev.filter(p => p.id !== id));
+      }, durationMs + 60);
+
+      return crumb;
+    });
+
+    setFoodCrumbs(prev => {
+      const next = [...prev, ...particles];
+      return next.length > 140 ? next.slice(next.length - 140) : next;
+    });
+  }, []);
+
   // Place fish food on click when food mode is active
   useEffect(() => {
     if (!isFishFoodMode) return;
@@ -385,6 +457,8 @@ const App: React.FC = () => {
 
     const animate = () => {
       const eatenFoodIds = new Set<number>();
+      const nibbleTriggers = new Set<number>();
+      const crumbBursts: Array<{ x: number; worldY: number }> = [];
 
       setFishes(currentFishes =>
         currentFishes.map(fish => {
@@ -395,12 +469,14 @@ const App: React.FC = () => {
           const FOOD_ATTRACT_RADIUS = 500;
           const FOOD_ATTRACT_STRENGTH = 0.25;
           const MAX_SPEED_FOOD = 3.5;
-          const EAT_RADIUS = 22;
+          const EAT_RADIUS = 30;
           const TURN_SPEED = 0.1;
           const RETURN_TO_HORIZONTAL_STRENGTH = 0.05;
           const WANDER_STRENGTH = 0.1;
 
-          let { x, y, vx, vy, rotation, initialVx } = fish;
+          let { x, y, vx, vy, rotation, initialVx, isFlipped } = fish;
+          const prevVx = vx;
+          const prevVy = vy;
 
           const screenY = y - scrollYRef.current * SCROLL_PARALLAX;
           const dxMouse = x - mousePosRef.current.x;
@@ -450,6 +526,8 @@ const App: React.FC = () => {
 
               if (closestDist < EAT_RADIUS) {
                 eatenFoodIds.add(closestFood.id);
+                nibbleTriggers.add(fish.id);
+                crumbBursts.push({ x: closestFood.x, worldY: closestFood.worldY });
               }
             } else {
               // Normal cruising
@@ -474,6 +552,17 @@ const App: React.FC = () => {
           if (delta < -180) delta += 360;
           rotation += delta * TURN_SPEED;
 
+          // Leave tiny bubble trails when fish sharply turn or accelerate.
+          const accelMagnitude = Math.hypot(vx - prevVx, vy - prevVy);
+          const turnMagnitude = Math.abs(delta);
+          const now = performance.now();
+          const lastEmit = trailEmitRef.current[fish.id] ?? 0;
+          if ((accelMagnitude > 0.14 || turnMagnitude > 7.5) && now - lastEmit > 170 && Math.random() > 0.4) {
+            trailEmitRef.current[fish.id] = now;
+            const direction = vx === 0 ? (isFlipped ? -1 : 1) : Math.sign(vx);
+            emitTrailBubble(x - direction * (26 * fish.scale), y + (Math.random() - 0.5) * 6);
+          }
+
           const displayY = y - scrollYRef.current * SCROLL_PARALLAX;
           return { ...fish, x, y, displayY, vx, vy, rotation };
         })
@@ -486,13 +575,39 @@ const App: React.FC = () => {
         setFishFoods(prev => prev.filter(f => !eatenFoodIds.has(f.id)));
       }
 
+      if (nibbleTriggers.size > 0) {
+        const ids = Array.from(nibbleTriggers);
+        setNibblingFishIds(prev => {
+          const next = { ...prev };
+          ids.forEach(id => {
+            next[id] = true;
+          });
+          return next;
+        });
+
+        ids.forEach(id => {
+          setTimeout(() => {
+            setNibblingFishIds(prev => {
+              if (!prev[id]) return prev;
+              const next = { ...prev };
+              delete next[id];
+              return next;
+            });
+          }, 280);
+        });
+      }
+
+      if (crumbBursts.length > 0) {
+        crumbBursts.forEach(burst => emitFoodCrumbs(burst.x, burst.worldY));
+      }
+
       animationFrameId = requestAnimationFrame(animate);
     };
     if (theme === 'underwater') {
       animate();
     }
     return () => cancelAnimationFrame(animationFrameId);
-  }, [theme]);
+  }, [theme, emitTrailBubble, emitFoodCrumbs]);
 
   useEffect(() => {
     if (theme === 'underwater') {
@@ -554,6 +669,29 @@ const App: React.FC = () => {
       ? 'bg-gradient-to-br from-[#000428] via-[#004e92] to-[#1CB5E0]'
       : 'bg-gradient-to-br from-[#020111] via-[#0d1b2a] to-[#1b263b]'
       }`}>
+      <style>{`
+        @keyframes fishTrailRise {
+          0% {
+            opacity: 0.95;
+            transform: translate(0px, 0px) scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: translate(var(--trail-dx), -42px) scale(0.45);
+          }
+        }
+
+        @keyframes foodCrumbBurst {
+          0% {
+            opacity: 1;
+            transform: translate(0px, 0px) scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: translate(var(--crumb-dx), var(--crumb-dy)) scale(0.35);
+          }
+        }
+      `}</style>
       <div
         className="fixed inset-0 w-full h-full z-0"
       >
@@ -563,7 +701,7 @@ const App: React.FC = () => {
               <Bubble key={bubble.id} {...bubble} />
             ))}
             {fishes.map(fish => (
-              <Fish key={fish.id} {...fish} />
+              <Fish key={fish.id} {...fish} isNibbling={Boolean(nibblingFishIds[fish.id])} />
             ))}
             {fishFoods.map(food => (
               <div
@@ -583,6 +721,55 @@ const App: React.FC = () => {
                 }}
               />
             ))}
+            {trailParticles.map(particle => {
+              const wrapperStyle: React.CSSProperties = {
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                transform: `translate(${particle.x}px, ${particle.worldY - scrollParallaxY}px)`,
+                pointerEvents: 'none',
+              };
+              const particleStyle: React.CSSProperties & Record<string, string> = {
+                width: particle.size,
+                height: particle.size,
+                borderRadius: '50%',
+                background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.98), rgba(125,211,252,0.88))',
+                boxShadow: '0 0 7px rgba(125,211,252,0.95)',
+                animation: `fishTrailRise ${particle.durationMs}ms ease-out forwards`,
+                '--trail-dx': `${particle.driftX}px`,
+              };
+
+              return (
+                <div key={particle.id} style={wrapperStyle}>
+                  <div style={particleStyle} />
+                </div>
+              );
+            })}
+            {foodCrumbs.map(crumb => {
+              const wrapperStyle: React.CSSProperties = {
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                transform: `translate(${crumb.x}px, ${crumb.worldY - scrollParallaxY}px)`,
+                pointerEvents: 'none',
+              };
+              const crumbStyle: React.CSSProperties & Record<string, string> = {
+                width: crumb.size,
+                height: crumb.size,
+                borderRadius: '50%',
+                background: 'radial-gradient(circle at 35% 35%, rgba(255,243,182,0.98), rgba(245,158,11,0.9))',
+                boxShadow: '0 0 6px rgba(251,191,36,0.95)',
+                animation: `foodCrumbBurst ${crumb.durationMs}ms ease-out forwards`,
+                '--crumb-dx': `${crumb.driftX}px`,
+                '--crumb-dy': `${crumb.driftY}px`,
+              };
+
+              return (
+                <div key={crumb.id} style={wrapperStyle}>
+                  <div style={crumbStyle} />
+                </div>
+              );
+            })}
           </>
         ) : (
           <>
