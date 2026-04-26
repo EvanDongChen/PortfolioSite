@@ -4,6 +4,8 @@ import Section from './components/Section';
 import ProjectCard from './components/ProjectCard';
 import Bubble from './components/Bubble';
 import Fish from './components/Fish';
+import Turtle from './components/Turtle';
+import Whale from './components/Whale';
 import SandDune from './components/SandDune';
 import BackToTopButton from './components/BackToTopButton';
 import FishFoodButton from './components/FishFoodButton';
@@ -21,6 +23,8 @@ const SCROLL_PARALLAX = 0.92;
 const DEFAULT_FISH_LIMIT = 50;
 const MIN_FISH_LIMIT = 5;
 const MAX_FISH_LIMIT = 150;
+const LARGE_CREATURE_MIN_SEPARATION = 220;
+const FISH_SPAWN_INTERVAL_MS = 600;
 
 interface FishTrailParticle {
   id: number;
@@ -41,10 +45,36 @@ interface FoodCrumbParticle {
   driftY: number;
 }
 
+interface WhaleState {
+  id: number;
+  x: number;
+  y: number;
+  baseY: number;
+  displayY: number;
+  vx: number;
+  scale: number;
+  isFlipped: boolean;
+  phase: number;
+}
+
+interface TurtleState {
+  id: number;
+  x: number;
+  y: number;
+  baseY: number;
+  displayY: number;
+  vx: number;
+  scale: number;
+  isFlipped: boolean;
+  phase: number;
+}
+
 const App: React.FC = () => {
   const { theme } = useTheme();
   const [bubbles, setBubbles] = useState<BubbleType[]>([]);
   const [fishes, setFishes] = useState<FishType[]>([]);
+  const [whale, setWhale] = useState<WhaleState | null>(null);
+  const [turtle, setTurtle] = useState<TurtleState | null>(null);
   const [fishFoods, setFishFoods] = useState<FishFoodType[]>([]);
   const [trailParticles, setTrailParticles] = useState<FishTrailParticle[]>([]);
   const [foodCrumbs, setFoodCrumbs] = useState<FoodCrumbParticle[]>([]);
@@ -58,8 +88,16 @@ const App: React.FC = () => {
   const scrollYRef = useRef(0);
   const scrollRafRef = useRef<number | null>(null);
   const mousePosRef = useRef({ x: -1000, y: -1000 });
+  const fishesRef = useRef<FishType[]>([]);
   const fishFoodsRef = useRef<FishFoodType[]>([]);
   const trailEmitRef = useRef<Record<number, number>>({});
+  const nextWhaleSpawnRef = useRef(0);
+  const nextTurtleSpawnRef = useRef(0);
+  const whaleRef = useRef<WhaleState | null>(null);
+  const turtleRef = useRef<TurtleState | null>(null);
+  const firstLargeCreatureSideRef = useRef<'left' | 'right' | null>(null);
+  const whaleHasSpawnedRef = useRef(false);
+  const turtleHasSpawnedRef = useRef(false);
 
   // Spinnable profile photo
   const [photoRotation, setPhotoRotation] = useState(0);
@@ -300,7 +338,21 @@ const App: React.FC = () => {
       isFlipped = true;
     }
 
-    y = Math.random() * document.documentElement.scrollHeight;
+    const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
+    const viewportWorldBottom = viewportWorldTop + window.innerHeight;
+    const spawnRoll = Math.random();
+
+    if (spawnRoll < 0.5) {
+      // Most fish spawn within the current viewport.
+      y = viewportWorldTop + window.innerHeight * (0.05 + Math.random() * 0.9);
+    } else if (spawnRoll < 0.8) {
+      // Some fish spawn just above or below view to swim in naturally.
+      const band = window.innerHeight * (0.25 + Math.random() * 0.35);
+      y = Math.random() > 0.5 ? viewportWorldTop - band : viewportWorldBottom + band;
+    } else {
+      // A small percentage can spawn anywhere in the document.
+      y = Math.random() * document.documentElement.scrollHeight;
+    }
     vy = 0;
     const initialVx = vx;
 
@@ -351,6 +403,24 @@ const App: React.FC = () => {
   useEffect(() => {
     fishFoodsRef.current = fishFoods;
   }, [fishFoods]);
+
+  useEffect(() => {
+    fishesRef.current = fishes;
+  }, [fishes]);
+
+  useEffect(() => {
+    whaleRef.current = whale;
+  }, [whale]);
+
+  useEffect(() => {
+    turtleRef.current = turtle;
+  }, [turtle]);
+
+  useEffect(() => {
+    firstLargeCreatureSideRef.current = null;
+    whaleHasSpawnedRef.current = false;
+    turtleHasSpawnedRef.current = false;
+  }, [theme]);
 
   const emitTrailBubble = useCallback((x: number, worldY: number) => {
     const id = Date.now() + Math.random();
@@ -465,7 +535,8 @@ const App: React.FC = () => {
       const crumbBursts: Array<{ x: number; worldY: number }> = [];
 
       setFishes(currentFishes =>
-        currentFishes.map(fish => {
+        {
+          return currentFishes.map(fish => {
           const SCARE_RADIUS = 150;
           const FLEE_STRENGTH = 6;
           const MAX_SPEED_FLEE = 5;
@@ -573,6 +644,7 @@ const App: React.FC = () => {
           .filter(fish =>
             fish.x > -200 && fish.x < window.innerWidth + 200
           )
+        }
       );
 
       if (eatenFoodIds.size > 0) {
@@ -616,7 +688,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (theme === 'underwater') {
       const bubbleInterval = setInterval(createBubble, 500);
-      const fishInterval = setInterval(createFish, 250);
+      const fishInterval = setInterval(createFish, FISH_SPAWN_INTERVAL_MS);
       return () => {
         clearInterval(bubbleInterval);
         clearInterval(fishInterval);
@@ -653,6 +725,179 @@ const App: React.FC = () => {
       setShootingStars([]);
     }
   }, [theme, createShootingStar]);
+
+  useEffect(() => {
+    let animationFrameId: number;
+
+    const randomWhaleDelay = () => 6000 + Math.random() * 8000;
+    if (nextWhaleSpawnRef.current === 0) {
+      nextWhaleSpawnRef.current = performance.now() + 900;
+    }
+
+    const animateWhale = (timestamp: number) => {
+      if (theme !== 'underwater') {
+        setWhale(null);
+        nextWhaleSpawnRef.current = timestamp + 1200;
+        return;
+      }
+
+      setWhale(current => {
+        if (!current) {
+          if (timestamp < nextWhaleSpawnRef.current) return null;
+
+          let fromLeft = Math.random() > 0.5;
+          if (!whaleHasSpawnedRef.current) {
+            if (turtleHasSpawnedRef.current && firstLargeCreatureSideRef.current) {
+              fromLeft = firstLargeCreatureSideRef.current === 'left' ? false : true;
+            } else {
+              firstLargeCreatureSideRef.current = fromLeft ? 'left' : 'right';
+            }
+          }
+          const scale = 1.0 + Math.random() * 0.5;
+          const speed = 0.4 + Math.random() * 0.35;
+          const x = fromLeft ? -420 : window.innerWidth + 420;
+          const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
+          const minSpawnY = viewportWorldTop + window.innerHeight * 0.12;
+          const maxSpawnY = viewportWorldTop + window.innerHeight * 0.88;
+          let baseY = viewportWorldTop + window.innerHeight * (0.15 + Math.random() * 0.65);
+          const turtleY = turtleRef.current?.y;
+          if (typeof turtleY === 'number' && Math.abs(baseY - turtleY) < LARGE_CREATURE_MIN_SEPARATION) {
+            const shifted = turtleY + (baseY < turtleY ? -LARGE_CREATURE_MIN_SEPARATION : LARGE_CREATURE_MIN_SEPARATION);
+            baseY = Math.max(minSpawnY, Math.min(maxSpawnY, shifted));
+            if (Math.abs(baseY - turtleY) < LARGE_CREATURE_MIN_SEPARATION) {
+              nextWhaleSpawnRef.current = timestamp + 900;
+              return null;
+            }
+          }
+          const y = baseY;
+
+          whaleHasSpawnedRef.current = true;
+          if (!firstLargeCreatureSideRef.current) {
+            firstLargeCreatureSideRef.current = fromLeft ? 'left' : 'right';
+          }
+
+          return {
+            id: Date.now() + Math.random(),
+            x,
+            y,
+            baseY,
+            displayY: y - scrollYRef.current * SCROLL_PARALLAX,
+            vx: fromLeft ? speed : -speed,
+            scale,
+            isFlipped: !fromLeft,
+            phase: Math.random() * Math.PI * 2,
+          };
+        }
+
+        const x = current.x + current.vx;
+        const y = current.baseY + Math.sin(timestamp / 1400 + current.phase) * 12;
+        const displayY = y - scrollYRef.current * SCROLL_PARALLAX;
+
+        if (x < -520 || x > window.innerWidth + 520) {
+          nextWhaleSpawnRef.current = timestamp + randomWhaleDelay();
+          return null;
+        }
+
+        return { ...current, x, y, displayY };
+      });
+
+      animationFrameId = requestAnimationFrame(animateWhale);
+    };
+
+    if (theme === 'underwater') {
+      animationFrameId = requestAnimationFrame(animateWhale);
+    } else {
+      setWhale(null);
+    }
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [theme]);
+
+  useEffect(() => {
+    let animationFrameId: number;
+
+    const randomTurtleDelay = () => 7000 + Math.random() * 9000;
+    if (nextTurtleSpawnRef.current === 0) {
+      nextTurtleSpawnRef.current = performance.now() + 1400;
+    }
+
+    const animateTurtle = (timestamp: number) => {
+      if (theme !== 'underwater') {
+        setTurtle(null);
+        nextTurtleSpawnRef.current = timestamp + 1600;
+        return;
+      }
+
+      setTurtle(current => {
+        if (!current) {
+          if (timestamp < nextTurtleSpawnRef.current) return null;
+
+          let fromLeft = Math.random() > 0.5;
+          if (!turtleHasSpawnedRef.current) {
+            if (whaleHasSpawnedRef.current && firstLargeCreatureSideRef.current) {
+              fromLeft = firstLargeCreatureSideRef.current === 'left' ? false : true;
+            } else {
+              firstLargeCreatureSideRef.current = fromLeft ? 'left' : 'right';
+            }
+          }
+          const scale = 0.8 + Math.random() * 0.45;
+          const speed = 0.28 + Math.random() * 0.24;
+          const x = fromLeft ? -260 : window.innerWidth + 260;
+          const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
+          const minSpawnY = viewportWorldTop + window.innerHeight * 0.14;
+          const maxSpawnY = viewportWorldTop + window.innerHeight * 0.9;
+          let baseY = viewportWorldTop + window.innerHeight * (0.2 + Math.random() * 0.65);
+          const whaleY = whaleRef.current?.y;
+          if (typeof whaleY === 'number' && Math.abs(baseY - whaleY) < LARGE_CREATURE_MIN_SEPARATION) {
+            const shifted = whaleY + (baseY < whaleY ? -LARGE_CREATURE_MIN_SEPARATION : LARGE_CREATURE_MIN_SEPARATION);
+            baseY = Math.max(minSpawnY, Math.min(maxSpawnY, shifted));
+            if (Math.abs(baseY - whaleY) < LARGE_CREATURE_MIN_SEPARATION) {
+              nextTurtleSpawnRef.current = timestamp + 900;
+              return null;
+            }
+          }
+
+          turtleHasSpawnedRef.current = true;
+          if (!firstLargeCreatureSideRef.current) {
+            firstLargeCreatureSideRef.current = fromLeft ? 'left' : 'right';
+          }
+
+          return {
+            id: Date.now() + Math.random(),
+            x,
+            y: baseY,
+            baseY,
+            displayY: baseY - scrollYRef.current * SCROLL_PARALLAX,
+            vx: fromLeft ? speed : -speed,
+            scale,
+            isFlipped: !fromLeft,
+            phase: Math.random() * Math.PI * 2,
+          };
+        }
+
+        const x = current.x + current.vx;
+        const y = current.baseY + Math.sin(timestamp / 1800 + current.phase) * 9;
+        const displayY = y - scrollYRef.current * SCROLL_PARALLAX;
+
+        if (x < -320 || x > window.innerWidth + 320) {
+          nextTurtleSpawnRef.current = timestamp + randomTurtleDelay();
+          return null;
+        }
+
+        return { ...current, x, y, displayY };
+      });
+
+      animationFrameId = requestAnimationFrame(animateTurtle);
+    };
+
+    if (theme === 'underwater') {
+      animationFrameId = requestAnimationFrame(animateTurtle);
+    } else {
+      setTurtle(null);
+    }
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [theme]);
 
   const colors = theme === 'underwater' ? {
     text: 'text-cyan-100', textLighter: 'text-cyan-100/90', highlight: 'text-cyan-300',
@@ -709,6 +954,8 @@ const App: React.FC = () => {
             {bubbles.map(bubble => (
               <Bubble key={bubble.id} {...bubble} />
             ))}
+            {whale && <Whale x={whale.x} displayY={whale.displayY} scale={whale.scale} isFlipped={whale.isFlipped} />}
+            {turtle && <Turtle x={turtle.x} displayY={turtle.displayY} scale={turtle.scale} isFlipped={turtle.isFlipped} />}
             {fishes.map(fish => (
               <Fish key={fish.id} {...fish} isNibbling={Boolean(nibblingFishIds[fish.id])} />
             ))}
