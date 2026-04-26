@@ -47,7 +47,6 @@ export interface FishFood {
   id: number;
   x: number;     // absolute x (same as fish x)
   worldY: number; // world y, same space as Fish.y
-  displayY: number; // computed: worldY - scrollY * 0.8
 }
 
 export interface Star {

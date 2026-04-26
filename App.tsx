@@ -17,6 +17,8 @@ import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from './components/Ico
 import { Project, Bubble as BubbleType, Experience, Fish as FishType, FishFood as FishFoodType, Education, Star as StarType, ShootingStar as ShootingStarType } from './types';
 import { useTheme } from './contexts/ThemeContext';
 
+const SCROLL_PARALLAX = 0.92;
+
 const App: React.FC = () => {
   const { theme } = useTheme();
   const [bubbles, setBubbles] = useState<BubbleType[]>([]);
@@ -26,7 +28,9 @@ const App: React.FC = () => {
   const [stars, setStars] = useState<StarType[]>([]);
   const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [scrollParallaxY, setScrollParallaxY] = useState(0);
   const scrollYRef = useRef(0);
+  const scrollRafRef = useRef<number | null>(null);
   const mousePosRef = useRef({ x: -1000, y: -1000 });
   const fishFoodsRef = useRef<FishFoodType[]>([]);
 
@@ -285,7 +289,7 @@ const App: React.FC = () => {
     const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
 
     const newFish: FishType = {
-      id, x, y, displayY: y - scrollYRef.current * 0.8, vx, vy, initialVx,
+      id, x, y, displayY: y - scrollYRef.current * SCROLL_PARALLAX, vx, vy, initialVx,
       rotation: Math.atan2(vy, vx) * (180 / Math.PI),
       scale, color1, color2,
       isFlipped,
@@ -331,8 +335,7 @@ const App: React.FC = () => {
       const newFood: FishFoodType = {
         id,
         x: e.clientX,
-        worldY: e.clientY + scrollYRef.current * 0.8,
-        displayY: e.clientY,
+        worldY: e.clientY + scrollYRef.current * SCROLL_PARALLAX,
       };
       setFishFoods(prev => prev.length >= 10 ? prev : [...prev, newFood]);
       // Auto-decay after 15 seconds if uneaten
@@ -352,11 +355,21 @@ const App: React.FC = () => {
 
   const handleScroll = useCallback(() => {
     scrollYRef.current = window.scrollY;
+    if (scrollRafRef.current !== null) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      setScrollParallaxY(scrollYRef.current * SCROLL_PARALLAX);
+      scrollRafRef.current = null;
+    });
   }, []);
 
   useEffect(() => {
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+    };
   }, [handleScroll]);
 
   useEffect(() => {
@@ -389,7 +402,7 @@ const App: React.FC = () => {
 
           let { x, y, vx, vy, rotation, initialVx } = fish;
 
-          const screenY = y - scrollYRef.current * 0.8;
+          const screenY = y - scrollYRef.current * SCROLL_PARALLAX;
           const dxMouse = x - mousePosRef.current.x;
           const dyMouse = screenY - mousePosRef.current.y;
           const distanceMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
@@ -461,7 +474,7 @@ const App: React.FC = () => {
           if (delta < -180) delta += 360;
           rotation += delta * TURN_SPEED;
 
-          const displayY = y - scrollYRef.current * 0.8;
+          const displayY = y - scrollYRef.current * SCROLL_PARALLAX;
           return { ...fish, x, y, displayY, vx, vy, rotation };
         })
           .filter(fish =>
@@ -469,15 +482,9 @@ const App: React.FC = () => {
           )
       );
 
-      // Update food displayY every frame (parallax) and remove eaten pellets
-      setFishFoods(prev => {
-        const next = prev
-          .filter(f => !eatenFoodIds.has(f.id))
-          .map(f => ({ ...f, displayY: f.worldY - scrollYRef.current * 0.8 }));
-        // Skip state update if nothing changed (avoid re-render churn)
-        if (next.length === prev.length && next.every((f, i) => f.displayY === prev[i].displayY)) return prev;
-        return next;
-      });
+      if (eatenFoodIds.size > 0) {
+        setFishFoods(prev => prev.filter(f => !eatenFoodIds.has(f.id)));
+      }
 
       animationFrameId = requestAnimationFrame(animate);
     };
@@ -568,7 +575,7 @@ const App: React.FC = () => {
                   width: 14,
                   height: 14,
                   borderRadius: '50%',
-                  transform: `translate(${food.x - 7}px, ${food.displayY - 7}px)`,
+                  transform: `translate(${food.x - 7}px, ${food.worldY - scrollParallaxY - 7}px)`,
                   background: 'radial-gradient(circle at 35% 35%, #fde68a, #f59e0b)',
                   boxShadow: '0 0 6px 2px rgba(251,191,36,0.7), 0 0 14px 4px rgba(245,158,11,0.4)',
                   pointerEvents: 'none',
