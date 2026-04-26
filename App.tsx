@@ -6,6 +6,7 @@ import Bubble from './components/Bubble';
 import Fish from './components/Fish';
 import SandDune from './components/SandDune';
 import BackToTopButton from './components/BackToTopButton';
+import FishFoodButton from './components/FishFoodButton';
 import Star from './components/Star';
 import ShootingStar from './components/ShootingStar';
 import CursorNebula from './components/CursorNebula';
@@ -13,18 +14,21 @@ import CursorNebula from './components/CursorNebula';
 const BASE_URL = import.meta.env.BASE_URL;
 import ThemeToggleButton from './components/ThemeToggleButton';
 import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from './components/Icons';
-import { Project, Bubble as BubbleType, Experience, Fish as FishType, Education, Star as StarType, ShootingStar as ShootingStarType } from './types';
+import { Project, Bubble as BubbleType, Experience, Fish as FishType, FishFood as FishFoodType, Education, Star as StarType, ShootingStar as ShootingStarType } from './types';
 import { useTheme } from './contexts/ThemeContext';
 
 const App: React.FC = () => {
   const { theme } = useTheme();
   const [bubbles, setBubbles] = useState<BubbleType[]>([]);
   const [fishes, setFishes] = useState<FishType[]>([]);
+  const [fishFoods, setFishFoods] = useState<FishFoodType[]>([]);
+  const [isFishFoodMode, setIsFishFoodMode] = useState(false);
   const [stars, setStars] = useState<StarType[]>([]);
   const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const scrollYRef = useRef(0);
   const mousePosRef = useRef({ x: -1000, y: -1000 });
+  const fishFoodsRef = useRef<FishFoodType[]>([]);
 
   // Spinnable profile photo
   const [photoRotation, setPhotoRotation] = useState(0);
@@ -312,6 +316,40 @@ const App: React.FC = () => {
     }, (duration + 10) * 1000);
   }, []);
 
+  // Keep fishFoodsRef in sync so animation loop can read it without stale closure
+  useEffect(() => {
+    fishFoodsRef.current = fishFoods;
+  }, [fishFoods]);
+
+  // Place fish food on click when food mode is active
+  useEffect(() => {
+    if (!isFishFoodMode) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('button, a, input')) return;
+      const id = Date.now() + Math.random();
+      const newFood: FishFoodType = {
+        id,
+        x: e.clientX,
+        worldY: e.clientY + scrollYRef.current * 0.8,
+        displayY: e.clientY,
+      };
+      setFishFoods(prev => prev.length >= 10 ? prev : [...prev, newFood]);
+      // Auto-decay after 15 seconds if uneaten
+      setTimeout(() => {
+        setFishFoods(prev => prev.filter(f => f.id !== id));
+      }, 15000);
+    };
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, [isFishFoodMode]);
+
+  // Crosshair cursor when food mode is active
+  useEffect(() => {
+    document.body.style.cursor = isFishFoodMode ? 'crosshair' : '';
+    return () => { document.body.style.cursor = ''; };
+  }, [isFishFoodMode]);
+
   const handleScroll = useCallback(() => {
     scrollYRef.current = window.scrollY;
   }, []);
@@ -333,12 +371,18 @@ const App: React.FC = () => {
     let animationFrameId: number;
 
     const animate = () => {
+      const eatenFoodIds = new Set<number>();
+
       setFishes(currentFishes =>
         currentFishes.map(fish => {
           const SCARE_RADIUS = 150;
           const FLEE_STRENGTH = 6;
           const MAX_SPEED_FLEE = 5;
           const MAX_SPEED_CRUISE = 2;
+          const FOOD_ATTRACT_RADIUS = 500;
+          const FOOD_ATTRACT_STRENGTH = 0.25;
+          const MAX_SPEED_FOOD = 3.5;
+          const EAT_RADIUS = 22;
           const TURN_SPEED = 0.1;
           const RETURN_TO_HORIZONTAL_STRENGTH = 0.05;
           const WANDER_STRENGTH = 0.1;
@@ -363,14 +407,48 @@ const App: React.FC = () => {
               vy = (vy / currentSpeed) * MAX_SPEED_FLEE;
             }
           } else {
-            vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
-            vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
-            vy += (Math.random() - 0.5) * WANDER_STRENGTH;
+            // Check for nearby food
+            const foods = fishFoodsRef.current;
+            let closestFood: FishFoodType | null = null;
+            let closestDist = Infinity;
+            for (const food of foods) {
+              const fdx = food.x - x;
+              const fdy = food.worldY - y;
+              const dist = Math.sqrt(fdx * fdx + fdy * fdy);
+              if (dist < closestDist) {
+                closestDist = dist;
+                closestFood = food;
+              }
+            }
 
-            const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-            if (currentSpeed > MAX_SPEED_CRUISE) {
-              vx = (vx / currentSpeed) * MAX_SPEED_CRUISE;
-              vy = (vy / currentSpeed) * MAX_SPEED_CRUISE;
+            if (closestFood && closestDist < FOOD_ATTRACT_RADIUS) {
+              // Swim toward food
+              const fdx = closestFood.x - x;
+              const fdy = closestFood.worldY - y;
+              const angle = Math.atan2(fdy, fdx);
+              vx += Math.cos(angle) * FOOD_ATTRACT_STRENGTH;
+              vy += Math.sin(angle) * FOOD_ATTRACT_STRENGTH;
+
+              const currentSpeed = Math.sqrt(vx * vx + vy * vy);
+              if (currentSpeed > MAX_SPEED_FOOD) {
+                vx = (vx / currentSpeed) * MAX_SPEED_FOOD;
+                vy = (vy / currentSpeed) * MAX_SPEED_FOOD;
+              }
+
+              if (closestDist < EAT_RADIUS) {
+                eatenFoodIds.add(closestFood.id);
+              }
+            } else {
+              // Normal cruising
+              vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
+              vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
+              vy += (Math.random() - 0.5) * WANDER_STRENGTH;
+
+              const currentSpeed = Math.sqrt(vx * vx + vy * vy);
+              if (currentSpeed > MAX_SPEED_CRUISE) {
+                vx = (vx / currentSpeed) * MAX_SPEED_CRUISE;
+                vy = (vy / currentSpeed) * MAX_SPEED_CRUISE;
+              }
             }
           }
 
@@ -390,6 +468,17 @@ const App: React.FC = () => {
             fish.x > -200 && fish.x < window.innerWidth + 200
           )
       );
+
+      // Update food displayY every frame (parallax) and remove eaten pellets
+      setFishFoods(prev => {
+        const next = prev
+          .filter(f => !eatenFoodIds.has(f.id))
+          .map(f => ({ ...f, displayY: f.worldY - scrollYRef.current * 0.8 }));
+        // Skip state update if nothing changed (avoid re-render churn)
+        if (next.length === prev.length && next.every((f, i) => f.displayY === prev[i].displayY)) return prev;
+        return next;
+      });
+
       animationFrameId = requestAnimationFrame(animate);
     };
     if (theme === 'underwater') {
@@ -468,6 +557,24 @@ const App: React.FC = () => {
             ))}
             {fishes.map(fish => (
               <Fish key={fish.id} {...fish} />
+            ))}
+            {fishFoods.map(food => (
+              <div
+                key={food.id}
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: 14,
+                  height: 14,
+                  borderRadius: '50%',
+                  transform: `translate(${food.x - 7}px, ${food.displayY - 7}px)`,
+                  background: 'radial-gradient(circle at 35% 35%, #fde68a, #f59e0b)',
+                  boxShadow: '0 0 6px 2px rgba(251,191,36,0.7), 0 0 14px 4px rgba(245,158,11,0.4)',
+                  pointerEvents: 'none',
+                  zIndex: 1,
+                }}
+              />
             ))}
           </>
         ) : (
@@ -651,6 +758,7 @@ const App: React.FC = () => {
       </div>
       <BackToTopButton />
       <ThemeToggleButton />
+      <FishFoodButton isActive={isFishFoodMode} onToggle={() => setIsFishFoodMode(prev => !prev)} />
     </div>
   );
 };
