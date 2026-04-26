@@ -18,6 +18,9 @@ import { Project, Bubble as BubbleType, Experience, Fish as FishType, FishFood a
 import { useTheme } from './contexts/ThemeContext';
 
 const SCROLL_PARALLAX = 0.92;
+const DEFAULT_FISH_LIMIT = 50;
+const MIN_FISH_LIMIT = 5;
+const MAX_FISH_LIMIT = 150;
 
 interface FishTrailParticle {
   id: number;
@@ -46,6 +49,7 @@ const App: React.FC = () => {
   const [trailParticles, setTrailParticles] = useState<FishTrailParticle[]>([]);
   const [foodCrumbs, setFoodCrumbs] = useState<FoodCrumbParticle[]>([]);
   const [nibblingFishIds, setNibblingFishIds] = useState<Record<number, boolean>>({});
+  const [fishLimit, setFishLimit] = useState(DEFAULT_FISH_LIMIT);
   const [isFishFoodMode, setIsFishFoodMode] = useState(false);
   const [stars, setStars] = useState<StarType[]>([]);
   const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
@@ -319,12 +323,12 @@ const App: React.FC = () => {
     };
 
     setFishes(prev => {
-      if (prev.length >= 50) {
+      if (prev.length >= fishLimit) {
         return prev;
       }
       return [...prev, newFish];
     });
-  }, []);
+  }, [fishLimit]);
 
   const createShootingStar = useCallback(() => {
     const id = Date.now() + Math.random();
@@ -622,6 +626,11 @@ const App: React.FC = () => {
       setFishes([]);
     }
   }, [theme, createBubble, createFish]);
+
+  useEffect(() => {
+    if (fishes.length <= fishLimit) return;
+    setFishes(prev => prev.slice(0, fishLimit));
+  }, [fishLimit, fishes.length]);
 
   useEffect(() => {
     if (theme === 'space') {
@@ -952,6 +961,23 @@ const App: React.FC = () => {
       </div>
       <BackToTopButton />
       <ThemeToggleButton />
+      {theme === 'underwater' && (
+        <div className="fixed bottom-8 left-24 z-40 w-56 px-1 opacity-50">
+          <div className="mb-1 flex items-center justify-between text-xs text-cyan-100/90">
+            <span className="font-semibold tracking-wide">Fish Count</span>
+            <span className="font-semibold">{fishLimit}</span>
+          </div>
+          <input
+            type="range"
+            min={MIN_FISH_LIMIT}
+            max={MAX_FISH_LIMIT}
+            value={fishLimit}
+            onChange={(e) => setFishLimit(Number(e.target.value))}
+            className="w-full accent-cyan-400 opacity-90 hover:opacity-100 transition-opacity"
+            aria-label="Fish spawn limit"
+          />
+        </div>
+      )}
       <FishFoodButton isActive={isFishFoodMode} onToggle={() => setIsFishFoodMode(prev => !prev)} />
     </div>
   );
