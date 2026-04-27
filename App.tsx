@@ -19,7 +19,7 @@ import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from './components/Ico
 import { Project, Bubble as BubbleType, Experience, Fish as FishType, FishFood as FishFoodType, Education, Star as StarType, ShootingStar as ShootingStarType } from './types';
 import { useTheme } from './contexts/ThemeContext';
 
-const SCROLL_PARALLAX = 0.92;
+const SCROLL_PARALLAX = 1.0;
 const DEFAULT_FISH_LIMIT = 50;
 const MIN_FISH_LIMIT = 5;
 const MAX_FISH_LIMIT = 150;
@@ -84,8 +84,8 @@ const App: React.FC = () => {
   const [stars, setStars] = useState<StarType[]>([]);
   const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [scrollParallaxY, setScrollParallaxY] = useState(0);
   const scrollYRef = useRef(0);
+  const worldLayerRef = useRef<HTMLDivElement>(null);
   const scrollRafRef = useRef<number | null>(null);
   const mousePosRef = useRef({ x: -1000, y: -1000 });
   const fishesRef = useRef<FishType[]>([]);
@@ -342,10 +342,10 @@ const App: React.FC = () => {
     const viewportWorldBottom = viewportWorldTop + window.innerHeight;
     const spawnRoll = Math.random();
 
-    if (spawnRoll < 0.5) {
+    if (spawnRoll < 0.6) {
       // Most fish spawn within the current viewport.
       y = viewportWorldTop + window.innerHeight * (0.05 + Math.random() * 0.9);
-    } else if (spawnRoll < 0.8) {
+    } else if (spawnRoll < 0.84) {
       // Some fish spawn just above or below view to swim in naturally.
       const band = window.innerHeight * (0.25 + Math.random() * 0.35);
       y = Math.random() > 0.5 ? viewportWorldTop - band : viewportWorldBottom + band;
@@ -368,10 +368,16 @@ const App: React.FC = () => {
     const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
 
     const newFish: FishType = {
-      id, x, y, displayY: y - scrollYRef.current * SCROLL_PARALLAX, vx, vy, initialVx,
+      id, x, y, displayY: y, vx, vy, initialVx,
       rotation: Math.atan2(vy, vx) * (180 / Math.PI),
       scale, color1, color2,
       isFlipped,
+      schoolId: (() => {
+        const xBand = Math.min(2, Math.floor((x / window.innerWidth) * 3));
+        const spawnDisplayY = y - scrollYRef.current * SCROLL_PARALLAX;
+        const yBand = spawnDisplayY < window.innerHeight / 2 ? 0 : 1;
+        return xBand * 2 + yBand; // 0–5
+      })(),
     };
 
     setFishes(prev => {
@@ -501,20 +507,15 @@ const App: React.FC = () => {
 
   const handleScroll = useCallback(() => {
     scrollYRef.current = window.scrollY;
-    if (scrollRafRef.current !== null) return;
-    scrollRafRef.current = requestAnimationFrame(() => {
-      setScrollParallaxY(scrollYRef.current * SCROLL_PARALLAX);
-      scrollRafRef.current = null;
-    });
+    if (worldLayerRef.current) {
+      worldLayerRef.current.style.transform = `translateY(${-scrollYRef.current * SCROLL_PARALLAX}px)`;
+    }
   }, []);
 
   useEffect(() => {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', handleScroll);
-      if (scrollRafRef.current !== null) {
-        cancelAnimationFrame(scrollRafRef.current);
-      }
     };
   }, [handleScroll]);
 
@@ -548,6 +549,14 @@ const App: React.FC = () => {
           const TURN_SPEED = 0.1;
           const RETURN_TO_HORIZONTAL_STRENGTH = 0.05;
           const WANDER_STRENGTH = 0.1;
+          const SCHOOL_RADIUS = 140;
+          const SEPARATION_RADIUS = 68;
+          const ALIGN_STRENGTH = 0.015;
+          const COHESION_STRENGTH = 0.006;
+          const SEPARATION_STRENGTH = 0.12;
+          const MAX_NEIGHBORS_CONSIDERED = 8;
+          const SCHOOL_SPEED_BOOST = 0.55;
+          const MAX_SPEED_SCHOOL = 3.5;
 
           let { x, y, vx, vy, rotation, initialVx, isFlipped } = fish;
           const prevVx = vx;
@@ -610,10 +619,106 @@ const App: React.FC = () => {
               vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
               vy += (Math.random() - 0.5) * WANDER_STRENGTH;
 
-              const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-              if (currentSpeed > MAX_SPEED_CRUISE) {
-                vx = (vx / currentSpeed) * MAX_SPEED_CRUISE;
-                vy = (vy / currentSpeed) * MAX_SPEED_CRUISE;
+              // Fish schooling: alignment + cohesion + separation.
+              // Viewport culling: skip costly schooling for off-screen fish.
+              const fishDisplayY = y - scrollYRef.current * SCROLL_PARALLAX;
+              const isOffscreen = fishDisplayY < -400 || fishDisplayY > window.innerHeight + 400;
+
+              let neighborCount = 0;
+              let alignX = 0;
+              let alignY = 0;
+              let centerX = 0;
+              let centerY = 0;
+              let separationX = 0;
+              let separationY = 0;
+
+              if (!isOffscreen) for (const other of currentFishes) {
+                if (other.id === fish.id) continue;
+                const dx = other.x - x;
+                const dy = other.y - y;
+                const distSq = dx * dx + dy * dy;
+                if (distSq > SCHOOL_RADIUS * SCHOOL_RADIUS) continue;
+
+                const dist = Math.sqrt(distSq);
+
+                // Separation applies to all fish regardless of school
+                if (dist < SEPARATION_RADIUS && dist > 0.001) {
+                  separationX -= dx / dist;
+                  separationY -= dy / dist;
+                }
+
+                // Cohesion and alignment only within the same mini-school
+                if (other.schoolId !== fish.schoolId) continue;
+
+                neighborCount++;
+                alignX += other.vx;
+                alignY += other.vy;
+                centerX += other.x;
+                centerY += other.y;
+
+                if (neighborCount >= MAX_NEIGHBORS_CONSIDERED) break;
+              } // end schooling loop
+
+              // Separation applies globally (all nearby fish push apart)
+              vx += separationX * SEPARATION_STRENGTH;
+              vy += separationY * SEPARATION_STRENGTH;
+
+              if (neighborCount > 0) {
+                // Alignment + cohesion only within same mini-school
+                alignX = alignX / neighborCount - vx;
+                alignY = alignY / neighborCount - vy;
+                vx += alignX * ALIGN_STRENGTH;
+                vy += alignY * ALIGN_STRENGTH;
+
+                centerX /= neighborCount;
+                centerY /= neighborCount;
+                vx += (centerX - x) * COHESION_STRENGTH;
+                vy += (centerY - y) * COHESION_STRENGTH;
+
+                // Pattern-based movement: each school group has a distinct style
+                const t = performance.now() * 0.001;
+                const pattern = fish.schoolId % 3;
+                if (pattern === 0) {
+                  // Sweep: wide lazy arcs up and down
+                  vy += Math.sin(t * 0.6 + fish.schoolId * 1.3) * 0.06;
+                } else if (pattern === 1) {
+                  // Surge: periodic speed bursts every ~4s
+                  const surgePhase = (t * 0.25 + fish.schoolId * 0.7) % 1;
+                  if (surgePhase < 0.18) {
+                    const surgeStrength = Math.sin(surgePhase * (Math.PI / 0.18)) * 0.18;
+                    const speed = Math.sqrt(vx * vx + vy * vy);
+                    if (speed > 0.001) {
+                      vx += (vx / speed) * surgeStrength;
+                      vy += (vy / speed) * surgeStrength;
+                    }
+                  }
+                } else {
+                  // Spiral: tighter oscillation, school weaves in a corkscrew
+                  vy += Math.sin(t * 1.4 + fish.schoolId * 2.1) * 0.09;
+                  vx += Math.cos(t * 0.9 + fish.schoolId * 1.7) * 0.025;
+                }
+
+                // Schooled fish move faster — use a higher speed cap than solo fish
+                const speed = Math.sqrt(vx * vx + vy * vy);
+                const schoolTargetSpeed = Math.min(MAX_SPEED_CRUISE + SCHOOL_SPEED_BOOST, MAX_SPEED_SCHOOL);
+                if (speed > 0.001 && speed < schoolTargetSpeed) {
+                  const boost = 0.12;
+                  vx += (vx / speed) * boost;
+                  vy += (vy / speed) * boost;
+                }
+
+                // School speed cap is higher than solo cruise cap
+                const finalSpeed = Math.sqrt(vx * vx + vy * vy);
+                if (finalSpeed > MAX_SPEED_SCHOOL) {
+                  vx = (vx / finalSpeed) * MAX_SPEED_SCHOOL;
+                  vy = (vy / finalSpeed) * MAX_SPEED_SCHOOL;
+                }
+              } else {
+                const currentSpeed = Math.sqrt(vx * vx + vy * vy);
+                if (currentSpeed > MAX_SPEED_CRUISE) {
+                  vx = (vx / currentSpeed) * MAX_SPEED_CRUISE;
+                  vy = (vy / currentSpeed) * MAX_SPEED_CRUISE;
+                }
               }
             }
           }
@@ -638,8 +743,7 @@ const App: React.FC = () => {
             emitTrailBubble(x - direction * (26 * fish.scale), y + (Math.random() - 0.5) * 6);
           }
 
-          const displayY = y - scrollYRef.current * SCROLL_PARALLAX;
-          return { ...fish, x, y, displayY, vx, vy, rotation };
+          return { ...fish, x, y, displayY: y, vx, vy, rotation };
         })
           .filter(fish =>
             fish.x > -200 && fish.x < window.innerWidth + 200
@@ -956,6 +1060,12 @@ const App: React.FC = () => {
             ))}
             {whale && <Whale x={whale.x} displayY={whale.displayY} scale={whale.scale} isFlipped={whale.isFlipped} />}
             {turtle && <Turtle x={turtle.x} displayY={turtle.displayY} scale={turtle.scale} isFlipped={turtle.isFlipped} />}
+            {/* World-layer: fish + food + particles all in world coords.
+                translateY(-scrollY) is applied directly on scroll — zero React re-renders for scroll. */}
+            <div
+              ref={worldLayerRef}
+              style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', willChange: 'transform' }}
+            >
             {fishes.map(fish => (
               <Fish key={fish.id} {...fish} isNibbling={Boolean(nibblingFishIds[fish.id])} />
             ))}
@@ -969,7 +1079,7 @@ const App: React.FC = () => {
                   width: 14,
                   height: 14,
                   borderRadius: '50%',
-                  transform: `translate(${food.x - 7}px, ${food.worldY - scrollParallaxY - 7}px)`,
+                  transform: `translate(${food.x - 7}px, ${food.worldY - 7}px)`,
                   background: 'radial-gradient(circle at 35% 35%, #fde68a, #f59e0b)',
                   boxShadow: '0 0 6px 2px rgba(251,191,36,0.7), 0 0 14px 4px rgba(245,158,11,0.4)',
                   pointerEvents: 'none',
@@ -982,7 +1092,7 @@ const App: React.FC = () => {
                 position: 'absolute',
                 left: 0,
                 top: 0,
-                transform: `translate(${particle.x}px, ${particle.worldY - scrollParallaxY}px)`,
+                transform: `translate(${particle.x}px, ${particle.worldY}px)`,
                 pointerEvents: 'none',
               };
               const particleStyle: React.CSSProperties & Record<string, string> = {
@@ -1006,7 +1116,7 @@ const App: React.FC = () => {
                 position: 'absolute',
                 left: 0,
                 top: 0,
-                transform: `translate(${crumb.x}px, ${crumb.worldY - scrollParallaxY}px)`,
+                transform: `translate(${crumb.x}px, ${crumb.worldY}px)`,
                 pointerEvents: 'none',
               };
               const crumbStyle: React.CSSProperties & Record<string, string> = {
@@ -1026,6 +1136,7 @@ const App: React.FC = () => {
                 </div>
               );
             })}
+            </div>
           </>
         ) : (
           <>

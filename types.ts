@@ -41,6 +41,7 @@ export interface Fish {
   color1: string;
   color2: string;
   isFlipped: boolean;
+  schoolId: number;
 }
 
 export interface FishFood {
