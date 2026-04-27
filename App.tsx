@@ -25,6 +25,17 @@ const MIN_FISH_LIMIT = 5;
 const MAX_FISH_LIMIT = 150;
 const LARGE_CREATURE_MIN_SEPARATION = 220;
 const FISH_SPAWN_INTERVAL_MS = 600;
+const randomInRange = (minMs: number, maxMs: number) => minMs + Math.random() * (maxMs - minMs);
+
+const WHALE_INITIAL_DELAY_MIN_MS = 2500;
+const WHALE_INITIAL_DELAY_MAX_MS = 7000;
+const WHALE_RESPAWN_DELAY_MIN_MS = 6000;
+const WHALE_RESPAWN_DELAY_MAX_MS = 14000;
+
+const TURTLE_INITIAL_DELAY_MIN_MS = 3000;
+const TURTLE_INITIAL_DELAY_MAX_MS = 8000;
+const TURTLE_RESPAWN_DELAY_MIN_MS = 7000;
+const TURTLE_RESPAWN_DELAY_MAX_MS = 16000;
 
 interface FishTrailParticle {
   id: number;
@@ -514,6 +525,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     window.addEventListener('scroll', handleScroll, { passive: true });
+    // Sync world-layer offset immediately (important when page loads not at top).
+    handleScroll();
     return () => {
       window.removeEventListener('scroll', handleScroll);
     };
@@ -833,15 +846,15 @@ const App: React.FC = () => {
   useEffect(() => {
     let animationFrameId: number;
 
-    const randomWhaleDelay = () => 6000 + Math.random() * 8000;
+    const randomWhaleDelay = () => randomInRange(WHALE_RESPAWN_DELAY_MIN_MS, WHALE_RESPAWN_DELAY_MAX_MS);
     if (nextWhaleSpawnRef.current === 0) {
-      nextWhaleSpawnRef.current = performance.now() + 900;
+      nextWhaleSpawnRef.current = performance.now() + randomInRange(WHALE_INITIAL_DELAY_MIN_MS, WHALE_INITIAL_DELAY_MAX_MS);
     }
 
     const animateWhale = (timestamp: number) => {
       if (theme !== 'underwater') {
         setWhale(null);
-        nextWhaleSpawnRef.current = timestamp + 1200;
+        nextWhaleSpawnRef.current = timestamp + randomInRange(WHALE_INITIAL_DELAY_MIN_MS, WHALE_INITIAL_DELAY_MAX_MS);
         return;
       }
 
@@ -920,15 +933,15 @@ const App: React.FC = () => {
   useEffect(() => {
     let animationFrameId: number;
 
-    const randomTurtleDelay = () => 7000 + Math.random() * 9000;
+    const randomTurtleDelay = () => randomInRange(TURTLE_RESPAWN_DELAY_MIN_MS, TURTLE_RESPAWN_DELAY_MAX_MS);
     if (nextTurtleSpawnRef.current === 0) {
-      nextTurtleSpawnRef.current = performance.now() + 1400;
+      nextTurtleSpawnRef.current = performance.now() + randomInRange(TURTLE_INITIAL_DELAY_MIN_MS, TURTLE_INITIAL_DELAY_MAX_MS);
     }
 
     const animateTurtle = (timestamp: number) => {
       if (theme !== 'underwater') {
         setTurtle(null);
-        nextTurtleSpawnRef.current = timestamp + 1600;
+        nextTurtleSpawnRef.current = timestamp + randomInRange(TURTLE_INITIAL_DELAY_MIN_MS, TURTLE_INITIAL_DELAY_MAX_MS);
         return;
       }
 
@@ -1095,14 +1108,14 @@ const App: React.FC = () => {
                 transform: `translate(${particle.x}px, ${particle.worldY}px)`,
                 pointerEvents: 'none',
               };
-              const particleStyle: React.CSSProperties & Record<string, string> = {
+              const particleStyle: React.CSSProperties = {
                 width: particle.size,
                 height: particle.size,
                 borderRadius: '50%',
                 background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.98), rgba(125,211,252,0.88))',
                 boxShadow: '0 0 7px rgba(125,211,252,0.95)',
                 animation: `fishTrailRise ${particle.durationMs}ms ease-out forwards`,
-                '--trail-dx': `${particle.driftX}px`,
+                ['--trail-dx' as any]: `${particle.driftX}px`,
               };
 
               return (
@@ -1119,15 +1132,15 @@ const App: React.FC = () => {
                 transform: `translate(${crumb.x}px, ${crumb.worldY}px)`,
                 pointerEvents: 'none',
               };
-              const crumbStyle: React.CSSProperties & Record<string, string> = {
+              const crumbStyle: React.CSSProperties = {
                 width: crumb.size,
                 height: crumb.size,
                 borderRadius: '50%',
                 background: 'radial-gradient(circle at 35% 35%, rgba(255,243,182,0.98), rgba(245,158,11,0.9))',
                 boxShadow: '0 0 6px rgba(251,191,36,0.95)',
                 animation: `foodCrumbBurst ${crumb.durationMs}ms ease-out forwards`,
-                '--crumb-dx': `${crumb.driftX}px`,
-                '--crumb-dy': `${crumb.driftY}px`,
+                ['--crumb-dx' as any]: `${crumb.driftX}px`,
+                ['--crumb-dy' as any]: `${crumb.driftY}px`,
               };
 
               return (
