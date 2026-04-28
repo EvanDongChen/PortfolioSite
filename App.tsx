@@ -9,6 +9,7 @@ import Jellyfish from './components/Jellyfish';
 import Whale from './components/Whale';
 import SandDune from './components/SandDune';
 import GodRays from './components/GodRays';
+import FishCensus from './components/FishCensus';
 import BackToTopButton from './components/BackToTopButton';
 import FishFoodButton from './components/FishFoodButton';
 import Star from './components/Star';
@@ -460,10 +461,10 @@ const App: React.FC = () => {
       const behaviorRoll = Math.random();
       const behavior: FishBehavior =
         behaviorRoll < 0.33 ? 'cruise' :
-        behaviorRoll < 0.48 ? 'swirl' :
-        behaviorRoll < 0.58 ? 'dart' :
-        behaviorRoll < 0.63 ? 'loiter' :
-        behaviorRoll < 0.88 ? 'conga' : 'curious';
+          behaviorRoll < 0.48 ? 'swirl' :
+            behaviorRoll < 0.58 ? 'dart' :
+              behaviorRoll < 0.63 ? 'loiter' :
+                behaviorRoll < 0.88 ? 'conga' : 'curious';
       const behaviorPhase = Math.random() * Math.PI * 2;
       // Swirl orbit setup
       const swirlRadius = 40 + Math.random() * 60;
@@ -779,9 +780,8 @@ const App: React.FC = () => {
       const crumbBursts: Array<{ x: number; worldY: number }> = [];
       const frameTimeSeconds = timestamp * 0.001;
 
-      setFishes(currentFishes =>
-        {
-          return currentFishes.map(fish => {
+      setFishes(currentFishes => {
+        return currentFishes.map(fish => {
           const SCARE_RADIUS = 150;
           const FLEE_STRENGTH = 6;
           const MAX_SPEED_FLEE = 5;
@@ -828,7 +828,7 @@ const App: React.FC = () => {
                 vx += Math.cos(angle) * force;
                 vy += Math.sin(angle) * force;
                 isFleeing = true;
-                
+
                 // Blast breaks up conga lines and resets them to dart mode
                 if (fish.behavior === 'conga') {
                   fish.congaLeaderId = undefined;
@@ -1000,12 +1000,12 @@ const App: React.FC = () => {
               } else if (fish.behavior === 'conga') {
                 // ── CONGA: single-file snake line, fast & curvy ─────────────
                 const CONGA_SPEED = 4.2;
-                const CONGA_GAP   = 36; // px between fish
+                const CONGA_GAP = 36; // px between fish
 
                 if (fish.congaIndex === 0) {
                   // Leader: fast sinusoidal path
                   const SINE_FREQ = 1.6;
-                  const SINE_AMP  = 0.22;
+                  const SINE_AMP = 0.22;
                   vy += Math.sin(t * SINE_FREQ + bp) * SINE_AMP;
                   vx += (initialVx > 0 ? CONGA_SPEED : -CONGA_SPEED) * 0.12;
                   const leaderSpd = Math.sqrt(vx * vx + vy * vy);
@@ -1702,76 +1702,76 @@ const App: React.FC = () => {
               ref={worldLayerRef}
               style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', willChange: 'transform' }}
             >
-            {fishes.map(fish => (
-              <Fish key={fish.id} {...fish} isNibbling={Boolean(nibblingFishIds[fish.id])} />
-            ))}
-            {fishFoods.map(food => (
-              <div
-                key={food.id}
-                style={{
+              {fishes.map(fish => (
+                <Fish key={fish.id} {...fish} isNibbling={Boolean(nibblingFishIds[fish.id])} />
+              ))}
+              {fishFoods.map(food => (
+                <div
+                  key={food.id}
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    width: 14,
+                    height: 14,
+                    borderRadius: '50%',
+                    transform: `translate(${food.x - 7}px, ${food.worldY - 7}px)`,
+                    background: 'radial-gradient(circle at 35% 35%, #fde68a, #f59e0b)',
+                    boxShadow: '0 0 6px 2px rgba(251,191,36,0.7), 0 0 14px 4px rgba(245,158,11,0.4)',
+                    pointerEvents: 'none',
+                    zIndex: 1,
+                  }}
+                />
+              ))}
+              {trailParticles.map(particle => {
+                const wrapperStyle: React.CSSProperties = {
                   position: 'absolute',
                   left: 0,
                   top: 0,
-                  width: 14,
-                  height: 14,
-                  borderRadius: '50%',
-                  transform: `translate(${food.x - 7}px, ${food.worldY - 7}px)`,
-                  background: 'radial-gradient(circle at 35% 35%, #fde68a, #f59e0b)',
-                  boxShadow: '0 0 6px 2px rgba(251,191,36,0.7), 0 0 14px 4px rgba(245,158,11,0.4)',
+                  transform: `translate(${particle.x}px, ${particle.worldY}px)`,
                   pointerEvents: 'none',
-                  zIndex: 1,
-                }}
-              />
-            ))}
-            {trailParticles.map(particle => {
-              const wrapperStyle: React.CSSProperties = {
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                transform: `translate(${particle.x}px, ${particle.worldY}px)`,
-                pointerEvents: 'none',
-              };
-              const particleStyle: React.CSSProperties = {
-                width: particle.size,
-                height: particle.size,
-                borderRadius: '50%',
-                background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.98), rgba(125,211,252,0.88))',
-                boxShadow: '0 0 7px rgba(125,211,252,0.95)',
-                animation: `fishTrailRise ${particle.durationMs}ms ease-out forwards`,
-                ['--trail-dx' as any]: `${particle.driftX}px`,
-              };
+                };
+                const particleStyle: React.CSSProperties = {
+                  width: particle.size,
+                  height: particle.size,
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.98), rgba(125,211,252,0.88))',
+                  boxShadow: '0 0 7px rgba(125,211,252,0.95)',
+                  animation: `fishTrailRise ${particle.durationMs}ms ease-out forwards`,
+                  ['--trail-dx' as any]: `${particle.driftX}px`,
+                };
 
-              return (
-                <div key={particle.id} style={wrapperStyle}>
-                  <div style={particleStyle} />
-                </div>
-              );
-            })}
-            {foodCrumbs.map(crumb => {
-              const wrapperStyle: React.CSSProperties = {
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                transform: `translate(${crumb.x}px, ${crumb.worldY}px)`,
-                pointerEvents: 'none',
-              };
-              const crumbStyle: React.CSSProperties = {
-                width: crumb.size,
-                height: crumb.size,
-                borderRadius: '50%',
-                background: 'radial-gradient(circle at 35% 35%, rgba(255,243,182,0.98), rgba(245,158,11,0.9))',
-                boxShadow: '0 0 6px rgba(251,191,36,0.95)',
-                animation: `foodCrumbBurst ${crumb.durationMs}ms ease-out forwards`,
-                ['--crumb-dx' as any]: `${crumb.driftX}px`,
-                ['--crumb-dy' as any]: `${crumb.driftY}px`,
-              };
+                return (
+                  <div key={particle.id} style={wrapperStyle}>
+                    <div style={particleStyle} />
+                  </div>
+                );
+              })}
+              {foodCrumbs.map(crumb => {
+                const wrapperStyle: React.CSSProperties = {
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  transform: `translate(${crumb.x}px, ${crumb.worldY}px)`,
+                  pointerEvents: 'none',
+                };
+                const crumbStyle: React.CSSProperties = {
+                  width: crumb.size,
+                  height: crumb.size,
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle at 35% 35%, rgba(255,243,182,0.98), rgba(245,158,11,0.9))',
+                  boxShadow: '0 0 6px rgba(251,191,36,0.95)',
+                  animation: `foodCrumbBurst ${crumb.durationMs}ms ease-out forwards`,
+                  ['--crumb-dx' as any]: `${crumb.driftX}px`,
+                  ['--crumb-dy' as any]: `${crumb.driftY}px`,
+                };
 
-              return (
-                <div key={crumb.id} style={wrapperStyle}>
-                  <div style={crumbStyle} />
-                </div>
-              );
-            })}
+                return (
+                  <div key={crumb.id} style={wrapperStyle}>
+                    <div style={crumbStyle} />
+                  </div>
+                );
+              })}
             </div>
           </>
         ) : (
@@ -2021,21 +2021,24 @@ const App: React.FC = () => {
       <BackToTopButton />
       <ThemeToggleButton />
       {theme === 'underwater' && (
-        <div className="fixed bottom-8 left-24 z-40 w-56 px-1 opacity-50">
-          <div className="mb-1 flex items-center justify-between text-xs text-cyan-100/90">
-            <span className="font-semibold tracking-wide">Fish Count</span>
-            <span className="font-semibold">{fishLimit}</span>
+        <>
+          <div className="fixed bottom-8 left-24 z-40 w-56 px-1 opacity-50">
+            <div className="mb-1 flex items-center justify-between text-xs text-cyan-100/90">
+              <span className="font-semibold tracking-wide">Fish Count</span>
+              <span className="font-semibold">{fishLimit}</span>
+            </div>
+            <input
+              type="range"
+              min={MIN_FISH_LIMIT}
+              max={MAX_FISH_LIMIT}
+              value={fishLimit}
+              onChange={(e) => setFishLimit(Number(e.target.value))}
+              className="w-full accent-cyan-400 opacity-90 hover:opacity-100 transition-opacity"
+              aria-label="Fish spawn limit"
+            />
           </div>
-          <input
-            type="range"
-            min={MIN_FISH_LIMIT}
-            max={MAX_FISH_LIMIT}
-            value={fishLimit}
-            onChange={(e) => setFishLimit(Number(e.target.value))}
-            className="w-full accent-cyan-400 opacity-90 hover:opacity-100 transition-opacity"
-            aria-label="Fish spawn limit"
-          />
-        </div>
+          <FishCensus fishes={fishes} />
+        </>
       )}
       <FishFoodButton isActive={isFishFoodMode} onToggle={() => setIsFishFoodMode(prev => !prev)} />
     </div>
