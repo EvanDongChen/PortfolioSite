@@ -72,6 +72,24 @@ interface FoodCrumbParticle {
   driftY: number;
 }
 
+interface JellyPopParticle {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  durationMs: number;
+  driftX: number;
+  driftY: number;
+}
+
+interface JellyPopRing {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  durationMs: number;
+}
+
 interface WhaleState {
   id: number;
   x: number;
@@ -120,6 +138,8 @@ const App: React.FC = () => {
   const [fishFoods, setFishFoods] = useState<FishFoodType[]>([]);
   const [trailParticles, setTrailParticles] = useState<FishTrailParticle[]>([]);
   const [foodCrumbs, setFoodCrumbs] = useState<FoodCrumbParticle[]>([]);
+  const [jellyPopParticles, setJellyPopParticles] = useState<JellyPopParticle[]>([]);
+  const [jellyPopRings, setJellyPopRings] = useState<JellyPopRing[]>([]);
   const [nibblingFishIds, setNibblingFishIds] = useState<Record<number, boolean>>({});
   const [fishLimit, setFishLimit] = useState(DEFAULT_FISH_LIMIT);
   const [isFishFoodMode, setIsFishFoodMode] = useState(false);
@@ -138,6 +158,7 @@ const App: React.FC = () => {
   const nextJellyfishSpawnRef = useRef(0);
   const whaleRef = useRef<WhaleState | null>(null);
   const turtleRef = useRef<TurtleState | null>(null);
+  const jellyfishRef = useRef<JellyfishState | null>(null);
   const firstLargeCreatureSideRef = useRef<'left' | 'right' | null>(null);
   const whaleHasSpawnedRef = useRef(false);
   const turtleHasSpawnedRef = useRef(false);
@@ -485,6 +506,10 @@ const App: React.FC = () => {
   }, [turtle]);
 
   useEffect(() => {
+    jellyfishRef.current = jellyfish;
+  }, [jellyfish]);
+
+  useEffect(() => {
     firstLargeCreatureSideRef.current = null;
     whaleHasSpawnedRef.current = false;
     turtleHasSpawnedRef.current = false;
@@ -536,6 +561,48 @@ const App: React.FC = () => {
     setFoodCrumbs(prev => {
       const next = [...prev, ...particles];
       return next.length > 140 ? next.slice(next.length - 140) : next;
+    });
+  }, [getNextEntityId]);
+
+  const emitJellyfishPop = useCallback((x: number, y: number, scale: number) => {
+    const ringId = getNextEntityId();
+    const ringDurationMs = 420;
+    const ringSize = 26 + scale * 26;
+
+    setJellyPopRings(prev => {
+      const next = [...prev, { id: ringId, x, y, size: ringSize, durationMs: ringDurationMs }];
+      return next.length > 10 ? next.slice(next.length - 10) : next;
+    });
+
+    setTimeout(() => {
+      setJellyPopRings(prev => prev.filter(ring => ring.id !== ringId));
+    }, ringDurationMs + 60);
+
+    const particles = Array.from({ length: 12 }, () => {
+      const id = getNextEntityId();
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 12 + Math.random() * 22;
+      const durationMs = 360 + Math.random() * 260;
+      const particle: JellyPopParticle = {
+        id,
+        x,
+        y,
+        size: 4 + Math.random() * 4,
+        durationMs,
+        driftX: Math.cos(angle) * speed,
+        driftY: Math.sin(angle) * speed - 12,
+      };
+
+      setTimeout(() => {
+        setJellyPopParticles(prev => prev.filter(p => p.id !== id));
+      }, durationMs + 60);
+
+      return particle;
+    });
+
+    setJellyPopParticles(prev => {
+      const next = [...prev, ...particles];
+      return next.length > 80 ? next.slice(next.length - 80) : next;
     });
   }, [getNextEntityId]);
 
@@ -1080,8 +1147,26 @@ const App: React.FC = () => {
           };
         }
 
-        const x = current.x + current.vx;
-        const y = current.baseY + Math.sin(timestamp / 1800 + current.phase) * 9;
+        let vx = current.vx;
+        let baseY = current.baseY;
+        const jelly = jellyfishRef.current;
+
+        if (jelly) {
+          const dx = jelly.x - current.x;
+          const desiredDirection = dx >= 0 ? 1 : -1;
+          const desiredSpeed = Math.min(1.2, Math.max(0.42, Math.abs(dx) * 0.004 + 0.35));
+          const desiredVx = desiredDirection * desiredSpeed;
+          vx += (desiredVx - vx) * 0.075;
+          baseY += (jelly.y - baseY) * 0.03;
+        }
+
+        const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
+        const minY = viewportWorldTop + window.innerHeight * 0.14;
+        const maxY = viewportWorldTop + window.innerHeight * 0.9;
+        baseY = Math.max(minY, Math.min(maxY, baseY));
+
+        const x = current.x + vx;
+        const y = baseY + Math.sin(timestamp / 1800 + current.phase) * 9;
         const displayY = y - scrollYRef.current * SCROLL_PARALLAX;
 
         if (x < -320 || x > window.innerWidth + 320) {
@@ -1089,7 +1174,7 @@ const App: React.FC = () => {
           return null;
         }
 
-        return { ...current, x, y, displayY };
+        return { ...current, x, y, baseY, displayY, vx, isFlipped: vx < 0 };
       });
 
       animationFrameId = requestAnimationFrame(animateTurtle);
@@ -1146,6 +1231,25 @@ const App: React.FC = () => {
           };
         }
 
+        const turtle = turtleRef.current;
+        if (turtle) {
+          const dx = turtle.x - current.x;
+          const dy = turtle.y - current.y;
+          const eatRadius = (45 * turtle.scale) + (28 * current.scale);
+          if ((dx * dx + dy * dy) < (eatRadius * eatRadius)) {
+            const scrollWorldOffset = scrollYRef.current * SCROLL_PARALLAX;
+            const turtleCenterX = turtle.x + 90 * turtle.scale;
+            const turtleCenterY = (turtle.y - scrollWorldOffset) + 55 * turtle.scale;
+            const jellyCenterX = current.x + 40 * current.scale;
+            const jellyCenterY = (current.y - scrollWorldOffset) + 50 * current.scale;
+            const popX = (turtleCenterX + jellyCenterX) * 0.5;
+            const popY = (turtleCenterY + jellyCenterY) * 0.5;
+            emitJellyfishPop(popX, popY, current.scale);
+            nextJellyfishSpawnRef.current = timestamp + randomJellyfishDelay();
+            return null;
+          }
+        }
+
         const x = current.x + current.vx;
         const y = current.baseY + Math.sin(timestamp / 2200 + current.phase) * 20;
         const displayY = y - scrollYRef.current * SCROLL_PARALLAX;
@@ -1168,7 +1272,7 @@ const App: React.FC = () => {
     }
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [theme, getNextEntityId]);
+  }, [theme, getNextEntityId, emitJellyfishPop]);
 
   const colors = theme === 'underwater' ? {
     text: 'text-cyan-100', textLighter: 'text-cyan-100/90', highlight: 'text-cyan-300',
@@ -1214,6 +1318,28 @@ const App: React.FC = () => {
           100% {
             opacity: 0;
             transform: translate(var(--crumb-dx), var(--crumb-dy)) scale(0.35);
+          }
+        }
+
+        @keyframes jellyPopParticle {
+          0% {
+            opacity: 0.95;
+            transform: translate(0px, 0px) scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: translate(var(--pop-dx), var(--pop-dy)) scale(0.25);
+          }
+        }
+
+        @keyframes jellyPopRing {
+          0% {
+            opacity: 0.9;
+            transform: scale(0.45);
+          }
+          100% {
+            opacity: 0;
+            transform: scale(1.8);
           }
         }
       `}</style>
@@ -1327,6 +1453,54 @@ const App: React.FC = () => {
               color2={jellyfish.color2}
             />
           )}
+          {jellyPopParticles.map(particle => {
+            const wrapperStyle: React.CSSProperties = {
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              transform: `translate(${particle.x}px, ${particle.y}px)`,
+              pointerEvents: 'none',
+            };
+            const particleStyle: React.CSSProperties = {
+              width: particle.size,
+              height: particle.size,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), rgba(244,114,182,0.92))',
+              boxShadow: '0 0 10px rgba(236,72,153,0.9)',
+              animation: `jellyPopParticle ${particle.durationMs}ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards`,
+              ['--pop-dx' as any]: `${particle.driftX}px`,
+              ['--pop-dy' as any]: `${particle.driftY}px`,
+            };
+
+            return (
+              <div key={particle.id} style={wrapperStyle}>
+                <div style={particleStyle} />
+              </div>
+            );
+          })}
+          {jellyPopRings.map(ring => {
+            const ringWrapperStyle: React.CSSProperties = {
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              transform: `translate(${ring.x - ring.size / 2}px, ${ring.y - ring.size / 2}px)`,
+              pointerEvents: 'none',
+            };
+            const ringStyle: React.CSSProperties = {
+              width: ring.size,
+              height: ring.size,
+              borderRadius: '50%',
+              border: '2px solid rgba(251,113,133,0.85)',
+              boxShadow: '0 0 14px rgba(244,114,182,0.8)',
+              animation: `jellyPopRing ${ring.durationMs}ms ease-out forwards`,
+            };
+
+            return (
+              <div key={ring.id} style={ringWrapperStyle}>
+                <div style={ringStyle} />
+              </div>
+            );
+          })}
         </div>
       )}
 
