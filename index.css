@@ -96,6 +96,20 @@ body {
   transform-origin: top center;
 }
 
+@keyframes jellyfish-click-bob {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  45% {
+    transform: translate3d(var(--jelly-bob-x), var(--jelly-bob-y), 0);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 .balatro-card {
   cursor: default;
   backface-visibility: hidden;

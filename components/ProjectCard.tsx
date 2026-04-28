@@ -7,7 +7,7 @@ interface ProjectCardProps {
   project: Project;
 }
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
+const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
   const { title, description, image, tags, codeUrl } = project;
   const { theme } = useTheme();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -176,6 +176,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
       </div>
     </div>
   );
-};
+});
 
 export default ProjectCard;

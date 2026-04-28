@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Header from './components/Header';
 import Section from './components/Section';
 import ProjectCard from './components/ProjectCard';
@@ -26,6 +26,9 @@ const MIN_FISH_LIMIT = 5;
 const MAX_FISH_LIMIT = 150;
 const LARGE_CREATURE_MIN_SEPARATION = 220;
 const FISH_SPAWN_INTERVAL_MS = 600;
+const CLOWN_FISH_CHANCE = 0.12;
+const FISH_SIMULATION_FPS = 30;
+const FISH_SIMULATION_FRAME_MS = 1000 / FISH_SIMULATION_FPS;
 const randomInRange = (minMs: number, maxMs: number) => minMs + Math.random() * (maxMs - minMs);
 
 const WHALE_INITIAL_DELAY_MIN_MS = 2500;
@@ -43,10 +46,10 @@ const JELLYFISH_INITIAL_DELAY_MAX_MS = 5000;
 const JELLYFISH_RESPAWN_DELAY_MIN_MS = 4000;
 const JELLYFISH_RESPAWN_DELAY_MAX_MS = 10000;
 const JELLYFISH_COLORS: [string, string][] = [
-  ['#f0abfc', '#c084fc'],
-  ['#67e8f9', '#a78bfa'],
-  ['#fda4af', '#f472b6'],
-  ['#86efac', '#34d399'],
+  ['#fda4af', '#fb7185'],
+  ['#f9a8d4', '#f472b6'],
+  ['#fbcfe8', '#ec4899'],
+  ['#fda4af', '#db2777'],
 ];
 
 interface FishTrailParticle {
@@ -137,6 +140,14 @@ const App: React.FC = () => {
   const firstLargeCreatureSideRef = useRef<'left' | 'right' | null>(null);
   const whaleHasSpawnedRef = useRef(false);
   const turtleHasSpawnedRef = useRef(false);
+  const nextEntityIdRef = useRef(1);
+  const fishLastFrameTimeRef = useRef(0);
+
+  const getNextEntityId = useCallback(() => {
+    const id = nextEntityIdRef.current;
+    nextEntityIdRef.current += 1;
+    return id;
+  }, []);
 
   // Spinnable profile photo
   const [photoRotation, setPhotoRotation] = useState(0);
@@ -199,7 +210,7 @@ const App: React.FC = () => {
 
 
 
-  const projects: Project[] = [
+  const projects = useMemo<Project[]>(() => [
     {
       title: 'Cramsino',
       description: 'AI-powered study app that uses computer vision to detect focus and rewards studying with gacha-style card pulls. Won Best UI at JourneyHacks 2026.',
@@ -291,17 +302,17 @@ const App: React.FC = () => {
       tags: ['Unity', 'C#', 'React', 'SQL', 'JavaScript', 'Hackathon', 'Incomplete'],
       codeUrl: 'https://devpost.com/software/pastry-panic',
     },
-  ];
+  ], []);
 
-  const education: Education = {
+  const education = useMemo<Education>(() => ({
     degree: 'Bachelor of Science, Computing Science',
     program: 'Zhejiang Dual Degree',
     university: 'Simon Fraser University, Burnaby, BC',
     period: 'Sep 2023 - Expected Jun 2027',
     gpa: '3.62 GPA'
-  };
+  }), []);
 
-  const experiences: Experience[] = [
+  const experiences = useMemo<Experience[]>(() => [
     {
       role: 'Software Engineer Co-op',
       company: 'OSI Maritime Systems, Burnaby, BC',
@@ -329,21 +340,24 @@ const App: React.FC = () => {
         'Implemented RESTful APIs and data models to support content management workflows.',
       ],
     },
-  ];
+  ], []);
 
-  const skills = {
+  const skills = useMemo(() => ({
     languages: ['C', 'C#', 'C++', 'HTML/CSS', 'Java', 'JavaScript', 'Kotlin', 'Python', 'QML', 'SQL', 'TypeScript'],
     frameworksAndTools: ['CMake', 'Node.js', 'PyTorch', 'React.js', 'Unity', 'Android Studio', 'CI/CD', 'Figma', 'GitHub', 'GitLab', 'Linux', 'MongoDB', 'Plastic SCM', 'Visual Studio']
-  };
+  }), []);
 
-  const filteredProjects = projects.filter(project =>
-    project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    project.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredProjects = useMemo(
+    () => projects.filter(project =>
+      project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+    ),
+    [projects, searchTerm]
   );
 
   const createBubble = useCallback(() => {
-    const id = Date.now() + Math.random();
+    const id = getNextEntityId();
     const size = Math.random() * 60 + 20;
     const duration = Math.random() * 15 + 10;
     const newBubble: BubbleType = {
@@ -358,10 +372,10 @@ const App: React.FC = () => {
     setTimeout(() => {
       setBubbles(prev => prev.filter(bubble => bubble.id !== id));
     }, duration * 1000 + 1000);
-  }, []);
+  }, [getNextEntityId]);
 
   const createFish = useCallback(() => {
-    const id = Date.now() + Math.random();
+    const id = getNextEntityId();
     const scale = Math.random() * 0.4 + 0.3;
     const speed = (Math.random() * 1 + 1);
 
@@ -404,31 +418,38 @@ const App: React.FC = () => {
       ['#48c6ef', '#6f86d6'],
       ['#a779e9', '#4facfe'],
     ];
-    const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
-
-    const newFish: FishType = {
-      id, x, y, displayY: y, vx, vy, initialVx,
-      rotation: Math.atan2(vy, vx) * (180 / Math.PI),
-      scale, color1, color2,
-      isFlipped,
-      schoolId: (() => {
-        const xBand = Math.min(2, Math.floor((x / window.innerWidth) * 3));
-        const spawnDisplayY = y - scrollYRef.current * SCROLL_PARALLAX;
-        const yBand = spawnDisplayY < window.innerHeight / 2 ? 0 : 1;
-        return xBand * 2 + yBand; // 0–5
-      })(),
-    };
 
     setFishes(prev => {
       if (prev.length >= fishLimit) {
         return prev;
       }
+
+      const alreadyHasClown = prev.some(f => f.variant === 'clown');
+      const variant: FishType['variant'] = !alreadyHasClown
+        ? 'clown'
+        : 'default';
+      const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
+
+      const newFish: FishType = {
+        id, x, y, displayY: y, vx, vy, initialVx,
+        rotation: Math.atan2(vy, vx) * (180 / Math.PI),
+        scale, color1, color2,
+        isFlipped,
+        schoolId: (() => {
+          const xBand = Math.min(2, Math.floor((x / window.innerWidth) * 3));
+          const spawnDisplayY = y - scrollYRef.current * SCROLL_PARALLAX;
+          const yBand = spawnDisplayY < window.innerHeight / 2 ? 0 : 1;
+          return xBand * 2 + yBand; // 0–5
+        })(),
+        variant,
+      };
+
       return [...prev, newFish];
     });
-  }, [fishLimit]);
+  }, [fishLimit, getNextEntityId]);
 
   const createShootingStar = useCallback(() => {
-    const id = Date.now() + Math.random();
+    const id = getNextEntityId();
     const duration = Math.random() * 3 + 2;
     const newShootingStar: ShootingStarType = {
       id,
@@ -442,7 +463,7 @@ const App: React.FC = () => {
     setTimeout(() => {
       setShootingStars(prev => prev.filter(s => s.id !== id));
     }, (duration + 10) * 1000);
-  }, []);
+  }, [getNextEntityId]);
 
   // Keep fishFoodsRef in sync so animation loop can read it without stale closure
   useEffect(() => {
@@ -468,7 +489,7 @@ const App: React.FC = () => {
   }, [theme]);
 
   const emitTrailBubble = useCallback((x: number, worldY: number) => {
-    const id = Date.now() + Math.random();
+    const id = getNextEntityId();
     const durationMs = 650 + Math.random() * 450;
     const newParticle: FishTrailParticle = {
       id,
@@ -487,11 +508,11 @@ const App: React.FC = () => {
     setTimeout(() => {
       setTrailParticles(prev => prev.filter(p => p.id !== id));
     }, durationMs + 100);
-  }, []);
+  }, [getNextEntityId]);
 
   const emitFoodCrumbs = useCallback((x: number, worldY: number) => {
     const particles = Array.from({ length: 6 }, () => {
-      const id = Date.now() + Math.random();
+      const id = getNextEntityId();
       const durationMs = 280 + Math.random() * 220;
       const crumb: FoodCrumbParticle = {
         id,
@@ -514,7 +535,7 @@ const App: React.FC = () => {
       const next = [...prev, ...particles];
       return next.length > 140 ? next.slice(next.length - 140) : next;
     });
-  }, []);
+  }, [getNextEntityId]);
 
   // Place fish food on click when food mode is active
   useEffect(() => {
@@ -522,7 +543,7 @@ const App: React.FC = () => {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (target.closest('button, a, input')) return;
-      const id = Date.now() + Math.random();
+      const id = getNextEntityId();
       const newFood: FishFoodType = {
         id,
         x: e.clientX,
@@ -536,7 +557,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
-  }, [isFishFoodMode]);
+  }, [isFishFoodMode, getNextEntityId]);
 
   // Crosshair cursor when food mode is active
   useEffect(() => {
@@ -571,10 +592,19 @@ const App: React.FC = () => {
   useEffect(() => {
     let animationFrameId: number;
 
-    const animate = () => {
+    fishLastFrameTimeRef.current = 0;
+
+    const animate = (timestamp: number) => {
+      if (fishLastFrameTimeRef.current !== 0 && timestamp - fishLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) {
+        animationFrameId = requestAnimationFrame(animate);
+        return;
+      }
+      fishLastFrameTimeRef.current = timestamp;
+
       const eatenFoodIds = new Set<number>();
       const nibbleTriggers = new Set<number>();
       const crumbBursts: Array<{ x: number; worldY: number }> = [];
+      const frameTimeSeconds = timestamp * 0.001;
 
       setFishes(currentFishes =>
         {
@@ -608,17 +638,22 @@ const App: React.FC = () => {
           const dyMouse = screenY - mousePosRef.current.y;
           const distanceMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
 
-          const isFleeing = distanceMouse < SCARE_RADIUS;
+          let isFleeing = false;
 
-          if (isFleeing) {
+          if (distanceMouse < SCARE_RADIUS) {
             const angle = Math.atan2(dyMouse, dxMouse);
             vx += Math.cos(angle) * FLEE_STRENGTH;
             vy += Math.sin(angle) * FLEE_STRENGTH;
+            isFleeing = true;
+          }
+
+          if (isFleeing) {
+            const fleeCap = MAX_SPEED_FLEE + 0.8;
 
             const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-            if (currentSpeed > MAX_SPEED_FLEE) {
-              vx = (vx / currentSpeed) * MAX_SPEED_FLEE;
-              vy = (vy / currentSpeed) * MAX_SPEED_FLEE;
+            if (currentSpeed > fleeCap) {
+              vx = (vx / currentSpeed) * fleeCap;
+              vy = (vy / currentSpeed) * fleeCap;
             }
           } else {
             // Check for nearby food
@@ -717,7 +752,7 @@ const App: React.FC = () => {
                 vy += (centerY - y) * COHESION_STRENGTH;
 
                 // Pattern-based movement: each school group has a distinct style
-                const t = performance.now() * 0.001;
+                const t = frameTimeSeconds;
                 const pattern = fish.schoolId % 3;
                 if (pattern === 0) {
                   // Sweep: wide lazy arcs up and down
@@ -776,7 +811,7 @@ const App: React.FC = () => {
           // Leave tiny bubble trails when fish sharply turn or accelerate.
           const accelMagnitude = Math.hypot(vx - prevVx, vy - prevVy);
           const turnMagnitude = Math.abs(delta);
-          const now = performance.now();
+          const now = timestamp;
           const lastEmit = trailEmitRef.current[fish.id] ?? 0;
           if ((accelMagnitude > 0.14 || turnMagnitude > 7.5) && now - lastEmit > 170 && Math.random() > 0.4) {
             trailEmitRef.current[fish.id] = now;
@@ -788,8 +823,16 @@ const App: React.FC = () => {
         })
           .filter(fish =>
             fish.x > -200 && fish.x < window.innerWidth + 200
-          )
+          );
+
+        // Always keep exactly 1 clown fish alive.
+        if (next.length > 0 && !next.some(f => f.variant === 'clown')) {
+          const idx = Math.floor(Math.random() * next.length);
+          next[idx] = { ...next[idx], variant: 'clown' };
         }
+
+        return next;
+      }
       );
 
       if (eatenFoodIds.size > 0) {
@@ -825,7 +868,7 @@ const App: React.FC = () => {
       animationFrameId = requestAnimationFrame(animate);
     };
     if (theme === 'underwater') {
-      animate();
+      animationFrameId = requestAnimationFrame(animate);
     }
     return () => cancelAnimationFrame(animationFrameId);
   }, [theme, emitTrailBubble, emitFoodCrumbs]);
@@ -852,7 +895,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (theme === 'space') {
       const newStars: StarType[] = Array.from({ length: 150 }).map(() => ({
-        id: Math.random(),
+        id: getNextEntityId(),
         left: `${Math.random() * 100}%`,
         top: `${Math.random() * 100}%`,
         size: `${Math.random() * 2 + 1}px`,
@@ -869,7 +912,7 @@ const App: React.FC = () => {
       setStars([]);
       setShootingStars([]);
     }
-  }, [theme, createShootingStar]);
+  }, [theme, createShootingStar, getNextEntityId]);
 
   useEffect(() => {
     let animationFrameId: number;
@@ -922,7 +965,7 @@ const App: React.FC = () => {
           }
 
           return {
-            id: Date.now() + Math.random(),
+            id: getNextEntityId(),
             x,
             y,
             baseY,
@@ -956,7 +999,7 @@ const App: React.FC = () => {
     }
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [theme]);
+  }, [theme, getNextEntityId]);
 
   useEffect(() => {
     let animationFrameId: number;
@@ -1008,7 +1051,7 @@ const App: React.FC = () => {
           }
 
           return {
-            id: Date.now() + Math.random(),
+            id: getNextEntityId(),
             x,
             y: baseY,
             baseY,
@@ -1042,7 +1085,7 @@ const App: React.FC = () => {
     }
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [theme]);
+  }, [theme, getNextEntityId]);
 
   useEffect(() => {
     let animationFrameId: number;
@@ -1072,7 +1115,7 @@ const App: React.FC = () => {
           const [color1, color2] = JELLYFISH_COLORS[Math.floor(Math.random() * JELLYFISH_COLORS.length)];
 
           return {
-            id: Date.now() + Math.random(),
+            id: getNextEntityId(),
             x,
             y: baseY,
             baseY,
@@ -1108,7 +1151,7 @@ const App: React.FC = () => {
     }
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [theme]);
+  }, [theme, getNextEntityId]);
 
   const colors = theme === 'underwater' ? {
     text: 'text-cyan-100', textLighter: 'text-cyan-100/90', highlight: 'text-cyan-300',
@@ -1167,7 +1210,6 @@ const App: React.FC = () => {
             ))}
             {whale && <Whale x={whale.x} displayY={whale.displayY} scale={whale.scale} isFlipped={whale.isFlipped} />}
             {turtle && <Turtle x={turtle.x} displayY={turtle.displayY} scale={turtle.scale} isFlipped={turtle.isFlipped} />}
-            {jellyfish && <Jellyfish id={jellyfish.id} x={jellyfish.x} displayY={jellyfish.displayY} scale={jellyfish.scale} isFlipped={jellyfish.isFlipped} color1={jellyfish.color1} color2={jellyfish.color2} />}
             {/* World-layer: fish + food + particles all in world coords.
                 translateY(-scrollY) is applied directly on scroll — zero React re-renders for scroll. */}
             <div
@@ -1254,6 +1296,22 @@ const App: React.FC = () => {
           </>
         )}
       </div>
+
+      {theme === 'underwater' && (
+        <div className="fixed inset-0 z-20 pointer-events-none">
+          {jellyfish && (
+            <Jellyfish
+              id={jellyfish.id}
+              x={jellyfish.x}
+              displayY={jellyfish.displayY}
+              scale={jellyfish.scale}
+              isFlipped={jellyfish.isFlipped}
+              color1={jellyfish.color1}
+              color2={jellyfish.color2}
+            />
+          )}
+        </div>
+      )}
 
       <div className="relative z-10">
         <Header />

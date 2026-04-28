@@ -42,6 +42,7 @@ export interface Fish {
   color2: string;
   isFlipped: boolean;
   schoolId: number;
+  variant?: 'default' | 'clown';
 }
 
 export interface FishFood {
