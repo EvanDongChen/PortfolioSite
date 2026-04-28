@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Poppins', sans-serif;
+}
+
+@keyframes rise {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: translateY(-50vh) scale(1.2);
+  }
+
+  100% {
+    transform: translateY(-110vh) scale(1.5);
+    opacity: 0;
+  }
+}
+
+.bubble-animation {
+  animation: rise linear infinite;
+  position: absolute;
+  bottom: -150px;
+}
+
+@keyframes twinkle {
+  from {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+.star-animation {
+  animation: twinkle infinite alternate;
+  position: absolute;
+}
+
+@keyframes shoot {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateX(150vw);
+    opacity: 0;
+  }
+}
+
+.shooting-star-animation {
+  animation-name: shoot;
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  position: absolute;
+}
+
+.balatro-card {
+  cursor: default;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform-origin: center center;
+}
