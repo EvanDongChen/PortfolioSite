@@ -5,6 +5,7 @@ import ProjectCard from './components/ProjectCard';
 import Bubble from './components/Bubble';
 import Fish from './components/Fish';
 import Turtle from './components/Turtle';
+import Jellyfish from './components/Jellyfish';
 import Whale from './components/Whale';
 import SandDune from './components/SandDune';
 import BackToTopButton from './components/BackToTopButton';
@@ -36,6 +37,17 @@ const TURTLE_INITIAL_DELAY_MIN_MS = 3000;
 const TURTLE_INITIAL_DELAY_MAX_MS = 8000;
 const TURTLE_RESPAWN_DELAY_MIN_MS = 7000;
 const TURTLE_RESPAWN_DELAY_MAX_MS = 16000;
+
+const JELLYFISH_INITIAL_DELAY_MIN_MS = 1500;
+const JELLYFISH_INITIAL_DELAY_MAX_MS = 5000;
+const JELLYFISH_RESPAWN_DELAY_MIN_MS = 4000;
+const JELLYFISH_RESPAWN_DELAY_MAX_MS = 10000;
+const JELLYFISH_COLORS: [string, string][] = [
+  ['#f0abfc', '#c084fc'],
+  ['#67e8f9', '#a78bfa'],
+  ['#fda4af', '#f472b6'],
+  ['#86efac', '#34d399'],
+];
 
 interface FishTrailParticle {
   id: number;
@@ -80,12 +92,27 @@ interface TurtleState {
   phase: number;
 }
 
+interface JellyfishState {
+  id: number;
+  x: number;
+  y: number;
+  baseY: number;
+  displayY: number;
+  vx: number;
+  scale: number;
+  isFlipped: boolean;
+  phase: number;
+  color1: string;
+  color2: string;
+}
+
 const App: React.FC = () => {
   const { theme } = useTheme();
   const [bubbles, setBubbles] = useState<BubbleType[]>([]);
   const [fishes, setFishes] = useState<FishType[]>([]);
   const [whale, setWhale] = useState<WhaleState | null>(null);
   const [turtle, setTurtle] = useState<TurtleState | null>(null);
+  const [jellyfish, setJellyfish] = useState<JellyfishState | null>(null);
   const [fishFoods, setFishFoods] = useState<FishFoodType[]>([]);
   const [trailParticles, setTrailParticles] = useState<FishTrailParticle[]>([]);
   const [foodCrumbs, setFoodCrumbs] = useState<FoodCrumbParticle[]>([]);
@@ -104,6 +131,7 @@ const App: React.FC = () => {
   const trailEmitRef = useRef<Record<number, number>>({});
   const nextWhaleSpawnRef = useRef(0);
   const nextTurtleSpawnRef = useRef(0);
+  const nextJellyfishSpawnRef = useRef(0);
   const whaleRef = useRef<WhaleState | null>(null);
   const turtleRef = useRef<TurtleState | null>(null);
   const firstLargeCreatureSideRef = useRef<'left' | 'right' | null>(null);
@@ -1016,6 +1044,72 @@ const App: React.FC = () => {
     return () => cancelAnimationFrame(animationFrameId);
   }, [theme]);
 
+  useEffect(() => {
+    let animationFrameId: number;
+
+    const randomJellyfishDelay = () => randomInRange(JELLYFISH_RESPAWN_DELAY_MIN_MS, JELLYFISH_RESPAWN_DELAY_MAX_MS);
+    if (nextJellyfishSpawnRef.current === 0) {
+      nextJellyfishSpawnRef.current = performance.now() + randomInRange(JELLYFISH_INITIAL_DELAY_MIN_MS, JELLYFISH_INITIAL_DELAY_MAX_MS);
+    }
+
+    const animateJellyfish = (timestamp: number) => {
+      if (theme !== 'underwater') {
+        setJellyfish(null);
+        nextJellyfishSpawnRef.current = timestamp + randomInRange(JELLYFISH_INITIAL_DELAY_MIN_MS, JELLYFISH_INITIAL_DELAY_MAX_MS);
+        return;
+      }
+
+      setJellyfish(current => {
+        if (!current) {
+          if (timestamp < nextJellyfishSpawnRef.current) return null;
+
+          const fromLeft = Math.random() > 0.5;
+          const scale = 0.9 + Math.random() * 0.55;
+          const speed = 0.18 + Math.random() * 0.17;
+          const x = fromLeft ? -120 : window.innerWidth + 120;
+          const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
+          const baseY = viewportWorldTop + window.innerHeight * (0.15 + Math.random() * 0.65);
+          const [color1, color2] = JELLYFISH_COLORS[Math.floor(Math.random() * JELLYFISH_COLORS.length)];
+
+          return {
+            id: Date.now() + Math.random(),
+            x,
+            y: baseY,
+            baseY,
+            displayY: baseY - scrollYRef.current * SCROLL_PARALLAX,
+            vx: fromLeft ? speed : -speed,
+            scale,
+            isFlipped: !fromLeft,
+            phase: Math.random() * Math.PI * 2,
+            color1,
+            color2,
+          };
+        }
+
+        const x = current.x + current.vx;
+        const y = current.baseY + Math.sin(timestamp / 2200 + current.phase) * 20;
+        const displayY = y - scrollYRef.current * SCROLL_PARALLAX;
+
+        if (x < -160 || x > window.innerWidth + 160) {
+          nextJellyfishSpawnRef.current = timestamp + randomJellyfishDelay();
+          return null;
+        }
+
+        return { ...current, x, y, displayY };
+      });
+
+      animationFrameId = requestAnimationFrame(animateJellyfish);
+    };
+
+    if (theme === 'underwater') {
+      animationFrameId = requestAnimationFrame(animateJellyfish);
+    } else {
+      setJellyfish(null);
+    }
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [theme]);
+
   const colors = theme === 'underwater' ? {
     text: 'text-cyan-100', textLighter: 'text-cyan-100/90', highlight: 'text-cyan-300',
     highlightStrong: 'text-cyan-200', border: 'border-cyan-400/20', timeline: 'bg-cyan-400/30',
@@ -1073,6 +1167,7 @@ const App: React.FC = () => {
             ))}
             {whale && <Whale x={whale.x} displayY={whale.displayY} scale={whale.scale} isFlipped={whale.isFlipped} />}
             {turtle && <Turtle x={turtle.x} displayY={turtle.displayY} scale={turtle.scale} isFlipped={turtle.isFlipped} />}
+            {jellyfish && <Jellyfish id={jellyfish.id} x={jellyfish.x} displayY={jellyfish.displayY} scale={jellyfish.scale} isFlipped={jellyfish.isFlipped} color1={jellyfish.color1} color2={jellyfish.color2} />}
             {/* World-layer: fish + food + particles all in world coords.
                 translateY(-scrollY) is applied directly on scroll — zero React re-renders for scroll. */}
             <div

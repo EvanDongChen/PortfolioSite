@@ -64,6 +64,38 @@ body {
   position: absolute;
 }
 
+@keyframes jellyfish-pulse {
+  0%, 100% {
+    transform: scaleY(1) scaleX(1);
+  }
+
+  50% {
+    transform: scaleY(0.87) scaleX(1.07);
+  }
+}
+
+.jellyfish-bell {
+  animation: jellyfish-pulse 1.7s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
+@keyframes jellyfish-tentacle-wave {
+  0%, 100% {
+    transform: translateX(0px);
+  }
+
+  50% {
+    transform: translateX(4px);
+  }
+}
+
+.jellyfish-tentacle {
+  animation: jellyfish-tentacle-wave 2.2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: top center;
+}
+
 .balatro-card {
   cursor: default;
   backface-visibility: hidden;
