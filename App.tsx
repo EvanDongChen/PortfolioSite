@@ -27,6 +27,7 @@ const MAX_FISH_LIMIT = 150;
 const LARGE_CREATURE_MIN_SEPARATION = 220;
 const FISH_SPAWN_INTERVAL_MS = 600;
 const CLOWN_FISH_CHANCE = 0.12;
+const SCROLL_ACTIVE_WINDOW_MS = 140;
 const FISH_SIMULATION_FPS = 30;
 const FISH_SIMULATION_FRAME_MS = 1000 / FISH_SIMULATION_FPS;
 const randomInRange = (minMs: number, maxMs: number) => minMs + Math.random() * (maxMs - minMs);
@@ -142,6 +143,7 @@ const App: React.FC = () => {
   const turtleHasSpawnedRef = useRef(false);
   const nextEntityIdRef = useRef(1);
   const fishLastFrameTimeRef = useRef(0);
+  const lastScrollTimestampRef = useRef(0);
 
   const getNextEntityId = useCallback(() => {
     const id = nextEntityIdRef.current;
@@ -566,10 +568,16 @@ const App: React.FC = () => {
   }, [isFishFoodMode]);
 
   const handleScroll = useCallback(() => {
-    scrollYRef.current = window.scrollY;
-    if (worldLayerRef.current) {
-      worldLayerRef.current.style.transform = `translateY(${-scrollYRef.current * SCROLL_PARALLAX}px)`;
-    }
+    lastScrollTimestampRef.current = performance.now();
+    if (scrollRafRef.current !== null) return;
+
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollYRef.current = window.scrollY;
+      if (worldLayerRef.current) {
+        worldLayerRef.current.style.transform = `translate3d(0, ${-scrollYRef.current * SCROLL_PARALLAX}px, 0)`;
+      }
+      scrollRafRef.current = null;
+    });
   }, []);
 
   useEffect(() => {
@@ -578,6 +586,10 @@ const App: React.FC = () => {
     handleScroll();
     return () => {
       window.removeEventListener('scroll', handleScroll);
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
     };
   }, [handleScroll]);
 
@@ -595,6 +607,11 @@ const App: React.FC = () => {
     fishLastFrameTimeRef.current = 0;
 
     const animate = (timestamp: number) => {
+      if (timestamp - lastScrollTimestampRef.current < SCROLL_ACTIVE_WINDOW_MS) {
+        animationFrameId = requestAnimationFrame(animate);
+        return;
+      }
+
       if (fishLastFrameTimeRef.current !== 0 && timestamp - fishLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) {
         animationFrameId = requestAnimationFrame(animate);
         return;
