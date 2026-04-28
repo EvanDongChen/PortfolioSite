@@ -8,6 +8,7 @@ import Turtle from './components/Turtle';
 import Jellyfish from './components/Jellyfish';
 import Whale from './components/Whale';
 import SandDune from './components/SandDune';
+import GodRays from './components/GodRays';
 import BackToTopButton from './components/BackToTopButton';
 import FishFoodButton from './components/FishFoodButton';
 import Star from './components/Star';
@@ -1652,6 +1653,7 @@ const App: React.FC = () => {
         })}
         {theme === 'underwater' ? (
           <>
+            <GodRays />
             {bubbles.map(bubble => (
               <Bubble key={bubble.id} {...bubble} />
             ))}
