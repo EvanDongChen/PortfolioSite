@@ -49,6 +49,7 @@ export interface Fish {
   behaviorPhase: number; // per-fish random offset for behavior oscillations
   congaLeaderId?: number; // conga: shared group id (= leader's fish.id)
   congaIndex?: number;    // conga: 0 = leader, 1+ = follower
+  curiousTimer?: number;  // track how long a fish has been curious
 }
 
 export interface FishFood {

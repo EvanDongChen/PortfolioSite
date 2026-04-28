@@ -457,20 +457,14 @@ const App: React.FC = () => {
         : 'default';
       const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
 
-      // Weighted random behavior: 33% cruise, 15% swirl, 10% dart, 5% loiter, 25% conga, 12% curious
+      // Weighted random behavior: 48% cruise, 10% dart, 5% loiter, 25% conga, 12% curious
       const behaviorRoll = Math.random();
       const behavior: FishBehavior =
-        behaviorRoll < 0.33 ? 'cruise' :
-          behaviorRoll < 0.48 ? 'swirl' :
-            behaviorRoll < 0.58 ? 'dart' :
-              behaviorRoll < 0.63 ? 'loiter' :
-                behaviorRoll < 0.88 ? 'conga' : 'curious';
+        behaviorRoll < 0.48 ? 'cruise' :
+          behaviorRoll < 0.58 ? 'dart' :
+            behaviorRoll < 0.63 ? 'loiter' :
+              behaviorRoll < 0.88 ? 'conga' : 'curious';
       const behaviorPhase = Math.random() * Math.PI * 2;
-      // Swirl orbit setup
-      const swirlRadius = 40 + Math.random() * 60;
-      const swirlAngle = Math.random() * Math.PI * 2;
-      const swirlCx = x + Math.cos(swirlAngle) * swirlRadius;
-      const swirlCy = y + Math.sin(swirlAngle) * swirlRadius;
 
       // Conga line: join existing group or start a new one
       let congaLeaderId: number | undefined;
@@ -525,10 +519,6 @@ const App: React.FC = () => {
         variant,
         behavior,
         behaviorPhase,
-        swirlRadius,
-        swirlAngle,
-        swirlCx,
-        swirlCy,
         congaLeaderId,
         congaIndex,
       };
@@ -781,7 +771,7 @@ const App: React.FC = () => {
       const frameTimeSeconds = timestamp * 0.001;
 
       setFishes(currentFishes => {
-        return currentFishes.map(fish => {
+        const next = currentFishes.map(fish => {
           const SCARE_RADIUS = 150;
           const FLEE_STRENGTH = 6;
           const MAX_SPEED_FLEE = 5;
@@ -803,6 +793,8 @@ const App: React.FC = () => {
           const MAX_SPEED_SCHOOL = 3.5;
 
           let { x, y, vx, vy, rotation, initialVx, isFlipped } = fish;
+          let newBehavior = fish.behavior;
+          let newCuriousTimer = fish.curiousTimer || 0;
           const prevVx = vx;
           const prevVy = vy;
 
@@ -893,41 +885,7 @@ const App: React.FC = () => {
               const t = frameTimeSeconds;
               const bp = fish.behaviorPhase;
 
-              if (fish.behavior === 'swirl') {
-                // ── SWIRL: tight clockwise orbit that slowly drifts sideways ──
-                const SWIRL_ANGULAR_SPEED = 0.055; // radians per frame
-                const DRIFT_SPEED = 0.35;           // px/frame lateral drift
-
-                let { swirlAngle, swirlCx, swirlCy, swirlRadius } = fish;
-                swirlAngle += SWIRL_ANGULAR_SPEED * Math.sign(initialVx > 0 ? 1 : -1);
-                // Drift the orbit center across the screen
-                swirlCx += initialVx > 0 ? DRIFT_SPEED : -DRIFT_SPEED;
-
-                const targetX = swirlCx + Math.cos(swirlAngle) * swirlRadius;
-                const targetY = swirlCy + Math.sin(swirlAngle) * swirlRadius;
-
-                // Steer toward the orbit point
-                vx += (targetX - x) * 0.18;
-                vy += (targetY - y) * 0.18;
-
-                const swirlSpeed = Math.sqrt(vx * vx + vy * vy);
-                const MAX_SWIRL_SPEED = 2.8;
-                if (swirlSpeed > MAX_SWIRL_SPEED) {
-                  vx = (vx / swirlSpeed) * MAX_SWIRL_SPEED;
-                  vy = (vy / swirlSpeed) * MAX_SWIRL_SPEED;
-                }
-
-                x += vx;
-                y += vy;
-
-                // Carry mutated swirl state forward
-                return {
-                  ...fish, x, y, displayY: y, vx, vy,
-                  rotation: Math.atan2(vy, vx) * (180 / Math.PI),
-                  swirlAngle, swirlCx, swirlCy,
-                };
-
-              } else if (fish.behavior === 'dart') {
+              if (fish.behavior === 'dart') {
                 // ── DART: cruise but with periodic explosive bursts ──────────
                 const DART_PERIOD = 3.5; // seconds between bursts
                 const dartPhase = (t * (1 / DART_PERIOD) + bp) % 1;
@@ -979,18 +937,29 @@ const App: React.FC = () => {
                 const CURIOUS_ATTRACT_RADIUS = 320;
                 const CURIOUS_ATTRACT_STRENGTH = 0.18;
                 const MAX_CURIOUS_SPEED = 3.8;
+                const BOREDOM_THRESHOLD = 300; // ~10 seconds at 30fps
 
                 if (distanceMouse < CURIOUS_ATTRACT_RADIUS) {
                   // Swim TOWARD cursor (note: dxMouse/dyMouse point away from cursor)
                   const angleToward = Math.atan2(-dyMouse, -dxMouse);
                   vx += Math.cos(angleToward) * CURIOUS_ATTRACT_STRENGTH;
                   vy += Math.sin(angleToward) * CURIOUS_ATTRACT_STRENGTH;
+                  
+                  newCuriousTimer++;
                 } else {
                   // Out of range: gentle cruise
                   vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
                   vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
                   vy += (Math.random() - 0.5) * WANDER_STRENGTH;
+                  
+                  if (newCuriousTimer > 0) newCuriousTimer--;
                 }
+                
+                if (newCuriousTimer > BOREDOM_THRESHOLD) {
+                  newBehavior = 'cruise';
+                  newCuriousTimer = 0;
+                }
+
                 const curiousSpd = Math.sqrt(vx * vx + vy * vy);
                 if (curiousSpd > MAX_CURIOUS_SPEED) {
                   vx = (vx / curiousSpd) * MAX_CURIOUS_SPEED;
@@ -1177,7 +1146,7 @@ const App: React.FC = () => {
             emitTrailBubble(x - direction * (26 * fish.scale), y + (Math.random() - 0.5) * 6);
           }
 
-          return { ...fish, x, y, displayY: y, vx, vy, rotation };
+          return { ...fish, behavior: newBehavior, curiousTimer: newCuriousTimer, x, y, displayY: y, vx, vy, rotation };
         })
           .filter(fish =>
             fish.x > -200 && fish.x < window.innerWidth + 200

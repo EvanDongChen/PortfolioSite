@@ -12,7 +12,6 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes }) => {
   const total = fishes.length;
   const behaviors = {
     cruise: 0,
-    swirl: 0,
     dart: 0,
     loiter: 0,
     conga: 0,
@@ -78,10 +77,6 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes }) => {
               <span className="text-purple-300">{behaviors.conga}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-400">Swirling</span>
-              <span className="text-emerald-300">{behaviors.swirl}</span>
-            </div>
-            <div className="flex justify-between">
               <span className="text-slate-400">Darting</span>
               <span className="text-orange-300">{behaviors.dart}</span>
             </div>
@@ -100,12 +95,12 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes }) => {
         <div className="mt-4 pt-3 border-t border-cyan-500/20">
           <div className="flex justify-between items-center mb-1 text-xs text-slate-400">
             <span>Activity Level</span>
-            <span>{Math.round(((behaviors.dart + behaviors.swirl + behaviors.curious) / Math.max(1, total)) * 100)}%</span>
+            <span>{Math.round(((behaviors.dart + behaviors.curious) / Math.max(1, total)) * 100)}%</span>
           </div>
           <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
             <div 
               className="bg-gradient-to-r from-cyan-500 to-purple-500 h-1.5 rounded-full transition-all duration-300"
-              style={{ width: `${Math.min(100, ((behaviors.dart + behaviors.swirl + behaviors.curious) / Math.max(1, total)) * 100 * 2)}%` }}
+              style={{ width: `${Math.min(100, ((behaviors.dart + behaviors.curious) / Math.max(1, total)) * 100 * 2)}%` }}
             />
           </div>
         </div>
