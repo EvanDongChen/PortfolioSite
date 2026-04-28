@@ -28,7 +28,7 @@ export interface Education {
   gpa: string;
 }
 
-export type FishBehavior = 'cruise' | 'swirl' | 'dart' | 'loiter' | 'conga';
+export type FishBehavior = 'cruise' | 'swirl' | 'dart' | 'loiter' | 'conga' | 'curious';
 
 export interface Fish {
   id: number;

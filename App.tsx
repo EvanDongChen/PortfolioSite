@@ -453,13 +453,14 @@ const App: React.FC = () => {
         : 'default';
       const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
 
-      // Weighted random behavior: 40% cruise, 18% swirl, 12% dart, 5% loiter, 25% conga
+      // Weighted random behavior: 33% cruise, 15% swirl, 10% dart, 5% loiter, 25% conga, 12% curious
       const behaviorRoll = Math.random();
       const behavior: FishBehavior =
-        behaviorRoll < 0.40 ? 'cruise' :
-        behaviorRoll < 0.58 ? 'swirl' :
-        behaviorRoll < 0.70 ? 'dart' :
-        behaviorRoll < 0.75 ? 'loiter' : 'conga';
+        behaviorRoll < 0.33 ? 'cruise' :
+        behaviorRoll < 0.48 ? 'swirl' :
+        behaviorRoll < 0.58 ? 'dart' :
+        behaviorRoll < 0.63 ? 'loiter' :
+        behaviorRoll < 0.88 ? 'conga' : 'curious';
       const behaviorPhase = Math.random() * Math.PI * 2;
       // Swirl orbit setup
       const swirlRadius = 40 + Math.random() * 60;
@@ -783,9 +784,10 @@ const App: React.FC = () => {
           const dyMouse = screenY - mousePosRef.current.y;
           const distanceMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
 
+          // Curious fish are attracted to the cursor rather than scared
           let isFleeing = false;
 
-          if (distanceMouse < SCARE_RADIUS) {
+          if (fish.behavior !== 'curious' && distanceMouse < SCARE_RADIUS) {
             const angle = Math.atan2(dyMouse, dxMouse);
             vx += Math.cos(angle) * FLEE_STRENGTH;
             vy += Math.sin(angle) * FLEE_STRENGTH;
@@ -918,6 +920,29 @@ const App: React.FC = () => {
                 if (loiterSpd > MAX_LOITER) {
                   vx = (vx / loiterSpd) * MAX_LOITER;
                   vy = (vy / loiterSpd) * MAX_LOITER;
+                }
+
+              } else if (fish.behavior === 'curious') {
+                // ── CURIOUS: bold fish that chase the cursor ─────────────────
+                const CURIOUS_ATTRACT_RADIUS = 320;
+                const CURIOUS_ATTRACT_STRENGTH = 0.18;
+                const MAX_CURIOUS_SPEED = 3.8;
+
+                if (distanceMouse < CURIOUS_ATTRACT_RADIUS) {
+                  // Swim TOWARD cursor (note: dxMouse/dyMouse point away from cursor)
+                  const angleToward = Math.atan2(-dyMouse, -dxMouse);
+                  vx += Math.cos(angleToward) * CURIOUS_ATTRACT_STRENGTH;
+                  vy += Math.sin(angleToward) * CURIOUS_ATTRACT_STRENGTH;
+                } else {
+                  // Out of range: gentle cruise
+                  vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
+                  vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
+                  vy += (Math.random() - 0.5) * WANDER_STRENGTH;
+                }
+                const curiousSpd = Math.sqrt(vx * vx + vy * vy);
+                if (curiousSpd > MAX_CURIOUS_SPEED) {
+                  vx = (vx / curiousSpd) * MAX_CURIOUS_SPEED;
+                  vy = (vy / curiousSpd) * MAX_CURIOUS_SPEED;
                 }
 
               } else if (fish.behavior === 'conga') {
@@ -1365,22 +1390,21 @@ const App: React.FC = () => {
         }
 
         let vx = current.vx;
-        let baseY = current.baseY;
+        let baseY = current.baseY; // world-space Y
         const jelly = jellyfishRef.current;
 
         if (jelly) {
+          // Steer X toward jellyfish
           const dx = jelly.x - current.x;
           const desiredDirection = dx >= 0 ? 1 : -1;
           const desiredSpeed = Math.min(1.2, Math.max(0.42, Math.abs(dx) * 0.004 + 0.35));
-          const desiredVx = desiredDirection * desiredSpeed;
-          vx += (desiredVx - vx) * 0.075;
-          baseY += (jelly.y - baseY) * 0.03;
+          vx += (desiredDirection * desiredSpeed - vx) * 0.075;
+          // Steer Y toward jellyfish world Y
+          baseY += (jelly.y - baseY) * 0.025;
         }
 
-        const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
-        const minY = viewportWorldTop + window.innerHeight * 0.14;
-        const maxY = viewportWorldTop + window.innerHeight * 0.9;
-        baseY = Math.max(minY, Math.min(maxY, baseY));
+        // No viewport clamping — turtle lives at a fixed world position
+        // and disappears naturally when you scroll away from it
 
         const x = current.x + vx;
         const y = baseY + Math.sin(timestamp / 1800 + current.phase) * 9;
@@ -1720,6 +1744,7 @@ const App: React.FC = () => {
           })}
         </div>
       )}
+
 
       <div className="relative z-10">
         <Header />
