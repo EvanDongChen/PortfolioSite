@@ -959,11 +959,31 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (theme === 'underwater') {
-      const bubbleInterval = setInterval(createBubble, 500);
-      const fishInterval = setInterval(createFish, FISH_SPAWN_INTERVAL_MS);
+      // --- Accelerating burst for first 2.5 seconds ---
+      const BURST_DURATION_MS = 2500;
+      const BURST_FISH_INTERVAL_MS = 80;
+      const BURST_BUBBLE_INTERVAL_MS = 120;
+
+      const burstFishInterval = setInterval(createFish, BURST_FISH_INTERVAL_MS);
+      const burstBubbleInterval = setInterval(createBubble, BURST_BUBBLE_INTERVAL_MS);
+
+      let steadyFishInterval: ReturnType<typeof setInterval>;
+      let steadyBubbleInterval: ReturnType<typeof setInterval>;
+
+      const burstTimeout = setTimeout(() => {
+        clearInterval(burstFishInterval);
+        clearInterval(burstBubbleInterval);
+        // Transition to normal steady-state intervals
+        steadyFishInterval = setInterval(createFish, FISH_SPAWN_INTERVAL_MS);
+        steadyBubbleInterval = setInterval(createBubble, 500);
+      }, BURST_DURATION_MS);
+
       return () => {
-        clearInterval(bubbleInterval);
-        clearInterval(fishInterval);
+        clearTimeout(burstTimeout);
+        clearInterval(burstFishInterval);
+        clearInterval(burstBubbleInterval);
+        clearInterval(steadyFishInterval);
+        clearInterval(steadyBubbleInterval);
       };
     } else {
       setBubbles([]);
