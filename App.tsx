@@ -140,6 +140,7 @@ const App: React.FC = () => {
   const [foodCrumbs, setFoodCrumbs] = useState<FoodCrumbParticle[]>([]);
   const [jellyPopParticles, setJellyPopParticles] = useState<JellyPopParticle[]>([]);
   const [jellyPopRings, setJellyPopRings] = useState<JellyPopRing[]>([]);
+  const [clickRipples, setClickRipples] = useState<{ id: number; x: number; y: number; theme: string }[]>([]);
   const [nibblingFishIds, setNibblingFishIds] = useState<Record<number, boolean>>({});
   const [fishLimit, setFishLimit] = useState(DEFAULT_FISH_LIMIT);
   const [isFishFoodMode, setIsFishFoodMode] = useState(false);
@@ -689,6 +690,22 @@ const App: React.FC = () => {
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
   }, [isFishFoodMode, getNextEntityId]);
+
+  // Global click ripples (only when not feeding fish)
+  useEffect(() => {
+    if (isFishFoodMode) return;
+    const handleRippleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('button, a, input')) return;
+      const id = getNextEntityId();
+      setClickRipples(prev => [...prev, { id, x: e.clientX, y: e.clientY, theme }]);
+      setTimeout(() => {
+        setClickRipples(prev => prev.filter(r => r.id !== id));
+      }, 800); // match animation duration
+    };
+    window.addEventListener('click', handleRippleClick);
+    return () => window.removeEventListener('click', handleRippleClick);
+  }, [isFishFoodMode, getNextEntityId, theme]);
 
   // Crosshair cursor when food mode is active
   useEffect(() => {
@@ -1583,10 +1600,56 @@ const App: React.FC = () => {
             transform: scale(1.8);
           }
         }
+
+        @keyframes clickRippleExpand {
+          0% {
+            opacity: 0.6;
+            transform: scale(0.1);
+          }
+          100% {
+            opacity: 0;
+            transform: scale(1);
+          }
+        }
       `}</style>
       <div
         className="fixed inset-0 w-full h-full z-0"
       >
+        {/* Click Ripples layer - above background, below world */}
+        {clickRipples.map(ripple => {
+          const isUnderwater = ripple.theme === 'underwater';
+          const size = isUnderwater ? 180 : 120;
+          return (
+            <div
+              key={ripple.id}
+              style={{
+                position: 'absolute',
+                left: ripple.x - size / 2,
+                top: ripple.y - size / 2,
+                width: size,
+                height: size,
+                pointerEvents: 'none',
+                zIndex: 5, // slightly above bubbles
+              }}
+            >
+              {[0, 150, 300].map((delay, index) => (
+                <div
+                  key={index}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '50%',
+                    border: isUnderwater ? '2px solid rgba(130, 240, 255, 0.6)' : '1.5px solid rgba(167, 139, 250, 0.5)',
+                    boxShadow: isUnderwater ? 'inset 0 0 10px rgba(130, 240, 255, 0.2), 0 0 10px rgba(130, 240, 255, 0.2)' : '0 0 15px rgba(167, 139, 250, 0.4)',
+                    animation: `clickRippleExpand 800ms cubic-bezier(0.1, 0.8, 0.3, 1) forwards`,
+                    animationDelay: `${delay}ms`,
+                    opacity: 0,
+                  }}
+                />
+              ))}
+            </div>
+          );
+        })}
         {theme === 'underwater' ? (
           <>
             {bubbles.map(bubble => (
