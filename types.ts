@@ -28,6 +28,8 @@ export interface Education {
   gpa: string;
 }
 
+export type FishBehavior = 'cruise' | 'swirl' | 'dart' | 'loiter' | 'conga';
+
 export interface Fish {
   id: number;
   x: number;
@@ -43,6 +45,14 @@ export interface Fish {
   isFlipped: boolean;
   schoolId: number;
   variant?: 'default' | 'clown';
+  behavior: FishBehavior;
+  behaviorPhase: number; // per-fish random offset for behavior oscillations
+  swirlCx: number;      // swirl: orbit center x
+  swirlCy: number;      // swirl: orbit center y
+  swirlAngle: number;   // swirl: current angle in radians
+  swirlRadius: number;  // swirl: orbit radius
+  congaLeaderId?: number; // conga: shared group id (= leader's fish.id)
+  congaIndex?: number;    // conga: 0 = leader, 1+ = follower
 }
 
 export interface FishFood {

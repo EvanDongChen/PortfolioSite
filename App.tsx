@@ -17,7 +17,7 @@ import CursorNebula from './components/CursorNebula';
 const BASE_URL = import.meta.env.BASE_URL;
 import ThemeToggleButton from './components/ThemeToggleButton';
 import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from './components/Icons';
-import { Project, Bubble as BubbleType, Experience, Fish as FishType, FishFood as FishFoodType, Education, Star as StarType, ShootingStar as ShootingStarType } from './types';
+import { Project, Bubble as BubbleType, Experience, Fish as FishType, FishFood as FishFoodType, Education, Star as StarType, ShootingStar as ShootingStarType, FishBehavior } from './types';
 import { useTheme } from './contexts/ThemeContext';
 
 const SCROLL_PARALLAX = 1.0;
@@ -430,7 +430,7 @@ const App: React.FC = () => {
       y = Math.random() * document.documentElement.scrollHeight;
     }
     vy = 0;
-    const initialVx = vx;
+    let initialVx = vx;
 
     const colors = [
       ['#4facfe', '#00f2fe'],
@@ -453,6 +453,59 @@ const App: React.FC = () => {
         : 'default';
       const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
 
+      // Weighted random behavior: 40% cruise, 18% swirl, 12% dart, 5% loiter, 25% conga
+      const behaviorRoll = Math.random();
+      const behavior: FishBehavior =
+        behaviorRoll < 0.40 ? 'cruise' :
+        behaviorRoll < 0.58 ? 'swirl' :
+        behaviorRoll < 0.70 ? 'dart' :
+        behaviorRoll < 0.75 ? 'loiter' : 'conga';
+      const behaviorPhase = Math.random() * Math.PI * 2;
+      // Swirl orbit setup
+      const swirlRadius = 40 + Math.random() * 60;
+      const swirlAngle = Math.random() * Math.PI * 2;
+      const swirlCx = x + Math.cos(swirlAngle) * swirlRadius;
+      const swirlCy = y + Math.sin(swirlAngle) * swirlRadius;
+
+      // Conga line: join existing group or start a new one
+      let congaLeaderId: number | undefined;
+      let congaIndex: number | undefined;
+      if (behavior === 'conga') {
+        const CONGA_MAX_SIZE = 8;
+        // Find the group with most members that still has room
+        const groups = new Map<number, { maxIdx: number; tail: FishType }>();
+        for (const f of prev) {
+          if (f.behavior === 'conga' && f.congaLeaderId !== undefined) {
+            const g = groups.get(f.congaLeaderId);
+            if (!g || (f.congaIndex ?? 0) > g.maxIdx) {
+              groups.set(f.congaLeaderId, { maxIdx: f.congaIndex ?? 0, tail: f });
+            }
+          }
+        }
+        let joined = false;
+        for (const [leaderId, { maxIdx, tail }] of groups) {
+          if (maxIdx < CONGA_MAX_SIZE - 1) {
+            congaLeaderId = leaderId;
+            congaIndex = maxIdx + 1;
+            // Spawn just behind the current tail in its direction of travel
+            const predAngle = Math.atan2(tail.vy, tail.vx);
+            x = tail.x - Math.cos(predAngle) * 38;
+            y = tail.y - Math.sin(predAngle) * 38;
+            vx = tail.vx * 0.85;
+            vy = tail.vy * 0.85;
+            initialVx = tail.initialVx;
+            isFlipped = tail.isFlipped;
+            joined = true;
+            break;
+          }
+        }
+        if (!joined) {
+          // This fish becomes the leader of a new conga group
+          congaLeaderId = id;
+          congaIndex = 0;
+        }
+      }
+
       const newFish: FishType = {
         id, x, y, displayY: y, vx, vy, initialVx,
         rotation: Math.atan2(vy, vx) * (180 / Math.PI),
@@ -465,6 +518,14 @@ const App: React.FC = () => {
           return xBand * 2 + yBand; // 0–5
         })(),
         variant,
+        behavior,
+        behaviorPhase,
+        swirlRadius,
+        swirlAngle,
+        swirlCx,
+        swirlCy,
+        congaLeaderId,
+        congaIndex,
       };
 
       return [...prev, newFish];
@@ -774,110 +835,246 @@ const App: React.FC = () => {
                 crumbBursts.push({ x: closestFood.x, worldY: closestFood.worldY });
               }
             } else {
-              // Normal cruising
-              vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
-              vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
-              vy += (Math.random() - 0.5) * WANDER_STRENGTH;
+              // ── Behavior dispatcher ────────────────────────────────────
+              const t = frameTimeSeconds;
+              const bp = fish.behaviorPhase;
 
-              // Fish schooling: alignment + cohesion + separation.
-              // Viewport culling: skip costly schooling for off-screen fish.
-              const fishDisplayY = y - scrollYRef.current * SCROLL_PARALLAX;
-              const isOffscreen = fishDisplayY < -400 || fishDisplayY > window.innerHeight + 400;
+              if (fish.behavior === 'swirl') {
+                // ── SWIRL: tight clockwise orbit that slowly drifts sideways ──
+                const SWIRL_ANGULAR_SPEED = 0.055; // radians per frame
+                const DRIFT_SPEED = 0.35;           // px/frame lateral drift
 
-              let neighborCount = 0;
-              let alignX = 0;
-              let alignY = 0;
-              let centerX = 0;
-              let centerY = 0;
-              let separationX = 0;
-              let separationY = 0;
+                let { swirlAngle, swirlCx, swirlCy, swirlRadius } = fish;
+                swirlAngle += SWIRL_ANGULAR_SPEED * Math.sign(initialVx > 0 ? 1 : -1);
+                // Drift the orbit center across the screen
+                swirlCx += initialVx > 0 ? DRIFT_SPEED : -DRIFT_SPEED;
 
-              if (!isOffscreen) for (const other of currentFishes) {
-                if (other.id === fish.id) continue;
-                const dx = other.x - x;
-                const dy = other.y - y;
-                const distSq = dx * dx + dy * dy;
-                if (distSq > SCHOOL_RADIUS * SCHOOL_RADIUS) continue;
+                const targetX = swirlCx + Math.cos(swirlAngle) * swirlRadius;
+                const targetY = swirlCy + Math.sin(swirlAngle) * swirlRadius;
 
-                const dist = Math.sqrt(distSq);
+                // Steer toward the orbit point
+                vx += (targetX - x) * 0.18;
+                vy += (targetY - y) * 0.18;
 
-                // Separation applies to all fish regardless of school
-                if (dist < SEPARATION_RADIUS && dist > 0.001) {
-                  separationX -= dx / dist;
-                  separationY -= dy / dist;
+                const swirlSpeed = Math.sqrt(vx * vx + vy * vy);
+                const MAX_SWIRL_SPEED = 2.8;
+                if (swirlSpeed > MAX_SWIRL_SPEED) {
+                  vx = (vx / swirlSpeed) * MAX_SWIRL_SPEED;
+                  vy = (vy / swirlSpeed) * MAX_SWIRL_SPEED;
                 }
 
-                // Cohesion and alignment only within the same mini-school
-                if (other.schoolId !== fish.schoolId) continue;
+                x += vx;
+                y += vy;
 
-                neighborCount++;
-                alignX += other.vx;
-                alignY += other.vy;
-                centerX += other.x;
-                centerY += other.y;
+                // Carry mutated swirl state forward
+                return {
+                  ...fish, x, y, displayY: y, vx, vy,
+                  rotation: Math.atan2(vy, vx) * (180 / Math.PI),
+                  swirlAngle, swirlCx, swirlCy,
+                };
 
-                if (neighborCount >= MAX_NEIGHBORS_CONSIDERED) break;
-              } // end schooling loop
+              } else if (fish.behavior === 'dart') {
+                // ── DART: cruise but with periodic explosive bursts ──────────
+                const DART_PERIOD = 3.5; // seconds between bursts
+                const dartPhase = (t * (1 / DART_PERIOD) + bp) % 1;
+                // Burst window: first 12% of the cycle
+                if (dartPhase < 0.12) {
+                  const burstStrength = Math.sin(dartPhase * (Math.PI / 0.12)) * 0.55;
+                  const spd = Math.sqrt(vx * vx + vy * vy);
+                  if (spd > 0.001) {
+                    vx += (vx / spd) * burstStrength;
+                    vy += (vy / spd) * burstStrength;
+                  }
+                }
+                // Between bursts: gentle zigzag
+                vy += Math.sin(t * 2.2 + bp) * 0.04;
 
-              // Separation applies globally (all nearby fish push apart)
-              vx += separationX * SEPARATION_STRENGTH;
-              vy += separationY * SEPARATION_STRENGTH;
+                vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
+                vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH * 0.6;
 
-              if (neighborCount > 0) {
-                // Alignment + cohesion only within same mini-school
-                alignX = alignX / neighborCount - vx;
-                alignY = alignY / neighborCount - vy;
-                vx += alignX * ALIGN_STRENGTH;
-                vy += alignY * ALIGN_STRENGTH;
+                const dartSpd = Math.sqrt(vx * vx + vy * vy);
+                const MAX_DART = 4.5;
+                if (dartSpd > MAX_DART) {
+                  vx = (vx / dartSpd) * MAX_DART;
+                  vy = (vy / dartSpd) * MAX_DART;
+                }
 
-                centerX /= neighborCount;
-                centerY /= neighborCount;
-                vx += (centerX - x) * COHESION_STRENGTH;
-                vy += (centerY - y) * COHESION_STRENGTH;
+              } else if (fish.behavior === 'loiter') {
+                // ── LOITER: lazy figure-8, drifts very slowly ───────────────
+                const LOITER_DRIFT = 0.12; // px/frame forward drift
+                const FIG8_FREQ_X = 0.35;
+                const FIG8_FREQ_Y = 0.70; // 2× x-freq → figure-8
+                const FIG8_AMP_X = 0.08;
+                const FIG8_AMP_Y = 0.12;
 
-                // Pattern-based movement: each school group has a distinct style
-                const t = frameTimeSeconds;
-                const pattern = fish.schoolId % 3;
-                if (pattern === 0) {
-                  // Sweep: wide lazy arcs up and down
-                  vy += Math.sin(t * 0.6 + fish.schoolId * 1.3) * 0.06;
-                } else if (pattern === 1) {
-                  // Surge: periodic speed bursts every ~4s
-                  const surgePhase = (t * 0.25 + fish.schoolId * 0.7) % 1;
-                  if (surgePhase < 0.18) {
-                    const surgeStrength = Math.sin(surgePhase * (Math.PI / 0.18)) * 0.18;
-                    const speed = Math.sqrt(vx * vx + vy * vy);
-                    if (speed > 0.001) {
-                      vx += (vx / speed) * surgeStrength;
-                      vy += (vy / speed) * surgeStrength;
-                    }
+                vx += Math.cos(t * FIG8_FREQ_X + bp) * FIG8_AMP_X;
+                vy += Math.sin(t * FIG8_FREQ_Y + bp) * FIG8_AMP_Y;
+
+                // Slow forward drift so loiterers don't get permanently stuck
+                vx += (initialVx > 0 ? LOITER_DRIFT : -LOITER_DRIFT - vx) * 0.08;
+
+                const loiterSpd = Math.sqrt(vx * vx + vy * vy);
+                const MAX_LOITER = 1.4;
+                if (loiterSpd > MAX_LOITER) {
+                  vx = (vx / loiterSpd) * MAX_LOITER;
+                  vy = (vy / loiterSpd) * MAX_LOITER;
+                }
+
+              } else if (fish.behavior === 'conga') {
+                // ── CONGA: single-file snake line, fast & curvy ─────────────
+                const CONGA_SPEED = 4.2;
+                const CONGA_GAP   = 36; // px between fish
+
+                if (fish.congaIndex === 0) {
+                  // Leader: fast sinusoidal path
+                  const SINE_FREQ = 1.6;
+                  const SINE_AMP  = 0.22;
+                  vy += Math.sin(t * SINE_FREQ + bp) * SINE_AMP;
+                  vx += (initialVx > 0 ? CONGA_SPEED : -CONGA_SPEED) * 0.12;
+                  const leaderSpd = Math.sqrt(vx * vx + vy * vy);
+                  if (leaderSpd > CONGA_SPEED) {
+                    vx = (vx / leaderSpd) * CONGA_SPEED;
+                    vy = (vy / leaderSpd) * CONGA_SPEED;
                   }
                 } else {
-                  // Spiral: tighter oscillation, school weaves in a corkscrew
-                  vy += Math.sin(t * 1.4 + fish.schoolId * 2.1) * 0.09;
-                  vx += Math.cos(t * 0.9 + fish.schoolId * 1.7) * 0.025;
+                  // Follower: chase a point CONGA_GAP behind predecessor
+                  const pred = currentFishes.find(
+                    f => f.congaLeaderId === fish.congaLeaderId && f.congaIndex === (fish.congaIndex ?? 1) - 1
+                  );
+                  if (pred) {
+                    const predSpd = Math.sqrt(pred.vx * pred.vx + pred.vy * pred.vy);
+                    const predAngle = Math.atan2(pred.vy, pred.vx);
+                    const tx = pred.x - Math.cos(predAngle) * CONGA_GAP;
+                    const ty = pred.y - Math.sin(predAngle) * CONGA_GAP;
+                    const dx = tx - x;
+                    const dy = ty - y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    vx += dx * 0.22;
+                    vy += dy * 0.22;
+                    const catchup = dist > CONGA_GAP * 1.5 ? 1.2 : 0;
+                    const targetSpd = predSpd + catchup;
+                    const mySpd = Math.sqrt(vx * vx + vy * vy);
+                    if (mySpd > 0.001) {
+                      vx = (vx / mySpd) * targetSpd;
+                      vy = (vy / mySpd) * targetSpd;
+                    }
+                  } else {
+                    // Predecessor gone — fall back to cruise
+                    vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
+                    vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
+                    const fbSpd = Math.sqrt(vx * vx + vy * vy);
+                    if (fbSpd > MAX_SPEED_CRUISE) {
+                      vx = (vx / fbSpd) * MAX_SPEED_CRUISE;
+                      vy = (vy / fbSpd) * MAX_SPEED_CRUISE;
+                    }
+                  }
                 }
 
-                // Schooled fish move faster — use a higher speed cap than solo fish
-                const speed = Math.sqrt(vx * vx + vy * vy);
-                const schoolTargetSpeed = Math.min(MAX_SPEED_CRUISE + SCHOOL_SPEED_BOOST, MAX_SPEED_SCHOOL);
-                if (speed > 0.001 && speed < schoolTargetSpeed) {
-                  const boost = 0.12;
-                  vx += (vx / speed) * boost;
-                  vy += (vy / speed) * boost;
-                }
-
-                // School speed cap is higher than solo cruise cap
-                const finalSpeed = Math.sqrt(vx * vx + vy * vy);
-                if (finalSpeed > MAX_SPEED_SCHOOL) {
-                  vx = (vx / finalSpeed) * MAX_SPEED_SCHOOL;
-                  vy = (vy / finalSpeed) * MAX_SPEED_SCHOOL;
-                }
               } else {
-                const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-                if (currentSpeed > MAX_SPEED_CRUISE) {
-                  vx = (vx / currentSpeed) * MAX_SPEED_CRUISE;
-                  vy = (vy / currentSpeed) * MAX_SPEED_CRUISE;
+                // ── CRUISE (default): schooling boids ───────────────────────
+                vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
+                vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
+                vy += (Math.random() - 0.5) * WANDER_STRENGTH;
+
+                // Fish schooling: alignment + cohesion + separation.
+                // Viewport culling: skip costly schooling for off-screen fish.
+                const fishDisplayY = y - scrollYRef.current * SCROLL_PARALLAX;
+                const isOffscreen = fishDisplayY < -400 || fishDisplayY > window.innerHeight + 400;
+
+                let neighborCount = 0;
+                let alignX = 0;
+                let alignY = 0;
+                let centerX = 0;
+                let centerY = 0;
+                let separationX = 0;
+                let separationY = 0;
+
+                if (!isOffscreen) for (const other of currentFishes) {
+                  if (other.id === fish.id) continue;
+                  const dx = other.x - x;
+                  const dy = other.y - y;
+                  const distSq = dx * dx + dy * dy;
+                  if (distSq > SCHOOL_RADIUS * SCHOOL_RADIUS) continue;
+
+                  const dist = Math.sqrt(distSq);
+
+                  // Separation applies to all fish regardless of school
+                  if (dist < SEPARATION_RADIUS && dist > 0.001) {
+                    separationX -= dx / dist;
+                    separationY -= dy / dist;
+                  }
+
+                  // Cohesion and alignment only within the same mini-school
+                  if (other.schoolId !== fish.schoolId) continue;
+
+                  neighborCount++;
+                  alignX += other.vx;
+                  alignY += other.vy;
+                  centerX += other.x;
+                  centerY += other.y;
+
+                  if (neighborCount >= MAX_NEIGHBORS_CONSIDERED) break;
+                } // end schooling loop
+
+                // Separation applies globally (all nearby fish push apart)
+                vx += separationX * SEPARATION_STRENGTH;
+                vy += separationY * SEPARATION_STRENGTH;
+
+                if (neighborCount > 0) {
+                  // Alignment + cohesion only within same mini-school
+                  alignX = alignX / neighborCount - vx;
+                  alignY = alignY / neighborCount - vy;
+                  vx += alignX * ALIGN_STRENGTH;
+                  vy += alignY * ALIGN_STRENGTH;
+
+                  centerX /= neighborCount;
+                  centerY /= neighborCount;
+                  vx += (centerX - x) * COHESION_STRENGTH;
+                  vy += (centerY - y) * COHESION_STRENGTH;
+
+                  // Pattern-based movement: each school group has a distinct style
+                  const pattern = fish.schoolId % 3;
+                  if (pattern === 0) {
+                    // Sweep: wide lazy arcs up and down
+                    vy += Math.sin(t * 0.6 + fish.schoolId * 1.3) * 0.06;
+                  } else if (pattern === 1) {
+                    // Surge: periodic speed bursts every ~4s
+                    const surgePhase = (t * 0.25 + fish.schoolId * 0.7) % 1;
+                    if (surgePhase < 0.18) {
+                      const surgeStrength = Math.sin(surgePhase * (Math.PI / 0.18)) * 0.18;
+                      const speed = Math.sqrt(vx * vx + vy * vy);
+                      if (speed > 0.001) {
+                        vx += (vx / speed) * surgeStrength;
+                        vy += (vy / speed) * surgeStrength;
+                      }
+                    }
+                  } else {
+                    // Spiral: tighter oscillation, school weaves in a corkscrew
+                    vy += Math.sin(t * 1.4 + fish.schoolId * 2.1) * 0.09;
+                    vx += Math.cos(t * 0.9 + fish.schoolId * 1.7) * 0.025;
+                  }
+
+                  // Schooled fish move faster — use a higher speed cap than solo fish
+                  const speed = Math.sqrt(vx * vx + vy * vy);
+                  const schoolTargetSpeed = Math.min(MAX_SPEED_CRUISE + SCHOOL_SPEED_BOOST, MAX_SPEED_SCHOOL);
+                  if (speed > 0.001 && speed < schoolTargetSpeed) {
+                    const boost = 0.12;
+                    vx += (vx / speed) * boost;
+                    vy += (vy / speed) * boost;
+                  }
+
+                  // School speed cap is higher than solo cruise cap
+                  const finalSpeed = Math.sqrt(vx * vx + vy * vy);
+                  if (finalSpeed > MAX_SPEED_SCHOOL) {
+                    vx = (vx / finalSpeed) * MAX_SPEED_SCHOOL;
+                    vy = (vy / finalSpeed) * MAX_SPEED_SCHOOL;
+                  }
+                } else {
+                  const currentSpeed = Math.sqrt(vx * vx + vy * vy);
+                  if (currentSpeed > MAX_SPEED_CRUISE) {
+                    vx = (vx / currentSpeed) * MAX_SPEED_CRUISE;
+                    vy = (vy / currentSpeed) * MAX_SPEED_CRUISE;
+                  }
                 }
               }
             }
