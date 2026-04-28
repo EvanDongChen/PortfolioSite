@@ -57,7 +57,7 @@ const Header: React.FC = () => {
             : 'bg-transparent'
           }`}
       >
-        <nav className="container mx-auto px-6 md:px-10 py-4 flex justify-between items-center">
+        <nav className="w-full px-6 py-4 flex justify-between items-center">
           <a href="#home" onClick={(e) => handleNavClick(e, '#home')} className="flex items-center">
             <span className={`text-3xl font-bold ${navTextColor} hover:text-white transition-colors duration-300`}>EC</span>
           </a>
