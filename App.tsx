@@ -22,7 +22,7 @@ import { Project, Bubble as BubbleType, Experience, Fish as FishType, FishFood a
 import { useTheme } from './contexts/ThemeContext';
 
 const SCROLL_PARALLAX = 1.0;
-const DEFAULT_FISH_LIMIT = 50;
+const DEFAULT_FISH_LIMIT = 75;
 const MIN_FISH_LIMIT = 5;
 const MAX_FISH_LIMIT = 150;
 const LARGE_CREATURE_MIN_SEPARATION = 220;
@@ -166,6 +166,7 @@ const App: React.FC = () => {
   const turtleHasSpawnedRef = useRef(false);
   const nextEntityIdRef = useRef(1);
   const fishLastFrameTimeRef = useRef(0);
+  const shockwavesRef = useRef<{ id: number; x: number; worldY: number; timestamp: number }[]>([]);
   const lastScrollTimestampRef = useRef(0);
 
   const getNextEntityId = useCallback(() => {
@@ -700,6 +701,14 @@ const App: React.FC = () => {
       if (target.closest('button, a, input')) return;
       const id = getNextEntityId();
       setClickRipples(prev => [...prev, { id, x: e.clientX, y: e.clientY, theme }]);
+
+      shockwavesRef.current.push({
+        id,
+        x: e.clientX,
+        worldY: e.clientY + scrollYRef.current * SCROLL_PARALLAX,
+        timestamp: performance.now(),
+      });
+
       setTimeout(() => {
         setClickRipples(prev => prev.filter(r => r.id !== id));
       }, 800); // match animation duration
@@ -804,6 +813,31 @@ const App: React.FC = () => {
 
           // Curious fish are attracted to the cursor rather than scared
           let isFleeing = false;
+
+          // Check physical shockwaves
+          for (const wave of shockwavesRef.current) {
+            const age = timestamp - wave.timestamp;
+            if (age < 500) { // Push effect lasts 500ms
+              const dx = x - wave.x;
+              const dy = y - wave.worldY;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              const BLAST_RADIUS = 350;
+              if (dist < BLAST_RADIUS) {
+                const force = (1 - dist / BLAST_RADIUS) * 3.5; // Massive push
+                const angle = Math.atan2(dy, dx);
+                vx += Math.cos(angle) * force;
+                vy += Math.sin(angle) * force;
+                isFleeing = true;
+                
+                // Blast breaks up conga lines and resets them to dart mode
+                if (fish.behavior === 'conga') {
+                  fish.congaLeaderId = undefined;
+                  fish.congaIndex = undefined;
+                  fish.behavior = 'dart';
+                }
+              }
+            }
+          }
 
           if (fish.behavior !== 'curious' && distanceMouse < SCARE_RADIUS) {
             const angle = Math.atan2(dyMouse, dxMouse);
@@ -1189,6 +1223,9 @@ const App: React.FC = () => {
         crumbBursts.forEach(burst => emitFoodCrumbs(burst.x, burst.worldY));
       }
 
+      // Cleanup old shockwaves
+      shockwavesRef.current = shockwavesRef.current.filter(w => timestamp - w.timestamp < 1000);
+
       animationFrameId = requestAnimationFrame(animate);
     };
     if (theme === 'underwater') {
@@ -1199,10 +1236,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (theme === 'underwater') {
-      // --- Accelerating burst for first 2.5 seconds ---
-      const BURST_DURATION_MS = 2500;
-      const BURST_FISH_INTERVAL_MS = 80;
-      const BURST_BUBBLE_INTERVAL_MS = 120;
+      // --- Accelerating burst for first 3.5 seconds ---
+      const BURST_DURATION_MS = 3500;
+      const BURST_FISH_INTERVAL_MS = 45;
+      const BURST_BUBBLE_INTERVAL_MS = 75;
 
       const burstFishInterval = setInterval(createFish, BURST_FISH_INTERVAL_MS);
       const burstBubbleInterval = setInterval(createBubble, BURST_BUBBLE_INTERVAL_MS);
