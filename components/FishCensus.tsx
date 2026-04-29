@@ -3,11 +3,9 @@ import { Fish as FishType } from '../types';
 
 interface FishCensusProps {
   fishes: FishType[];
-  highlightedBehavior: FishType['behavior'] | null;
-  onHighlightBehavior: (behavior: FishType['behavior'] | null) => void;
 }
 
-const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, onHighlightBehavior }) => {
+const FishCensus: React.FC<FishCensusProps> = ({ fishes }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   // Derive stats
@@ -66,27 +64,30 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
           <span className="text-slate-400">Total Fish</span>
           <span className="text-white font-bold">{total}</span>
         </div>
-        
+
         <div className="pt-2">
           <div className="text-xs text-cyan-500/70 mb-2 font-sans tracking-widest uppercase">Live Behaviors</div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-            {[
-              { id: 'cruise', label: 'Schooling', color: 'text-cyan-100', activeBg: 'bg-cyan-500/20', borderColor: 'border-cyan-400/50' },
-              { id: 'conga', label: 'Conga', color: 'text-purple-300', activeBg: 'bg-purple-500/20', borderColor: 'border-purple-400/50' },
-              { id: 'dart', label: 'Darting', color: 'text-orange-300', activeBg: 'bg-orange-500/20', borderColor: 'border-orange-400/50' },
-              { id: 'curious', label: 'Curious', color: 'text-pink-300', activeBg: 'bg-pink-500/20', borderColor: 'border-pink-400/50' },
-              { id: 'loiter', label: 'Loitering', color: 'text-slate-300', activeBg: 'bg-slate-500/20', borderColor: 'border-slate-400/50' },
-            ].map(b => (
-              <button
-                key={b.id}
-                onClick={() => onHighlightBehavior(highlightedBehavior === b.id ? null : b.id as FishType['behavior'])}
-                className={`flex justify-between items-center p-1.5 -mx-1.5 rounded transition-all duration-200 border border-transparent ${highlightedBehavior === b.id ? `${b.activeBg} ${b.borderColor}` : 'hover:bg-slate-800/50'}`}
-                aria-label={`Highlight ${b.label} fish`}
-              >
-                <span className="text-slate-400 pointer-events-none">{b.label}</span>
-                <span className={`${b.color} pointer-events-none`}>{behaviors[b.id as keyof typeof behaviors]}</span>
-              </button>
-            ))}
+            <div className="flex justify-between">
+              <span className="text-slate-400">Schooling</span>
+              <span className="text-cyan-100">{behaviors.cruise}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Conga</span>
+              <span className="text-purple-300">{behaviors.conga}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Darting</span>
+              <span className="text-orange-300">{behaviors.dart}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Curious</span>
+              <span className="text-pink-300">{behaviors.curious}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Loitering</span>
+              <span className="text-slate-300">{behaviors.loiter}</span>
+            </div>
           </div>
         </div>
 
@@ -97,7 +98,7 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
             <span>{Math.round(((behaviors.dart + behaviors.curious) / Math.max(1, total)) * 100)}%</span>
           </div>
           <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-            <div 
+            <div
               className="bg-gradient-to-r from-cyan-500 to-purple-500 h-1.5 rounded-full transition-all duration-300"
               style={{ width: `${Math.min(100, ((behaviors.dart + behaviors.curious) / Math.max(1, total)) * 100 * 2)}%` }}
             />

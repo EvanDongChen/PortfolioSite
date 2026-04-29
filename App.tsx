@@ -145,7 +145,6 @@ const App: React.FC = () => {
   const [clickRipples, setClickRipples] = useState<{ id: number; x: number; y: number; theme: string }[]>([]);
   const [nibblingFishIds, setNibblingFishIds] = useState<Record<number, boolean>>({});
   const [fishLimit, setFishLimit] = useState(DEFAULT_FISH_LIMIT);
-  const [highlightedBehavior, setHighlightedBehavior] = useState<FishBehavior | null>(null);
   const [isFishFoodMode, setIsFishFoodMode] = useState(false);
   const [stars, setStars] = useState<StarType[]>([]);
   const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
@@ -945,17 +944,17 @@ const App: React.FC = () => {
                   const angleToward = Math.atan2(-dyMouse, -dxMouse);
                   vx += Math.cos(angleToward) * CURIOUS_ATTRACT_STRENGTH;
                   vy += Math.sin(angleToward) * CURIOUS_ATTRACT_STRENGTH;
-                  
+
                   newCuriousTimer++;
                 } else {
                   // Out of range: gentle cruise
                   vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
                   vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
                   vy += (Math.random() - 0.5) * WANDER_STRENGTH;
-                  
+
                   if (newCuriousTimer > 0) newCuriousTimer--;
                 }
-                
+
                 if (newCuriousTimer > BOREDOM_THRESHOLD) {
                   newBehavior = 'cruise';
                   newCuriousTimer = 0;
@@ -1673,13 +1672,7 @@ const App: React.FC = () => {
               style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', willChange: 'transform' }}
             >
               {fishes.map(fish => (
-                <Fish
-                  key={fish.id}
-                  {...fish}
-                  isNibbling={Boolean(nibblingFishIds[fish.id])}
-                  isFaded={highlightedBehavior !== null && fish.behavior !== highlightedBehavior}
-                  isHighlighted={highlightedBehavior !== null && fish.behavior === highlightedBehavior}
-                />
+                <Fish key={fish.id} {...fish} isNibbling={Boolean(nibblingFishIds[fish.id])} />
               ))}
               {fishFoods.map(food => (
                 <div
@@ -2013,11 +2006,7 @@ const App: React.FC = () => {
               aria-label="Fish spawn limit"
             />
           </div>
-          <FishCensus 
-            fishes={fishes} 
-            highlightedBehavior={highlightedBehavior} 
-            onHighlightBehavior={setHighlightedBehavior} 
-          />
+          <FishCensus fishes={fishes} />
         </>
       )}
       <FishFoodButton isActive={isFishFoodMode} onToggle={() => setIsFishFoodMode(prev => !prev)} />
