@@ -1037,6 +1037,13 @@ const App: React.FC = () => {
           x += vx;
           y += vy;
 
+          // Keep puffer fish persistent by wrapping it around the screen instead of letting it swim off and respawning.
+          // This prevents the 'teleportation' effect when a new fish is randomly chosen to be the puffer.
+          if (fish.variant === 'puffer') {
+            if (vx > 0 && x > window.innerWidth + 200) x = -200;
+            else if (vx < 0 && x < -200) x = window.innerWidth + 200;
+          }
+
           let delta = 0;
           if (newBehavior !== 'mating' || (fish as any).isPreamble) {
             const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
@@ -1581,14 +1588,19 @@ const App: React.FC = () => {
               color2={jellyfish.color2}
             />
           )}
-          {fishes.find(f => f.variant === 'puffer') && (
-            <Fish
-              {...fishes.find(f => f.variant === 'puffer')!}
-              isNibbling={Boolean(nibblingFishIds[fishes.find(f => f.variant === 'puffer')!.id])}
-              isFaded={false}
-              isHighlighted={false}
-            />
-          )}
+          {(() => {
+            const puffer = fishes.find(f => f.variant === 'puffer');
+            if (!puffer) return null;
+            return (
+              <Fish
+                key={puffer.id}
+                {...puffer}
+                isNibbling={Boolean(nibblingFishIds[puffer.id])}
+                isFaded={false}
+                isHighlighted={false}
+              />
+            );
+          })()}
         </div>
       )}
 
