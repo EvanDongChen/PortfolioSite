@@ -60,7 +60,8 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
       });
     },
     emitFoodCrumbs: (x, worldY, isLove) => {
-      for (let i = 0; i < 6; i++) {
+      const count = isLove ? 3 : 6;
+      for (let i = 0; i < count; i++) {
         crumbsRef.current.push({
           x: x + (Math.random() - 0.5) * 12,
           worldY: worldY + (Math.random() - 0.5) * 8,
@@ -74,15 +75,15 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
       }
     },
     emitHearts: (x, worldY) => {
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 3; i++) {
         heartsRef.current.push({
           x, worldY,
-          size: 15 + Math.random() * 15,
-          driftX: (Math.random() - 0.5) * 40,
-          driftY: -30 - Math.random() * 50,
+          size: 16 + Math.random() * 12,
+          driftX: (Math.random() - 0.5) * 120,
+          driftY: -70 - Math.random() * 80,
           rotation: Math.random() * Math.PI * 2,
-          rotationSpeed: (Math.random() - 0.5) * 0.2,
-          duration: 1000 + Math.random() * 1000,
+          rotationSpeed: (Math.random() - 0.5) * 0.1,
+          duration: 2500 + Math.random() * 1000,
           elapsed: 0
         });
       }

@@ -780,8 +780,26 @@ const App: React.FC = () => {
                     setTimeout(() => {
                       const babyId = getNextEntityId();
                       setFishes(prev => {
-                        if (prev.length >= fishLimit + 20) return prev;
-                        return [...prev, { ...fish, id: babyId, x: cx, y: cy, scale: fish.scale * 0.4, behavior: 'cruise' } as any];
+                        // Much higher safety cap for mating births (250) to ensure babies usually spawn
+                        if (prev.length >= 250) return prev; 
+                        
+                        const babyFish: FishType = {
+                          ...fish,
+                          id: babyId,
+                          x: cx,
+                          y: cy,
+                          scale: fish.scale * 0.4,
+                          behavior: 'cruise',
+                          behaviorPhase: Math.random() * Math.PI * 2,
+                          initialVx: (Math.random() > 0.5 ? 1 : -1) * (1.2 + Math.random() * 1.0),
+                          congaLeaderId: undefined,
+                          congaIndex: undefined,
+                          readyToSpiral: false,
+                          matingSpiralStartTime: undefined,
+                          matingStartTime: undefined,
+                          matingPartnerId: undefined
+                        };
+                        return [...prev, babyFish];
                       });
                     }, 50);
                   }
