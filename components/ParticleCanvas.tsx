@@ -75,7 +75,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
       }
     },
     emitHearts: (x, worldY) => {
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 2; i++) {
         heartsRef.current.push({
           x, worldY,
           size: 16 + Math.random() * 12,

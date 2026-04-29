@@ -598,17 +598,17 @@ const App: React.FC = () => {
       const currentFishes = fishesRef.current;
       const foods = fishFoodsRef.current;
       const loveFoodAssignments = new Map<number, number[]>();
-      
       const spiralTriggers = new Set<number>();
-      
+      const assignedForLove = new Set<number>();
       foods.filter(f => f.type === 'love').forEach(food => {
         const nearbyFish = currentFishes
-          .filter(f => f.behavior !== 'mating')
+          .filter(f => f.behavior !== 'mating' && !assignedForLove.has(f.id))
           .map(f => ({ id: f.id, x: f.x, y: f.y, dist: Math.hypot(f.x - food.x, f.y - food.worldY) }))
           .sort((a, b) => a.dist - b.dist)
           .slice(0, 2);
         
         if (nearbyFish.length === 2) {
+          nearbyFish.forEach(nf => assignedForLove.add(nf.id));
           loveFoodAssignments.set(food.id, nearbyFish.map(f => f.id));
           const EAT_RADIUS = 30;
           if (nearbyFish.some(f => f.dist < EAT_RADIUS)) {
