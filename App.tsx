@@ -885,8 +885,8 @@ const App: React.FC = () => {
                   }
                 } else {
                   // Two-stage mating: 1. Move to start positions, 2. Spiral orbit
-                  const TOTAL_DURATION = 5000;
-                  const PREAMBLE_DURATION = 1000;
+                  const TOTAL_DURATION = 6000;
+                  const PREAMBLE_DURATION = 1500;
                   const elapsed = timestamp - fish.matingStartTime;
                   
                   if (elapsed >= TOTAL_DURATION) {
@@ -905,14 +905,38 @@ const App: React.FC = () => {
                       }, 50);
                     }
                   } else if (elapsed < PREAMBLE_DURATION) {
-                    // Stage 1: Swim to poles
+                    // Stage 1: Move and then Align
                     const START_RADIUS = 65;
                     const isTop = fish.id < (fish.matingPartnerId ?? 0);
                     const tx = fish.matingCenter.x;
                     const ty = fish.matingCenter.y + (isTop ? -START_RADIUS : START_RADIUS);
                     
-                    vx = (tx - x) * 0.35;
-                    vy = (ty - y) * 0.35;
+                    const dx = tx - x;
+                    const dy = ty - y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // First 1s: Swim to poles
+                    if (elapsed < 1000) {
+                      const SWIM_SPEED = 5;
+                      if (dist > 5) {
+                        vx = (dx / dist) * SWIM_SPEED;
+                        vy = (dy / dist) * SWIM_SPEED;
+                      } else {
+                        vx = dx * 0.2;
+                        vy = dy * 0.2;
+                      }
+                      (fish as any).isPreamble = true;
+                    } else {
+                      // Final 0.5s: Force horizontal alignment
+                      vx = dx * 0.2;
+                      vy = dy * 0.2;
+                      const targetTangent = isTop ? 0 : 180;
+                      let deltaH = targetTangent - rotation;
+                      if (deltaH > 180) deltaH -= 360;
+                      if (deltaH < -180) deltaH += 360;
+                      rotation += deltaH * 0.25; // faster snap to horizontal
+                      (fish as any).isPreamble = false; // Disable default rotation
+                    }
                   } else {
                     // Stage 2: Spiral orbit
                     const spiralElapsed = elapsed - PREAMBLE_DURATION;
@@ -1101,7 +1125,7 @@ const App: React.FC = () => {
           y += vy;
 
           let delta = 0;
-          if (newBehavior !== 'mating') {
+          if (newBehavior !== 'mating' || (fish as any).isPreamble) {
             const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
             delta = targetRotation - rotation;
             if (delta > 180) delta -= 360;
@@ -1669,15 +1693,24 @@ const App: React.FC = () => {
           <LoveModeButton 
             isActive={isLoveMode} 
             onToggle={() => {
-              setIsLoveMode(prev => !prev);
-              if (!isLoveMode) setIsFishFoodMode(true);
+              if (isLoveMode) {
+                setIsLoveMode(false);
+                setIsFishFoodMode(false);
+              } else {
+                setIsLoveMode(true);
+                setIsFishFoodMode(true);
+              }
             }} 
           />
         </>
       )}
       <FishFoodButton isActive={isFishFoodMode && !isLoveMode} onToggle={() => {
-        setIsFishFoodMode(prev => !prev);
-        if (isLoveMode) setIsLoveMode(false);
+        if (isFishFoodMode && !isLoveMode) {
+          setIsFishFoodMode(false);
+        } else {
+          setIsFishFoodMode(true);
+          setIsLoveMode(false);
+        }
       }} />
     </div>
   );
