@@ -786,9 +786,10 @@ const App: React.FC = () => {
                         const babyFish: FishType = {
                           ...fish,
                           id: babyId,
+                          birthTime: timestamp,
                           x: cx,
                           y: cy,
-                          scale: fish.scale * 0.4,
+                          scale: fish.scale, // Base scale (adult size)
                           behavior: 'cruise',
                           behaviorPhase: Math.random() * Math.PI * 2,
                           initialVx: (Math.random() > 0.5 ? 1 : -1) * (1.2 + Math.random() * 1.0),

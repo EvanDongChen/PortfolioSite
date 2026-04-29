@@ -7,8 +7,17 @@ interface FishProps extends Omit<FishType, 'vx' | 'vy' | 'initialVx'> {
   isHighlighted?: boolean;
 }
 
-const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false }) => {
+const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false, birthTime }) => {
   const isClownFish = variant === 'clown';
+
+  // Growth logic: Start at 40% size and grow to 100% over 15 seconds
+  const GROWTH_DURATION = 15000;
+  let currentScale = scale;
+  if (birthTime) {
+    const age = performance.now() - birthTime;
+    const growthT = Math.min(1, age / GROWTH_DURATION);
+    currentScale = scale * (0.4 + 0.6 * growthT);
+  }
 
   const nibbleTilt = isNibbling ? (isFlipped ? -14 : 14) : 0;
   const nibbleScale = isNibbling ? 1.2 : 1;
@@ -17,8 +26,8 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
     left: 0,
     top: 0,
     transform: `translate(${x}px, ${displayY}px) rotate(${rotation + nibbleTilt}deg) scale(${nibbleScale}) ${isFlipped ? 'scaleY(-1)' : ''}`,
-    width: 120 * scale,
-    height: 50 * scale,
+    width: 120 * currentScale,
+    height: 50 * currentScale,
     willChange: 'transform',
     pointerEvents: 'none',
     cursor: 'default',
