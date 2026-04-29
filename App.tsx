@@ -145,6 +145,7 @@ const App: React.FC = () => {
   const [clickRipples, setClickRipples] = useState<{ id: number; x: number; y: number; theme: string }[]>([]);
   const [nibblingFishIds, setNibblingFishIds] = useState<Record<number, boolean>>({});
   const [fishLimit, setFishLimit] = useState(DEFAULT_FISH_LIMIT);
+  const [highlightedBehavior, setHighlightedBehavior] = useState<FishBehavior | null>(null);
   const [isFishFoodMode, setIsFishFoodMode] = useState(false);
   const [stars, setStars] = useState<StarType[]>([]);
   const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
@@ -1672,7 +1673,13 @@ const App: React.FC = () => {
               style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', willChange: 'transform' }}
             >
               {fishes.map(fish => (
-                <Fish key={fish.id} {...fish} isNibbling={Boolean(nibblingFishIds[fish.id])} />
+                <Fish
+                  key={fish.id}
+                  {...fish}
+                  isNibbling={Boolean(nibblingFishIds[fish.id])}
+                  isFaded={highlightedBehavior !== null && fish.behavior !== highlightedBehavior}
+                  isHighlighted={highlightedBehavior !== null && fish.behavior === highlightedBehavior}
+                />
               ))}
               {fishFoods.map(food => (
                 <div
@@ -2006,7 +2013,11 @@ const App: React.FC = () => {
               aria-label="Fish spawn limit"
             />
           </div>
-          <FishCensus fishes={fishes} />
+          <FishCensus 
+            fishes={fishes} 
+            highlightedBehavior={highlightedBehavior} 
+            onHighlightBehavior={setHighlightedBehavior} 
+          />
         </>
       )}
       <FishFoodButton isActive={isFishFoodMode} onToggle={() => setIsFishFoodMode(prev => !prev)} />
