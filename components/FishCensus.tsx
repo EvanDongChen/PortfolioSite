@@ -90,19 +90,6 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
           </div>
         </div>
 
-        {/* Dynamic Activity Meter */}
-        <div className="mt-4 pt-3 border-t border-cyan-500/20">
-          <div className="flex justify-between items-center mb-1 text-xs text-slate-400">
-            <span>Activity Level</span>
-            <span>{Math.round(((behaviors.dart + behaviors.curious) / Math.max(1, total)) * 100)}%</span>
-          </div>
-          <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-            <div
-              className="bg-gradient-to-r from-cyan-500 to-purple-500 h-1.5 rounded-full transition-all duration-300"
-              style={{ width: `${Math.min(100, ((behaviors.dart + behaviors.curious) / Math.max(1, total)) * 100 * 2)}%` }}
-            />
-          </div>
-        </div>
       </div>
     </div>
   );

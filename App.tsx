@@ -579,11 +579,6 @@ const App: React.FC = () => {
     fishLastFrameTimeRef.current = 0;
 
     const animate = (timestamp: number) => {
-      if (timestamp - lastScrollTimestampRef.current < SCROLL_ACTIVE_WINDOW_MS) {
-        animationFrameId = requestAnimationFrame(animate);
-        return;
-      }
-
       if (fishLastFrameTimeRef.current !== 0 && timestamp - fishLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) {
         animationFrameId = requestAnimationFrame(animate);
         return;
