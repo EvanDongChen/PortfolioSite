@@ -499,6 +499,13 @@ const App: React.FC = () => {
     if (!isFishFoodMode) return;
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
+      const pufferEl = target.closest('[data-is-puffer="true"]');
+      if (pufferEl) {
+        const id = Number(pufferEl.getAttribute('data-fish-id'));
+        setFishes(prev => prev.map(f => f.id === id ? { ...f, isPuffed: true, puffStartTime: performance.now() } : f));
+        return;
+      }
+
       if (target.closest('button, a, input')) return;
       const id = getNextEntityId();
       const newFood: FishFoodType = {
@@ -522,6 +529,13 @@ const App: React.FC = () => {
     if (isFishFoodMode) return;
     const handleRippleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
+      const pufferEl = target.closest('[data-is-puffer="true"]');
+      if (pufferEl) {
+        const id = Number(pufferEl.getAttribute('data-fish-id'));
+        setFishes(prev => prev.map(f => f.id === id ? { ...f, isPuffed: true, puffStartTime: performance.now() } : f));
+        return;
+      }
+
       if (target.closest('button, a, input')) return;
       const id = getNextEntityId();
       particleCanvasRef.current?.emitClickRipple(e.clientX, e.clientY, theme);
@@ -654,6 +668,13 @@ const App: React.FC = () => {
           let newMatingCenter = fish.matingCenter;
           let newMatingSpiralStartTime = fish.matingSpiralStartTime;
           let newReadyToSpiral = fish.readyToSpiral;
+          let newIsPuffed = fish.isPuffed;
+          let newPuffStartTime = fish.puffStartTime;
+
+          if (newIsPuffed && newPuffStartTime && (timestamp - newPuffStartTime > 3500)) {
+            newIsPuffed = false;
+            newPuffStartTime = undefined;
+          }
 
           if (matingTriggers.has(fish.id)) {
             const trigger = matingTriggers.get(fish.id)!;
@@ -719,7 +740,7 @@ const App: React.FC = () => {
             }
           }
 
-          if (fish.behavior !== 'curious' && fish.behavior !== 'mating' && distanceMouse < SCARE_RADIUS) {
+          if (fish.variant !== 'puffer' && fish.behavior !== 'curious' && fish.behavior !== 'mating' && distanceMouse < SCARE_RADIUS) {
             const angle = Math.atan2(dyMouse, dxMouse);
             vx += Math.cos(angle) * FLEE_STRENGTH;
             vy += Math.sin(angle) * FLEE_STRENGTH;
@@ -1008,6 +1029,11 @@ const App: React.FC = () => {
             }
           }
 
+          if (newIsPuffed) {
+            vx *= 0.15;
+            vy = (vy * 0.15) - 0.12;
+          }
+
           x += vx;
           y += vy;
 
@@ -1031,16 +1057,22 @@ const App: React.FC = () => {
             emitTrailBubble(x - direction * (26 * fish.scale), y + (Math.random() - 0.5) * 6);
           }
 
+          const fishDisplayY = fish.variant === 'puffer' 
+            ? y - scrollYRef.current * SCROLL_PARALLAX 
+            : y;
+
           return { 
             ...fish, 
             behavior: newBehavior, 
             curiousTimer: newCuriousTimer, 
-            x, y, displayY: y, vx, vy, rotation,
+            x, y, displayY: fishDisplayY, vx, vy, rotation,
             matingStartTime: newMatingStartTime,
             matingPartnerId: newMatingPartnerId,
             matingCenter: newMatingCenter,
             matingSpiralStartTime: newMatingSpiralStartTime,
             readyToSpiral: newReadyToSpiral,
+            isPuffed: newIsPuffed,
+            puffStartTime: newPuffStartTime,
           };
         })
           .filter(fish =>
@@ -1051,6 +1083,14 @@ const App: React.FC = () => {
         if (next.length > 0 && !next.some(f => f.variant === 'clown')) {
           const idx = Math.floor(Math.random() * next.length);
           next[idx] = { ...next[idx], variant: 'clown' };
+        }
+
+        // Always keep exactly 1 puffer fish alive.
+        if (next.length > 0 && !next.some(f => f.variant === 'puffer')) {
+          // Prefer non-clown fish for puffer
+          const availableIdxs = next.map((f, i) => f.variant !== 'clown' ? i : -1).filter(i => i !== -1);
+          const targetIdx = availableIdxs.length > 0 ? availableIdxs[Math.floor(Math.random() * availableIdxs.length)] : Math.floor(Math.random() * next.length);
+          next[targetIdx] = { ...next[targetIdx], variant: 'puffer' };
         }
 
         return next;
@@ -1486,7 +1526,7 @@ const App: React.FC = () => {
               ref={worldLayerRef}
               style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', willChange: 'transform' }}
             >
-              {fishes.map(fish => (
+              {fishes.filter(f => f.variant !== 'puffer').map(fish => (
                 <Fish
                   key={fish.id}
                   {...fish}
@@ -1539,6 +1579,14 @@ const App: React.FC = () => {
               isFlipped={jellyfish.isFlipped}
               color1={jellyfish.color1}
               color2={jellyfish.color2}
+            />
+          )}
+          {fishes.find(f => f.variant === 'puffer') && (
+            <Fish
+              {...fishes.find(f => f.variant === 'puffer')!}
+              isNibbling={Boolean(nibblingFishIds[fishes.find(f => f.variant === 'puffer')!.id])}
+              isFaded={false}
+              isHighlighted={false}
             />
           )}
         </div>

@@ -30,6 +30,8 @@ export interface Education {
 
 export type FishBehavior = 'cruise' | 'dart' | 'loiter' | 'conga' | 'curious' | 'mating';
 
+export type FishVariant = 'default' | 'clown' | 'puffer';
+
 export interface Fish {
   id: number;
   x: number;
@@ -44,7 +46,7 @@ export interface Fish {
   color2: string;
   isFlipped: boolean;
   schoolId: number;
-  variant?: 'default' | 'clown';
+  variant?: FishVariant;
   behavior: FishBehavior;
   behaviorPhase: number; // per-fish random offset for behavior oscillations
   congaLeaderId?: number; // conga: shared group id (= leader's fish.id)
@@ -56,6 +58,8 @@ export interface Fish {
   matingSpiralStartTime?: number; // timestamp when spiral actually started
   readyToSpiral?: boolean; // whether this fish reached pole and is horizontal
   birthTime?: number;
+  isPuffed?: boolean;
+  puffStartTime?: number;
 }
 
 export interface FishFood {
