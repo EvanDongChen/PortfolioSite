@@ -16,6 +16,7 @@ import Star from './components/Star';
 import ShootingStar from './components/ShootingStar';
 import CursorNebula from './components/CursorNebula';
 import PortfolioContent from './components/PortfolioContent';
+import ParticleCanvas, { ParticleCanvasRef } from './components/ParticleCanvas';
 
 const BASE_URL = import.meta.env.BASE_URL;
 import ThemeToggleButton from './components/ThemeToggleButton';
@@ -55,35 +56,6 @@ const JELLYFISH_COLORS: [string, string][] = [
   ['#fbcfe8', '#ec4899'],
   ['#fda4af', '#db2777'],
 ];
-
-interface FishTrailParticle {
-  id: number;
-  x: number;
-  worldY: number;
-  size: number;
-  durationMs: number;
-  driftX: number;
-}
-
-interface FoodCrumbParticle {
-  id: number;
-  x: number;
-  worldY: number;
-  size: number;
-  durationMs: number;
-  driftX: number;
-  driftY: number;
-}
-
-interface JellyPopParticle {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  durationMs: number;
-  driftX: number;
-  driftY: number;
-}
 
 interface JellyPopRing {
   id: number;
@@ -139,11 +111,6 @@ const App: React.FC = () => {
   const [turtle, setTurtle] = useState<TurtleState | null>(null);
   const [jellyfish, setJellyfish] = useState<JellyfishState | null>(null);
   const [fishFoods, setFishFoods] = useState<FishFoodType[]>([]);
-  const [trailParticles, setTrailParticles] = useState<FishTrailParticle[]>([]);
-  const [foodCrumbs, setFoodCrumbs] = useState<FoodCrumbParticle[]>([]);
-  const [jellyPopParticles, setJellyPopParticles] = useState<JellyPopParticle[]>([]);
-  const [jellyPopRings, setJellyPopRings] = useState<JellyPopRing[]>([]);
-  const [clickRipples, setClickRipples] = useState<{ id: number; x: number; y: number; theme: string }[]>([]);
   const [nibblingFishIds, setNibblingFishIds] = useState<Record<number, boolean>>({});
   const [fishLimit, setFishLimit] = useState(DEFAULT_FISH_LIMIT);
   const [highlightedBehavior, setHighlightedBehavior] = useState<FishBehavior | null>(null);
@@ -151,6 +118,7 @@ const App: React.FC = () => {
   const [stars, setStars] = useState<StarType[]>([]);
   const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const particleCanvasRef = useRef<ParticleCanvasRef>(null);
   const scrollYRef = useRef(0);
   const worldLayerRef = useRef<HTMLDivElement>(null);
   const scrollRafRef = useRef<number | null>(null);
@@ -512,95 +480,16 @@ const App: React.FC = () => {
   }, [theme]);
 
   const emitTrailBubble = useCallback((x: number, worldY: number) => {
-    const id = getNextEntityId();
-    const durationMs = 650 + Math.random() * 450;
-    const newParticle: FishTrailParticle = {
-      id,
-      x,
-      worldY,
-      size: 3 + Math.random() * 4,
-      durationMs,
-      driftX: (Math.random() - 0.5) * 20,
-    };
-
-    setTrailParticles(prev => {
-      const next = [...prev, newParticle];
-      return next.length > 160 ? next.slice(next.length - 160) : next;
-    });
-
-    setTimeout(() => {
-      setTrailParticles(prev => prev.filter(p => p.id !== id));
-    }, durationMs + 100);
-  }, [getNextEntityId]);
+    particleCanvasRef.current?.emitTrailBubble(x, worldY);
+  }, []);
 
   const emitFoodCrumbs = useCallback((x: number, worldY: number) => {
-    const particles = Array.from({ length: 6 }, () => {
-      const id = getNextEntityId();
-      const durationMs = 280 + Math.random() * 220;
-      const crumb: FoodCrumbParticle = {
-        id,
-        x: x + (Math.random() - 0.5) * 12,
-        worldY: worldY + (Math.random() - 0.5) * 8,
-        size: 2 + Math.random() * 2.5,
-        durationMs,
-        driftX: (Math.random() - 0.5) * 26,
-        driftY: -10 - Math.random() * 20,
-      };
-
-      setTimeout(() => {
-        setFoodCrumbs(prev => prev.filter(p => p.id !== id));
-      }, durationMs + 60);
-
-      return crumb;
-    });
-
-    setFoodCrumbs(prev => {
-      const next = [...prev, ...particles];
-      return next.length > 140 ? next.slice(next.length - 140) : next;
-    });
-  }, [getNextEntityId]);
+    particleCanvasRef.current?.emitFoodCrumbs(x, worldY);
+  }, []);
 
   const emitJellyfishPop = useCallback((x: number, y: number, scale: number) => {
-    const ringId = getNextEntityId();
-    const ringDurationMs = 420;
-    const ringSize = 26 + scale * 26;
-
-    setJellyPopRings(prev => {
-      const next = [...prev, { id: ringId, x, y, size: ringSize, durationMs: ringDurationMs }];
-      return next.length > 10 ? next.slice(next.length - 10) : next;
-    });
-
-    setTimeout(() => {
-      setJellyPopRings(prev => prev.filter(ring => ring.id !== ringId));
-    }, ringDurationMs + 60);
-
-    const particles = Array.from({ length: 12 }, () => {
-      const id = getNextEntityId();
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 12 + Math.random() * 22;
-      const durationMs = 360 + Math.random() * 260;
-      const particle: JellyPopParticle = {
-        id,
-        x,
-        y,
-        size: 4 + Math.random() * 4,
-        durationMs,
-        driftX: Math.cos(angle) * speed,
-        driftY: Math.sin(angle) * speed - 12,
-      };
-
-      setTimeout(() => {
-        setJellyPopParticles(prev => prev.filter(p => p.id !== id));
-      }, durationMs + 60);
-
-      return particle;
-    });
-
-    setJellyPopParticles(prev => {
-      const next = [...prev, ...particles];
-      return next.length > 80 ? next.slice(next.length - 80) : next;
-    });
-  }, [getNextEntityId]);
+    particleCanvasRef.current?.emitJellyfishPop(x, y, scale);
+  }, []);
 
   // Place fish food on click when food mode is active
   useEffect(() => {
@@ -631,7 +520,7 @@ const App: React.FC = () => {
       const target = e.target as HTMLElement;
       if (target.closest('button, a, input')) return;
       const id = getNextEntityId();
-      setClickRipples(prev => [...prev, { id, x: e.clientX, y: e.clientY, theme }]);
+      particleCanvasRef.current?.emitClickRipple(e.clientX, e.clientY, theme);
 
       shockwavesRef.current.push({
         id,
@@ -639,10 +528,6 @@ const App: React.FC = () => {
         worldY: e.clientY + scrollYRef.current * SCROLL_PARALLAX,
         timestamp: performance.now(),
       });
-
-      setTimeout(() => {
-        setClickRipples(prev => prev.filter(r => r.id !== id));
-      }, 800); // match animation duration
     };
     window.addEventListener('click', handleRippleClick);
     return () => window.removeEventListener('click', handleRippleClick);
@@ -1135,6 +1020,10 @@ const App: React.FC = () => {
       // Cleanup old shockwaves
       shockwavesRef.current = shockwavesRef.current.filter(w => timestamp - w.timestamp < 1000);
 
+      if (particleCanvasRef.current) {
+        particleCanvasRef.current.setScrollY(scrollYRef.current);
+      }
+
       animationFrameId = requestAnimationFrame(animate);
     };
     if (theme === 'underwater') {
@@ -1504,99 +1393,11 @@ const App: React.FC = () => {
       : 'bg-gradient-to-br from-[#020111] via-[#0d1b2a] to-[#1b263b]'
       }`}>
       <style>{`
-        @keyframes fishTrailRise {
-          0% {
-            opacity: 0.95;
-            transform: translate(0px, 0px) scale(1);
-          }
-          100% {
-            opacity: 0;
-            transform: translate(var(--trail-dx), -42px) scale(0.45);
-          }
-        }
-
-        @keyframes foodCrumbBurst {
-          0% {
-            opacity: 1;
-            transform: translate(0px, 0px) scale(1);
-          }
-          100% {
-            opacity: 0;
-            transform: translate(var(--crumb-dx), var(--crumb-dy)) scale(0.35);
-          }
-        }
-
-        @keyframes jellyPopParticle {
-          0% {
-            opacity: 0.95;
-            transform: translate(0px, 0px) scale(1);
-          }
-          100% {
-            opacity: 0;
-            transform: translate(var(--pop-dx), var(--pop-dy)) scale(0.25);
-          }
-        }
-
-        @keyframes jellyPopRing {
-          0% {
-            opacity: 0.9;
-            transform: scale(0.45);
-          }
-          100% {
-            opacity: 0;
-            transform: scale(1.8);
-          }
-        }
-
-        @keyframes clickRippleExpand {
-          0% {
-            opacity: 0.6;
-            transform: scale(0.1);
-          }
-          100% {
-            opacity: 0;
-            transform: scale(1);
-          }
-        }
       `}</style>
+      <ParticleCanvas ref={particleCanvasRef} />
       <div
         className="fixed inset-0 w-full h-full z-0"
       >
-        {/* Click Ripples layer - above background, below world */}
-        {clickRipples.map(ripple => {
-          const isUnderwater = ripple.theme === 'underwater';
-          const size = isUnderwater ? 180 : 120;
-          return (
-            <div
-              key={ripple.id}
-              style={{
-                position: 'absolute',
-                left: ripple.x - size / 2,
-                top: ripple.y - size / 2,
-                width: size,
-                height: size,
-                pointerEvents: 'none',
-                zIndex: 5, // slightly above bubbles
-              }}
-            >
-              {[0, 150, 300].map((delay, index) => (
-                <div
-                  key={index}
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    borderRadius: '50%',
-                    border: isUnderwater ? '2px solid rgba(130, 240, 255, 0.6)' : '1.5px solid rgba(167, 139, 250, 0.5)',
-                    boxShadow: isUnderwater ? 'inset 0 0 10px rgba(130, 240, 255, 0.2), 0 0 10px rgba(130, 240, 255, 0.2)' : '0 0 15px rgba(167, 139, 250, 0.4)',
-                    animation: `clickRippleExpand 800ms cubic-bezier(0.1, 0.8, 0.3, 1) forwards`,
-                    animationDelay: `${delay}ms`,
-                    opacity: 0,
-                  }}
-                />
-              ))}
-            </div>
-          );
-        })}
         {theme === 'underwater' ? (
           <>
             <GodRays />
@@ -1638,55 +1439,6 @@ const App: React.FC = () => {
                   }}
                 />
               ))}
-              {trailParticles.map(particle => {
-                const wrapperStyle: React.CSSProperties = {
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  transform: `translate(${particle.x}px, ${particle.worldY}px)`,
-                  pointerEvents: 'none',
-                };
-                const particleStyle: React.CSSProperties = {
-                  width: particle.size,
-                  height: particle.size,
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.98), rgba(125,211,252,0.88))',
-                  boxShadow: '0 0 7px rgba(125,211,252,0.95)',
-                  animation: `fishTrailRise ${particle.durationMs}ms ease-out forwards`,
-                  ['--trail-dx' as any]: `${particle.driftX}px`,
-                };
-
-                return (
-                  <div key={particle.id} style={wrapperStyle}>
-                    <div style={particleStyle} />
-                  </div>
-                );
-              })}
-              {foodCrumbs.map(crumb => {
-                const wrapperStyle: React.CSSProperties = {
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  transform: `translate(${crumb.x}px, ${crumb.worldY}px)`,
-                  pointerEvents: 'none',
-                };
-                const crumbStyle: React.CSSProperties = {
-                  width: crumb.size,
-                  height: crumb.size,
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle at 35% 35%, rgba(255,243,182,0.98), rgba(245,158,11,0.9))',
-                  boxShadow: '0 0 6px rgba(251,191,36,0.95)',
-                  animation: `foodCrumbBurst ${crumb.durationMs}ms ease-out forwards`,
-                  ['--crumb-dx' as any]: `${crumb.driftX}px`,
-                  ['--crumb-dy' as any]: `${crumb.driftY}px`,
-                };
-
-                return (
-                  <div key={crumb.id} style={wrapperStyle}>
-                    <div style={crumbStyle} />
-                  </div>
-                );
-              })}
             </div>
           </>
         ) : (
@@ -1711,54 +1463,6 @@ const App: React.FC = () => {
               color2={jellyfish.color2}
             />
           )}
-          {jellyPopParticles.map(particle => {
-            const wrapperStyle: React.CSSProperties = {
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              transform: `translate(${particle.x}px, ${particle.y}px)`,
-              pointerEvents: 'none',
-            };
-            const particleStyle: React.CSSProperties = {
-              width: particle.size,
-              height: particle.size,
-              borderRadius: '50%',
-              background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), rgba(244,114,182,0.92))',
-              boxShadow: '0 0 10px rgba(236,72,153,0.9)',
-              animation: `jellyPopParticle ${particle.durationMs}ms cubic-bezier(0.2, 0.7, 0.2, 1) forwards`,
-              ['--pop-dx' as any]: `${particle.driftX}px`,
-              ['--pop-dy' as any]: `${particle.driftY}px`,
-            };
-
-            return (
-              <div key={particle.id} style={wrapperStyle}>
-                <div style={particleStyle} />
-              </div>
-            );
-          })}
-          {jellyPopRings.map(ring => {
-            const ringWrapperStyle: React.CSSProperties = {
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              transform: `translate(${ring.x - ring.size / 2}px, ${ring.y - ring.size / 2}px)`,
-              pointerEvents: 'none',
-            };
-            const ringStyle: React.CSSProperties = {
-              width: ring.size,
-              height: ring.size,
-              borderRadius: '50%',
-              border: '2px solid rgba(251,113,133,0.85)',
-              boxShadow: '0 0 14px rgba(244,114,182,0.8)',
-              animation: `jellyPopRing ${ring.durationMs}ms ease-out forwards`,
-            };
-
-            return (
-              <div key={ring.id} style={ringWrapperStyle}>
-                <div style={ringStyle} />
-              </div>
-            );
-          })}
         </div>
       )}
 
