@@ -484,7 +484,8 @@ const App: React.FC = () => {
         }
         let joined = false;
         for (const [leaderId, { maxIdx, tail }] of groups) {
-          if (maxIdx < CONGA_MAX_SIZE - 1) {
+          const isTailOffscreen = tail.x < -20 || tail.x > window.innerWidth + 20;
+          if (maxIdx < CONGA_MAX_SIZE - 1 && isTailOffscreen) {
             congaLeaderId = leaderId;
             congaIndex = maxIdx + 1;
             // Spawn just behind the current tail in its direction of travel
