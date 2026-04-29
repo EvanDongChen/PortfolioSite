@@ -18,6 +18,7 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
     loiter: 0,
     conga: 0,
     curious: 0,
+    mating: 0,
   };
 
   fishes.forEach(f => {
@@ -75,6 +76,7 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
               { id: 'conga', label: 'Conga', color: 'text-purple-300', activeBg: 'bg-purple-500/20', borderColor: 'border-purple-400/50' },
               { id: 'dart', label: 'Darting', color: 'text-orange-300', activeBg: 'bg-orange-500/20', borderColor: 'border-orange-400/50' },
               { id: 'curious', label: 'Curious', color: 'text-pink-300', activeBg: 'bg-pink-500/20', borderColor: 'border-pink-400/50' },
+              { id: 'mating', label: 'Mating', color: 'text-rose-400', activeBg: 'bg-rose-500/20', borderColor: 'border-rose-400/50' },
               { id: 'loiter', label: 'Loitering', color: 'text-slate-300', activeBg: 'bg-slate-500/20', borderColor: 'border-slate-400/50' },
             ].map(b => (
               <button

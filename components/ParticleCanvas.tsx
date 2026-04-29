@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react
 
 export interface ParticleCanvasRef {
   emitTrailBubble: (x: number, worldY: number) => void;
-  emitFoodCrumbs: (x: number, worldY: number) => void;
+  emitFoodCrumbs: (x: number, worldY: number, isLove?: boolean) => void;
+  emitHearts: (x: number, worldY: number) => void;
   emitJellyfishPop: (x: number, worldY: number, scale: number) => void;
   emitClickRipple: (x: number, screenY: number, theme: string) => void;
   setScrollY: (y: number) => void;
@@ -28,6 +29,11 @@ interface ClickRipple {
   x: number; screenY: number; theme: string;
   duration: number; elapsed: number; delay: number;
 }
+interface Heart {
+  x: number; worldY: number; size: number; driftX: number; driftY: number;
+  rotation: number; rotationSpeed: number;
+  duration: number; elapsed: number;
+}
 
 const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -39,6 +45,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
   const jellyPopsRef = useRef<JellyPop[]>([]);
   const jellyRingsRef = useRef<JellyRing[]>([]);
   const ripplesRef = useRef<ClickRipple[]>([]);
+  const heartsRef = useRef<Heart[]>([]);
 
   useImperativeHandle(ref, () => ({
     setScrollY: (y: number) => {
@@ -52,7 +59,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
         elapsed: 0
       });
     },
-    emitFoodCrumbs: (x, worldY) => {
+    emitFoodCrumbs: (x, worldY, isLove) => {
       for (let i = 0; i < 6; i++) {
         crumbsRef.current.push({
           x: x + (Math.random() - 0.5) * 12,
@@ -61,6 +68,21 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
           driftX: (Math.random() - 0.5) * 26,
           driftY: -10 - Math.random() * 20,
           duration: 280 + Math.random() * 220,
+          elapsed: 0,
+          isLove
+        } as any);
+      }
+    },
+    emitHearts: (x, worldY) => {
+      for (let i = 0; i < 8; i++) {
+        heartsRef.current.push({
+          x, worldY,
+          size: 15 + Math.random() * 15,
+          driftX: (Math.random() - 0.5) * 40,
+          driftY: -30 - Math.random() * 50,
+          rotation: Math.random() * Math.PI * 2,
+          rotationSpeed: (Math.random() - 0.5) * 0.2,
+          duration: 1000 + Math.random() * 1000,
           elapsed: 0
         });
       }
@@ -170,12 +192,13 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
           ctx.save();
           ctx.translate(drawX, drawY);
           
-          ctx.shadowColor = `rgba(251,191,36,${opacity * 0.95})`;
+          const color = (p as any).isLove ? 'rgba(244,63,94,' : 'rgba(251,191,36,';
+          ctx.shadowColor = `${color}${opacity * 0.95})`;
           ctx.shadowBlur = 6;
           
           const grad = ctx.createRadialGradient(-r*0.3, -r*0.3, 0, 0, 0, r);
-          grad.addColorStop(0, `rgba(255,243,182,${opacity * 0.98})`);
-          grad.addColorStop(1, `rgba(245,158,11,${opacity * 0.9})`);
+          grad.addColorStop(0, (p as any).isLove ? `rgba(255,190,200,${opacity * 0.98})` : `rgba(255,243,182,${opacity * 0.98})`);
+          grad.addColorStop(1, `${color}${opacity * 0.9})`);
           
           ctx.fillStyle = grad;
           ctx.beginPath();
@@ -183,6 +206,37 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
           ctx.fill();
           ctx.restore();
         }
+        return true;
+      });
+
+      // Draw Hearts
+      heartsRef.current = heartsRef.current.filter(p => {
+        p.elapsed += dt;
+        if (p.elapsed >= p.duration) return false;
+
+        const t = p.elapsed / p.duration;
+        const easeT = easeOutQuad(t);
+        const drawX = p.x + p.driftX * easeT;
+        const drawY = p.worldY - sy + p.driftY * easeT;
+        const opacity = Math.max(0, 1 - t);
+        const scale = p.size * (1 - t * 0.3);
+
+        ctx.save();
+        ctx.translate(drawX, drawY);
+        ctx.rotate(p.rotation + p.elapsed * p.rotationSpeed * 0.01);
+        ctx.scale(scale / 20, scale / 20);
+        ctx.fillStyle = `rgba(244,63,94,${opacity})`;
+        ctx.shadowColor = `rgba(244,63,94,${opacity * 0.5})`;
+        ctx.shadowBlur = 10;
+        
+        ctx.beginPath();
+        ctx.moveTo(0, 5);
+        ctx.bezierCurveTo(-5, -5, -15, 0, -15, 10);
+        ctx.bezierCurveTo(-15, 20, 0, 30, 0, 30);
+        ctx.bezierCurveTo(0, 30, 15, 20, 15, 10);
+        ctx.bezierCurveTo(15, 0, 5, -5, 0, 5);
+        ctx.fill();
+        ctx.restore();
         return true;
       });
 

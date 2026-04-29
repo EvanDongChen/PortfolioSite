@@ -28,7 +28,7 @@ export interface Education {
   gpa: string;
 }
 
-export type FishBehavior = 'cruise' | 'dart' | 'loiter' | 'conga' | 'curious';
+export type FishBehavior = 'cruise' | 'dart' | 'loiter' | 'conga' | 'curious' | 'mating';
 
 export interface Fish {
   id: number;
@@ -50,12 +50,16 @@ export interface Fish {
   congaLeaderId?: number; // conga: shared group id (= leader's fish.id)
   congaIndex?: number;    // conga: 0 = leader, 1+ = follower
   curiousTimer?: number;  // track how long a fish has been curious
+  matingStartTime?: number; // timestamp when mating started
+  matingPartnerId?: number; // id of the partner
+  matingCenter?: { x: number; y: number }; // center of the mating circle
 }
 
 export interface FishFood {
   id: number;
   x: number;     // absolute x (same as fish x)
   worldY: number; // world y, same space as Fish.y
+  type?: 'default' | 'love';
 }
 
 export interface Star {

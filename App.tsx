@@ -10,6 +10,7 @@ import Whale from './components/Whale';
 import SandDune from './components/SandDune';
 import GodRays from './components/GodRays';
 import FishCensus from './components/FishCensus';
+import LoveModeButton from './components/LoveModeButton';
 import BackToTopButton from './components/BackToTopButton';
 import FishFoodButton from './components/FishFoodButton';
 import Star from './components/Star';
@@ -107,6 +108,8 @@ const App: React.FC = () => {
   const { theme } = useTheme();
   const [bubbles, setBubbles] = useState<BubbleType[]>([]);
   const [fishes, setFishes] = useState<FishType[]>([]);
+  const fishesRef = useRef<FishType[]>([]);
+  useEffect(() => { fishesRef.current = fishes; }, [fishes]);
   const [whale, setWhale] = useState<WhaleState | null>(null);
   const [turtle, setTurtle] = useState<TurtleState | null>(null);
   const [jellyfish, setJellyfish] = useState<JellyfishState | null>(null);
@@ -115,6 +118,7 @@ const App: React.FC = () => {
   const [fishLimit, setFishLimit] = useState(DEFAULT_FISH_LIMIT);
   const [highlightedBehavior, setHighlightedBehavior] = useState<FishBehavior | null>(null);
   const [isFishFoodMode, setIsFishFoodMode] = useState(false);
+  const [isLoveMode, setIsLoveMode] = useState(false);
   const [stars, setStars] = useState<StarType[]>([]);
   const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -123,7 +127,6 @@ const App: React.FC = () => {
   const worldLayerRef = useRef<HTMLDivElement>(null);
   const scrollRafRef = useRef<number | null>(null);
   const mousePosRef = useRef({ x: -1000, y: -1000 });
-  const fishesRef = useRef<FishType[]>([]);
   const fishFoodsRef = useRef<FishFoodType[]>([]);
   const trailEmitRef = useRef<Record<number, number>>({});
   const nextWhaleSpawnRef = useRef(0);
@@ -458,10 +461,6 @@ const App: React.FC = () => {
   }, [fishFoods]);
 
   useEffect(() => {
-    fishesRef.current = fishes;
-  }, [fishes]);
-
-  useEffect(() => {
     whaleRef.current = whale;
   }, [whale]);
 
@@ -483,8 +482,12 @@ const App: React.FC = () => {
     particleCanvasRef.current?.emitTrailBubble(x, worldY);
   }, []);
 
-  const emitFoodCrumbs = useCallback((x: number, worldY: number) => {
-    particleCanvasRef.current?.emitFoodCrumbs(x, worldY);
+  const emitFoodCrumbs = useCallback((x: number, worldY: number, isLove?: boolean) => {
+    particleCanvasRef.current?.emitFoodCrumbs(x, worldY, isLove);
+  }, []);
+
+  const emitHearts = useCallback((x: number, worldY: number) => {
+    particleCanvasRef.current?.emitHearts(x, worldY);
   }, []);
 
   const emitJellyfishPop = useCallback((x: number, y: number, scale: number) => {
@@ -502,6 +505,7 @@ const App: React.FC = () => {
         id,
         x: e.clientX,
         worldY: e.clientY + scrollYRef.current * SCROLL_PARALLAX,
+        type: isLoveMode ? 'love' : 'default',
       };
       setFishFoods(prev => prev.length >= 10 ? prev : [...prev, newFood]);
       // Auto-decay after 15 seconds if uneaten
@@ -587,11 +591,64 @@ const App: React.FC = () => {
 
       const eatenFoodIds = new Set<number>();
       const nibbleTriggers = new Set<number>();
-      const crumbBursts: Array<{ x: number; worldY: number }> = [];
+      const crumbBursts: Array<{ x: number; worldY: number, isLove?: boolean }> = [];
+      const matingTriggers = new Map<number, { partnerId: number, center: { x: number, y: number } }>();
       const frameTimeSeconds = timestamp * 0.001;
+
+      const currentFishes = fishesRef.current;
+      const foods = fishFoodsRef.current;
+      const loveFoodAssignments = new Map<number, number[]>();
+      
+      foods.filter(f => f.type === 'love').forEach(food => {
+        const nearbyFish = currentFishes
+          .filter(f => f.behavior !== 'mating')
+          .map(f => ({ id: f.id, x: f.x, y: f.y, dist: Math.hypot(f.x - food.x, f.y - food.worldY) }))
+          .sort((a, b) => a.dist - b.dist)
+          .slice(0, 2);
+        
+        if (nearbyFish.length === 2) {
+          loveFoodAssignments.set(food.id, nearbyFish.map(f => f.id));
+          const EAT_RADIUS = 30;
+          if (nearbyFish.some(f => f.dist < EAT_RADIUS)) {
+            matingTriggers.set(nearbyFish[0].id, { partnerId: nearbyFish[1].id, center: { x: food.x, y: food.worldY } });
+            matingTriggers.set(nearbyFish[1].id, { partnerId: nearbyFish[0].id, center: { x: food.x, y: food.worldY } });
+            eatenFoodIds.add(food.id);
+          }
+        }
+      });
+
+      const DEFAULT_EAT_RADIUS = 30;
+      currentFishes.forEach(fish => {
+        if (fish.behavior === 'mating') return;
+        for (const food of foods) {
+          if (food.type === 'love' || eatenFoodIds.has(food.id)) continue;
+          const dist = Math.hypot(fish.x - food.x, fish.y - food.worldY);
+          if (dist < DEFAULT_EAT_RADIUS) {
+            eatenFoodIds.add(food.id);
+            nibbleTriggers.add(fish.id);
+            crumbBursts.push({ x: food.x, worldY: food.worldY, isLove: false });
+          }
+        }
+      });
 
       setFishes(currentFishes => {
         const next = currentFishes.map(fish => {
+          // Check for external mating triggers first
+          let { x, y, vx, vy, rotation, initialVx, isFlipped } = fish;
+          let newBehavior = fish.behavior;
+          let newCuriousTimer = fish.curiousTimer || 0;
+          let newMatingStartTime = fish.matingStartTime;
+          let newMatingPartnerId = fish.matingPartnerId;
+          let newMatingCenter = fish.matingCenter;
+
+          if (matingTriggers.has(fish.id)) {
+            const trigger = matingTriggers.get(fish.id)!;
+            newBehavior = 'mating';
+            newMatingStartTime = timestamp;
+            newMatingPartnerId = trigger.partnerId;
+            newMatingCenter = trigger.center;
+          }
+
           const SCARE_RADIUS = 150;
           const FLEE_STRENGTH = 6;
           const MAX_SPEED_FLEE = 5;
@@ -612,9 +669,6 @@ const App: React.FC = () => {
           const SCHOOL_SPEED_BOOST = 0.55;
           const MAX_SPEED_SCHOOL = 3.5;
 
-          let { x, y, vx, vy, rotation, initialVx, isFlipped } = fish;
-          let newBehavior = fish.behavior;
-          let newCuriousTimer = fish.curiousTimer || 0;
           const prevVx = vx;
           const prevVy = vy;
 
@@ -667,14 +721,20 @@ const App: React.FC = () => {
               vy = (vy / currentSpeed) * fleeCap;
             }
           } else {
-            // Check for nearby food
-            const foods = fishFoodsRef.current;
+            // Find food
             let closestFood: FishFoodType | null = null;
             let closestDist = Infinity;
+            
             for (const food of foods) {
               const fdx = food.x - x;
               const fdy = food.worldY - y;
               const dist = Math.sqrt(fdx * fdx + fdy * fdy);
+              
+              if (food.type === 'love') {
+                const assigned = loveFoodAssignments.get(food.id);
+                if (!assigned || !assigned.includes(fish.id)) continue;
+              }
+
               if (dist < closestDist) {
                 closestDist = dist;
                 closestFood = food;
@@ -696,9 +756,11 @@ const App: React.FC = () => {
               }
 
               if (closestDist < EAT_RADIUS) {
-                eatenFoodIds.add(closestFood.id);
-                nibbleTriggers.add(fish.id);
-                crumbBursts.push({ x: closestFood.x, worldY: closestFood.worldY });
+                if (closestFood.type === 'love') {
+                  // Mating trigger handled above
+                  nibbleTriggers.add(fish.id);
+                  crumbBursts.push({ x: closestFood.x, worldY: closestFood.worldY, isLove: true });
+                }
               }
             } else {
               // ── Behavior dispatcher ────────────────────────────────────
@@ -784,6 +846,95 @@ const App: React.FC = () => {
                 if (curiousSpd > MAX_CURIOUS_SPEED) {
                   vx = (vx / curiousSpd) * MAX_CURIOUS_SPEED;
                   vy = (vy / curiousSpd) * MAX_CURIOUS_SPEED;
+                }
+
+              } else if (fish.behavior === 'mating' && fish.matingStartTime && fish.matingCenter) {
+                // ── MATING: 2 fish swim in a fast circle ────────────────────
+                const MATING_DURATION = 4000;
+                const elapsed = timestamp - fish.matingStartTime;
+                
+                if (elapsed >= MATING_DURATION) {
+                  // Mating finished!
+                  newBehavior = 'cruise';
+                  
+                  // Only one fish (the one with lower id) handles spawning to avoid duplicates
+                  if (fish.matingPartnerId && fish.id < fish.matingPartnerId) {
+                    const cx = fish.matingCenter.x;
+                    const cy = fish.matingCenter.y;
+                    emitHearts(cx, cy);
+                    
+                    // Spawn a baby fish
+                    setTimeout(() => {
+                      const babyId = getNextEntityId();
+                      setFishes(prev => {
+                        if (prev.length >= fishLimit + 20) return prev; // allow some over-limit for babies
+                        const babyFish: FishType = {
+                          ...fish,
+                          id: babyId,
+                          x: cx,
+                          y: cy,
+                          scale: fish.scale * 0.4, // tiny baby
+                          behavior: 'cruise',
+                          behaviorPhase: Math.random() * Math.PI * 2,
+                          congaLeaderId: undefined,
+                          congaIndex: undefined,
+                        };
+                        return [...prev, babyFish];
+                      });
+                    }, 50);
+                  }
+                } else {
+                  // Two-stage mating: 1. Move to start positions, 2. Spiral orbit
+                  const TOTAL_DURATION = 5000;
+                  const PREAMBLE_DURATION = 1000;
+                  const elapsed = timestamp - fish.matingStartTime;
+                  
+                  if (elapsed >= TOTAL_DURATION) {
+                    // Finalize (same as before)
+                    newBehavior = 'cruise';
+                    if (fish.matingPartnerId && fish.id < fish.matingPartnerId) {
+                      const cx = fish.matingCenter.x;
+                      const cy = fish.matingCenter.y;
+                      emitHearts(cx, cy);
+                      setTimeout(() => {
+                        const babyId = getNextEntityId();
+                        setFishes(prev => {
+                          if (prev.length >= fishLimit + 20) return prev;
+                          return [...prev, { ...fish, id: babyId, x: cx, y: cy, scale: fish.scale * 0.4, behavior: 'cruise' } as any];
+                        });
+                      }, 50);
+                    }
+                  } else if (elapsed < PREAMBLE_DURATION) {
+                    // Stage 1: Swim to poles
+                    const START_RADIUS = 65;
+                    const isTop = fish.id < (fish.matingPartnerId ?? 0);
+                    const tx = fish.matingCenter.x;
+                    const ty = fish.matingCenter.y + (isTop ? -START_RADIUS : START_RADIUS);
+                    
+                    vx = (tx - x) * 0.35;
+                    vy = (ty - y) * 0.35;
+                  } else {
+                    // Stage 2: Spiral orbit
+                    const spiralElapsed = elapsed - PREAMBLE_DURATION;
+                    const SPIRAL_DURATION = TOTAL_DURATION - PREAMBLE_DURATION;
+                    const t = spiralElapsed / SPIRAL_DURATION;
+                    const START_RADIUS = 65;
+                    const END_RADIUS = 12;
+                    const currentRadius = START_RADIUS - (START_RADIUS - END_RADIUS) * t;
+                    
+                    const ORBIT_SPEED = 0.006 + (t * 0.005);
+                    const isTop = fish.id < (fish.matingPartnerId ?? 0);
+                    const angle = (spiralElapsed * ORBIT_SPEED) + (isTop ? -Math.PI/2 : Math.PI/2);
+                    
+                    const tx = fish.matingCenter.x + Math.cos(angle) * currentRadius;
+                    const ty = fish.matingCenter.y + Math.sin(angle) * currentRadius;
+                    
+                    vx = (tx - x) * 0.55;
+                    vy = (ty - y) * 0.55;
+                    
+                    const tangentAngle = angle + Math.PI / 2;
+                    rotation = tangentAngle * (180 / Math.PI);
+                  }
                 }
 
               } else if (fish.behavior === 'conga') {
@@ -949,11 +1100,14 @@ const App: React.FC = () => {
           x += vx;
           y += vy;
 
-          const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
-          let delta = targetRotation - rotation;
-          if (delta > 180) delta -= 360;
-          if (delta < -180) delta += 360;
-          rotation += delta * TURN_SPEED;
+          let delta = 0;
+          if (newBehavior !== 'mating') {
+            const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
+            delta = targetRotation - rotation;
+            if (delta > 180) delta -= 360;
+            if (delta < -180) delta += 360;
+            rotation += delta * TURN_SPEED;
+          }
 
           // Leave tiny bubble trails when fish sharply turn or accelerate.
           const accelMagnitude = Math.hypot(vx - prevVx, vy - prevVy);
@@ -966,7 +1120,15 @@ const App: React.FC = () => {
             emitTrailBubble(x - direction * (26 * fish.scale), y + (Math.random() - 0.5) * 6);
           }
 
-          return { ...fish, behavior: newBehavior, curiousTimer: newCuriousTimer, x, y, displayY: y, vx, vy, rotation };
+          return { 
+            ...fish, 
+            behavior: newBehavior, 
+            curiousTimer: newCuriousTimer, 
+            x, y, displayY: y, vx, vy, rotation,
+            matingStartTime: newMatingStartTime,
+            matingPartnerId: newMatingPartnerId,
+            matingCenter: newMatingCenter
+          };
         })
           .filter(fish =>
             fish.x > -200 && fish.x < window.innerWidth + 200
@@ -983,7 +1145,11 @@ const App: React.FC = () => {
       );
 
       if (eatenFoodIds.size > 0) {
-        setFishFoods(prev => prev.filter(f => !eatenFoodIds.has(f.id)));
+        setFishFoods(prev => {
+          const next = prev.filter(f => !eatenFoodIds.has(f.id));
+          fishFoodsRef.current = next; // Sync ref immediately
+          return next;
+        });
       }
 
       if (nibbleTriggers.size > 0) {
@@ -1009,7 +1175,7 @@ const App: React.FC = () => {
       }
 
       if (crumbBursts.length > 0) {
-        crumbBursts.forEach(burst => emitFoodCrumbs(burst.x, burst.worldY));
+        crumbBursts.forEach(burst => emitFoodCrumbs(burst.x, burst.worldY, (burst as any).isLove));
       }
 
       // Cleanup old shockwaves
@@ -1427,8 +1593,12 @@ const App: React.FC = () => {
                     height: 14,
                     borderRadius: '50%',
                     transform: `translate(${food.x - 7}px, ${food.worldY - 7}px)`,
-                    background: 'radial-gradient(circle at 35% 35%, #fde68a, #f59e0b)',
-                    boxShadow: '0 0 6px 2px rgba(251,191,36,0.7), 0 0 14px 4px rgba(245,158,11,0.4)',
+                    background: food.type === 'love' 
+                      ? 'radial-gradient(circle at 35% 35%, #fda4af, #f43f5e)' 
+                      : 'radial-gradient(circle at 35% 35%, #fde68a, #f59e0b)',
+                    boxShadow: food.type === 'love'
+                      ? '0 0 6px 2px rgba(244,63,94,0.7), 0 0 14px 4px rgba(225,29,72,0.4)'
+                      : '0 0 6px 2px rgba(251,191,36,0.7), 0 0 14px 4px rgba(245,158,11,0.4)',
                     pointerEvents: 'none',
                     zIndex: 1,
                   }}
@@ -1496,9 +1666,19 @@ const App: React.FC = () => {
             highlightedBehavior={highlightedBehavior} 
             onHighlightBehavior={setHighlightedBehavior} 
           />
+          <LoveModeButton 
+            isActive={isLoveMode} 
+            onToggle={() => {
+              setIsLoveMode(prev => !prev);
+              if (!isLoveMode) setIsFishFoodMode(true);
+            }} 
+          />
         </>
       )}
-      <FishFoodButton isActive={isFishFoodMode} onToggle={() => setIsFishFoodMode(prev => !prev)} />
+      <FishFoodButton isActive={isFishFoodMode && !isLoveMode} onToggle={() => {
+        setIsFishFoodMode(prev => !prev);
+        if (isLoveMode) setIsLoveMode(false);
+      }} />
     </div>
   );
 };
