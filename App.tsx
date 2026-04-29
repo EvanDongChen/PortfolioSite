@@ -599,6 +599,8 @@ const App: React.FC = () => {
       const foods = fishFoodsRef.current;
       const loveFoodAssignments = new Map<number, number[]>();
       
+      const spiralTriggers = new Set<number>();
+      
       foods.filter(f => f.type === 'love').forEach(food => {
         const nearbyFish = currentFishes
           .filter(f => f.behavior !== 'mating')
@@ -613,6 +615,17 @@ const App: React.FC = () => {
             matingTriggers.set(nearbyFish[0].id, { partnerId: nearbyFish[1].id, center: { x: food.x, y: food.worldY } });
             matingTriggers.set(nearbyFish[1].id, { partnerId: nearbyFish[0].id, center: { x: food.x, y: food.worldY } });
             eatenFoodIds.add(food.id);
+          }
+        }
+      });
+
+      // Coordinate spiral starts
+      currentFishes.forEach(fish => {
+        if (fish.behavior === 'mating' && fish.readyToSpiral && !fish.matingSpiralStartTime) {
+          const partner = currentFishes.find(f => f.id === fish.matingPartnerId);
+          if (partner?.readyToSpiral) {
+            spiralTriggers.add(fish.id);
+            spiralTriggers.add(partner.id);
           }
         }
       });
@@ -633,13 +646,14 @@ const App: React.FC = () => {
 
       setFishes(currentFishes => {
         const next = currentFishes.map(fish => {
-          // Check for external mating triggers first
           let { x, y, vx, vy, rotation, initialVx, isFlipped } = fish;
           let newBehavior = fish.behavior;
           let newCuriousTimer = fish.curiousTimer || 0;
           let newMatingStartTime = fish.matingStartTime;
           let newMatingPartnerId = fish.matingPartnerId;
           let newMatingCenter = fish.matingCenter;
+          let newMatingSpiralStartTime = fish.matingSpiralStartTime;
+          let newReadyToSpiral = fish.readyToSpiral;
 
           if (matingTriggers.has(fish.id)) {
             const trigger = matingTriggers.get(fish.id)!;
@@ -647,6 +661,11 @@ const App: React.FC = () => {
             newMatingStartTime = timestamp;
             newMatingPartnerId = trigger.partnerId;
             newMatingCenter = trigger.center;
+            newReadyToSpiral = false;
+            newMatingSpiralStartTime = undefined;
+          }
+          if (spiralTriggers.has(fish.id)) {
+            newMatingSpiralStartTime = timestamp;
           }
 
           const SCARE_RADIUS = 150;
@@ -677,35 +696,30 @@ const App: React.FC = () => {
           const dyMouse = screenY - mousePosRef.current.y;
           const distanceMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
 
-          // Curious fish are attracted to the cursor rather than scared
           let isFleeing = false;
 
           // Check physical shockwaves
           for (const wave of shockwavesRef.current) {
             const age = timestamp - wave.timestamp;
-            if (age < 500) { // Push effect lasts 500ms
+            if (age < 500) {
               const dx = x - wave.x;
               const dy = y - wave.worldY;
               const dist = Math.sqrt(dx * dx + dy * dy);
               const BLAST_RADIUS = 350;
               if (dist < BLAST_RADIUS) {
-                const force = (1 - dist / BLAST_RADIUS) * 3.5; // Massive push
+                const force = (1 - dist / BLAST_RADIUS) * 3.5;
                 const angle = Math.atan2(dy, dx);
                 vx += Math.cos(angle) * force;
                 vy += Math.sin(angle) * force;
                 isFleeing = true;
-
-                // Blast breaks up conga lines and resets them to dart mode
                 if (fish.behavior === 'conga') {
-                  fish.congaLeaderId = undefined;
-                  fish.congaIndex = undefined;
-                  fish.behavior = 'dart';
+                  newBehavior = 'dart';
                 }
               }
             }
           }
 
-          if (fish.behavior !== 'curious' && distanceMouse < SCARE_RADIUS) {
+          if (fish.behavior !== 'curious' && fish.behavior !== 'mating' && distanceMouse < SCARE_RADIUS) {
             const angle = Math.atan2(dyMouse, dxMouse);
             vx += Math.cos(angle) * FLEE_STRENGTH;
             vy += Math.sin(angle) * FLEE_STRENGTH;
@@ -714,7 +728,6 @@ const App: React.FC = () => {
 
           if (isFleeing) {
             const fleeCap = MAX_SPEED_FLEE + 0.8;
-
             const currentSpeed = Math.sqrt(vx * vx + vy * vy);
             if (currentSpeed > fleeCap) {
               vx = (vx / currentSpeed) * fleeCap;
@@ -724,17 +737,14 @@ const App: React.FC = () => {
             // Find food
             let closestFood: FishFoodType | null = null;
             let closestDist = Infinity;
-            
             for (const food of foods) {
               const fdx = food.x - x;
               const fdy = food.worldY - y;
               const dist = Math.sqrt(fdx * fdx + fdy * fdy);
-              
               if (food.type === 'love') {
                 const assigned = loveFoodAssignments.get(food.id);
                 if (!assigned || !assigned.includes(fish.id)) continue;
               }
-
               if (dist < closestDist) {
                 closestDist = dist;
                 closestFood = food;
@@ -742,380 +752,238 @@ const App: React.FC = () => {
             }
 
             if (closestFood && closestDist < FOOD_ATTRACT_RADIUS) {
-              // Swim toward food
               const fdx = closestFood.x - x;
               const fdy = closestFood.worldY - y;
               const angle = Math.atan2(fdy, fdx);
               vx += Math.cos(angle) * FOOD_ATTRACT_STRENGTH;
               vy += Math.sin(angle) * FOOD_ATTRACT_STRENGTH;
-
               const currentSpeed = Math.sqrt(vx * vx + vy * vy);
               if (currentSpeed > MAX_SPEED_FOOD) {
                 vx = (vx / currentSpeed) * MAX_SPEED_FOOD;
                 vy = (vy / currentSpeed) * MAX_SPEED_FOOD;
               }
-
-              if (closestDist < EAT_RADIUS) {
-                if (closestFood.type === 'love') {
-                  // Mating trigger handled above
-                  nibbleTriggers.add(fish.id);
-                  crumbBursts.push({ x: closestFood.x, worldY: closestFood.worldY, isLove: true });
-                }
+              if (closestDist < EAT_RADIUS && closestFood.type === 'love') {
+                nibbleTriggers.add(fish.id);
+                crumbBursts.push({ x: closestFood.x, worldY: closestFood.worldY, isLove: true });
               }
-            } else {
-              // ── Behavior dispatcher ────────────────────────────────────
-              const t = frameTimeSeconds;
-              const bp = fish.behaviorPhase;
-
-              if (fish.behavior === 'dart') {
-                // ── DART: cruise but with periodic explosive bursts ──────────
-                const DART_PERIOD = 3.5; // seconds between bursts
-                const dartPhase = (t * (1 / DART_PERIOD) + bp) % 1;
-                // Burst window: first 12% of the cycle
-                if (dartPhase < 0.12) {
-                  const burstStrength = Math.sin(dartPhase * (Math.PI / 0.12)) * 0.55;
-                  const spd = Math.sqrt(vx * vx + vy * vy);
-                  if (spd > 0.001) {
-                    vx += (vx / spd) * burstStrength;
-                    vy += (vy / spd) * burstStrength;
-                  }
-                }
-                // Between bursts: gentle zigzag
-                vy += Math.sin(t * 2.2 + bp) * 0.04;
-
-                vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
-                vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH * 0.6;
-
-                const dartSpd = Math.sqrt(vx * vx + vy * vy);
-                const MAX_DART = 4.5;
-                if (dartSpd > MAX_DART) {
-                  vx = (vx / dartSpd) * MAX_DART;
-                  vy = (vy / dartSpd) * MAX_DART;
-                }
-
-              } else if (fish.behavior === 'loiter') {
-                // ── LOITER: lazy figure-8, drifts very slowly ───────────────
-                const LOITER_DRIFT = 0.12; // px/frame forward drift
-                const FIG8_FREQ_X = 0.35;
-                const FIG8_FREQ_Y = 0.70; // 2× x-freq → figure-8
-                const FIG8_AMP_X = 0.08;
-                const FIG8_AMP_Y = 0.12;
-
-                vx += Math.cos(t * FIG8_FREQ_X + bp) * FIG8_AMP_X;
-                vy += Math.sin(t * FIG8_FREQ_Y + bp) * FIG8_AMP_Y;
-
-                // Slow forward drift so loiterers don't get permanently stuck
-                vx += (initialVx > 0 ? LOITER_DRIFT : -LOITER_DRIFT - vx) * 0.08;
-
-                const loiterSpd = Math.sqrt(vx * vx + vy * vy);
-                const MAX_LOITER = 1.4;
-                if (loiterSpd > MAX_LOITER) {
-                  vx = (vx / loiterSpd) * MAX_LOITER;
-                  vy = (vy / loiterSpd) * MAX_LOITER;
-                }
-
-              } else if (fish.behavior === 'curious') {
-                // ── CURIOUS: bold fish that chase the cursor ─────────────────
-                const CURIOUS_ATTRACT_RADIUS = 320;
-                const CURIOUS_ATTRACT_STRENGTH = 0.18;
-                const MAX_CURIOUS_SPEED = 3.8;
-                const BOREDOM_THRESHOLD = 300; // ~10 seconds at 30fps
-
-                if (distanceMouse < CURIOUS_ATTRACT_RADIUS) {
-                  // Swim TOWARD cursor (note: dxMouse/dyMouse point away from cursor)
-                  const angleToward = Math.atan2(-dyMouse, -dxMouse);
-                  vx += Math.cos(angleToward) * CURIOUS_ATTRACT_STRENGTH;
-                  vy += Math.sin(angleToward) * CURIOUS_ATTRACT_STRENGTH;
-
-                  newCuriousTimer++;
-                } else {
-                  // Out of range: gentle cruise
-                  vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
-                  vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
-                  vy += (Math.random() - 0.5) * WANDER_STRENGTH;
-
-                  if (newCuriousTimer > 0) newCuriousTimer--;
-                }
-
-                if (newCuriousTimer > BOREDOM_THRESHOLD) {
+            } else if (fish.behavior === 'mating' && fish.matingStartTime && fish.matingCenter) {
+              if (fish.matingSpiralStartTime) {
+                const elapsed = timestamp - fish.matingSpiralStartTime;
+                const SPIRAL_DURATION = 4500;
+                const t = Math.min(1, elapsed / SPIRAL_DURATION);
+                if (t >= 1) {
                   newBehavior = 'cruise';
-                  newCuriousTimer = 0;
-                }
-
-                const curiousSpd = Math.sqrt(vx * vx + vy * vy);
-                if (curiousSpd > MAX_CURIOUS_SPEED) {
-                  vx = (vx / curiousSpd) * MAX_CURIOUS_SPEED;
-                  vy = (vy / curiousSpd) * MAX_CURIOUS_SPEED;
-                }
-
-              } else if (fish.behavior === 'mating' && fish.matingStartTime && fish.matingCenter) {
-                // ── MATING: 2 fish swim in a fast circle ────────────────────
-                const MATING_DURATION = 4000;
-                const elapsed = timestamp - fish.matingStartTime;
-                
-                if (elapsed >= MATING_DURATION) {
-                  // Mating finished!
-                  newBehavior = 'cruise';
-                  
-                  // Only one fish (the one with lower id) handles spawning to avoid duplicates
                   if (fish.matingPartnerId && fish.id < fish.matingPartnerId) {
                     const cx = fish.matingCenter.x;
                     const cy = fish.matingCenter.y;
                     emitHearts(cx, cy);
-                    
-                    // Spawn a baby fish
                     setTimeout(() => {
                       const babyId = getNextEntityId();
                       setFishes(prev => {
-                        if (prev.length >= fishLimit + 20) return prev; // allow some over-limit for babies
-                        const babyFish: FishType = {
-                          ...fish,
-                          id: babyId,
-                          x: cx,
-                          y: cy,
-                          scale: fish.scale * 0.4, // tiny baby
-                          behavior: 'cruise',
-                          behaviorPhase: Math.random() * Math.PI * 2,
-                          congaLeaderId: undefined,
-                          congaIndex: undefined,
-                        };
-                        return [...prev, babyFish];
+                        if (prev.length >= fishLimit + 20) return prev;
+                        return [...prev, { ...fish, id: babyId, x: cx, y: cy, scale: fish.scale * 0.4, behavior: 'cruise' } as any];
                       });
                     }, 50);
                   }
                 } else {
-                  // Two-stage mating: 1. Move to start positions, 2. Spiral orbit
-                  const TOTAL_DURATION = 6000;
-                  const PREAMBLE_DURATION = 1500;
-                  const elapsed = timestamp - fish.matingStartTime;
-                  
-                  if (elapsed >= TOTAL_DURATION) {
-                    // Finalize (same as before)
-                    newBehavior = 'cruise';
-                    if (fish.matingPartnerId && fish.id < fish.matingPartnerId) {
-                      const cx = fish.matingCenter.x;
-                      const cy = fish.matingCenter.y;
-                      emitHearts(cx, cy);
-                      setTimeout(() => {
-                        const babyId = getNextEntityId();
-                        setFishes(prev => {
-                          if (prev.length >= fishLimit + 20) return prev;
-                          return [...prev, { ...fish, id: babyId, x: cx, y: cy, scale: fish.scale * 0.4, behavior: 'cruise' } as any];
-                        });
-                      }, 50);
-                    }
-                  } else if (elapsed < PREAMBLE_DURATION) {
-                    // Stage 1: Move and then Align
-                    const START_RADIUS = 65;
-                    const isTop = fish.id < (fish.matingPartnerId ?? 0);
-                    const tx = fish.matingCenter.x;
-                    const ty = fish.matingCenter.y + (isTop ? -START_RADIUS : START_RADIUS);
-                    
-                    const dx = tx - x;
-                    const dy = ty - y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    
-                    // First 1s: Swim to poles
-                    if (elapsed < 1000) {
-                      const SWIM_SPEED = 5;
-                      if (dist > 5) {
-                        vx = (dx / dist) * SWIM_SPEED;
-                        vy = (dy / dist) * SWIM_SPEED;
-                      } else {
-                        vx = dx * 0.2;
-                        vy = dy * 0.2;
-                      }
-                      (fish as any).isPreamble = true;
-                    } else {
-                      // Final 0.5s: Force horizontal alignment
-                      vx = dx * 0.2;
-                      vy = dy * 0.2;
-                      const targetTangent = isTop ? 0 : 180;
-                      let deltaH = targetTangent - rotation;
-                      if (deltaH > 180) deltaH -= 360;
-                      if (deltaH < -180) deltaH += 360;
-                      rotation += deltaH * 0.25; // faster snap to horizontal
-                      (fish as any).isPreamble = false; // Disable default rotation
-                    }
-                  } else {
-                    // Stage 2: Spiral orbit
-                    const spiralElapsed = elapsed - PREAMBLE_DURATION;
-                    const SPIRAL_DURATION = TOTAL_DURATION - PREAMBLE_DURATION;
-                    const t = spiralElapsed / SPIRAL_DURATION;
-                    const START_RADIUS = 65;
-                    const END_RADIUS = 12;
-                    const currentRadius = START_RADIUS - (START_RADIUS - END_RADIUS) * t;
-                    
-                    const ORBIT_SPEED = 0.006 + (t * 0.005);
-                    const isTop = fish.id < (fish.matingPartnerId ?? 0);
-                    const angle = (spiralElapsed * ORBIT_SPEED) + (isTop ? -Math.PI/2 : Math.PI/2);
-                    
-                    const tx = fish.matingCenter.x + Math.cos(angle) * currentRadius;
-                    const ty = fish.matingCenter.y + Math.sin(angle) * currentRadius;
-                    
-                    vx = (tx - x) * 0.55;
-                    vy = (ty - y) * 0.55;
-                    
-                    const tangentAngle = angle + Math.PI / 2;
-                    rotation = tangentAngle * (180 / Math.PI);
+                  const START_RADIUS = 65;
+                  const END_RADIUS = 12;
+                  const currentRadius = START_RADIUS - (START_RADIUS - END_RADIUS) * t;
+                  const ORBIT_SPEED = 0.006 + (t * 0.005);
+                  const isTop = fish.id < (fish.matingPartnerId ?? 0);
+                  const angle = (elapsed * ORBIT_SPEED) + (isTop ? -Math.PI/2 : Math.PI/2);
+                  const tx = fish.matingCenter.x + Math.cos(angle) * currentRadius;
+                  const ty = fish.matingCenter.y + Math.sin(angle) * currentRadius;
+                  vx = (tx - x) * 0.55;
+                  vy = (ty - y) * 0.55;
+                  rotation = (angle + Math.PI / 2) * (180 / Math.PI);
+                }
+              } else {
+                const isTop = fish.id < (fish.matingPartnerId ?? 0);
+                const START_RADIUS = 65;
+                const tx = fish.matingCenter.x;
+                const ty = fish.matingCenter.y + (isTop ? -START_RADIUS : START_RADIUS);
+                const dx = tx - x;
+                const dy = ty - y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const MAX_STEER_SPEED = 4.5;
+                const STEER_STRENGTH = 0.3;
+                if (dist > 8) {
+                  const targetAngle = Math.atan2(dy, dx);
+                  vx += (Math.cos(targetAngle) * MAX_STEER_SPEED - vx) * STEER_STRENGTH;
+                  vy += (Math.sin(targetAngle) * MAX_STEER_SPEED - vy) * STEER_STRENGTH;
+                  (fish as any).isPreamble = true;
+                } else {
+                  vx = dx * 0.2;
+                  vy = dy * 0.2;
+                  (fish as any).isPreamble = false; // Stop following velocity rotation
+                  const targetTangent = isTop ? 0 : 180;
+                  let deltaH = targetTangent - rotation;
+                  if (deltaH > 180) deltaH -= 360;
+                  if (deltaH < -180) deltaH += 360;
+                  rotation += deltaH * 0.25;
+                  if (Math.abs(deltaH) < 5) {
+                    newReadyToSpiral = true;
                   }
                 }
-
-              } else if (fish.behavior === 'conga') {
-                // ── CONGA: single-file snake line, fast & curvy ─────────────
-                const CONGA_SPEED = 4.2;
-                const CONGA_GAP = 36; // px between fish
-
-                if (fish.congaIndex === 0) {
-                  // Leader: fast sinusoidal path
-                  const SINE_FREQ = 1.6;
-                  const SINE_AMP = 0.22;
-                  vy += Math.sin(t * SINE_FREQ + bp) * SINE_AMP;
-                  vx += (initialVx > 0 ? CONGA_SPEED : -CONGA_SPEED) * 0.12;
-                  const leaderSpd = Math.sqrt(vx * vx + vy * vy);
-                  if (leaderSpd > CONGA_SPEED) {
-                    vx = (vx / leaderSpd) * CONGA_SPEED;
-                    vy = (vy / leaderSpd) * CONGA_SPEED;
+              }
+            } else if (fish.behavior === 'conga') {
+              const CONGA_SPEED = 4.2;
+              const CONGA_GAP = 36;
+              if (fish.congaIndex === 0) {
+                vy += Math.sin(frameTimeSeconds * 1.6 + fish.behaviorPhase) * 0.22;
+                vx += (initialVx > 0 ? CONGA_SPEED : -CONGA_SPEED) * 0.12;
+                const leaderSpd = Math.sqrt(vx * vx + vy * vy);
+                if (leaderSpd > CONGA_SPEED) {
+                  vx = (vx / leaderSpd) * CONGA_SPEED;
+                  vy = (vy / leaderSpd) * CONGA_SPEED;
+                }
+              } else {
+                const pred = currentFishes.find(f => f.congaLeaderId === fish.congaLeaderId && f.congaIndex === (fish.congaIndex ?? 1) - 1);
+                if (pred) {
+                  const predSpd = Math.sqrt(pred.vx * pred.vx + pred.vy * pred.vy);
+                  const predAngle = Math.atan2(pred.vy, pred.vx);
+                  const tx = pred.x - Math.cos(predAngle) * CONGA_GAP;
+                  const ty = pred.y - Math.sin(predAngle) * CONGA_GAP;
+                  const dx = tx - x;
+                  const dy = ty - y;
+                  const dist = Math.sqrt(dx * dx + dy * dy);
+                  vx += dx * 0.22;
+                  vy += dy * 0.22;
+                  const targetSpd = predSpd + (dist > CONGA_GAP * 1.5 ? 1.2 : 0);
+                  const mySpd = Math.sqrt(vx * vx + vy * vy);
+                  if (mySpd > 0.001) {
+                    vx = (vx / mySpd) * targetSpd;
+                    vy = (vy / mySpd) * targetSpd;
                   }
                 } else {
-                  // Follower: chase a point CONGA_GAP behind predecessor
-                  const pred = currentFishes.find(
-                    f => f.congaLeaderId === fish.congaLeaderId && f.congaIndex === (fish.congaIndex ?? 1) - 1
-                  );
-                  if (pred) {
-                    const predSpd = Math.sqrt(pred.vx * pred.vx + pred.vy * pred.vy);
-                    const predAngle = Math.atan2(pred.vy, pred.vx);
-                    const tx = pred.x - Math.cos(predAngle) * CONGA_GAP;
-                    const ty = pred.y - Math.sin(predAngle) * CONGA_GAP;
-                    const dx = tx - x;
-                    const dy = ty - y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    vx += dx * 0.22;
-                    vy += dy * 0.22;
-                    const catchup = dist > CONGA_GAP * 1.5 ? 1.2 : 0;
-                    const targetSpd = predSpd + catchup;
-                    const mySpd = Math.sqrt(vx * vx + vy * vy);
-                    if (mySpd > 0.001) {
-                      vx = (vx / mySpd) * targetSpd;
-                      vy = (vy / mySpd) * targetSpd;
-                    }
-                  } else {
-                    // Predecessor gone — fall back to cruise
-                    vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
-                    vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
-                    const fbSpd = Math.sqrt(vx * vx + vy * vy);
-                    if (fbSpd > MAX_SPEED_CRUISE) {
-                      vx = (vx / fbSpd) * MAX_SPEED_CRUISE;
-                      vy = (vy / fbSpd) * MAX_SPEED_CRUISE;
-                    }
-                  }
+                  newBehavior = 'cruise';
                 }
-
+              }
+            } else if (fish.behavior === 'dart') {
+              const DART_PERIOD = 3.5;
+              const dartPhase = (frameTimeSeconds * (1 / DART_PERIOD) + fish.behaviorPhase) % 1;
+              if (dartPhase < 0.12) {
+                const burstStrength = Math.sin(dartPhase * (Math.PI / 0.12)) * 0.55;
+                const spd = Math.sqrt(vx * vx + vy * vy);
+                if (spd > 0.001) {
+                  vx += (vx / spd) * burstStrength;
+                  vy += (vy / spd) * burstStrength;
+                }
+              }
+              vy += Math.sin(frameTimeSeconds * 2.2 + fish.behaviorPhase) * 0.04;
+              vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
+              vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH * 0.6;
+              const dartSpd = Math.sqrt(vx * vx + vy * vy);
+              if (dartSpd > 4.5) {
+                vx = (vx / dartSpd) * 4.5;
+                vy = (vy / dartSpd) * 4.5;
+              }
+            } else if (fish.behavior === 'loiter') {
+              vx += Math.cos(frameTimeSeconds * 0.35 + fish.behaviorPhase) * 0.08;
+              vy += Math.sin(frameTimeSeconds * 0.70 + fish.behaviorPhase) * 0.12;
+              vx += (initialVx > 0 ? 0.12 : -0.12 - vx) * 0.08;
+              const loiterSpd = Math.sqrt(vx * vx + vy * vy);
+              if (loiterSpd > 1.4) {
+                vx = (vx / loiterSpd) * 1.4;
+                vy = (vy / loiterSpd) * 1.4;
+              }
+            } else if (fish.behavior === 'curious') {
+              if (distanceMouse < 320) {
+                const angleToward = Math.atan2(-dyMouse, -dxMouse);
+                vx += Math.cos(angleToward) * 0.18;
+                vy += Math.sin(angleToward) * 0.18;
+                newCuriousTimer++;
               } else {
-                // ── CRUISE (default): schooling boids ───────────────────────
                 vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
                 vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
                 vy += (Math.random() - 0.5) * WANDER_STRENGTH;
+                if (newCuriousTimer > 0) newCuriousTimer--;
+              }
+              if (newCuriousTimer > 300) {
+                newBehavior = 'cruise';
+                newCuriousTimer = 0;
+              }
+              const curiousSpd = Math.sqrt(vx * vx + vy * vy);
+              if (curiousSpd > 3.8) {
+                vx = (vx / curiousSpd) * 3.8;
+                vy = (vy / curiousSpd) * 3.8;
+              }
+            } else {
+              // Cruise (schooling)
+              vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
+              vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
+              vy += (Math.random() - 0.5) * WANDER_STRENGTH;
 
-                // Fish schooling: alignment + cohesion + separation.
-                // Viewport culling: skip costly schooling for off-screen fish.
-                const fishDisplayY = y - scrollYRef.current * SCROLL_PARALLAX;
-                const isOffscreen = fishDisplayY < -400 || fishDisplayY > window.innerHeight + 400;
+              const fishDisplayY = y - scrollYRef.current * SCROLL_PARALLAX;
+              const isOffscreen = fishDisplayY < -400 || fishDisplayY > window.innerHeight + 400;
 
-                let neighborCount = 0;
-                let alignX = 0;
-                let alignY = 0;
-                let centerX = 0;
-                let centerY = 0;
-                let separationX = 0;
-                let separationY = 0;
+              let neighborCount = 0;
+              let alignX = 0, alignY = 0, centerX = 0, centerY = 0, separationX = 0, separationY = 0;
 
-                if (!isOffscreen) for (const other of currentFishes) {
+              if (!isOffscreen) {
+                for (const other of currentFishes) {
                   if (other.id === fish.id) continue;
                   const dx = other.x - x;
                   const dy = other.y - y;
                   const distSq = dx * dx + dy * dy;
                   if (distSq > SCHOOL_RADIUS * SCHOOL_RADIUS) continue;
-
                   const dist = Math.sqrt(distSq);
-
-                  // Separation applies to all fish regardless of school
                   if (dist < SEPARATION_RADIUS && dist > 0.001) {
                     separationX -= dx / dist;
                     separationY -= dy / dist;
                   }
-
-                  // Cohesion and alignment only within the same mini-school
-                  if (other.schoolId !== fish.schoolId) continue;
-
-                  neighborCount++;
-                  alignX += other.vx;
-                  alignY += other.vy;
-                  centerX += other.x;
-                  centerY += other.y;
-
-                  if (neighborCount >= MAX_NEIGHBORS_CONSIDERED) break;
-                } // end schooling loop
-
-                // Separation applies globally (all nearby fish push apart)
-                vx += separationX * SEPARATION_STRENGTH;
-                vy += separationY * SEPARATION_STRENGTH;
-
-                if (neighborCount > 0) {
-                  // Alignment + cohesion only within same mini-school
-                  alignX = alignX / neighborCount - vx;
-                  alignY = alignY / neighborCount - vy;
-                  vx += alignX * ALIGN_STRENGTH;
-                  vy += alignY * ALIGN_STRENGTH;
-
-                  centerX /= neighborCount;
-                  centerY /= neighborCount;
-                  vx += (centerX - x) * COHESION_STRENGTH;
-                  vy += (centerY - y) * COHESION_STRENGTH;
-
-                  // Pattern-based movement: each school group has a distinct style
-                  const pattern = fish.schoolId % 3;
-                  if (pattern === 0) {
-                    // Sweep: wide lazy arcs up and down
-                    vy += Math.sin(t * 0.6 + fish.schoolId * 1.3) * 0.06;
-                  } else if (pattern === 1) {
-                    // Surge: periodic speed bursts every ~4s
-                    const surgePhase = (t * 0.25 + fish.schoolId * 0.7) % 1;
-                    if (surgePhase < 0.18) {
-                      const surgeStrength = Math.sin(surgePhase * (Math.PI / 0.18)) * 0.18;
-                      const speed = Math.sqrt(vx * vx + vy * vy);
-                      if (speed > 0.001) {
-                        vx += (vx / speed) * surgeStrength;
-                        vy += (vy / speed) * surgeStrength;
-                      }
-                    }
-                  } else {
-                    // Spiral: tighter oscillation, school weaves in a corkscrew
-                    vy += Math.sin(t * 1.4 + fish.schoolId * 2.1) * 0.09;
-                    vx += Math.cos(t * 0.9 + fish.schoolId * 1.7) * 0.025;
+                  if (other.schoolId === fish.schoolId) {
+                    neighborCount++;
+                    alignX += other.vx; alignY += other.vy;
+                    centerX += other.x; centerY += other.y;
+                    if (neighborCount >= MAX_NEIGHBORS_CONSIDERED) break;
                   }
+                }
+              }
 
-                  // Schooled fish move faster — use a higher speed cap than solo fish
-                  const speed = Math.sqrt(vx * vx + vy * vy);
-                  const schoolTargetSpeed = Math.min(MAX_SPEED_CRUISE + SCHOOL_SPEED_BOOST, MAX_SPEED_SCHOOL);
-                  if (speed > 0.001 && speed < schoolTargetSpeed) {
-                    const boost = 0.12;
-                    vx += (vx / speed) * boost;
-                    vy += (vy / speed) * boost;
-                  }
+              vx += separationX * SEPARATION_STRENGTH;
+              vy += separationY * SEPARATION_STRENGTH;
 
-                  // School speed cap is higher than solo cruise cap
-                  const finalSpeed = Math.sqrt(vx * vx + vy * vy);
-                  if (finalSpeed > MAX_SPEED_SCHOOL) {
-                    vx = (vx / finalSpeed) * MAX_SPEED_SCHOOL;
-                    vy = (vy / finalSpeed) * MAX_SPEED_SCHOOL;
+              if (neighborCount > 0) {
+                alignX = alignX / neighborCount - vx;
+                alignY = alignY / neighborCount - vy;
+                vx += alignX * ALIGN_STRENGTH;
+                vy += alignY * ALIGN_STRENGTH;
+                centerX /= neighborCount;
+                centerY /= neighborCount;
+                vx += (centerX - x) * COHESION_STRENGTH;
+                vy += (centerY - y) * COHESION_STRENGTH;
+
+                const pattern = fish.schoolId % 3;
+                if (pattern === 0) vy += Math.sin(frameTimeSeconds * 0.6 + fish.schoolId * 1.3) * 0.06;
+                else if (pattern === 1) {
+                  const surgePhase = (frameTimeSeconds * 0.25 + fish.schoolId * 0.7) % 1;
+                  if (surgePhase < 0.18) {
+                    const surgeStrength = Math.sin(surgePhase * (Math.PI / 0.18)) * 0.18;
+                    const spd = Math.sqrt(vx * vx + vy * vy);
+                    if (spd > 0.001) { vx += (vx / spd) * surgeStrength; vy += (vy / spd) * surgeStrength; }
                   }
                 } else {
-                  const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-                  if (currentSpeed > MAX_SPEED_CRUISE) {
-                    vx = (vx / currentSpeed) * MAX_SPEED_CRUISE;
-                    vy = (vy / currentSpeed) * MAX_SPEED_CRUISE;
-                  }
+                  vy += Math.sin(frameTimeSeconds * 1.4 + fish.schoolId * 2.1) * 0.09;
+                  vx += Math.cos(frameTimeSeconds * 0.9 + fish.schoolId * 1.7) * 0.025;
+                }
+
+                const speed = Math.sqrt(vx * vx + vy * vy);
+                const schoolTargetSpeed = Math.min(MAX_SPEED_CRUISE + SCHOOL_SPEED_BOOST, MAX_SPEED_SCHOOL);
+                if (speed > 0.001 && speed < schoolTargetSpeed) {
+                  vx += (vx / speed) * 0.12; vy += (vy / speed) * 0.12;
+                }
+                const finalSpeed = Math.sqrt(vx * vx + vy * vy);
+                if (finalSpeed > MAX_SPEED_SCHOOL) {
+                  vx = (vx / finalSpeed) * MAX_SPEED_SCHOOL;
+                  vy = (vy / finalSpeed) * MAX_SPEED_SCHOOL;
+                }
+              } else {
+                const currentSpeed = Math.sqrt(vx * vx + vy * vy);
+                if (currentSpeed > MAX_SPEED_CRUISE) {
+                  vx = (vx / currentSpeed) * MAX_SPEED_CRUISE;
+                  vy = (vy / currentSpeed) * MAX_SPEED_CRUISE;
                 }
               }
             }
@@ -1151,7 +1019,9 @@ const App: React.FC = () => {
             x, y, displayY: y, vx, vy, rotation,
             matingStartTime: newMatingStartTime,
             matingPartnerId: newMatingPartnerId,
-            matingCenter: newMatingCenter
+            matingCenter: newMatingCenter,
+            matingSpiralStartTime: newMatingSpiralStartTime,
+            readyToSpiral: newReadyToSpiral,
           };
         })
           .filter(fish =>

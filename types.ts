@@ -53,6 +53,8 @@ export interface Fish {
   matingStartTime?: number; // timestamp when mating started
   matingPartnerId?: number; // id of the partner
   matingCenter?: { x: number; y: number }; // center of the mating circle
+  matingSpiralStartTime?: number; // timestamp when spiral actually started
+  readyToSpiral?: boolean; // whether this fish reached pole and is horizontal
 }
 
 export interface FishFood {
