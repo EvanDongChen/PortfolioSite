@@ -515,7 +515,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
-  }, [isFishFoodMode, getNextEntityId]);
+  }, [isFishFoodMode, isLoveMode, getNextEntityId]);
 
   // Global click ripples (only when not feeding fish)
   useEffect(() => {
