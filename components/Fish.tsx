@@ -3,9 +3,11 @@ import { Fish as FishType } from '../types';
 
 interface FishProps extends Omit<FishType, 'vx' | 'vy' | 'initialVx'> {
   isNibbling?: boolean;
+  isFaded?: boolean;
+  isHighlighted?: boolean;
 }
 
-const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default' }) => {
+const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false }) => {
   const isClownFish = variant === 'clown';
 
   const nibbleTilt = isNibbling ? (isFlipped ? -14 : 14) : 0;
@@ -20,7 +22,10 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
     willChange: 'transform',
     pointerEvents: 'none',
     cursor: 'default',
-    transition: 'transform 140ms ease-out',
+    transition: 'transform 140ms ease-out, opacity 300ms ease-out, filter 300ms ease-out',
+    opacity: isFaded ? 0.15 : 1,
+    filter: isHighlighted ? 'drop-shadow(0 0 8px rgba(255,255,255,0.8)) brightness(1.2)' : 'none',
+    zIndex: isHighlighted ? 10 : 1,
   };
 
   const gradientId = `fishGradient-${id}`;
