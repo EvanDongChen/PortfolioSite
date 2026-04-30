@@ -50,4 +50,4 @@ const GodRays: React.FC = () => {
   );
 };
 
-export default GodRays;
+export default React.memo(GodRays);

@@ -1642,7 +1642,12 @@ const App: React.FC = () => {
               ref={worldLayerRef}
               style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', willChange: 'transform' }}
             >
-              {fishes.filter(f => f.variant !== 'puffer').map(fish => (
+              {fishes.filter(f => {
+                if (f.variant === 'puffer') return false;
+                // Simple viewport culling based on scroll position
+                const worldY = f.y - scrollYRef.current * SCROLL_PARALLAX;
+                return worldY > -400 && worldY < window.innerHeight + 400;
+              }).map(fish => (
                 <Fish
                   key={fish.id}
                   {...fish}

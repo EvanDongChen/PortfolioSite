@@ -24,4 +24,4 @@ const SandDune: React.FC = () => {
   );
 };
 
-export default SandDune;
+export default React.memo(SandDune);
