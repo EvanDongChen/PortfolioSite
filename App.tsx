@@ -1625,9 +1625,8 @@ const App: React.FC = () => {
       <style>{`
       `}</style>
       <ParticleCanvas ref={particleCanvasRef} />
-      <div
-        className={`fixed inset-0 w-full h-full ${isGrabMode ? 'z-[50]' : 'z-0'}`}
-      >
+      {/* Background Aquarium Layer: Environment and Large Creatures */}
+      <div className="fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none">
         {theme === 'underwater' ? (
           <>
             <GodRays />
@@ -1636,6 +1635,22 @@ const App: React.FC = () => {
             ))}
             {whale && <Whale x={whale.x} displayY={whale.displayY} scale={whale.scale} isFlipped={whale.isFlipped} />}
             {turtle && <Turtle x={turtle.x} displayY={turtle.displayY} scale={turtle.scale} isFlipped={turtle.isFlipped} />}
+          </>
+        ) : (
+          <>
+            <CursorNebula />
+            {stars.map(star => <Star key={star.id} {...star} />)}
+            {shootingStars.map(star => <ShootingStar key={star.id} {...star} />)}
+          </>
+        )}
+      </div>
+
+      {/* Interaction Layer: Fish, Food, and Grab Mechanics */}
+      <div
+        className={`fixed inset-0 w-full h-full pointer-events-none ${isGrabMode ? 'z-[50]' : 'z-0'}`}
+      >
+        {theme === 'underwater' && (
+          <>
             {/* World-layer: fish + food + particles all in world coords.
                 translateY(-scrollY) is applied directly on scroll — zero React re-renders for scroll. */}
             <div
@@ -1681,12 +1696,6 @@ const App: React.FC = () => {
                 />
               ))}
             </div>
-          </>
-        ) : (
-          <>
-            <CursorNebula />
-            {stars.map(star => <Star key={star.id} {...star} />)}
-            {shootingStars.map(star => <ShootingStar key={star.id} {...star} />)}
           </>
         )}
       </div>
