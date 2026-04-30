@@ -1642,90 +1642,89 @@ const App: React.FC = () => {
       <div
         className={`fixed inset-0 w-full h-full pointer-events-none ${isGrabMode ? 'z-[50]' : 'z-20'}`}
       >
-        {theme === 'underwater' && (
-          <>
-            {/* Background World Layer: Regular fish swimming behind the content */}
-            <div
-              ref={worldLayerRef}
-              style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', willChange: 'transform', zIndex: 0 }}
-            >
-              {fishes.filter(f => {
-                if (f.variant === 'clown' || f.variant === 'puffer') return false;
-                const worldY = f.y - scrollYRef.current * SCROLL_PARALLAX;
-                return worldY > -400 && worldY < window.innerHeight + 400;
-              }).map(fish => (
-                <Fish
-                  key={fish.id}
-                  {...fish}
-                  isNibbling={Boolean(nibblingFishIds[fish.id])}
-                  isFaded={highlightedBehavior !== null && fish.behavior !== highlightedBehavior}
-                  isHighlighted={highlightedBehavior !== null && fish.behavior === highlightedBehavior}
-                  isGrabMode={isGrabMode}
-                  onMouseDown={(e) => handleGrabFish(fish.id, e)}
-                />
-              ))}
-              {/* Regular food in the background layer */}
-              {fishFoods.filter(f => f.type !== 'love').map(food => (
-                <div
-                  key={food.id}
-                  className="absolute w-3 h-3 bg-amber-400 rounded-full blur-[1px] animate-bounce"
-                  style={{
-                    left: food.x,
-                    top: food.worldY,
-                    transform: 'translate(-50%, -50%)',
-                    zIndex: 1
-                  }}
-                />
-              ))}
-            </div>
+        {theme === 'underwater' && (() => {
+          // Optimization: Partition and cull fish in a single pass to avoid multiple filter/map operations in render
+          const viewportTop = scrollYRef.current * SCROLL_PARALLAX;
+          const bgFishes: JSX.Element[] = [];
+          const fgFishes: JSX.Element[] = [];
 
-            {/* Foreground World Layer: Clown and Puffer fish swimming above the content */}
-            <div
-              ref={worldLayerForegroundRef}
-              style={{ 
-                position: 'absolute', 
-                inset: 0, 
-                overflow: 'visible', 
-                pointerEvents: 'none', 
-                willChange: 'transform', 
-                zIndex: isGrabMode ? 50 : 20 
-              }}
-            >
-              {fishes.filter(f => {
-                if (f.variant !== 'clown' && f.variant !== 'puffer') return false;
-                const worldY = f.y - scrollYRef.current * SCROLL_PARALLAX;
-                return worldY > -400 && worldY < window.innerHeight + 400;
-              }).map(fish => (
-                <Fish
-                  key={fish.id}
-                  {...fish}
-                  isNibbling={Boolean(nibblingFishIds[fish.id])}
-                  isFaded={highlightedBehavior !== null && fish.behavior !== highlightedBehavior}
-                  isHighlighted={highlightedBehavior !== null && fish.behavior === highlightedBehavior}
-                  isGrabMode={isGrabMode}
-                  onMouseDown={(e) => handleGrabFish(fish.id, e)}
-                />
-              ))}
-              {/* Love food in the foreground layer */}
-              {fishFoods.filter(f => f.type === 'love').map(food => (
-                <div
-                  key={food.id}
-                  className="absolute w-6 h-6 text-pink-400 drop-shadow-[0_0_10px_rgba(244,114,182,0.8)] rounded-full blur-[1px] animate-bounce flex items-center justify-center"
-                  style={{
-                    left: food.x,
-                    top: food.worldY,
-                    transform: 'translate(-50%, -50%)',
-                    zIndex: 1
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                  </svg>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+          fishes.forEach(fish => {
+            const worldY = fish.y - viewportTop;
+            if (worldY < -400 || worldY > window.innerHeight + 400) return;
+
+            const element = (
+              <Fish
+                key={fish.id}
+                {...fish}
+                isNibbling={Boolean(nibblingFishIds[fish.id])}
+                isFaded={highlightedBehavior !== null && fish.behavior !== highlightedBehavior}
+                isHighlighted={highlightedBehavior !== null && fish.behavior === highlightedBehavior}
+                isGrabMode={isGrabMode}
+                onMouseDown={handleGrabFish}
+              />
+            );
+
+            if (fish.variant === 'clown' || fish.variant === 'puffer') {
+              fgFishes.push(element);
+            } else {
+              bgFishes.push(element);
+            }
+          });
+
+          return (
+            <>
+              {/* Background World Layer: Regular fish swimming behind the content */}
+              <div
+                ref={worldLayerRef}
+                style={{ 
+                  position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', 
+                  willChange: 'transform', zIndex: 0
+                }}
+              >
+                {bgFishes}
+                {fishFoods.filter(f => f.type !== 'love').map(food => (
+                  <div
+                    key={food.id}
+                    className="absolute w-3 h-3 bg-amber-400 rounded-full blur-[1px] animate-bounce"
+                    style={{
+                      left: food.x,
+                      top: food.worldY,
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 1
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Foreground World Layer: Clown and Puffer fish swimming above the content */}
+              <div
+                ref={worldLayerForegroundRef}
+                style={{ 
+                  position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', 
+                  willChange: 'transform', zIndex: isGrabMode ? 50 : 20
+                }}
+              >
+                {fgFishes}
+                {fishFoods.filter(f => f.type === 'love').map(food => (
+                  <div
+                    key={food.id}
+                    className="absolute w-6 h-6 text-pink-400 drop-shadow-[0_0_10px_rgba(244,114,182,0.8)] rounded-full blur-[1px] animate-bounce flex items-center justify-center"
+                    style={{
+                      left: food.x,
+                      top: food.worldY,
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 1
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                    </svg>
+                  </div>
+                ))}
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       {theme === 'underwater' && (

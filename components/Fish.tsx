@@ -5,7 +5,7 @@ interface FishProps extends Omit<FishType, 'vx' | 'vy' | 'initialVx'> {
   isNibbling?: boolean;
   isFaded?: boolean;
   isHighlighted?: boolean;
-  onMouseDown?: (id: number) => void;
+  onMouseDown?: (id: number, e: React.MouseEvent) => void;
   isGrabMode?: boolean;
 }
 
@@ -60,12 +60,16 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
   // The viewBox is 100x50. To make a circle in a square container, the path must be 100 units wide and 50 units tall.
   const ballPufferPath = "M 100,25 C 100,0 75,0 50,0 C 25,0 0,0 0,25 C 0,50 25,50 50,50 C 75,50 100,50 100,25";
 
+  const handleGrabFish = (e: React.MouseEvent) => {
+    onMouseDown?.(id, e);
+  };
+
   return (
     <div 
       style={style} 
       data-fish-id={id} 
       data-is-puffer={isPuffer}
-      onMouseDown={(e) => onMouseDown?.(e, id)}
+      onMouseDown={handleGrabFish}
     >
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" style={{ width: '100%', height: '100%', overflow: 'visible' }} preserveAspectRatio="none">
         <defs>
