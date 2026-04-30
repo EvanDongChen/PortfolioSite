@@ -114,31 +114,22 @@ const FishTank: React.FC<FishTankProps> = ({
 
     // love food logic - ensure same species
     foodsRef.current.filter(f => f.type === 'love').forEach(food => {
-      const variantCounts = new Map<string, FishType[]>();
+      const potentialFishes: Array<FishType & { dist: number }> = [];
       fishesRef.current.forEach(f => {
         if (f.behavior === 'mating' || assignedForLove.has(f.id)) return;
         const dist = Math.hypot(f.x - food.x, f.y - food.y);
         if (dist < 300) {
-          const list = variantCounts.get(f.variant) || [];
-          list.push({ ...f, dist } as any);
-          variantCounts.set(f.variant, list);
+          potentialFishes.push({ ...f, dist } as any);
         }
       });
 
-      let bestVariant: string | null = null;
-      let minPairDist = Infinity;
-      variantCounts.forEach((fishes, variant) => {
-        if (fishes.length >= 2) {
-          fishes.sort((a, b) => (a as any).dist - (b as any).dist);
-          const d = (fishes[0] as any).dist + (fishes[1] as any).dist;
-          if (d < minPairDist) { minPairDist = d; bestVariant = variant; }
-        }
-      });
-
-      if (bestVariant) {
-        const pair = variantCounts.get(bestVariant)!.sort((a, b) => (a as any).dist - (b as any).dist).slice(0, 2);
+      if (potentialFishes.length >= 2) {
+        // Sort by distance to food and take the closest two
+        potentialFishes.sort((a, b) => a.dist - b.dist);
+        const pair = potentialFishes.slice(0, 2);
+        
         pair.forEach(nf => assignedForLove.add(nf.id));
-        if (pair.some(f => (f as any).dist < 25)) {
+        if (pair.some(f => f.dist < 25)) {
            matingTriggers.set(pair[0].id, { partnerId: pair[1].id, center: { x: food.x, y: food.y } });
            matingTriggers.set(pair[1].id, { partnerId: pair[0].id, center: { x: food.x, y: food.y } });
            foodsRef.current = foodsRef.current.filter(f => f.id !== food.id);

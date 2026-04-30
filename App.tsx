@@ -133,6 +133,7 @@ const App: React.FC = () => {
   const particleCanvasRef = useRef<ParticleCanvasRef>(null);
   const scrollYRef = useRef(0);
   const worldLayerRef = useRef<HTMLDivElement>(null);
+  const worldLayerForegroundRef = useRef<HTMLDivElement>(null);
   const scrollRafRef = useRef<number | null>(null);
   const mousePosRef = useRef({ x: -1000, y: -1000 });
   const fishFoodsRef = useRef<FishFoodType[]>([]);
@@ -372,9 +373,12 @@ const App: React.FC = () => {
       }
 
       const alreadyHasClown = prev.some(f => f.variant === 'clown');
+      const alreadyHasPuffer = prev.some(f => f.variant === 'puffer');
+      const variantRoll = Math.random();
+      
       const variant: FishType['variant'] = !alreadyHasClown
         ? 'clown'
-        : 'default';
+        : (!alreadyHasPuffer ? 'puffer' : (variantRoll < 0.06 ? 'puffer' : 'default'));
       const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
 
       // Weighted random behavior: 48% cruise, 10% dart, 5% loiter, 25% conga, 12% curious
@@ -570,6 +574,9 @@ const App: React.FC = () => {
       if (worldLayerRef.current) {
         worldLayerRef.current.style.transform = `translate3d(0, ${-scrollYRef.current * SCROLL_PARALLAX}px, 0)`;
       }
+      if (worldLayerForegroundRef.current) {
+        worldLayerForegroundRef.current.style.transform = `translate3d(0, ${-scrollYRef.current * SCROLL_PARALLAX}px, 0)`;
+      }
       scrollRafRef.current = null;
     });
   }, []);
@@ -619,7 +626,7 @@ const App: React.FC = () => {
       setFishes(prev => [...prev, { 
         ...grabbedFish, 
         x: clientX, 
-        y: clientY,
+        y: clientY + scrollYRef.current * SCROLL_PARALLAX,
         displayY: clientY,
         vx: (Math.random() - 0.5) * 2,
         vy: (Math.random() - 0.5) * 2
@@ -698,44 +705,30 @@ const App: React.FC = () => {
       const spiralTriggers = new Set<number>();
       const assignedForLove = new Set<number>();        
       foods.filter(f => f.type === 'love').forEach(food => {
-        const variantCounts = new Map<string, FishType[]>();
+        const potentialFishes: Array<FishType & { dist: number }> = [];
         currentFishes.forEach(f => {
           if (f.behavior === 'mating' || assignedForLove.has(f.id)) return;
           const dist = Math.hypot(f.x - food.x, f.y - food.worldY);
           if (dist < 450) {
-            const list = variantCounts.get(f.variant) || [];
-            list.push({ ...f, dist } as any);
-            variantCounts.set(f.variant, list);
+            potentialFishes.push({ ...f, dist } as any);
           }
         });
 
-        // Find the variant with at least 2 fish closest to this food
-        let bestVariant: string | null = null;
-        let minPairDist = Infinity;
-        
-        variantCounts.forEach((fishes, variant) => {
-          if (fishes.length >= 2) {
-            fishes.sort((a, b) => (a as any).dist - (b as any).dist);
-            const pairDist = (fishes[0] as any).dist + (fishes[1] as any).dist;
-            if (pairDist < minPairDist) {
-              minPairDist = pairDist;
-              bestVariant = variant;
-            }
-          }
-        });
-
-        if (bestVariant) {
-          const pair = variantCounts.get(bestVariant)!.sort((a, b) => (a as any).dist - (b as any).dist).slice(0, 2);
+        if (potentialFishes.length >= 2) {
+          // Sort by distance to food and take the closest two, regardless of species
+          potentialFishes.sort((a, b) => a.dist - b.dist);
+          const pair = potentialFishes.slice(0, 2);
+          
           pair.forEach(nf => assignedForLove.add(nf.id));
           loveFoodAssignments.set(food.id, pair.map(f => f.id));
+          
           const EAT_RADIUS = 35;
-          if (pair.some(f => (f as any).dist < EAT_RADIUS)) {
+          if (pair.some(f => f.dist < EAT_RADIUS)) {
             matingTriggers.set(pair[0].id, { partnerId: pair[1].id, center: { x: food.x, y: food.worldY } });
             matingTriggers.set(pair[1].id, { partnerId: pair[0].id, center: { x: food.x, y: food.worldY } });
             eatenFoodIds.add(food.id);
           }
         }
-
       });
 
       // Coordinate spiral starts
@@ -1647,19 +1640,17 @@ const App: React.FC = () => {
 
       {/* Interaction Layer: Fish, Food, and Grab Mechanics */}
       <div
-        className={`fixed inset-0 w-full h-full pointer-events-none ${isGrabMode ? 'z-[50]' : 'z-0'}`}
+        className={`fixed inset-0 w-full h-full pointer-events-none ${isGrabMode ? 'z-[50]' : 'z-20'}`}
       >
         {theme === 'underwater' && (
           <>
-            {/* World-layer: fish + food + particles all in world coords.
-                translateY(-scrollY) is applied directly on scroll — zero React re-renders for scroll. */}
+            {/* Background World Layer: Regular fish swimming behind the content */}
             <div
               ref={worldLayerRef}
-              style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', willChange: 'transform' }}
+              style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', willChange: 'transform', zIndex: 0 }}
             >
               {fishes.filter(f => {
-                if (f.variant === 'puffer') return false;
-                // Simple viewport culling based on scroll position
+                if (f.variant === 'clown' || f.variant === 'puffer') return false;
                 const worldY = f.y - scrollYRef.current * SCROLL_PARALLAX;
                 return worldY > -400 && worldY < window.innerHeight + 400;
               }).map(fish => (
@@ -1673,27 +1664,64 @@ const App: React.FC = () => {
                   onMouseDown={(e) => handleGrabFish(fish.id, e)}
                 />
               ))}
-              {fishFoods.map(food => (
+              {/* Regular food in the background layer */}
+              {fishFoods.filter(f => f.type !== 'love').map(food => (
                 <div
                   key={food.id}
+                  className="absolute w-3 h-3 bg-amber-400 rounded-full blur-[1px] animate-bounce"
                   style={{
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    width: 14,
-                    height: 14,
-                    borderRadius: '50%',
-                    transform: `translate(${food.x - 7}px, ${food.worldY - 7}px)`,
-                    background: food.type === 'love' 
-                      ? 'radial-gradient(circle at 35% 35%, #fda4af, #f43f5e)' 
-                      : 'radial-gradient(circle at 35% 35%, #fde68a, #f59e0b)',
-                    boxShadow: food.type === 'love'
-                      ? '0 0 6px 2px rgba(244,63,94,0.7), 0 0 14px 4px rgba(225,29,72,0.4)'
-                      : '0 0 6px 2px rgba(251,191,36,0.7), 0 0 14px 4px rgba(245,158,11,0.4)',
-                    pointerEvents: 'none',
-                    zIndex: 1,
+                    left: food.x,
+                    top: food.worldY,
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 1
                   }}
                 />
+              ))}
+            </div>
+
+            {/* Foreground World Layer: Clown and Puffer fish swimming above the content */}
+            <div
+              ref={worldLayerForegroundRef}
+              style={{ 
+                position: 'absolute', 
+                inset: 0, 
+                overflow: 'visible', 
+                pointerEvents: 'none', 
+                willChange: 'transform', 
+                zIndex: isGrabMode ? 50 : 20 
+              }}
+            >
+              {fishes.filter(f => {
+                if (f.variant !== 'clown' && f.variant !== 'puffer') return false;
+                const worldY = f.y - scrollYRef.current * SCROLL_PARALLAX;
+                return worldY > -400 && worldY < window.innerHeight + 400;
+              }).map(fish => (
+                <Fish
+                  key={fish.id}
+                  {...fish}
+                  isNibbling={Boolean(nibblingFishIds[fish.id])}
+                  isFaded={highlightedBehavior !== null && fish.behavior !== highlightedBehavior}
+                  isHighlighted={highlightedBehavior !== null && fish.behavior === highlightedBehavior}
+                  isGrabMode={isGrabMode}
+                  onMouseDown={(e) => handleGrabFish(fish.id, e)}
+                />
+              ))}
+              {/* Love food in the foreground layer */}
+              {fishFoods.filter(f => f.type === 'love').map(food => (
+                <div
+                  key={food.id}
+                  className="absolute w-6 h-6 text-pink-400 drop-shadow-[0_0_10px_rgba(244,114,182,0.8)] rounded-full blur-[1px] animate-bounce flex items-center justify-center"
+                  style={{
+                    left: food.x,
+                    top: food.worldY,
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: 1
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                  </svg>
+                </div>
               ))}
             </div>
           </>
@@ -1713,21 +1741,6 @@ const App: React.FC = () => {
               color2={jellyfish.color2}
             />
           )}
-          {(() => {
-            const puffer = fishes.find(f => f.variant === 'puffer');
-            if (!puffer) return null;
-            return (
-              <Fish
-                key={puffer.id}
-                {...puffer}
-                isNibbling={Boolean(nibblingFishIds[puffer.id])}
-                isFaded={false}
-                isHighlighted={false}
-                isGrabMode={isGrabMode}
-                onMouseDown={(e) => handleGrabFish(puffer.id, e)}
-              />
-            );
-          })()}
         </div>
       )}
 
