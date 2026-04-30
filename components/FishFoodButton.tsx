@@ -17,7 +17,7 @@ const FishFoodButton: React.FC<FishFoodButtonProps> = ({ isActive, onToggle }) =
       onClick={onToggle}
       title={isActive ? 'Food mode on – click anywhere to place fish food' : 'Feed the fish!'}
       aria-label="Toggle fish food mode"
-      className={`fixed bottom-8 left-8 z-40 p-3 rounded-full backdrop-blur-sm text-white shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 transition-all duration-300 ${
+      className={`fixed bottom-8 left-8 z-[60] p-3 rounded-full backdrop-blur-sm text-white shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 transition-all duration-300 ${
         isActive
           ? 'bg-amber-500/50 border-amber-400/60 focus:ring-amber-400 scale-110'
           : 'bg-cyan-500/30 border-cyan-400/30 hover:bg-cyan-500/50 focus:ring-cyan-400'

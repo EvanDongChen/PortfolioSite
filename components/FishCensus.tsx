@@ -31,7 +31,7 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-[9rem] left-8 z-40 p-3 rounded-full backdrop-blur-sm text-white shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 focus:ring-cyan-400 transition-all duration-300 bg-cyan-500/30 border-cyan-400/30 hover:bg-cyan-500/50"
+        className="fixed bottom-[9rem] left-8 z-[60] p-3 rounded-full backdrop-blur-sm text-white shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 focus:ring-cyan-400 transition-all duration-300 bg-cyan-500/30 border-cyan-400/30 hover:bg-cyan-500/50"
         title="Aquarium Census"
         aria-label="Open Fish Census"
       >
@@ -43,7 +43,7 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
   }
 
   return (
-    <div className="fixed bottom-[9rem] left-8 z-50 bg-slate-900/60 backdrop-blur-xl border border-cyan-500/30 rounded-2xl p-5 shadow-2xl w-64 text-slate-200 pointer-events-auto">
+    <div className="fixed bottom-[9rem] left-8 z-[70] bg-slate-900/60 backdrop-blur-xl border border-cyan-500/30 rounded-2xl p-5 shadow-2xl w-64 text-slate-200 pointer-events-auto">
       <div className="flex justify-between items-center mb-4 pb-2 border-b border-cyan-500/20">
         <h3 className="text-cyan-300 font-bold tracking-wider text-sm flex items-center gap-2">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -5,9 +5,11 @@ interface FishProps extends Omit<FishType, 'vx' | 'vy' | 'initialVx'> {
   isNibbling?: boolean;
   isFaded?: boolean;
   isHighlighted?: boolean;
+  onMouseDown?: (id: number) => void;
+  isGrabMode?: boolean;
 }
 
-const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false, birthTime, isPuffed = false }) => {
+const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false, birthTime, isPuffed = false, onMouseDown, isGrabMode = false }) => {
   const isClownFish = variant === 'clown';
   const isPuffer = variant === 'puffer';
 
@@ -36,12 +38,12 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
     width: (isPuffer ? (isPuffed ? 65 : 85) : 120) * currentScale,
     height: (isPuffer ? (isPuffed ? 65 : 65) : 50) * currentScale,
     willChange: 'transform',
-    pointerEvents: isPuffer ? 'auto' : 'none',
-    cursor: isPuffer ? 'pointer' : 'default',
+    pointerEvents: (isPuffer || isGrabMode) ? 'auto' : 'none',
+    cursor: isGrabMode ? 'crosshair' : (isPuffer ? 'pointer' : 'default'),
     transition: 'transform 450ms cubic-bezier(0.175, 0.885, 0.32, 1.275), width 450ms ease, height 450ms ease, opacity 300ms ease-out, filter 300ms ease-out',
     opacity: isFaded ? 0.15 : 1,
     filter: isHighlighted ? 'drop-shadow(0 0 8px rgba(255,255,255,0.8)) brightness(1.2)' : 'none',
-    zIndex: isHighlighted || isPuffer ? 10 : 1,
+    zIndex: isGrabMode ? 100 : (isHighlighted || isPuffer ? 10 : 1),
   };
 
   const gradientId = `fishGradient-${id}`;
@@ -59,7 +61,12 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
   const ballPufferPath = "M 100,25 C 100,0 75,0 50,0 C 25,0 0,0 0,25 C 0,50 25,50 50,50 C 75,50 100,50 100,25";
 
   return (
-    <div style={style} data-fish-id={id} data-is-puffer={isPuffer}>
+    <div 
+      style={style} 
+      data-fish-id={id} 
+      data-is-puffer={isPuffer}
+      onMouseDown={(e) => onMouseDown?.(e, id)}
+    >
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" style={{ width: '100%', height: '100%', overflow: 'visible' }} preserveAspectRatio="none">
         <defs>
           <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">

@@ -18,6 +18,9 @@ import ShootingStar from './components/ShootingStar';
 import CursorNebula from './components/CursorNebula';
 import PortfolioContent from './components/PortfolioContent';
 import ParticleCanvas, { ParticleCanvasRef } from './components/ParticleCanvas';
+import GrabModeButton from './components/GrabModeButton';
+import FishTank from './components/FishTank';
+import TankToggleButton from './components/TankToggleButton';
 
 const BASE_URL = import.meta.env.BASE_URL;
 import ThemeToggleButton from './components/ThemeToggleButton';
@@ -122,6 +125,11 @@ const App: React.FC = () => {
   const [stars, setStars] = useState<StarType[]>([]);
   const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isGrabMode, setIsGrabMode] = useState(false);
+  const [grabbedFish, setGrabbedFish] = useState<FishType | null>(null);
+  const [tankFishes, setTankFishes] = useState<FishType[]>([]);
+  const [isTankOpen, setIsTankOpen] = useState(false);
+  useEffect(() => { isGrabModeRef.current = isGrabMode; }, [isGrabMode]);
   const particleCanvasRef = useRef<ParticleCanvasRef>(null);
   const scrollYRef = useRef(0);
   const worldLayerRef = useRef<HTMLDivElement>(null);
@@ -129,6 +137,7 @@ const App: React.FC = () => {
   const mousePosRef = useRef({ x: -1000, y: -1000 });
   const fishFoodsRef = useRef<FishFoodType[]>([]);
   const trailEmitRef = useRef<Record<number, number>>({});
+  const grabbedFishRef = useRef<HTMLDivElement>(null);
   const nextWhaleSpawnRef = useRef(0);
   const nextTurtleSpawnRef = useRef(0);
   const nextJellyfishSpawnRef = useRef(0);
@@ -142,6 +151,7 @@ const App: React.FC = () => {
   const fishLastFrameTimeRef = useRef(0);
   const shockwavesRef = useRef<{ id: number; x: number; worldY: number; timestamp: number }[]>([]);
   const lastScrollTimestampRef = useRef(0);
+  const isGrabModeRef = useRef(isGrabMode);
 
   const getNextEntityId = useCallback(() => {
     const id = nextEntityIdRef.current;
@@ -499,14 +509,8 @@ const App: React.FC = () => {
     if (!isFishFoodMode) return;
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      const pufferEl = target.closest('[data-is-puffer="true"]');
-      if (pufferEl) {
-        const id = Number(pufferEl.getAttribute('data-fish-id'));
-        setFishes(prev => prev.map(f => f.id === id ? { ...f, isPuffed: true, puffStartTime: performance.now() } : f));
-        return;
-      }
 
-      if (target.closest('button, a, input')) return;
+      if (target.closest('button, a, input, [data-is-tank="true"]')) return;
       const id = getNextEntityId();
       const newFood: FishFoodType = {
         id,
@@ -526,7 +530,7 @@ const App: React.FC = () => {
 
   // Global click ripples (only when not feeding fish)
   useEffect(() => {
-    if (isFishFoodMode) return;
+    if (isFishFoodMode || isGrabMode) return;
     const handleRippleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const pufferEl = target.closest('[data-is-puffer="true"]');
@@ -536,7 +540,7 @@ const App: React.FC = () => {
         return;
       }
 
-      if (target.closest('button, a, input')) return;
+      if (target.closest('button, a, input, [data-is-tank="true"]')) return;
       const id = getNextEntityId();
       particleCanvasRef.current?.emitClickRipple(e.clientX, e.clientY, theme);
 
@@ -549,7 +553,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('click', handleRippleClick);
     return () => window.removeEventListener('click', handleRippleClick);
-  }, [isFishFoodMode, getNextEntityId, theme]);
+  }, [isFishFoodMode, isGrabMode, getNextEntityId, theme]);
 
   // Crosshair cursor when food mode is active
   useEffect(() => {
@@ -583,12 +587,91 @@ const App: React.FC = () => {
     };
   }, [handleScroll]);
 
+  const handleGrabFish = useCallback((id: number, e?: React.MouseEvent) => {
+    if (!isGrabMode || grabbedFish) return;
+    e?.preventDefault();
+    const fishToGrab = fishes.find(f => f.id === id);
+    if (fishToGrab) {
+      setGrabbedFish(fishToGrab);
+      setFishes(prev => prev.filter(f => f.id !== id));
+    }
+  }, [isGrabMode, grabbedFish, fishes]);
+
+  const handleDropFish = useCallback((clientX?: number, clientY?: number) => {
+    if (!grabbedFish) return;
+
+    const tankElement = document.querySelector('[data-is-tank="true"]');
+    if (tankElement && clientX !== undefined && clientY !== undefined) {
+      const rect = tankElement.getBoundingClientRect();
+      if (clientX >= rect.left && clientX <= rect.right && 
+          clientY >= rect.top && clientY <= rect.bottom) {
+        // Drop into tank
+        const localX = clientX - rect.left;
+        const localY = clientY - rect.top;
+        setTankFishes(prev => [...prev, { ...grabbedFish, x: localX, y: localY }]);
+        setGrabbedFish(null);
+        return;
+      }
+    }
+
+    // Drop into ocean
+    if (clientX !== undefined && clientY !== undefined) {
+      setFishes(prev => [...prev, { 
+        ...grabbedFish, 
+        x: clientX, 
+        y: clientY,
+        displayY: clientY,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2
+      }]);
+    } else {
+      // Fallback if no coords (shouldn't happen with mouseup)
+      setFishes(prev => [...prev, grabbedFish]);
+    }
+    setGrabbedFish(null);
+  }, [grabbedFish]);
+
   useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
-      mousePosRef.current = { x: event.clientX, y: event.clientY };
+    isGrabModeRef.current = isGrabMode;
+  }, [isGrabMode]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      mousePosRef.current = { x: e.clientX, y: e.clientY };
     };
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  useEffect(() => {
+    if (!grabbedFish) return;
+    
+    const handleGlobalMouseUp = (e: MouseEvent) => {
+      handleDropFish(e.clientX, e.clientY);
+    };
+    
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (grabbedFishRef.current) {
+        grabbedFishRef.current.style.transform = `translate(${e.clientX}px, ${e.clientY}px) translate(-50%, -50%) rotate(15deg)`;
+      }
+    };
+
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+    };
+  }, [grabbedFish, handleDropFish]);
+
+  const handleGrabFishFromTank = useCallback((fish: FishType) => {
+    if (!isGrabMode || grabbedFish) return;
+    setGrabbedFish(fish);
+    setTankFishes(prev => prev.filter(f => f.id !== fish.id));
+  }, [isGrabMode, grabbedFish]);
+
+  const handleFishBreed = useCallback((baby: FishType) => {
+    setTankFishes(prev => [...prev, baby]);
   }, []);
 
   useEffect(() => {
@@ -613,24 +696,46 @@ const App: React.FC = () => {
       const foods = fishFoodsRef.current;
       const loveFoodAssignments = new Map<number, number[]>();
       const spiralTriggers = new Set<number>();
-      const assignedForLove = new Set<number>();
+      const assignedForLove = new Set<number>();        
       foods.filter(f => f.type === 'love').forEach(food => {
-        const nearbyFish = currentFishes
-          .filter(f => f.behavior !== 'mating' && !assignedForLove.has(f.id))
-          .map(f => ({ id: f.id, x: f.x, y: f.y, dist: Math.hypot(f.x - food.x, f.y - food.worldY) }))
-          .sort((a, b) => a.dist - b.dist)
-          .slice(0, 2);
+        const variantCounts = new Map<string, FishType[]>();
+        currentFishes.forEach(f => {
+          if (f.behavior === 'mating' || assignedForLove.has(f.id)) return;
+          const dist = Math.hypot(f.x - food.x, f.y - food.worldY);
+          if (dist < 450) {
+            const list = variantCounts.get(f.variant) || [];
+            list.push({ ...f, dist } as any);
+            variantCounts.set(f.variant, list);
+          }
+        });
+
+        // Find the variant with at least 2 fish closest to this food
+        let bestVariant: string | null = null;
+        let minPairDist = Infinity;
         
-        if (nearbyFish.length === 2) {
-          nearbyFish.forEach(nf => assignedForLove.add(nf.id));
-          loveFoodAssignments.set(food.id, nearbyFish.map(f => f.id));
-          const EAT_RADIUS = 30;
-          if (nearbyFish.some(f => f.dist < EAT_RADIUS)) {
-            matingTriggers.set(nearbyFish[0].id, { partnerId: nearbyFish[1].id, center: { x: food.x, y: food.worldY } });
-            matingTriggers.set(nearbyFish[1].id, { partnerId: nearbyFish[0].id, center: { x: food.x, y: food.worldY } });
+        variantCounts.forEach((fishes, variant) => {
+          if (fishes.length >= 2) {
+            fishes.sort((a, b) => (a as any).dist - (b as any).dist);
+            const pairDist = (fishes[0] as any).dist + (fishes[1] as any).dist;
+            if (pairDist < minPairDist) {
+              minPairDist = pairDist;
+              bestVariant = variant;
+            }
+          }
+        });
+
+        if (bestVariant) {
+          const pair = variantCounts.get(bestVariant)!.sort((a, b) => (a as any).dist - (b as any).dist).slice(0, 2);
+          pair.forEach(nf => assignedForLove.add(nf.id));
+          loveFoodAssignments.set(food.id, pair.map(f => f.id));
+          const EAT_RADIUS = 35;
+          if (pair.some(f => (f as any).dist < EAT_RADIUS)) {
+            matingTriggers.set(pair[0].id, { partnerId: pair[1].id, center: { x: food.x, y: food.worldY } });
+            matingTriggers.set(pair[1].id, { partnerId: pair[0].id, center: { x: food.x, y: food.worldY } });
             eatenFoodIds.add(food.id);
           }
         }
+
       });
 
       // Coordinate spiral starts
@@ -720,27 +825,29 @@ const App: React.FC = () => {
           let isFleeing = false;
 
           // Check physical shockwaves
-          for (const wave of shockwavesRef.current) {
-            const age = timestamp - wave.timestamp;
-            if (age < 500) {
-              const dx = x - wave.x;
-              const dy = y - wave.worldY;
-              const dist = Math.sqrt(dx * dx + dy * dy);
-              const BLAST_RADIUS = 350;
-              if (dist < BLAST_RADIUS) {
-                const force = (1 - dist / BLAST_RADIUS) * 3.5;
-                const angle = Math.atan2(dy, dx);
-                vx += Math.cos(angle) * force;
-                vy += Math.sin(angle) * force;
-                isFleeing = true;
-                if (fish.behavior === 'conga') {
-                  newBehavior = 'dart';
+          if (!isGrabModeRef.current) {
+            for (const wave of shockwavesRef.current) {
+              const age = timestamp - wave.timestamp;
+              if (age < 500) {
+                const dx = x - wave.x;
+                const dy = y - wave.worldY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const BLAST_RADIUS = 350;
+                if (dist < BLAST_RADIUS) {
+                  const force = (1 - dist / BLAST_RADIUS) * 3.5;
+                  const angle = Math.atan2(dy, dx);
+                  vx += Math.cos(angle) * force;
+                  vy += Math.sin(angle) * force;
+                  isFleeing = true;
+                  if (fish.behavior === 'conga') {
+                    newBehavior = 'dart';
+                  }
                 }
               }
             }
           }
 
-          if (fish.variant !== 'puffer' && fish.behavior !== 'curious' && fish.behavior !== 'mating' && distanceMouse < SCARE_RADIUS) {
+          if (!isGrabModeRef.current && fish.variant !== 'puffer' && fish.behavior !== 'curious' && fish.behavior !== 'mating' && distanceMouse < SCARE_RADIUS) {
             const angle = Math.atan2(dyMouse, dxMouse);
             vx += Math.cos(angle) * FLEE_STRENGTH;
             vy += Math.sin(angle) * FLEE_STRENGTH;
@@ -1509,7 +1616,9 @@ const App: React.FC = () => {
 
 
   return (
-    <div className={`relative min-h-screen text-white overflow-x-hidden transition-colors duration-1000 ${theme === 'underwater'
+    <div className={`relative min-h-screen text-white overflow-x-hidden transition-colors duration-1000 ${
+      grabbedFish ? 'select-none cursor-grabbing' : ''
+    } ${theme === 'underwater'
       ? 'bg-gradient-to-br from-[#000428] via-[#004e92] to-[#1CB5E0]'
       : 'bg-gradient-to-br from-[#020111] via-[#0d1b2a] to-[#1b263b]'
       }`}>
@@ -1517,7 +1626,7 @@ const App: React.FC = () => {
       `}</style>
       <ParticleCanvas ref={particleCanvasRef} />
       <div
-        className="fixed inset-0 w-full h-full z-0"
+        className={`fixed inset-0 w-full h-full ${isGrabMode ? 'z-[50]' : 'z-0'}`}
       >
         {theme === 'underwater' ? (
           <>
@@ -1540,6 +1649,8 @@ const App: React.FC = () => {
                   isNibbling={Boolean(nibblingFishIds[fish.id])}
                   isFaded={highlightedBehavior !== null && fish.behavior !== highlightedBehavior}
                   isHighlighted={highlightedBehavior !== null && fish.behavior === highlightedBehavior}
+                  isGrabMode={isGrabMode}
+                  onMouseDown={(e) => handleGrabFish(fish.id, e)}
                 />
               ))}
               {fishFoods.map(food => (
@@ -1598,6 +1709,8 @@ const App: React.FC = () => {
                 isNibbling={Boolean(nibblingFishIds[puffer.id])}
                 isFaded={false}
                 isHighlighted={false}
+                isGrabMode={isGrabMode}
+                onMouseDown={(e) => handleGrabFish(puffer.id, e)}
               />
             );
           })()}
@@ -1659,8 +1772,54 @@ const App: React.FC = () => {
         } else {
           setIsFishFoodMode(true);
           setIsLoveMode(false);
+          setIsGrabMode(false);
         }
       }} />
+
+      <GrabModeButton isActive={isGrabMode} onToggle={() => {
+        const nextMode = !isGrabMode;
+        setIsGrabMode(nextMode);
+        if (nextMode) {
+          setIsTankOpen(true); // Open tank when entering grab mode
+          setIsFishFoodMode(false);
+          setIsLoveMode(false);
+        }
+      }} />
+
+      <TankToggleButton 
+        isActive={isTankOpen} 
+        onToggle={() => setIsTankOpen(!isTankOpen)} 
+        count={tankFishes.length}
+      />
+
+      <FishTank 
+        isOpen={isTankOpen} 
+        onClose={() => setIsTankOpen(false)} 
+        tankFishes={tankFishes}
+        onDropFish={handleDropFish}
+        onGrabFishFromTank={handleGrabFishFromTank}
+        onFishBreed={handleFishBreed}
+        isGrabMode={isGrabMode}
+        hasGrabbedFish={!!grabbedFish}
+        isFishFoodMode={isFishFoodMode}
+        isLoveMode={isLoveMode}
+      />
+
+      {grabbedFish && (
+        <div 
+          ref={grabbedFishRef}
+          className="fixed pointer-events-none z-[100]"
+          style={{ 
+            left: 0, 
+            top: 0,
+            transform: `translate(${mousePosRef.current.x}px, ${mousePosRef.current.y}px) translate(-50%, -50%) rotate(15deg)`
+          }}
+        >
+          <Fish {...grabbedFish} x={0} displayY={0} rotation={0} />
+          {/* Net visual under the fish */}
+          <div className="absolute inset-0 bg-white/20 rounded-full blur-xl -z-10 scale-150"></div>
+        </div>
+      )}
     </div>
   );
 };

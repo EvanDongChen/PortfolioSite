@@ -110,3 +110,39 @@ export const WaterDropIcon: React.FC<IconProps> = ({ className }) => (
         <path d="M12 2C8.686 2 6 4.686 6 8c0 3.314 6 14 6 14s6-10.686 6-14c0-3.314-2.686-6-6-6z" />
     </svg>
 );
+
+export const NetIcon: React.FC<IconProps> = ({ className }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <path d="M21 3L10 14" />
+    <path d="M10 14L3 21" />
+    <circle cx="15" cy="9" r="6" />
+    <path d="M10.7 13.3l4.6-4.6" />
+    <path d="M13.3 10.7l4.6-4.6" />
+  </svg>
+);
+
+export const TankIcon: React.FC<IconProps> = ({ className }) => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <path d="M21 8V21H3V8" />
+    <path d="M1 3H23V8H1V3Z" />
+    <path d="M10 12H14" />
+  </svg>
+);
