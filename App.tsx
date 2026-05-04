@@ -739,7 +739,7 @@ const App: React.FC = () => {
       // Coordinate spiral starts
       currentFishes.forEach(fish => {
         if (fish.behavior === 'mating' && fish.readyToSpiral && !fish.matingSpiralStartTime) {
-          const partner = currentFishes.find(f => f.id === fish.matingPartnerId);
+          const partner = fishById.get(fish.matingPartnerId!);
           if (partner?.readyToSpiral) {
             spiralTriggers.add(fish.id);
             spiralTriggers.add(partner.id);
@@ -760,6 +760,48 @@ const App: React.FC = () => {
           }
         }
       });
+
+      // ── Per-frame acceleration structures ──────────────────────────────────
+      // Map<id, fish> for O(1) partner / predecessor lookups.
+      const fishById = new Map<number, FishType>();
+      // Spatial grid (cell size = SCHOOL_RADIUS) for O(1) neighbor queries.
+      const CELL_SIZE = 140;
+      const spatialGrid = new Map<string, FishType[]>();
+      // Conga predecessor map: `${leaderId}_${index}` → fish.
+      const congaPredMap = new Map<string, FishType>();
+
+      for (const f of currentFishes) {
+        fishById.set(f.id, f);
+        const cx = Math.floor(f.x / CELL_SIZE);
+        const cy = Math.floor(f.y / CELL_SIZE);
+        const key = `${cx},${cy}`;
+        const cell = spatialGrid.get(key);
+        if (cell) cell.push(f);
+        else spatialGrid.set(key, [f]);
+        if (f.behavior === 'conga' && f.congaLeaderId !== undefined && f.congaIndex !== undefined) {
+          congaPredMap.set(`${f.congaLeaderId}_${f.congaIndex}`, f);
+        }
+      }
+
+      // Simulation constants hoisted from the per-fish loop.
+      const SCARE_RADIUS = 150;
+      const FLEE_STRENGTH = 6;
+      const MAX_SPEED_FLEE = 5;
+      const MAX_SPEED_CRUISE = 2;
+      const FOOD_ATTRACT_RADIUS = 500;
+      const FOOD_ATTRACT_STRENGTH = 0.25;
+      const MAX_SPEED_FOOD = 3.5;
+      const TURN_SPEED = 0.1;
+      const RETURN_TO_HORIZONTAL_STRENGTH = 0.05;
+      const WANDER_STRENGTH = 0.1;
+      const SCHOOL_RADIUS = 140;
+      const SEPARATION_RADIUS = 68;
+      const ALIGN_STRENGTH = 0.015;
+      const COHESION_STRENGTH = 0.006;
+      const SEPARATION_STRENGTH = 0.12;
+      const MAX_NEIGHBORS_CONSIDERED = 8;
+      const SCHOOL_SPEED_BOOST = 0.55;
+      const MAX_SPEED_SCHOOL = 3.5;
 
       setFishes(currentFishes => {
         const next = currentFishes.map(fish => {
@@ -791,26 +833,6 @@ const App: React.FC = () => {
           if (spiralTriggers.has(fish.id)) {
             newMatingSpiralStartTime = timestamp;
           }
-
-          const SCARE_RADIUS = 150;
-          const FLEE_STRENGTH = 6;
-          const MAX_SPEED_FLEE = 5;
-          const MAX_SPEED_CRUISE = 2;
-          const FOOD_ATTRACT_RADIUS = 500;
-          const FOOD_ATTRACT_STRENGTH = 0.25;
-          const MAX_SPEED_FOOD = 3.5;
-          const EAT_RADIUS = 30;
-          const TURN_SPEED = 0.1;
-          const RETURN_TO_HORIZONTAL_STRENGTH = 0.05;
-          const WANDER_STRENGTH = 0.1;
-          const SCHOOL_RADIUS = 140;
-          const SEPARATION_RADIUS = 68;
-          const ALIGN_STRENGTH = 0.015;
-          const COHESION_STRENGTH = 0.006;
-          const SEPARATION_STRENGTH = 0.12;
-          const MAX_NEIGHBORS_CONSIDERED = 8;
-          const SCHOOL_SPEED_BOOST = 0.55;
-          const MAX_SPEED_SCHOOL = 3.5;
 
           const prevVx = vx;
           const prevVy = vy;
@@ -888,7 +910,7 @@ const App: React.FC = () => {
                 vx = (vx / currentSpeed) * MAX_SPEED_FOOD;
                 vy = (vy / currentSpeed) * MAX_SPEED_FOOD;
               }
-              if (closestDist < EAT_RADIUS && closestFood.type === 'love') {
+              if (closestDist < DEFAULT_EAT_RADIUS && closestFood.type === 'love') {
                 nibbleTriggers.add(fish.id);
                 crumbBursts.push({ x: closestFood.x, worldY: closestFood.worldY, isLove: true });
               }
@@ -984,7 +1006,7 @@ const App: React.FC = () => {
                   vy = (vy / leaderSpd) * CONGA_SPEED;
                 }
               } else {
-                const pred = currentFishes.find(f => f.congaLeaderId === fish.congaLeaderId && f.congaIndex === (fish.congaIndex ?? 1) - 1);
+                const pred = congaPredMap.get(`${fish.congaLeaderId}_${(fish.congaIndex ?? 1) - 1}`);
                 if (pred) {
                   const predSpd = Math.sqrt(pred.vx * pred.vx + pred.vy * pred.vy);
                   const predAngle = Math.atan2(pred.vy, pred.vx);
@@ -1067,22 +1089,31 @@ const App: React.FC = () => {
               let alignX = 0, alignY = 0, centerX = 0, centerY = 0, separationX = 0, separationY = 0;
 
               if (!isOffscreen) {
-                for (const other of currentFishes) {
-                  if (other.id === fish.id) continue;
-                  const dx = other.x - x;
-                  const dy = other.y - y;
-                  const distSq = dx * dx + dy * dy;
-                  if (distSq > SCHOOL_RADIUS * SCHOOL_RADIUS) continue;
-                  const dist = Math.sqrt(distSq);
-                  if (dist < SEPARATION_RADIUS && dist > 0.001) {
-                    separationX -= dx / dist;
-                    separationY -= dy / dist;
-                  }
-                  if (other.schoolId === fish.schoolId) {
-                    neighborCount++;
-                    alignX += other.vx; alignY += other.vy;
-                    centerX += other.x; centerY += other.y;
-                    if (neighborCount >= MAX_NEIGHBORS_CONSIDERED) break;
+                const fcx = Math.floor(x / CELL_SIZE);
+                const fcy = Math.floor(y / CELL_SIZE);
+                neighborScan:
+                for (let dcx = -1; dcx <= 1; dcx++) {
+                  for (let dcy = -1; dcy <= 1; dcy++) {
+                    const neighbors = spatialGrid.get(`${fcx + dcx},${fcy + dcy}`);
+                    if (!neighbors) continue;
+                    for (const other of neighbors) {
+                      if (other.id === fish.id) continue;
+                      const dx = other.x - x;
+                      const dy = other.y - y;
+                      const distSq = dx * dx + dy * dy;
+                      if (distSq > SCHOOL_RADIUS * SCHOOL_RADIUS) continue;
+                      const dist = Math.sqrt(distSq);
+                      if (dist < SEPARATION_RADIUS && dist > 0.001) {
+                        separationX -= dx / dist;
+                        separationY -= dy / dist;
+                      }
+                      if (other.schoolId === fish.schoolId) {
+                        neighborCount++;
+                        alignX += other.vx; alignY += other.vy;
+                        centerX += other.x; centerY += other.y;
+                        if (neighborCount >= MAX_NEIGHBORS_CONSIDERED) break neighborScan;
+                      }
+                    }
                   }
                 }
               }
