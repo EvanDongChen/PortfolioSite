@@ -7,6 +7,7 @@ import Fish from './components/Fish';
 import Turtle from './components/Turtle';
 import Jellyfish from './components/Jellyfish';
 import Whale from './components/Whale';
+import AnglerFish from './components/AnglerFish';
 import SandDune from './components/SandDune';
 import GodRays from './components/GodRays';
 import FishCensus from './components/FishCensus';
@@ -38,6 +39,7 @@ const FISH_SIMULATION_FPS = 30;
 const FISH_SIMULATION_FRAME_MS = 1000 / FISH_SIMULATION_FPS;
 const THEME_TRANSITION_MS = 900;
 const SILHOUETTE_FADE_MS = 460;
+const ANGLER_REVEAL_RADIUS = 165;
 const randomInRange = (minMs: number, maxMs: number) => minMs + Math.random() * (maxMs - minMs);
 
 const WHALE_INITIAL_DELAY_MIN_MS = 2500;
@@ -105,6 +107,16 @@ interface JellyfishState {
   phase: number;
   color1: string;
   color2: string;
+}
+
+interface AnglerFishState {
+  id: number;
+  x: number;
+  y: number;
+  baseY: number;
+  vx: number;
+  scale: number;
+  phase: number;
 }
 
 const App: React.FC = () => {
@@ -197,6 +209,7 @@ const App: React.FC = () => {
   const [whale, setWhale] = useState<WhaleState | null>(null);
   const [turtle, setTurtle] = useState<TurtleState | null>(null);
   const [jellyfish, setJellyfish] = useState<JellyfishState | null>(null);
+  const [anglerFish, setAnglerFish] = useState<AnglerFishState | null>(null);
   const [fishFoods, setFishFoods] = useState<FishFoodType[]>([]);
   const [nibblingFishIds, setNibblingFishIds] = useState<Record<number, boolean>>({});
   const [fishLimit, setFishLimit] = useState(DEFAULT_FISH_LIMIT);
@@ -238,6 +251,7 @@ const App: React.FC = () => {
   const whaleLastFrameTimeRef = useRef(0);
   const turtleLastFrameTimeRef = useRef(0);
   const jellyfishLastFrameTimeRef = useRef(0);
+  const anglerLastFrameTimeRef = useRef(0);
   const isPageHiddenRef = useRef(false);
   const shockwavesRef = useRef<{ id: number; x: number; worldY: number; timestamp: number }[]>([]);
   const lastScrollTimestampRef = useRef(0);
@@ -1723,6 +1737,64 @@ const App: React.FC = () => {
     return () => cancelAnimationFrame(animationFrameId);
   }, [theme, getNextEntityId, emitJellyfishPop]);
 
+  useEffect(() => {
+    let animationFrameId: number;
+
+    const animateAnglerFish = (timestamp: number) => {
+      if (isPageHiddenRef.current) { animationFrameId = requestAnimationFrame(animateAnglerFish); return; }
+      if (timestamp - anglerLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) { animationFrameId = requestAnimationFrame(animateAnglerFish); return; }
+      anglerLastFrameTimeRef.current = timestamp;
+
+      if (theme !== 'deepsea') {
+        setAnglerFish(null);
+        return;
+      }
+
+      setAnglerFish(current => {
+        const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
+
+        if (!current) {
+          const spawnX = randomInRange(window.innerWidth * 0.18, window.innerWidth * 0.82);
+          const spawnBaseY = viewportWorldTop + window.innerHeight * (0.3 + Math.random() * 0.45);
+          return {
+            id: getNextEntityId(),
+            x: spawnX,
+            y: spawnBaseY,
+            baseY: spawnBaseY,
+            vx: (Math.random() > 0.5 ? 1 : -1) * randomInRange(0.22, 0.38),
+            scale: randomInRange(0.8, 1.15),
+            phase: Math.random() * Math.PI * 2,
+          };
+        }
+
+        let vx = current.vx;
+        let x = current.x + vx;
+        const edgePad = 120;
+        if (x < edgePad || x > window.innerWidth - edgePad) {
+          vx *= -1;
+          x = Math.max(edgePad, Math.min(window.innerWidth - edgePad, x));
+        }
+
+        let baseY = current.baseY;
+        const targetY = viewportWorldTop + window.innerHeight * 0.42;
+        baseY += (targetY - baseY) * 0.018;
+        const y = baseY + Math.sin(timestamp / 1700 + current.phase) * 16;
+
+        return { ...current, x, y, baseY, vx };
+      });
+
+      animationFrameId = requestAnimationFrame(animateAnglerFish);
+    };
+
+    if (theme === 'deepsea') {
+      animationFrameId = requestAnimationFrame(animateAnglerFish);
+    } else {
+      setAnglerFish(null);
+    }
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [theme, getNextEntityId]);
+
   const colors = theme === 'underwater' ? {
     text: 'text-cyan-100', textLighter: 'text-cyan-100/90', highlight: 'text-cyan-300',
     highlightStrong: 'text-cyan-200', border: 'border-cyan-400/20', timeline: 'bg-cyan-400/30',
@@ -1746,6 +1818,10 @@ const App: React.FC = () => {
     ? (themeTransitionDirection === 'dive' ? 'theme-transition-world-dive' : 'theme-transition-world-surface')
     : '';
   const fishEnterClass = isThemeTransitionActive ? 'theme-fish-enter' : '';
+  const anglerDisplayY = anglerFish ? (anglerFish.y - scrollYRef.current * SCROLL_PARALLAX) : 0;
+  const isAnglerRevealed = anglerFish
+    ? Math.hypot(mousePosRef.current.x - anglerFish.x, mousePosRef.current.y - anglerDisplayY) < (ANGLER_REVEAL_RADIUS * anglerFish.scale)
+    : false;
 
   return (
     <div className={`relative min-h-screen text-white overflow-x-hidden transition-colors duration-1000 ${
@@ -1787,6 +1863,15 @@ const App: React.FC = () => {
                 } as React.CSSProperties}
               />
             ))}
+            {anglerFish && (
+              <AnglerFish
+                x={anglerFish.x}
+                displayY={anglerDisplayY}
+                scale={anglerFish.scale}
+                revealBody={isAnglerRevealed}
+                isFlipped={anglerFish.vx > 0}
+              />
+            )}
           </>
         )}
       </div>
