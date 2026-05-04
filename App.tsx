@@ -593,8 +593,8 @@ const App: React.FC = () => {
   }, [theme]);
 
   const emitTrailBubble = useCallback((x: number, worldY: number) => {
-    particleCanvasRef.current?.emitTrailBubble(x, worldY);
-  }, []);
+    particleCanvasRef.current?.emitTrailBubble(x, worldY, theme === 'deepsea');
+  }, [theme]);
 
   const emitFoodCrumbs = useCallback((x: number, worldY: number, isLove?: boolean) => {
     particleCanvasRef.current?.emitFoodCrumbs(x, worldY, isLove);
@@ -1290,7 +1290,7 @@ const App: React.FC = () => {
           const turnMagnitude = Math.abs(delta);
           const now = timestamp;
           const lastEmit = trailEmitRef.current[fish.id] ?? 0;
-          if (theme === 'underwater' && (accelMagnitude > 0.14 || turnMagnitude > 7.5) && now - lastEmit > 170 && Math.random() > 0.4) {
+          if ((theme === 'underwater' || theme === 'deepsea') && (accelMagnitude > 0.14 || turnMagnitude > 7.5) && now - lastEmit > 170 && Math.random() > 0.4) {
             trailEmitRef.current[fish.id] = now;
             const direction = vx === 0 ? (isFlipped ? -1 : 1) : Math.sign(vx);
             emitTrailBubble(x - direction * (26 * fish.scale), y + (Math.random() - 0.5) * 6);
@@ -1413,20 +1413,26 @@ const App: React.FC = () => {
         clearInterval(steadyBubbleInterval);
       };
     } else if (theme === 'deepsea') {
-      setBubbles([]);
-      // Burst of fish into the abyss, then steady trickle — no bubbles in deep sea
+      // Burst of fish into the abyss, with darker ambient bubbles.
       const BURST_DURATION_MS = 3500;
       const BURST_FISH_INTERVAL_MS = 45;
+      const BURST_BUBBLE_INTERVAL_MS = 140;
       const burstFishInterval = setInterval(createFish, BURST_FISH_INTERVAL_MS);
+      const burstBubbleInterval = setInterval(createBubble, BURST_BUBBLE_INTERVAL_MS);
       let steadyFishInterval: ReturnType<typeof setInterval>;
+      let steadyBubbleInterval: ReturnType<typeof setInterval>;
       const burstTimeout = setTimeout(() => {
         clearInterval(burstFishInterval);
+        clearInterval(burstBubbleInterval);
         steadyFishInterval = setInterval(createFish, FISH_SPAWN_INTERVAL_MS);
+        steadyBubbleInterval = setInterval(createBubble, 900);
       }, BURST_DURATION_MS);
       return () => {
         clearTimeout(burstTimeout);
         clearInterval(burstFishInterval);
+        clearInterval(burstBubbleInterval);
         clearInterval(steadyFishInterval);
+        clearInterval(steadyBubbleInterval);
       };
     }
   }, [theme, createBubble, createFish]);
@@ -1836,12 +1842,12 @@ const App: React.FC = () => {
       <ParticleCanvas ref={particleCanvasRef} />
       {/* Background Aquarium Layer: Environment and Large Creatures */}
       <div className={`fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none ${worldTransitionClass}`}>
+        {bubbles.map(bubble => (
+          <Bubble key={bubble.id} {...bubble} isDeepSea={theme === 'deepsea'} />
+        ))}
         {theme === 'underwater' ? (
           <>
             <GodRays />
-            {bubbles.map(bubble => (
-              <Bubble key={bubble.id} {...bubble} />
-            ))}
             {whale && <Whale x={whale.x} displayY={whale.displayY} scale={whale.scale} isFlipped={whale.isFlipped} />}
             {turtle && <Turtle x={turtle.x} displayY={turtle.displayY} scale={turtle.scale} isFlipped={turtle.isFlipped} />}
           </>

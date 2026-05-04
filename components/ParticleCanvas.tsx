@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 
 export interface ParticleCanvasRef {
-  emitTrailBubble: (x: number, worldY: number) => void;
+  emitTrailBubble: (x: number, worldY: number, isDeepSea?: boolean) => void;
   emitFoodCrumbs: (x: number, worldY: number, isLove?: boolean) => void;
   emitHearts: (x: number, worldY: number) => void;
   emitJellyfishPop: (x: number, worldY: number, scale: number) => void;
@@ -11,7 +11,7 @@ export interface ParticleCanvasRef {
 
 interface Trail {
   x: number; worldY: number; size: number; driftX: number;
-  duration: number; elapsed: number;
+  duration: number; elapsed: number; isDeepSea?: boolean;
 }
 interface Crumb {
   x: number; worldY: number; size: number; driftX: number; driftY: number;
@@ -51,12 +51,13 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
     setScrollY: (y: number) => {
       scrollYRef.current = y;
     },
-    emitTrailBubble: (x, worldY) => {
+    emitTrailBubble: (x, worldY, isDeepSea) => {
       trailsRef.current.push({
         x, worldY, size: 3 + Math.random() * 4,
         driftX: (Math.random() - 0.5) * 20,
         duration: 650 + Math.random() * 450,
-        elapsed: 0
+        elapsed: 0,
+        isDeepSea
       });
     },
     emitFoodCrumbs: (x, worldY, isLove) => {
@@ -159,13 +160,16 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
           ctx.save();
           ctx.translate(drawX, drawY);
           
-          // Glow
-          ctx.shadowColor = `rgba(125,211,252,${opacity * 0.95})`;
-          ctx.shadowBlur = 7;
+          // Glow color shifts darker in deep sea.
+          const glowColor = p.isDeepSea
+            ? `rgba(58,64,72,${opacity * 0.55})`
+            : `rgba(125,211,252,${opacity * 0.95})`;
+          ctx.shadowColor = glowColor;
+          ctx.shadowBlur = p.isDeepSea ? 4 : 7;
           
           const grad = ctx.createRadialGradient(-r*0.4, -r*0.4, 0, 0, 0, r);
-          grad.addColorStop(0, `rgba(255,255,255,${opacity * 0.98})`);
-          grad.addColorStop(1, `rgba(125,211,252,${opacity * 0.88})`);
+          grad.addColorStop(0, p.isDeepSea ? `rgba(112,120,132,${opacity * 0.48})` : `rgba(255,255,255,${opacity * 0.98})`);
+          grad.addColorStop(1, p.isDeepSea ? `rgba(42,48,56,${opacity * 0.7})` : `rgba(125,211,252,${opacity * 0.88})`);
           
           ctx.fillStyle = grad;
           ctx.beginPath();

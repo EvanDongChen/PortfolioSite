@@ -4,9 +4,10 @@ interface BubbleProps {
   left: string;
   size: string;
   duration: string;
+  isDeepSea?: boolean;
 }
 
-const Bubble: React.FC<BubbleProps> = React.memo(({ left, size, duration }) => {
+const Bubble: React.FC<BubbleProps> = React.memo(({ left, size, duration, isDeepSea }) => {
   const style: React.CSSProperties = {
     left,
     width: size,
@@ -14,7 +15,12 @@ const Bubble: React.FC<BubbleProps> = React.memo(({ left, size, duration }) => {
     animationDuration: duration,
   };
 
-  return <div className="bubble-animation rounded-full bg-cyan-400/20" style={style}></div>;
+  return (
+    <div
+      className={`bubble-animation rounded-full ${isDeepSea ? 'bg-slate-800/24' : 'bg-cyan-400/20'}`}
+      style={style}
+    ></div>
+  );
 });
 
 export default Bubble;
