@@ -131,6 +131,11 @@ const App: React.FC = () => {
   const [tankFishes, setTankFishes] = useState<FishType[]>([]);
   const [isTankOpen, setIsTankOpen] = useState(false);
   useEffect(() => { isGrabModeRef.current = isGrabMode; }, [isGrabMode]);
+  useEffect(() => {
+    const handleVisibility = () => { isPageHiddenRef.current = document.hidden; };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
   const particleCanvasRef = useRef<ParticleCanvasRef>(null);
   const scrollYRef = useRef(0);
   const worldLayerRef = useRef<HTMLDivElement>(null);
@@ -151,6 +156,10 @@ const App: React.FC = () => {
   const turtleHasSpawnedRef = useRef(false);
   const nextEntityIdRef = useRef(1);
   const fishLastFrameTimeRef = useRef(0);
+  const whaleLastFrameTimeRef = useRef(0);
+  const turtleLastFrameTimeRef = useRef(0);
+  const jellyfishLastFrameTimeRef = useRef(0);
+  const isPageHiddenRef = useRef(false);
   const shockwavesRef = useRef<{ id: number; x: number; worldY: number; timestamp: number }[]>([]);
   const lastScrollTimestampRef = useRef(0);
   const isGrabModeRef = useRef(isGrabMode);
@@ -692,6 +701,7 @@ const App: React.FC = () => {
     fishLastFrameTimeRef.current = 0;
 
     const animate = (timestamp: number) => {
+      if (isPageHiddenRef.current) { animationFrameId = requestAnimationFrame(animate); return; }
       if (fishLastFrameTimeRef.current !== 0 && timestamp - fishLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) {
         animationFrameId = requestAnimationFrame(animate);
         return;
@@ -1324,9 +1334,9 @@ const App: React.FC = () => {
   }, [theme, createBubble, createFish]);
 
   useEffect(() => {
-    if (fishes.length <= fishLimit) return;
+    if (fishesRef.current.length <= fishLimit) return;
     setFishes(prev => prev.slice(0, fishLimit));
-  }, [fishLimit, fishes.length]);
+  }, [fishLimit]);
 
   useEffect(() => {
     if (theme === 'space') {
@@ -1359,6 +1369,9 @@ const App: React.FC = () => {
     }
 
     const animateWhale = (timestamp: number) => {
+      if (isPageHiddenRef.current) { animationFrameId = requestAnimationFrame(animateWhale); return; }
+      if (timestamp - whaleLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) { animationFrameId = requestAnimationFrame(animateWhale); return; }
+      whaleLastFrameTimeRef.current = timestamp;
       if (theme !== 'underwater') {
         setWhale(null);
         nextWhaleSpawnRef.current = timestamp + randomInRange(WHALE_INITIAL_DELAY_MIN_MS, WHALE_INITIAL_DELAY_MAX_MS);
@@ -1446,6 +1459,9 @@ const App: React.FC = () => {
     }
 
     const animateTurtle = (timestamp: number) => {
+      if (isPageHiddenRef.current) { animationFrameId = requestAnimationFrame(animateTurtle); return; }
+      if (timestamp - turtleLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) { animationFrameId = requestAnimationFrame(animateTurtle); return; }
+      turtleLastFrameTimeRef.current = timestamp;
       if (theme !== 'underwater') {
         setTurtle(null);
         nextTurtleSpawnRef.current = timestamp + randomInRange(TURTLE_INITIAL_DELAY_MIN_MS, TURTLE_INITIAL_DELAY_MAX_MS);
@@ -1549,6 +1565,9 @@ const App: React.FC = () => {
     }
 
     const animateJellyfish = (timestamp: number) => {
+      if (isPageHiddenRef.current) { animationFrameId = requestAnimationFrame(animateJellyfish); return; }
+      if (timestamp - jellyfishLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) { animationFrameId = requestAnimationFrame(animateJellyfish); return; }
+      jellyfishLastFrameTimeRef.current = timestamp;
       if (theme !== 'underwater') {
         setJellyfish(null);
         nextJellyfishSpawnRef.current = timestamp + randomInRange(JELLYFISH_INITIAL_DELAY_MIN_MS, JELLYFISH_INITIAL_DELAY_MAX_MS);
