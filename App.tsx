@@ -115,6 +115,16 @@ const App: React.FC = () => {
   const [themeTransitionDirection, setThemeTransitionDirection] = useState<'dive' | 'surface'>('dive');
   const [silhouetteFishes, setSilhouetteFishes] = useState<FishType[]>([]);
   const [showSilhouetteFishes, setShowSilhouetteFishes] = useState(false);
+  const [transitionParticles, setTransitionParticles] = useState<Array<{
+    id: number;
+    left: string;
+    size: string;
+    duration: string;
+    delay: string;
+    driftX: string;
+    opacity: number;
+    color: string;
+  }>>([]);
   const fishesRef = useRef<FishType[]>([]);
   const fishesByThemeRef = useRef<{ underwater: FishType[]; deepsea: FishType[] }>({ underwater: [], deepsea: [] });
   const previousThemeRef = useRef<'underwater' | 'deepsea'>(theme);
@@ -132,7 +142,22 @@ const App: React.FC = () => {
     if (previousTheme === theme) return;
 
     const transitionDirection: 'dive' | 'surface' = theme === 'deepsea' ? 'dive' : 'surface';
+    const particlePalette = transitionDirection === 'dive'
+      ? ['#7dd3fc', '#67e8f9', '#22d3ee', '#38bdf8']
+      : ['#34d399', '#6ee7b7', '#2dd4bf', '#a7f3d0'];
+    const particles = Array.from({ length: 64 }).map((_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}vw`,
+      size: `${Math.random() * 5 + 3}px`,
+      duration: `${780 + Math.random() * 420}ms`,
+      delay: `${Math.random() * 180}ms`,
+      driftX: `${(Math.random() - 0.5) * 88}px`,
+      opacity: 0.55 + Math.random() * 0.4,
+      color: particlePalette[Math.floor(Math.random() * particlePalette.length)],
+    }));
+
     setThemeTransitionDirection(transitionDirection);
+    setTransitionParticles(particles);
     setSilhouetteFishes(fishesRef.current);
     setShowSilhouetteFishes(true);
     setIsThemeTransitionActive(true);
@@ -152,6 +177,7 @@ const App: React.FC = () => {
     transitionTimerRef.current = window.setTimeout(() => {
       setIsThemeTransitionActive(false);
       setSilhouetteFishes([]);
+      setTransitionParticles([]);
       transitionTimerRef.current = null;
     }, THEME_TRANSITION_MS);
 
@@ -1764,6 +1790,27 @@ const App: React.FC = () => {
           </>
         )}
       </div>
+      {isThemeTransitionActive && transitionParticles.length > 0 && (
+        <div className="fixed inset-0 pointer-events-none z-[6] overflow-hidden">
+          {transitionParticles.map((p) => (
+            <span
+              key={`transition-particle-${p.id}`}
+              className={`theme-transition-particle ${themeTransitionDirection === 'dive' ? 'theme-transition-particle-dive' : 'theme-transition-particle-surface'}`}
+              style={{
+                left: p.left,
+                width: p.size,
+                height: p.size,
+                backgroundColor: p.color,
+                boxShadow: `0 0 14px ${p.color}, 0 0 26px ${p.color}88`,
+                '--tp-duration': p.duration,
+                '--tp-delay': p.delay,
+                '--tp-drift-x': p.driftX,
+                '--tp-opacity': p.opacity,
+              } as React.CSSProperties}
+            />
+          ))}
+        </div>
+      )}
       {isThemeTransitionActive && (
         <div
           className={`fixed inset-0 pointer-events-none z-[5] ${themeTransitionDirection === 'dive' ? 'theme-transition-sweep-dive' : 'theme-transition-sweep-surface'}`}

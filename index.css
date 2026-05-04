@@ -266,3 +266,50 @@ body {
 .theme-fish-enter {
   animation: fishFadeIn 900ms ease-out;
 }
+
+.theme-transition-particle {
+  position: absolute;
+  display: block;
+  top: 0;
+  border-radius: 9999px;
+  filter: blur(1px);
+  pointer-events: none;
+  mix-blend-mode: plus-lighter;
+  opacity: 0;
+}
+
+@keyframes transitionParticleDive {
+  0% {
+    transform: translate3d(0, -16vh, 0) scale(0.65);
+    opacity: 0;
+  }
+  18% {
+    opacity: var(--tp-opacity, 0.7);
+  }
+  100% {
+    transform: translate3d(var(--tp-drift-x, 0px), 120vh, 0) scale(1.22);
+    opacity: 0;
+  }
+}
+
+@keyframes transitionParticleSurface {
+  0% {
+    transform: translate3d(0, 120vh, 0) scale(1.05);
+    opacity: 0;
+  }
+  18% {
+    opacity: var(--tp-opacity, 0.7);
+  }
+  100% {
+    transform: translate3d(var(--tp-drift-x, 0px), -20vh, 0) scale(0.62);
+    opacity: 0;
+  }
+}
+
+.theme-transition-particle-dive {
+  animation: transitionParticleDive var(--tp-duration, 900ms) ease-out var(--tp-delay, 0ms) forwards;
+}
+
+.theme-transition-particle-surface {
+  animation: transitionParticleSurface var(--tp-duration, 900ms) ease-out var(--tp-delay, 0ms) forwards;
+}
