@@ -34,7 +34,8 @@ const MIN_FISH_LIMIT = 5;
 const MAX_FISH_LIMIT = 150;
 const LARGE_CREATURE_MIN_SEPARATION = 220;
 const FISH_SPAWN_INTERVAL_MS = 600;
-const CLOWN_FISH_CHANCE = 0.12;
+const PUFFER_FISH_CHANCE = 0.02;
+const RAINBOW_FISH_CHANCE = 0.005;
 const SCROLL_ACTIVE_WINDOW_MS = 140;
 const FISH_SIMULATION_FPS = 30;
 const FISH_SIMULATION_FRAME_MS = 1000 / FISH_SIMULATION_FPS;
@@ -378,7 +379,11 @@ const App: React.FC = () => {
       
       const variant: FishType['variant'] = !alreadyHasClown
         ? 'clown'
-        : (!alreadyHasPuffer ? 'puffer' : (variantRoll < 0.06 ? 'puffer' : 'default'));
+        : (!alreadyHasPuffer
+          ? 'puffer'
+          : (variantRoll < RAINBOW_FISH_CHANCE
+            ? 'rainbow'
+            : (variantRoll < RAINBOW_FISH_CHANCE + PUFFER_FISH_CHANCE ? 'puffer' : 'default')));
       const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
 
       // Weighted random behavior: 48% cruise, 10% dart, 5% loiter, 25% conga, 12% curious
@@ -1664,7 +1669,7 @@ const App: React.FC = () => {
               />
             );
 
-            if (fish.variant === 'clown' || fish.variant === 'puffer') {
+            if (fish.variant === 'clown' || fish.variant === 'puffer' || fish.variant === 'rainbow') {
               fgFishes.push(element);
             } else {
               bgFishes.push(element);

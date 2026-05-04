@@ -30,7 +30,7 @@ export interface Education {
 
 export type FishBehavior = 'cruise' | 'dart' | 'loiter' | 'conga' | 'curious' | 'mating';
 
-export type FishVariant = 'default' | 'clown' | 'puffer';
+export type FishVariant = 'default' | 'clown' | 'puffer' | 'rainbow';
 
 export interface Fish {
   id: number;
