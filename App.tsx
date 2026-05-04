@@ -8,6 +8,7 @@ import Turtle from './components/Turtle';
 import Jellyfish from './components/Jellyfish';
 import Whale from './components/Whale';
 import AnglerFish from './components/AnglerFish';
+import DeepSeaPlankton from './components/DeepSeaPlankton';
 import SandDune from './components/SandDune';
 import GodRays from './components/GodRays';
 import FishCensus from './components/FishCensus';
@@ -1847,6 +1848,13 @@ const App: React.FC = () => {
         ) : (
           // Deep Sea: bioluminescent plankton orbs only.
           <>
+            <DeepSeaPlankton
+              active={theme === 'deepsea'}
+              fishesRef={fishesRef}
+              scrollYRef={scrollYRef}
+              isPageHiddenRef={isPageHiddenRef}
+              scrollParallax={SCROLL_PARALLAX}
+            />
             {deepSeaOrbs.map(orb => (
               <div
                 key={orb.id}
