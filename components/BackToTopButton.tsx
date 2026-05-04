@@ -29,7 +29,7 @@ const BackToTopButton: React.FC = () => {
 
   const buttonColors = theme === 'underwater' 
     ? "bg-cyan-500/30 border-cyan-400/30 hover:bg-cyan-500/50 focus:ring-cyan-400"
-    : "bg-indigo-500/30 border-indigo-400/30 hover:bg-indigo-500/50 focus:ring-indigo-400";
+    : "bg-emerald-500/20 border-emerald-400/30 hover:bg-emerald-500/40 focus:ring-emerald-400";
 
 
   return (

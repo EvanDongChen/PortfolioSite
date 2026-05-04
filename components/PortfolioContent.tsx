@@ -40,11 +40,11 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
             <a href="https://github.com/evandongchen" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-white transition-colors">
               <GitHubIcon className="w-6 h-6" /> GitHub
             </a>
-            <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-indigo-400/50'}`}>•</span>
+            <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-emerald-400/40'}`}>•</span>
             <a href="https://www.linkedin.com/in/evandongchen/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-white transition-colors">
               <LinkedInIcon className="w-6 h-6" /> LinkedIn
             </a>
-            <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-indigo-400/50'}`}>•</span>
+            <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-emerald-400/40'}`}>•</span>
             <a href="mailto:evanchen0609@gmail.com" className="flex items-center gap-2 hover:text-white transition-colors">
               <MailIcon className="w-6 h-6" /> evanchen0609@gmail.com
             </a>
@@ -81,7 +81,7 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
             <p className={`text-lg ${colors.textLighter} mt-4`}>{education.university}</p>
             <div className={`flex justify-center items-center gap-6 mt-4 ${colors.highlightStrong}/80`}>
               <span>{education.period}</span>
-              <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-indigo-400/50'}`}>•</span>
+              <span className={`${theme === 'underwater' ? 'text-cyan-400/50' : 'text-emerald-400/40'}`}>•</span>
               <span>{education.gpa}</span>
             </div>
           </div>

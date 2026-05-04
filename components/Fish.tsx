@@ -7,9 +7,11 @@ interface FishProps extends Omit<FishType, 'vx' | 'vy' | 'initialVx'> {
   isHighlighted?: boolean;
   onMouseDown?: (id: number, e: React.MouseEvent) => void;
   isGrabMode?: boolean;
+  isDeepSea?: boolean;
+  isSilhouette?: boolean;
 }
 
-const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false, birthTime, isPuffed = false, onMouseDown, isGrabMode = false }) => {
+const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false, birthTime, isPuffed = false, onMouseDown, isGrabMode = false, isDeepSea = false, isSilhouette = false }) => {
   const isClownFish = variant === 'clown';
   const isPuffer = variant === 'puffer';
   const isRainbowFish = variant === 'rainbow';
@@ -39,14 +41,20 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
     width: (isPuffer ? (isPuffed ? 65 : 85) : 120) * currentScale,
     height: (isPuffer ? (isPuffed ? 65 : 65) : 50) * currentScale,
     willChange: 'transform',
-    pointerEvents: (isPuffer || isGrabMode) ? 'auto' : 'none',
-    cursor: isGrabMode ? 'crosshair' : (isPuffer ? 'pointer' : 'default'),
+    pointerEvents: isSilhouette ? 'none' : ((isPuffer || isGrabMode) ? 'auto' : 'none'),
+    cursor: isSilhouette ? 'default' : (isGrabMode ? 'crosshair' : (isPuffer ? 'pointer' : 'default')),
     transition: 'transform 450ms cubic-bezier(0.175, 0.885, 0.32, 1.275), width 450ms ease, height 450ms ease, opacity 300ms ease-out, filter 300ms ease-out',
-    opacity: isFaded ? 0.15 : 1,
-    filter: isHighlighted
+    opacity: isSilhouette ? 0.62 : (isFaded ? 0.15 : 1),
+    filter: isSilhouette
+      ? 'grayscale(1) brightness(0.08) contrast(1.2)'
+      : isHighlighted
       ? 'drop-shadow(0 0 8px rgba(255,255,255,0.8)) brightness(1.2)'
-      : (isRainbowFish ? 'drop-shadow(0 0 10px rgba(255,255,255,0.35)) saturate(1.2)' : 'none'),
-    zIndex: isGrabMode ? 100 : (isHighlighted || isPuffer || isRainbowFish ? 10 : 1),
+      : isRainbowFish
+        ? 'drop-shadow(0 0 10px rgba(255,255,255,0.35)) saturate(1.2)'
+        : isDeepSea
+          ? `drop-shadow(0 0 8px ${color1}cc) drop-shadow(0 0 22px ${color1}66) brightness(1.6) saturate(2.2)`
+          : 'none',
+    zIndex: isSilhouette ? 2 : (isGrabMode ? 100 : (isHighlighted || isPuffer || isRainbowFish ? 10 : 1)),
   };
 
   const gradientId = `fishGradient-${id}`;

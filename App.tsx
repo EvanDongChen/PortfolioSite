@@ -13,9 +13,6 @@ import FishCensus from './components/FishCensus';
 import LoveModeButton from './components/LoveModeButton';
 import BackToTopButton from './components/BackToTopButton';
 import FishFoodButton from './components/FishFoodButton';
-import Star from './components/Star';
-import ShootingStar from './components/ShootingStar';
-import CursorNebula from './components/CursorNebula';
 import PortfolioContent from './components/PortfolioContent';
 import ParticleCanvas, { ParticleCanvasRef } from './components/ParticleCanvas';
 import GrabModeButton from './components/GrabModeButton';
@@ -25,7 +22,7 @@ import TankToggleButton from './components/TankToggleButton';
 const BASE_URL = import.meta.env.BASE_URL;
 import ThemeToggleButton from './components/ThemeToggleButton';
 import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from './components/Icons';
-import { Project, Bubble as BubbleType, Experience, Fish as FishType, FishFood as FishFoodType, Education, Star as StarType, ShootingStar as ShootingStarType, FishBehavior } from './types';
+import { Project, Bubble as BubbleType, Experience, Fish as FishType, FishFood as FishFoodType, Education, FishBehavior } from './types';
 import { useTheme } from './contexts/ThemeContext';
 
 const SCROLL_PARALLAX = 1.0;
@@ -39,6 +36,8 @@ const RAINBOW_FISH_CHANCE = 0.005;
 const SCROLL_ACTIVE_WINDOW_MS = 140;
 const FISH_SIMULATION_FPS = 30;
 const FISH_SIMULATION_FRAME_MS = 1000 / FISH_SIMULATION_FPS;
+const THEME_TRANSITION_MS = 900;
+const SILHOUETTE_FADE_MS = 460;
 const randomInRange = (minMs: number, maxMs: number) => minMs + Math.random() * (maxMs - minMs);
 
 const WHALE_INITIAL_DELAY_MIN_MS = 2500;
@@ -112,8 +111,63 @@ const App: React.FC = () => {
   const { theme } = useTheme();
   const [bubbles, setBubbles] = useState<BubbleType[]>([]);
   const [fishes, setFishes] = useState<FishType[]>([]);
+  const [isThemeTransitionActive, setIsThemeTransitionActive] = useState(false);
+  const [themeTransitionDirection, setThemeTransitionDirection] = useState<'dive' | 'surface'>('dive');
+  const [silhouetteFishes, setSilhouetteFishes] = useState<FishType[]>([]);
+  const [showSilhouetteFishes, setShowSilhouetteFishes] = useState(false);
   const fishesRef = useRef<FishType[]>([]);
+  const fishesByThemeRef = useRef<{ underwater: FishType[]; deepsea: FishType[] }>({ underwater: [], deepsea: [] });
+  const previousThemeRef = useRef<'underwater' | 'deepsea'>(theme);
+  const transitionTimerRef = useRef<number | null>(null);
+  const silhouetteTimerRef = useRef<number | null>(null);
   useEffect(() => { fishesRef.current = fishes; }, [fishes]);
+  useEffect(() => {
+    // During a theme transition, this render still has previous theme's fish state.
+    // Skip writing until the transition effect has completed to avoid cross-theme bleed.
+    if (previousThemeRef.current !== theme) return;
+    fishesByThemeRef.current[theme] = fishes;
+  }, [theme, fishes]);
+  useEffect(() => {
+    const previousTheme = previousThemeRef.current;
+    if (previousTheme === theme) return;
+
+    const transitionDirection: 'dive' | 'surface' = theme === 'deepsea' ? 'dive' : 'surface';
+    setThemeTransitionDirection(transitionDirection);
+    setSilhouetteFishes(fishesRef.current);
+    setShowSilhouetteFishes(true);
+    setIsThemeTransitionActive(true);
+
+    if (silhouetteTimerRef.current !== null) {
+      window.clearTimeout(silhouetteTimerRef.current);
+      silhouetteTimerRef.current = null;
+    }
+    if (transitionTimerRef.current !== null) {
+      window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+    silhouetteTimerRef.current = window.setTimeout(() => {
+      setShowSilhouetteFishes(false);
+      silhouetteTimerRef.current = null;
+    }, SILHOUETTE_FADE_MS);
+    transitionTimerRef.current = window.setTimeout(() => {
+      setIsThemeTransitionActive(false);
+      setSilhouetteFishes([]);
+      transitionTimerRef.current = null;
+    }, THEME_TRANSITION_MS);
+
+    // Persist the old theme's fish set, then restore the newly selected theme's set.
+    fishesByThemeRef.current[previousTheme] = fishesRef.current;
+    setFishes(fishesByThemeRef.current[theme] ?? []);
+
+    setNibblingFishIds({});
+    previousThemeRef.current = theme;
+  }, [theme]);
+  useEffect(() => {
+    return () => {
+      if (silhouetteTimerRef.current !== null) window.clearTimeout(silhouetteTimerRef.current);
+      if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+    };
+  }, []);
   const [whale, setWhale] = useState<WhaleState | null>(null);
   const [turtle, setTurtle] = useState<TurtleState | null>(null);
   const [jellyfish, setJellyfish] = useState<JellyfishState | null>(null);
@@ -123,8 +177,7 @@ const App: React.FC = () => {
   const [highlightedBehavior, setHighlightedBehavior] = useState<FishBehavior | null>(null);
   const [isFishFoodMode, setIsFishFoodMode] = useState(false);
   const [isLoveMode, setIsLoveMode] = useState(false);
-  const [stars, setStars] = useState<StarType[]>([]);
-  const [shootingStars, setShootingStars] = useState<ShootingStarType[]>([]);
+  const [deepSeaOrbs, setDeepSeaOrbs] = useState<{id:number;left:string;top:string;size:string;color:string;duration:string;delay:string;}[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isGrabMode, setIsGrabMode] = useState(false);
   const [grabbedFish, setGrabbedFish] = useState<FishType | null>(null);
@@ -367,7 +420,7 @@ const App: React.FC = () => {
     vy = 0;
     let initialVx = vx;
 
-    const colors = [
+    const underwaterPalette = [
       ['#4facfe', '#00f2fe'],
       ['#89f7fe', '#66a6ff'],
       ['#DA22FF', '#9733EE'],
@@ -376,6 +429,13 @@ const App: React.FC = () => {
       ['#48c6ef', '#6f86d6'],
       ['#a779e9', '#4facfe'],
     ];
+    const deepSeaPalette = [
+      ['#00d4ff', '#0077ff'],
+      ['#ff2fcf', '#9d00ff'],
+      ['#39ff14', '#00c853'],
+      ['#ffe600', '#ffb300'],
+    ];
+    const fishPalette = theme === 'deepsea' ? deepSeaPalette : underwaterPalette;
 
     setFishes(prev => {
       if (prev.length >= fishLimit) {
@@ -385,15 +445,17 @@ const App: React.FC = () => {
       const alreadyHasClown = prev.some(f => f.variant === 'clown');
       const alreadyHasPuffer = prev.some(f => f.variant === 'puffer');
       const variantRoll = Math.random();
-      
-      const variant: FishType['variant'] = !alreadyHasClown
-        ? 'clown'
-        : (!alreadyHasPuffer
-          ? 'puffer'
-          : (variantRoll < RAINBOW_FISH_CHANCE
-            ? 'rainbow'
-            : (variantRoll < RAINBOW_FISH_CHANCE + PUFFER_FISH_CHANCE ? 'puffer' : 'default')));
-      const [color1, color2] = colors[Math.floor(Math.random() * colors.length)];
+
+      const variant: FishType['variant'] = theme === 'deepsea'
+        ? 'default'
+        : (!alreadyHasClown
+          ? 'clown'
+          : (!alreadyHasPuffer
+            ? 'puffer'
+            : (variantRoll < RAINBOW_FISH_CHANCE
+              ? 'rainbow'
+              : (variantRoll < RAINBOW_FISH_CHANCE + PUFFER_FISH_CHANCE ? 'puffer' : 'default'))));
+      const [color1, color2] = fishPalette[Math.floor(Math.random() * fishPalette.length)];
 
       // Weighted random behavior: 48% cruise, 10% dart, 5% loiter, 25% conga, 12% curious
       const behaviorRoll = Math.random();
@@ -464,24 +526,7 @@ const App: React.FC = () => {
 
       return [...prev, newFish];
     });
-  }, [fishLimit, getNextEntityId]);
-
-  const createShootingStar = useCallback(() => {
-    const id = getNextEntityId();
-    const duration = Math.random() * 3 + 2;
-    const newShootingStar: ShootingStarType = {
-      id,
-      top: `${Math.random() * 100}%`,
-      left: '-200px',
-      duration: `${duration}s`,
-      delay: `${Math.random() * 10}s`,
-      rotation: Math.random() * 45 + 10,
-    };
-    setShootingStars(prev => [...prev, newShootingStar]);
-    setTimeout(() => {
-      setShootingStars(prev => prev.filter(s => s.id !== id));
-    }, (duration + 10) * 1000);
-  }, [getNextEntityId]);
+  }, [fishLimit, getNextEntityId, theme]);
 
   // Keep fishFoodsRef in sync so animation loop can read it without stale closure
   useEffect(() => {
@@ -1204,7 +1249,7 @@ const App: React.FC = () => {
           const turnMagnitude = Math.abs(delta);
           const now = timestamp;
           const lastEmit = trailEmitRef.current[fish.id] ?? 0;
-          if ((accelMagnitude > 0.14 || turnMagnitude > 7.5) && now - lastEmit > 170 && Math.random() > 0.4) {
+          if (theme === 'underwater' && (accelMagnitude > 0.14 || turnMagnitude > 7.5) && now - lastEmit > 170 && Math.random() > 0.4) {
             trailEmitRef.current[fish.id] = now;
             const direction = vx === 0 ? (isFlipped ? -1 : 1) : Math.sign(vx);
             emitTrailBubble(x - direction * (26 * fish.scale), y + (Math.random() - 0.5) * 6);
@@ -1232,14 +1277,13 @@ const App: React.FC = () => {
             fish.x > -200 && fish.x < window.innerWidth + 200
           );
 
-        // Always keep exactly 1 clown fish alive.
-        if (next.length > 0 && !next.some(f => f.variant === 'clown')) {
+        // Keep clown/puffer guarantees in underwater only.
+        if (theme === 'underwater' && next.length > 0 && !next.some(f => f.variant === 'clown')) {
           const idx = Math.floor(Math.random() * next.length);
           next[idx] = { ...next[idx], variant: 'clown' };
         }
 
-        // Always keep exactly 1 puffer fish alive.
-        if (next.length > 0 && !next.some(f => f.variant === 'puffer')) {
+        if (theme === 'underwater' && next.length > 0 && !next.some(f => f.variant === 'puffer')) {
           // Prefer non-clown fish for puffer
           const availableIdxs = next.map((f, i) => f.variant !== 'clown' ? i : -1).filter(i => i !== -1);
           const targetIdx = availableIdxs.length > 0 ? availableIdxs[Math.floor(Math.random() * availableIdxs.length)] : Math.floor(Math.random() * next.length);
@@ -1293,7 +1337,7 @@ const App: React.FC = () => {
 
       animationFrameId = requestAnimationFrame(animate);
     };
-    if (theme === 'underwater') {
+    if (theme === 'underwater' || theme === 'deepsea') {
       animationFrameId = requestAnimationFrame(animate);
     }
     return () => cancelAnimationFrame(animationFrameId);
@@ -1327,9 +1371,22 @@ const App: React.FC = () => {
         clearInterval(steadyFishInterval);
         clearInterval(steadyBubbleInterval);
       };
-    } else {
+    } else if (theme === 'deepsea') {
       setBubbles([]);
-      setFishes([]);
+      // Burst of fish into the abyss, then steady trickle — no bubbles in deep sea
+      const BURST_DURATION_MS = 3500;
+      const BURST_FISH_INTERVAL_MS = 45;
+      const burstFishInterval = setInterval(createFish, BURST_FISH_INTERVAL_MS);
+      let steadyFishInterval: ReturnType<typeof setInterval>;
+      const burstTimeout = setTimeout(() => {
+        clearInterval(burstFishInterval);
+        steadyFishInterval = setInterval(createFish, FISH_SPAWN_INTERVAL_MS);
+      }, BURST_DURATION_MS);
+      return () => {
+        clearTimeout(burstTimeout);
+        clearInterval(burstFishInterval);
+        clearInterval(steadyFishInterval);
+      };
     }
   }, [theme, createBubble, createFish]);
 
@@ -1338,27 +1395,23 @@ const App: React.FC = () => {
     setFishes(prev => prev.slice(0, fishLimit));
   }, [fishLimit]);
 
+  const DEEPSEA_ORB_COLORS = ['#00ff9f', '#ff006e', '#7b2fff', '#00e5ff', '#39ff14', '#ff4d6d', '#00b4d8', '#f72585'];
   useEffect(() => {
-    if (theme === 'space') {
-      const newStars: StarType[] = Array.from({ length: 150 }).map(() => ({
-        id: getNextEntityId(),
-        left: `${Math.random() * 100}%`,
-        top: `${Math.random() * 100}%`,
-        size: `${Math.random() * 2 + 1}px`,
-        duration: `${Math.random() * 2 + 1}s`,
+    if (theme === 'deepsea') {
+      const orbs = Array.from({ length: 28 }).map((_, i) => ({
+        id: i,
+        left: `${Math.random() * 100}vw`,
+        top: `${Math.random() * 100}vh`,
+        size: `${Math.random() * 6 + 2}px`,
+        color: DEEPSEA_ORB_COLORS[Math.floor(Math.random() * DEEPSEA_ORB_COLORS.length)],
+        duration: `${Math.random() * 5 + 4}s`,
+        delay: `${-Math.random() * 8}s`,
       }));
-      setStars(newStars);
-
-      const shootingStarInterval = setInterval(createShootingStar, 2000);
-
-      return () => {
-        clearInterval(shootingStarInterval);
-      };
+      setDeepSeaOrbs(orbs);
     } else {
-      setStars([]);
-      setShootingStars([]);
+      setDeepSeaOrbs([]);
     }
-  }, [theme, createShootingStar, getNextEntityId]);
+  }, [theme]);
 
   useEffect(() => {
     let animationFrameId: number;
@@ -1653,28 +1706,33 @@ const App: React.FC = () => {
     searchRing: 'focus:ring-cyan-400', searchPlaceholder: 'placeholder-cyan-200/50', periodBg: 'bg-[#004e92]',
     heroGradient: 'from-cyan-300 to-blue-400', contactIcon: 'text-cyan-300'
   } : {
-    text: 'text-slate-300', textLighter: 'text-slate-300/90', highlight: 'text-indigo-300',
-    highlightStrong: 'text-indigo-200', border: 'border-indigo-400/20', timeline: 'bg-indigo-400/30',
-    timelineDot: 'bg-indigo-500', timelineDotBorder: 'border-slate-900', cardBg: 'bg-black/30',
-    tagBg: 'bg-indigo-900/50', tagHoverBg: 'hover:bg-indigo-800/70', toolTagBg: 'bg-slate-800/50',
-    toolTagHoverBg: 'hover:bg-slate-700/70', searchBg: 'bg-slate-900/70', searchBorder: 'border-indigo-400/30',
-    searchRing: 'focus:ring-indigo-400', searchPlaceholder: 'placeholder-indigo-200/50', periodBg: 'bg-[#1b263b]',
-    heroGradient: 'from-purple-400 to-indigo-400', contactIcon: 'text-indigo-300'
+    text: 'text-emerald-100', textLighter: 'text-emerald-100/80', highlight: 'text-emerald-300',
+    highlightStrong: 'text-emerald-200', border: 'border-emerald-400/15', timeline: 'bg-emerald-400/25',
+    timelineDot: 'bg-emerald-400', timelineDotBorder: 'border-black', cardBg: 'bg-black/50',
+    tagBg: 'bg-emerald-900/40', tagHoverBg: 'hover:bg-emerald-800/60', toolTagBg: 'bg-slate-900/60',
+    toolTagHoverBg: 'hover:bg-slate-800/70', searchBg: 'bg-black/60', searchBorder: 'border-emerald-400/25',
+    searchRing: 'focus:ring-emerald-400', searchPlaceholder: 'placeholder-emerald-200/40', periodBg: 'bg-[#001208]',
+    heroGradient: 'from-emerald-300 to-cyan-400', contactIcon: 'text-emerald-300'
   };
 
+
+  const worldTransitionClass = isThemeTransitionActive
+    ? (themeTransitionDirection === 'dive' ? 'theme-transition-world-dive' : 'theme-transition-world-surface')
+    : '';
+  const fishEnterClass = isThemeTransitionActive ? 'theme-fish-enter' : '';
 
   return (
     <div className={`relative min-h-screen text-white overflow-x-hidden transition-colors duration-1000 ${
       grabbedFish ? 'select-none cursor-grabbing' : ''
     } ${theme === 'underwater'
       ? 'bg-gradient-to-br from-[#000428] via-[#004e92] to-[#1CB5E0]'
-      : 'bg-gradient-to-br from-[#020111] via-[#0d1b2a] to-[#1b263b]'
+      : 'bg-gradient-to-b from-[#000000] via-[#000508] to-[#000c14]'
       }`}>
       <style>{`
       `}</style>
       <ParticleCanvas ref={particleCanvasRef} />
       {/* Background Aquarium Layer: Environment and Large Creatures */}
-      <div className="fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none">
+      <div className={`fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none ${worldTransitionClass}`}>
         {theme === 'underwater' ? (
           <>
             <GodRays />
@@ -1685,23 +1743,60 @@ const App: React.FC = () => {
             {turtle && <Turtle x={turtle.x} displayY={turtle.displayY} scale={turtle.scale} isFlipped={turtle.isFlipped} />}
           </>
         ) : (
+          // Deep Sea: bioluminescent plankton orbs only.
           <>
-            <CursorNebula />
-            {stars.map(star => <Star key={star.id} {...star} />)}
-            {shootingStars.map(star => <ShootingStar key={star.id} {...star} />)}
+            {deepSeaOrbs.map(orb => (
+              <div
+                key={orb.id}
+                className="bio-orb"
+                style={{
+                  left: orb.left,
+                  top: orb.top,
+                  width: orb.size,
+                  height: orb.size,
+                  backgroundColor: orb.color,
+                  boxShadow: `0 0 ${parseInt(orb.size) * 3}px ${parseInt(orb.size) * 2}px ${orb.color}55`,
+                  '--orb-duration': orb.duration,
+                  '--orb-delay': orb.delay,
+                } as React.CSSProperties}
+              />
+            ))}
           </>
         )}
       </div>
+      {isThemeTransitionActive && (
+        <div
+          className={`fixed inset-0 pointer-events-none z-[5] ${themeTransitionDirection === 'dive' ? 'theme-transition-sweep-dive' : 'theme-transition-sweep-surface'}`}
+        />
+      )}
+
+      {isThemeTransitionActive && showSilhouetteFishes && silhouetteFishes.length > 0 && (
+        <div className={`fixed inset-0 w-full h-full pointer-events-none z-[25] ${themeTransitionDirection === 'dive' ? 'theme-fish-silhouette-out' : 'theme-fish-silhouette-out'}`}>
+          {silhouetteFishes.map((fish) => {
+            const viewportY = fish.y - scrollYRef.current * SCROLL_PARALLAX;
+            if (viewportY < -220 || viewportY > window.innerHeight + 220) return null;
+            return (
+              <Fish
+                key={`silhouette-${fish.id}`}
+                {...fish}
+                displayY={viewportY}
+                isSilhouette
+              />
+            );
+          })}
+        </div>
+      )}
 
       {/* Interaction Layer: Fish, Food, and Grab Mechanics */}
       <div
-        className={`fixed inset-0 w-full h-full pointer-events-none ${isGrabMode ? 'z-[50]' : 'z-20'}`}
+        className={`fixed inset-0 w-full h-full pointer-events-none ${worldTransitionClass} ${fishEnterClass} ${isGrabMode ? 'z-[50]' : 'z-20'}`}
       >
-        {theme === 'underwater' && (() => {
+        {(theme === 'underwater' || theme === 'deepsea') && (() => {
           // Optimization: Partition and cull fish in a single pass to avoid multiple filter/map operations in render
           const viewportTop = scrollYRef.current * SCROLL_PARALLAX;
           const bgFishes: JSX.Element[] = [];
           const fgFishes: JSX.Element[] = [];
+          const isDeepSea = theme === 'deepsea';
 
           fishes.forEach(fish => {
             const worldY = fish.y - viewportTop;
@@ -1715,6 +1810,7 @@ const App: React.FC = () => {
                 isFaded={highlightedBehavior !== null && fish.behavior !== highlightedBehavior}
                 isHighlighted={highlightedBehavior !== null && fish.behavior === highlightedBehavior}
                 isGrabMode={isGrabMode}
+                isDeepSea={isDeepSea}
                 onMouseDown={handleGrabFish}
               />
             );
@@ -1783,7 +1879,7 @@ const App: React.FC = () => {
       </div>
 
       {theme === 'underwater' && (
-        <div className="fixed inset-0 z-20 pointer-events-none">
+        <div className={`fixed inset-0 z-20 pointer-events-none ${worldTransitionClass}`}>
           {jellyfish && (
             <Jellyfish
               id={jellyfish.id}
@@ -1811,7 +1907,7 @@ const App: React.FC = () => {
       />
       <BackToTopButton />
       <ThemeToggleButton />
-      {theme === 'underwater' && (
+      {(theme === 'underwater' || theme === 'deepsea') && (
         <>
           <div className="fixed bottom-8 left-24 z-40 w-56 px-1 opacity-50">
             <div className="mb-1 flex items-center justify-between text-xs text-cyan-100/90">

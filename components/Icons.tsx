@@ -130,6 +130,26 @@ export const NetIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
+export const DiveIcon: React.FC<IconProps> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    {/* Water surface */}
+    <path d="M2 6c1.5-1.5 3-1.5 4.5 0s3 1.5 4.5 0 3-1.5 4.5 0 3 1.5 4.5 0" />
+    {/* Arrow going deeper */}
+    <line x1="12" y1="9" x2="12" y2="18" />
+    <polyline points="8 14 12 18 16 14" />
+  </svg>
+);
+
+export const SurfaceIcon: React.FC<IconProps> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    {/* Arrow going up to surface */}
+    <line x1="12" y1="15" x2="12" y2="6" />
+    <polyline points="8 10 12 6 16 10" />
+    {/* Water surface at bottom */}
+    <path d="M2 18c1.5-1.5 3-1.5 4.5 0s3 1.5 4.5 0 3-1.5 4.5 0 3 1.5 4.5 0" />
+  </svg>
+);
+
 export const TankIcon: React.FC<IconProps> = ({ className }) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 

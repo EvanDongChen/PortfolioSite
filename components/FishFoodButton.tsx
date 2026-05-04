@@ -9,7 +9,11 @@ interface FishFoodButtonProps {
 const FishFoodButton: React.FC<FishFoodButtonProps> = ({ isActive, onToggle }) => {
   const { theme } = useTheme();
 
-  if (theme !== 'underwater') return null;
+  if (theme !== 'underwater' && theme !== 'deepsea') return null;
+
+  const inactiveStyles = theme === 'deepsea'
+    ? 'bg-emerald-500/20 border-emerald-400/30 hover:bg-emerald-500/35 focus:ring-emerald-400'
+    : 'bg-cyan-500/30 border-cyan-400/30 hover:bg-cyan-500/50 focus:ring-cyan-400';
 
   return (
     <button
@@ -20,7 +24,7 @@ const FishFoodButton: React.FC<FishFoodButtonProps> = ({ isActive, onToggle }) =
       className={`fixed bottom-8 left-8 z-[60] p-3 rounded-full backdrop-blur-sm text-white shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 transition-all duration-300 ${
         isActive
           ? 'bg-amber-500/50 border-amber-400/60 focus:ring-amber-400 scale-110'
-          : 'bg-cyan-500/30 border-cyan-400/30 hover:bg-cyan-500/50 focus:ring-cyan-400'
+          : inactiveStyles
       }`}
     >
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

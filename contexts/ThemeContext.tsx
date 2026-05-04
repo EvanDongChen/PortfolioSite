@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 
-type Theme = 'underwater' | 'space';
+type Theme = 'underwater' | 'deepsea';
 
 interface ThemeContextType {
   theme: Theme;
@@ -13,7 +13,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [theme, setTheme] = useState<Theme>('underwater');
 
   const toggleTheme = () => {
-    setTheme(prevTheme => (prevTheme === 'underwater' ? 'space' : 'underwater'));
+    setTheme(prevTheme => (prevTheme === 'underwater' ? 'deepsea' : 'underwater'));
   };
 
   return (
