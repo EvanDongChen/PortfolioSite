@@ -8,7 +8,6 @@ import Turtle from './components/Turtle';
 import Jellyfish from './components/Jellyfish';
 import Whale from './components/Whale';
 import AnglerFish from './components/AnglerFish';
-import DeepSeaPlankton from './components/DeepSeaPlankton';
 import SandDune from './components/SandDune';
 import GodRays from './components/GodRays';
 import FishCensus from './components/FishCensus';
@@ -128,16 +127,6 @@ const App: React.FC = () => {
   const [themeTransitionDirection, setThemeTransitionDirection] = useState<'dive' | 'surface'>('dive');
   const [silhouetteFishes, setSilhouetteFishes] = useState<FishType[]>([]);
   const [showSilhouetteFishes, setShowSilhouetteFishes] = useState(false);
-  const [transitionParticles, setTransitionParticles] = useState<Array<{
-    id: number;
-    left: string;
-    size: string;
-    duration: string;
-    delay: string;
-    driftX: string;
-    opacity: number;
-    color: string;
-  }>>([]);
   const fishesRef = useRef<FishType[]>([]);
   const fishesByThemeRef = useRef<{ underwater: FishType[]; deepsea: FishType[] }>({ underwater: [], deepsea: [] });
   const previousThemeRef = useRef<'underwater' | 'deepsea'>(theme);
@@ -155,22 +144,9 @@ const App: React.FC = () => {
     if (previousTheme === theme) return;
 
     const transitionDirection: 'dive' | 'surface' = theme === 'deepsea' ? 'dive' : 'surface';
-    const particlePalette = transitionDirection === 'dive'
-      ? ['#7dd3fc', '#67e8f9', '#22d3ee', '#38bdf8']
-      : ['#34d399', '#6ee7b7', '#2dd4bf', '#a7f3d0'];
-    const particles = Array.from({ length: 64 }).map((_, i) => ({
-      id: i,
-      left: `${Math.random() * 100}vw`,
-      size: `${Math.random() * 5 + 3}px`,
-      duration: `${780 + Math.random() * 420}ms`,
-      delay: `${Math.random() * 180}ms`,
-      driftX: `${(Math.random() - 0.5) * 88}px`,
-      opacity: 0.55 + Math.random() * 0.4,
-      color: particlePalette[Math.floor(Math.random() * particlePalette.length)],
-    }));
 
     setThemeTransitionDirection(transitionDirection);
-    setTransitionParticles(particles);
+    particleCanvasRef.current?.emitTransitionBurst?.(transitionDirection);
     setSilhouetteFishes(fishesRef.current);
     setShowSilhouetteFishes(true);
     setIsThemeTransitionActive(true);
@@ -190,7 +166,6 @@ const App: React.FC = () => {
     transitionTimerRef.current = window.setTimeout(() => {
       setIsThemeTransitionActive(false);
       setSilhouetteFishes([]);
-      setTransitionParticles([]);
       transitionTimerRef.current = null;
     }, THEME_TRANSITION_MS);
 
@@ -223,13 +198,16 @@ const App: React.FC = () => {
   const [grabbedFish, setGrabbedFish] = useState<FishType | null>(null);
   const [tankFishes, setTankFishes] = useState<FishType[]>([]);
   const [isTankOpen, setIsTankOpen] = useState(false);
+  const particleCanvasRef = useRef<ParticleCanvasRef>(null);
   useEffect(() => { isGrabModeRef.current = isGrabMode; }, [isGrabMode]);
   useEffect(() => {
     const handleVisibility = () => { isPageHiddenRef.current = document.hidden; };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
-  const particleCanvasRef = useRef<ParticleCanvasRef>(null);
+  useEffect(() => {
+    particleCanvasRef.current?.setThemeMode?.(theme === 'underwater' || theme === 'deepsea' ? theme : 'other');
+  }, [theme]);
   const scrollYRef = useRef(0);
   const worldLayerRef = useRef<HTMLDivElement>(null);
   const worldLayerForegroundRef = useRef<HTMLDivElement>(null);
@@ -409,22 +387,27 @@ const App: React.FC = () => {
   );
 
   const createBubble = useCallback(() => {
-    const id = getNextEntityId();
-    const size = Math.random() * 60 + 20;
-    const duration = Math.random() * 15 + 10;
-    const newBubble: BubbleType = {
-      id,
-      left: `${Math.random() * 100}%`,
-      size: `${size}px`,
-      duration: `${duration}s`,
-    };
+    if (theme === 'underwater') {
+      const id = getNextEntityId();
+      const size = Math.random() * 60 + 20;
+      const duration = Math.random() * 15 + 10;
+      const newBubble: BubbleType = {
+        id,
+        left: `${Math.random() * 100}%`,
+        size: `${size}px`,
+        duration: `${duration}s`,
+      };
 
-    setBubbles(prev => [...prev, newBubble]);
+      setBubbles(prev => [...prev, newBubble]);
 
-    setTimeout(() => {
-      setBubbles(prev => prev.filter(bubble => bubble.id !== id));
-    }, duration * 1000 + 1000);
-  }, [getNextEntityId]);
+      window.setTimeout(() => {
+        setBubbles(prev => prev.filter(bubble => bubble.id !== id));
+      }, duration * 1000 + 1000);
+      return;
+    }
+
+    particleCanvasRef.current?.emitAmbientBubble?.(theme === 'deepsea');
+  }, [theme, getNextEntityId]);
 
   const createFish = useCallback(() => {
     const id = getNextEntityId();
@@ -593,19 +576,19 @@ const App: React.FC = () => {
   }, [theme]);
 
   const emitTrailBubble = useCallback((x: number, worldY: number) => {
-    particleCanvasRef.current?.emitTrailBubble(x, worldY, theme === 'deepsea');
+    particleCanvasRef.current?.emitTrailBubble?.(x, worldY, theme === 'deepsea');
   }, [theme]);
 
   const emitFoodCrumbs = useCallback((x: number, worldY: number, isLove?: boolean) => {
-    particleCanvasRef.current?.emitFoodCrumbs(x, worldY, isLove);
+    particleCanvasRef.current?.emitFoodCrumbs?.(x, worldY, isLove);
   }, []);
 
   const emitHearts = useCallback((x: number, worldY: number) => {
-    particleCanvasRef.current?.emitHearts(x, worldY);
+    particleCanvasRef.current?.emitHearts?.(x, worldY);
   }, []);
 
   const emitJellyfishPop = useCallback((x: number, y: number, scale: number) => {
-    particleCanvasRef.current?.emitJellyfishPop(x, y, scale);
+    particleCanvasRef.current?.emitJellyfishPop?.(x, y, scale);
   }, []);
 
   // Place fish food on click when food mode is active
@@ -646,7 +629,7 @@ const App: React.FC = () => {
 
       if (target.closest('button, a, input, [data-is-tank="true"]')) return;
       const id = getNextEntityId();
-      particleCanvasRef.current?.emitClickRipple(e.clientX, e.clientY, theme);
+      particleCanvasRef.current?.emitClickRipple?.(e.clientX, e.clientY, theme);
 
       shockwavesRef.current.push({
         id,
@@ -832,6 +815,28 @@ const App: React.FC = () => {
         }
       });
 
+      // ── Per-frame acceleration structures ──────────────────────────────────
+      // Map<id, fish> for O(1) partner / predecessor lookups.
+      const fishById = new Map<number, FishType>();
+      // Spatial grid (cell size = SCHOOL_RADIUS) for O(1) neighbor queries.
+      const CELL_SIZE = 140;
+      const spatialGrid = new Map<string, FishType[]>();
+      // Conga predecessor map: `${leaderId}_${index}` → fish.
+      const congaPredMap = new Map<string, FishType>();
+
+      for (const f of currentFishes) {
+        fishById.set(f.id, f);
+        const cx = Math.floor(f.x / CELL_SIZE);
+        const cy = Math.floor(f.y / CELL_SIZE);
+        const key = `${cx},${cy}`;
+        const cell = spatialGrid.get(key);
+        if (cell) cell.push(f);
+        else spatialGrid.set(key, [f]);
+        if (f.behavior === 'conga' && f.congaLeaderId !== undefined && f.congaIndex !== undefined) {
+          congaPredMap.set(`${f.congaLeaderId}_${f.congaIndex}`, f);
+        }
+      }
+
       // Coordinate spiral starts
       currentFishes.forEach(fish => {
         if (fish.behavior === 'mating' && fish.readyToSpiral && !fish.matingSpiralStartTime) {
@@ -856,28 +861,6 @@ const App: React.FC = () => {
           }
         }
       });
-
-      // ── Per-frame acceleration structures ──────────────────────────────────
-      // Map<id, fish> for O(1) partner / predecessor lookups.
-      const fishById = new Map<number, FishType>();
-      // Spatial grid (cell size = SCHOOL_RADIUS) for O(1) neighbor queries.
-      const CELL_SIZE = 140;
-      const spatialGrid = new Map<string, FishType[]>();
-      // Conga predecessor map: `${leaderId}_${index}` → fish.
-      const congaPredMap = new Map<string, FishType>();
-
-      for (const f of currentFishes) {
-        fishById.set(f.id, f);
-        const cx = Math.floor(f.x / CELL_SIZE);
-        const cy = Math.floor(f.y / CELL_SIZE);
-        const key = `${cx},${cy}`;
-        const cell = spatialGrid.get(key);
-        if (cell) cell.push(f);
-        else spatialGrid.set(key, [f]);
-        if (f.behavior === 'conga' && f.congaLeaderId !== undefined && f.congaIndex !== undefined) {
-          congaPredMap.set(`${f.congaLeaderId}_${f.congaIndex}`, f);
-        }
-      }
 
       // Simulation constants hoisted from the per-fish loop.
       const SCARE_RADIUS = 150;
@@ -1372,9 +1355,8 @@ const App: React.FC = () => {
       // Cleanup old shockwaves
       shockwavesRef.current = shockwavesRef.current.filter(w => timestamp - w.timestamp < 1000);
 
-      if (particleCanvasRef.current) {
-        particleCanvasRef.current.setScrollY(scrollYRef.current);
-      }
+      particleCanvasRef.current?.setScrollY?.(scrollYRef.current);
+      particleCanvasRef.current?.setFishSnapshot?.(fishesRef.current);
 
       animationFrameId = requestAnimationFrame(animate);
     };
@@ -1413,6 +1395,7 @@ const App: React.FC = () => {
         clearInterval(steadyBubbleInterval);
       };
     } else if (theme === 'deepsea') {
+      setBubbles([]);
       // Burst of fish into the abyss, with darker ambient bubbles.
       const BURST_DURATION_MS = 3500;
       const BURST_FISH_INTERVAL_MS = 45;
@@ -1842,25 +1825,18 @@ const App: React.FC = () => {
       <ParticleCanvas ref={particleCanvasRef} />
       {/* Background Aquarium Layer: Environment and Large Creatures */}
       <div className={`fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none ${worldTransitionClass}`}>
-        {bubbles.map(bubble => (
-          <Bubble key={bubble.id} {...bubble} isDeepSea={theme === 'deepsea'} />
-        ))}
         {theme === 'underwater' ? (
           <>
             <GodRays />
+            {bubbles.map(bubble => (
+              <Bubble key={bubble.id} {...bubble} />
+            ))}
             {whale && <Whale x={whale.x} displayY={whale.displayY} scale={whale.scale} isFlipped={whale.isFlipped} />}
             {turtle && <Turtle x={turtle.x} displayY={turtle.displayY} scale={turtle.scale} isFlipped={turtle.isFlipped} />}
           </>
         ) : (
           // Deep Sea: bioluminescent plankton orbs only.
           <>
-            <DeepSeaPlankton
-              active={theme === 'deepsea'}
-              fishesRef={fishesRef}
-              scrollYRef={scrollYRef}
-              isPageHiddenRef={isPageHiddenRef}
-              scrollParallax={SCROLL_PARALLAX}
-            />
             {deepSeaOrbs.map(orb => (
               <div
                 key={orb.id}
@@ -1889,27 +1865,6 @@ const App: React.FC = () => {
           </>
         )}
       </div>
-      {isThemeTransitionActive && transitionParticles.length > 0 && (
-        <div className="fixed inset-0 pointer-events-none z-[6] overflow-hidden">
-          {transitionParticles.map((p) => (
-            <span
-              key={`transition-particle-${p.id}`}
-              className={`theme-transition-particle ${themeTransitionDirection === 'dive' ? 'theme-transition-particle-dive' : 'theme-transition-particle-surface'}`}
-              style={{
-                left: p.left,
-                width: p.size,
-                height: p.size,
-                backgroundColor: p.color,
-                boxShadow: `0 0 14px ${p.color}, 0 0 26px ${p.color}88`,
-                '--tp-duration': p.duration,
-                '--tp-delay': p.delay,
-                '--tp-drift-x': p.driftX,
-                '--tp-opacity': p.opacity,
-              } as React.CSSProperties}
-            />
-          ))}
-        </div>
-      )}
       {isThemeTransitionActive && (
         <div
           className={`fixed inset-0 pointer-events-none z-[5] ${themeTransitionDirection === 'dive' ? 'theme-transition-sweep-dive' : 'theme-transition-sweep-surface'}`}
