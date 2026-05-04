@@ -785,35 +785,51 @@ const App: React.FC = () => {
 
       const currentFishes = fishesRef.current;
       const foods = fishFoodsRef.current;
-      const loveFoodAssignments = new Map<number, number[]>();
+      const loveFoodAssignments = new Map<number, Set<number>>();
       const spiralTriggers = new Set<number>();
-      const assignedForLove = new Set<number>();        
-      foods.filter(f => f.type === 'love').forEach(food => {
-        const potentialFishes: Array<FishType & { dist: number }> = [];
-        currentFishes.forEach(f => {
-          if (f.behavior === 'mating' || assignedForLove.has(f.id)) return;
-          const dist = Math.hypot(f.x - food.x, f.y - food.worldY);
-          if (dist < 450) {
-            potentialFishes.push({ ...f, dist } as any);
-          }
-        });
+      const assignedForLove = new Set<number>();
+      for (const food of foods) {
+        if (food.type !== 'love') continue;
 
-        if (potentialFishes.length >= 2) {
-          // Sort by distance to food and take the closest two, regardless of species
-          potentialFishes.sort((a, b) => a.dist - b.dist);
-          const pair = potentialFishes.slice(0, 2);
-          
-          pair.forEach(nf => assignedForLove.add(nf.id));
-          loveFoodAssignments.set(food.id, pair.map(f => f.id));
-          
+        let firstId = -1;
+        let secondId = -1;
+        let firstDist = Infinity;
+        let secondDist = Infinity;
+
+        for (let i = 0; i < currentFishes.length; i++) {
+          const fish = currentFishes[i];
+          if (fish.behavior === 'mating' || assignedForLove.has(fish.id)) continue;
+          const dx = fish.x - food.x;
+          const dy = fish.y - food.worldY;
+          const dist = Math.hypot(dx, dy);
+          if (dist >= 450) continue;
+
+          if (dist < firstDist) {
+            secondDist = firstDist;
+            secondId = firstId;
+            firstDist = dist;
+            firstId = fish.id;
+          } else if (dist < secondDist) {
+            secondDist = dist;
+            secondId = fish.id;
+          }
+        }
+
+        if (firstId !== -1 && secondId !== -1) {
+          assignedForLove.add(firstId);
+          assignedForLove.add(secondId);
+
+          const assignedIds = new Set<number>([firstId, secondId]);
+          loveFoodAssignments.set(food.id, assignedIds);
+
           const EAT_RADIUS = 35;
-          if (pair.some(f => f.dist < EAT_RADIUS)) {
-            matingTriggers.set(pair[0].id, { partnerId: pair[1].id, center: { x: food.x, y: food.worldY } });
-            matingTriggers.set(pair[1].id, { partnerId: pair[0].id, center: { x: food.x, y: food.worldY } });
+          if (firstDist < EAT_RADIUS || secondDist < EAT_RADIUS) {
+            matingTriggers.set(firstId, { partnerId: secondId, center: { x: food.x, y: food.worldY } });
+            matingTriggers.set(secondId, { partnerId: firstId, center: { x: food.x, y: food.worldY } });
             eatenFoodIds.add(food.id);
           }
         }
-      });
+      }
 
       // ── Per-frame acceleration structures ──────────────────────────────────
       // Map<id, fish> for O(1) partner / predecessor lookups.
@@ -970,7 +986,7 @@ const App: React.FC = () => {
               const dist = Math.sqrt(fdx * fdx + fdy * fdy);
               if (food.type === 'love') {
                 const assigned = loveFoodAssignments.get(food.id);
-                if (!assigned || !assigned.includes(fish.id)) continue;
+                if (!assigned || !assigned.has(fish.id)) continue;
               }
               if (dist < closestDist) {
                 closestDist = dist;
@@ -1352,8 +1368,19 @@ const App: React.FC = () => {
         crumbBursts.forEach(burst => emitFoodCrumbs(burst.x, burst.worldY, (burst as any).isLove));
       }
 
-      // Cleanup old shockwaves
-      shockwavesRef.current = shockwavesRef.current.filter(w => timestamp - w.timestamp < 1000);
+      // Cleanup old shockwaves with in-place compaction to avoid per-frame array allocation.
+      {
+        const waves = shockwavesRef.current;
+        let write = 0;
+        for (let i = 0; i < waves.length; i++) {
+          const wave = waves[i];
+          if (timestamp - wave.timestamp < 1000) {
+            waves[write] = wave;
+            write += 1;
+          }
+        }
+        waves.length = write;
+      }
 
       particleCanvasRef.current?.setScrollY?.(scrollYRef.current);
       particleCanvasRef.current?.setFishSnapshot?.(fishesRef.current);
