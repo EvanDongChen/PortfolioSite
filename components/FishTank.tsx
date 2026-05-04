@@ -18,6 +18,9 @@ interface FishTankProps {
 const SPIRAL_DURATION = 4000;
 const START_RADIUS = 60;
 const END_RADIUS = 15;
+const FOOD_ATTRACT_RADIUS = 240;
+const FOOD_ATTRACT_STRENGTH = 0.22;
+const FOOD_EAT_RADIUS = 24;
 
 const FishTank: React.FC<FishTankProps> = ({ 
   isOpen, 
@@ -108,9 +111,11 @@ const FishTank: React.FC<FishTankProps> = ({
   const animate = useCallback((timestamp: number) => {
     // 1. Cleanup and Pre-calculations
     foodsRef.current = foodsRef.current.filter(food => timestamp - food.spawnTime < 8000);
+    const eatenFoodIds = new Set<number>();
     const matingTriggers = new Map<number, { partnerId: number, center: { x: number, y: number } }>();
     const spiralTriggers = new Set<number>();
     const assignedForLove = new Set<number>();
+    const loveFoodAssignments = new Map<number, number[]>();
 
     // love food logic - ensure same species
     foodsRef.current.filter(f => f.type === 'love').forEach(food => {
@@ -129,13 +134,16 @@ const FishTank: React.FC<FishTankProps> = ({
         const pair = potentialFishes.slice(0, 2);
         
         pair.forEach(nf => assignedForLove.add(nf.id));
+        loveFoodAssignments.set(food.id, pair.map(fish => fish.id));
         if (pair.some(f => f.dist < 25)) {
            matingTriggers.set(pair[0].id, { partnerId: pair[1].id, center: { x: food.x, y: food.y } });
            matingTriggers.set(pair[1].id, { partnerId: pair[0].id, center: { x: food.x, y: food.y } });
-           foodsRef.current = foodsRef.current.filter(f => f.id !== food.id);
+           eatenFoodIds.add(food.id);
         }
       }
     });
+
+    foodsRef.current = foodsRef.current.filter(food => !eatenFoodIds.has(food.id));
 
     // spiral synchronization
     fishesRef.current.forEach(fish => {
@@ -200,7 +208,37 @@ const FishTank: React.FC<FishTankProps> = ({
         }
       } else {
         behavior = 'cruise';
-        vx += (Math.random() - 0.5) * 0.12; vy += (Math.random() - 0.5) * 0.12;
+        let closestFood: FishFoodType | undefined;
+        let closestFoodDist = Infinity;
+
+        for (const food of foodsRef.current) {
+          if (food.type === 'love') {
+            const assignedFishIds = loveFoodAssignments.get(food.id);
+            if (!assignedFishIds?.includes(fish.id)) continue;
+          }
+
+          const dist = Math.hypot(food.x - x, food.y - y);
+          if (dist < closestFoodDist) {
+            closestFood = food;
+            closestFoodDist = dist;
+          }
+        }
+
+        if (closestFood && closestFoodDist < FOOD_ATTRACT_RADIUS) {
+          const dx = closestFood.x - x;
+          const dy = closestFood.y - y;
+          const dist = Math.hypot(dx, dy) || 1;
+          vx += (dx / dist) * FOOD_ATTRACT_STRENGTH;
+          vy += (dy / dist) * FOOD_ATTRACT_STRENGTH;
+
+          if (closestFoodDist < FOOD_EAT_RADIUS && closestFood.type !== 'love') {
+            eatenFoodIds.add(closestFood.id);
+          }
+        } else {
+          vx += (Math.random() - 0.5) * 0.12;
+          vy += (Math.random() - 0.5) * 0.12;
+        }
+
         rotation = Math.atan2(vy, vx) * (180 / Math.PI);
       }
 
@@ -217,6 +255,8 @@ const FishTank: React.FC<FishTankProps> = ({
 
       return { ...fish, x, y, displayY: y, vx, vy, behavior, matingStartTime, matingPartnerId, matingCenter, matingSpiralStartTime, rotation };
     });
+
+    foodsRef.current = foodsRef.current.filter(food => !eatenFoodIds.has(food.id));
 
     setInternalFishes([...fishesRef.current]);
     setInternalFoods([...foodsRef.current]);
