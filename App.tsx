@@ -19,6 +19,8 @@ import ParticleCanvas, { ParticleCanvasRef } from './components/ParticleCanvas';
 import GrabModeButton from './components/GrabModeButton';
 import FishTank from './components/FishTank';
 import TankToggleButton from './components/TankToggleButton';
+import TutorialButton from './components/TutorialButton';
+import TutorialPanel from './components/TutorialPanel';
 
 const BASE_URL = import.meta.env.BASE_URL;
 import ThemeToggleButton from './components/ThemeToggleButton';
@@ -198,6 +200,7 @@ const App: React.FC = () => {
   const [grabbedFish, setGrabbedFish] = useState<FishType | null>(null);
   const [tankFishes, setTankFishes] = useState<FishType[]>([]);
   const [isTankOpen, setIsTankOpen] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const particleCanvasRef = useRef<ParticleCanvasRef>(null);
   useEffect(() => { isGrabModeRef.current = isGrabMode; }, [isGrabMode]);
   useEffect(() => {
@@ -597,7 +600,7 @@ const App: React.FC = () => {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
 
-      if (target.closest('button, a, input, [data-is-tank="true"]')) return;
+      if (target.closest('button, a, input, [data-is-tank="true"], [data-is-tutorial="true"], [data-is-census="true"]')) return;
       const id = getNextEntityId();
       const newFood: FishFoodType = {
         id,
@@ -627,7 +630,7 @@ const App: React.FC = () => {
         return;
       }
 
-      if (target.closest('button, a, input, [data-is-tank="true"]')) return;
+      if (target.closest('button, a, input, [data-is-tank="true"], [data-is-tutorial="true"], [data-is-census="true"]')) return;
       const id = getNextEntityId();
       particleCanvasRef.current?.emitClickRipple?.(e.clientX, e.clientY, theme);
 
@@ -2035,6 +2038,8 @@ const App: React.FC = () => {
       />
       <BackToTopButton />
       <ThemeToggleButton />
+      <TutorialButton isOpen={isTutorialOpen} onToggle={() => setIsTutorialOpen((prev) => !prev)} />
+      <TutorialPanel isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
       {(theme === 'underwater' || theme === 'deepsea') && (
         <>
           <div className="fixed bottom-8 left-24 z-40 w-56 px-1 opacity-50">

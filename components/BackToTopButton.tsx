@@ -1,24 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { ArrowUpIcon } from './Icons';
 import { useTheme } from '../contexts/ThemeContext';
 
 const BackToTopButton: React.FC = () => {
-  const [isVisible, setIsVisible] = useState(false);
   const { theme } = useTheme();
-
-  useEffect(() => {
-    const toggleVisibility = () => {
-      if (window.scrollY > 300) {
-        setIsVisible(true);
-      } else {
-        setIsVisible(false);
-      }
-    };
-
-    window.addEventListener('scroll', toggleVisibility);
-
-    return () => window.removeEventListener('scroll', toggleVisibility);
-  }, []);
 
   const scrollToTop = () => {
     window.scrollTo({
@@ -37,9 +22,7 @@ const BackToTopButton: React.FC = () => {
       type="button"
       onClick={scrollToTop}
       aria-label="Go to top"
-      className={`fixed bottom-24 right-8 z-40 p-3 rounded-full backdrop-blur-sm text-white shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 transition-all duration-300 ${buttonColors} ${
-        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-      }`}
+      className={`fixed bottom-24 right-8 z-40 p-3 rounded-full backdrop-blur-sm text-white shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 transition-all duration-300 opacity-100 translate-y-0 ${buttonColors}`}
     >
       <ArrowUpIcon className="w-6 h-6" />
     </button>
