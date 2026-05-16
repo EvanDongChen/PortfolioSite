@@ -166,7 +166,7 @@ const TutorialPanel: React.FC<TutorialPanelProps> = ({ isOpen, onClose }) => {
 
         <div className="px-5 py-4 overflow-y-auto max-h-[calc(100vh-13rem)] space-y-4">
           <p className={`text-sm leading-relaxed ${mutedTextClasses}`}>
-            Each control has its own section below. Send your screenshots and I can map them into each slot.
+            Welcome to Evan's Fish Simulation (or portfolio site)! In this simulation you can explore different fish species, behaviors, and themes. Here's a quick guide to get you started:
           </p>
 
           {tutorialSections.map((section) => (
