@@ -44,6 +44,22 @@ export const MailIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
+export const InstagramIcon: React.FC<IconProps> = ({ className }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    className={className}
+    aria-hidden="true"
+  >
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <circle cx="12" cy="12" r="4.2" />
+    <circle cx="17.3" cy="6.7" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 
 export const ExternalLinkIcon: React.FC<IconProps> = ({ className }) => (
   <svg 
@@ -108,6 +124,16 @@ export const PlanetIcon: React.FC<IconProps> = ({ className }) => (
 export const WaterDropIcon: React.FC<IconProps> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path d="M12 2C8.686 2 6 4.686 6 8c0 3.314 6 14 6 14s6-10.686 6-14c0-3.314-2.686-6-6-6z" />
+    </svg>
+);
+
+export const PaletteIcon: React.FC<IconProps> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+        <path d="M12 3C7.03 3 3 6.58 3 11c0 2.9 2.02 4.5 4 4.5h1.2c.66 0 1.2.54 1.2 1.2 0 .3-.11.56-.28.8-.2.27-.32.6-.32.96 0 .83.9 1.54 2 1.54 4.97 0 9-4.03 9-9.5C21 6.14 17.02 3 12 3z" />
+        <circle cx="7.5" cy="10.5" r="1.1" fill="currentColor" stroke="none" />
+        <circle cx="11" cy="7.2" r="1.1" fill="currentColor" stroke="none" />
+        <circle cx="15.2" cy="8" r="1.1" fill="currentColor" stroke="none" />
+        <circle cx="16.8" cy="12" r="1.1" fill="currentColor" stroke="none" />
     </svg>
 );
 

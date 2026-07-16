@@ -34,7 +34,16 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
             Computer Science Student & Developer
           </p>
           <p className={`mt-6 text-lg ${colors.textLighter} max-w-3xl animate-fade-in-up delay-200`}>
-            A passionate CS student with experience in full-stack development, object-oriented programming, and game development. Check out my projects to see how I'm growing as a developer!
+            A passionate CS student with experience in full-stack development, object-oriented programming, and game development. Check out my projects to see how I'm growing as a developer! I also love drawing, check out{' '}
+            <a
+              href="https://www.instagram.com/hangyodonevantures/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`font-semibold underline underline-offset-2 hover:text-white transition-colors ${colors.highlight}`}
+            >
+              my art
+            </a>
+            .
           </p>
           <div className={`mt-8 flex flex-wrap justify-center items-center gap-x-6 gap-y-4 ${colors.highlightStrong}`}>
             <a href="https://github.com/evandongchen" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-white transition-colors">
