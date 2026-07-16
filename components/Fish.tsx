@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Fish as FishType } from '../types';
 
 interface FishProps extends Omit<FishType, 'vx' | 'vy' | 'initialVx'> {
@@ -10,6 +10,16 @@ interface FishProps extends Omit<FishType, 'vx' | 'vy' | 'initialVx'> {
   isDeepSea?: boolean;
   isSilhouette?: boolean;
 }
+
+// Static, theme-independent constants hoisted out of the component so they
+// aren't reallocated on every animation-frame render.
+const STRIPE_COLOR = 'rgba(255, 255, 255, 0.96)';
+const OUTLINE_COLOR = 'rgba(15, 23, 42, 0.55)';
+const PUFFER_COLOR_1 = '#fef3c7';
+const PUFFER_COLOR_2 = '#fbbf24';
+const NORMAL_PUFFER_PATH = "M 85,25 C 80,5 20,5 15,25 C 20,45 80,45 85,25";
+// The viewBox is 100x50. To make a circle in a square container, the path must be 100 units wide and 50 units tall.
+const BALL_PUFFER_PATH = "M 100,25 C 100,0 75,0 50,0 C 25,0 0,0 0,25 C 0,50 25,50 50,50 C 75,50 100,50 100,25";
 
 const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false, birthTime, isPuffed = false, onMouseDown, isGrabMode = false, isDeepSea = false, isSilhouette = false }) => {
   const isClownFish = variant === 'clown';
@@ -61,29 +71,19 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
   const glowId = `glow-${id}`;
   const clipId = `fishClip-${id}`;
   const rainbowShimmerId = `rainbowShimmer-${id}`;
-  const stripeColor = 'rgba(255, 255, 255, 0.96)';
-  const outlineColor = 'rgba(15, 23, 42, 0.55)';
-
-  // Puffer colors: Cream to Yellow
-  const pColor1 = '#fef3c7';
-  const pColor2 = '#fbbf24';
-
-  const normalPufferPath = "M 85,25 C 80,5 20,5 15,25 C 20,45 80,45 85,25";
-  // The viewBox is 100x50. To make a circle in a square container, the path must be 100 units wide and 50 units tall.
-  const ballPufferPath = "M 100,25 C 100,0 75,0 50,0 C 25,0 0,0 0,25 C 0,50 25,50 50,50 C 75,50 100,50 100,25";
 
   const handleGrabFish = (e: React.MouseEvent) => {
     onMouseDown?.(id, e);
   };
 
-  return (
-    <div 
-      style={style} 
-      data-fish-id={id} 
-      data-is-puffer={isPuffer}
-      onMouseDown={handleGrabFish}
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" style={{ width: '100%', height: '100%', overflow: 'visible' }} preserveAspectRatio="none">
+  // The SVG body (gradients, glow filter, fin/body/eye paths) only depends on a
+  // fish's identity/appearance, never on its per-frame position or rotation.
+  // Memoizing it lets React reuse the same element across the ~30fps swim
+  // simulation updates instead of re-creating and re-diffing this whole subtree
+  // every frame, which is what caused the perceptible lag (worst in deep sea,
+  // where every fish also carries an extra glow filter on top of this one).
+  const svgContent = useMemo(() => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" style={{ width: '100%', height: '100%', overflow: 'visible' }} preserveAspectRatio="none">
         <defs>
           <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
             {isRainbowFish ? (
@@ -97,8 +97,8 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
               </>
             ) : (
               <>
-                <stop offset="0%" style={{ stopColor: isClownFish ? '#ffb347' : (isPuffer ? pColor1 : color1), stopOpacity: 0.85 }} />
-                <stop offset="100%" style={{ stopColor: isClownFish ? '#f97316' : (isPuffer ? pColor2 : color2), stopOpacity: 0.7 }} />
+                <stop offset="0%" style={{ stopColor: isClownFish ? '#ffb347' : (isPuffer ? PUFFER_COLOR_1 : color1), stopOpacity: 0.85 }} />
+                <stop offset="100%" style={{ stopColor: isClownFish ? '#f97316' : (isPuffer ? PUFFER_COLOR_2 : color2), stopOpacity: 0.7 }} />
               </>
             )}
           </linearGradient>
@@ -118,14 +118,14 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
           </filter>
           {(isClownFish || isPuffer) && (
             <clipPath id={clipId}>
-              <path d={isPuffer ? (isPuffed ? ballPufferPath : normalPufferPath) : "M 90,25 C 80,10 30,5 10,25 C 30,45 80,40 90,25"} />
+              <path d={isPuffer ? (isPuffed ? BALL_PUFFER_PATH : NORMAL_PUFFER_PATH) : "M 90,25 C 80,10 30,5 10,25 C 30,45 80,40 90,25"} />
             </clipPath>
           )}
         </defs>
         <g filter={`url(#${glowId})`}>
           <path
             fill={`url(#${gradientId})`}
-            d={isPuffer ? (isPuffed ? ballPufferPath : normalPufferPath) : "M 90,25 C 80,10 30,5 10,25 C 30,45 80,40 90,25"}
+            d={isPuffer ? (isPuffed ? BALL_PUFFER_PATH : NORMAL_PUFFER_PATH) : "M 90,25 C 80,10 30,5 10,25 C 30,45 80,40 90,25"}
             style={{ transition: 'd 450ms cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}
           />
           <path
@@ -151,12 +151,12 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
           )}
           {isClownFish && (
             <g clipPath={`url(#${clipId})`}>
-              <path d="M 65,0 L 65,50" stroke={outlineColor} strokeWidth="6" opacity="0.5" />
-              <path d="M 65,0 L 65,50" stroke={stripeColor} strokeWidth="4.4" />
-              <path d="M 45,0 L 45,50" stroke={outlineColor} strokeWidth="7" opacity="0.5" />
-              <path d="M 45,0 L 45,50" stroke={stripeColor} strokeWidth="5.1" />
-              <path d="M 25,0 L 25,50" stroke={outlineColor} strokeWidth="6" opacity="0.45" />
-              <path d="M 25,0 L 25,50" stroke={stripeColor} strokeWidth="4.2" />
+              <path d="M 65,0 L 65,50" stroke={OUTLINE_COLOR} strokeWidth="6" opacity="0.5" />
+              <path d="M 65,0 L 65,50" stroke={STRIPE_COLOR} strokeWidth="4.4" />
+              <path d="M 45,0 L 45,50" stroke={OUTLINE_COLOR} strokeWidth="7" opacity="0.5" />
+              <path d="M 45,0 L 45,50" stroke={STRIPE_COLOR} strokeWidth="5.1" />
+              <path d="M 25,0 L 25,50" stroke={OUTLINE_COLOR} strokeWidth="6" opacity="0.45" />
+              <path d="M 25,0 L 25,50" stroke={STRIPE_COLOR} strokeWidth="4.2" />
             </g>
           )}
           {isPuffer && (
@@ -177,6 +177,17 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
           />
         </g>
       </svg>
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [id, color1, color2, isPuffer, isPuffed, isClownFish, isRainbowFish]);
+
+  return (
+    <div 
+      style={style} 
+      data-fish-id={id} 
+      data-is-puffer={isPuffer}
+      onMouseDown={handleGrabFish}
+    >
+      {svgContent}
     </div>
   );
 });
