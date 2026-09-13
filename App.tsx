@@ -16,6 +16,7 @@ import BackToTopButton from './components/BackToTopButton';
 import FishFoodButton from './components/FishFoodButton';
 import PortfolioContent from './components/PortfolioContent';
 import ParticleCanvas, { ParticleCanvasRef } from './components/ParticleCanvas';
+import FishCanvas, { FishCanvasRef } from './components/FishCanvas';
 import GrabModeButton from './components/GrabModeButton';
 import FishTank from './components/FishTank';
 import TankToggleButton from './components/TankToggleButton';
@@ -236,6 +237,7 @@ const App: React.FC = () => {
   const [isTankOpen, setIsTankOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const particleCanvasRef = useRef<ParticleCanvasRef>(null);
+  const fishCanvasRef = useRef<FishCanvasRef>(null);
   const nibblingFishIdsRef = useRef<Record<number, boolean>>({});
   useEffect(() => { isGrabModeRef.current = isGrabMode; }, [isGrabMode]);
   useEffect(() => { nibblingFishIdsRef.current = nibblingFishIds; }, [nibblingFishIds]);
@@ -718,6 +720,7 @@ const App: React.FC = () => {
       if (worldLayerForegroundRef.current) {
         worldLayerForegroundRef.current.style.transform = `translate3d(0, ${-scrollYRef.current * SCROLL_PARALLAX}px, 0)`;
       }
+      fishCanvasRef.current?.setScrollY(scrollYRef.current * SCROLL_PARALLAX);
       scrollRafRef.current = null;
     });
   }, []);
@@ -739,6 +742,7 @@ const App: React.FC = () => {
   // fish appearance and interactions, but does not reconcile every SVG subtree
   // just because a fish moved a few pixels.
   const syncFishPositions = useCallback((fishList: FishType[]) => {
+    fishCanvasRef.current?.setFishSnapshot(fishList);
     const layers = [worldLayerRef.current, worldLayerForegroundRef.current].filter(
       (layer): layer is HTMLDivElement => layer !== null,
     );
@@ -1989,6 +1993,10 @@ const App: React.FC = () => {
     ? (themeTransitionDirection === 'dive' ? 'theme-transition-world-dive' : 'theme-transition-world-surface')
     : '';
   const fishEnterClass = isThemeTransitionActive ? 'theme-fish-enter' : '';
+  const fishCanvasEnabled = (theme === 'underwater' || theme === 'deepsea')
+    && !isGrabMode
+    && highlightedBehavior === null
+    && Object.keys(nibblingFishIds).length === 0;
   const anglerDisplayY = anglerFish ? (anglerFish.y - scrollYRef.current * SCROLL_PARALLAX) : 0;
   const isAnglerRevealed = anglerFish
     ? Math.hypot(mousePosRef.current.x - anglerFish.x, mousePosRef.current.y - anglerDisplayY) < (ANGLER_REVEAL_RADIUS * anglerFish.scale)
@@ -2084,6 +2092,10 @@ const App: React.FC = () => {
             const worldY = fish.y - viewportTop;
             if (worldY < -400 || worldY > window.innerHeight + 400) return;
 
+            // Ordinary fish are painted by one canvas when no interaction or
+            // highlighting requires individual DOM nodes.
+            if (fishCanvasEnabled && (!fish.variant || fish.variant === 'default')) return;
+
             const element = (
               <Fish
                 key={fish.id}
@@ -2106,6 +2118,11 @@ const App: React.FC = () => {
 
           return (
             <>
+              <FishCanvas
+                ref={fishCanvasRef}
+                enabled={fishCanvasEnabled}
+                isDeepSea={isDeepSea}
+              />
               {/* Background World Layer: Regular fish swimming behind the content */}
               <div
                 ref={worldLayerRef}

@@ -120,6 +120,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
   const scrollYRef = useRef(0);
   const fishSnapshotRef = useRef<FishSnapshot[]>([]);
   const themeModeRef = useRef<ThemeMode>('underwater');
+  const wakeAnimationRef = useRef<(() => void) | null>(null);
 
   // Active arrays
   const trailsRef = useRef<Trail[]>([]);
@@ -151,6 +152,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
       if (mode !== 'deepsea') {
         planktonRef.current.length = 0;
       }
+      wakeAnimationRef.current?.();
     },
     setFishSnapshot: (fishes) => {
       fishSnapshotRef.current = fishes;
@@ -165,6 +167,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
       p.elapsed = 0;
       p.isDeepSea = isDeepSea;
       trailsRef.current.push(p);
+      wakeAnimationRef.current?.();
     },
     emitAmbientBubble: (isDeepSea) => {
       const p = ambientBubblePoolRef.current.pop() ?? ({} as AmbientBubble);
@@ -176,6 +179,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
       p.elapsed = 0;
       p.isDeepSea = isDeepSea;
       ambientBubblesRef.current.push(p);
+      wakeAnimationRef.current?.();
     },
     emitFoodCrumbs: (x, worldY, isLove) => {
       const count = isLove ? 3 : 6;
@@ -191,6 +195,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
         p.isLove = isLove;
         crumbsRef.current.push(p);
       }
+      wakeAnimationRef.current?.();
     },
     emitHearts: (x, worldY) => {
       for (let i = 0; i < 2; i++) {
@@ -206,6 +211,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
         p.elapsed = 0;
         heartsRef.current.push(p);
       }
+      wakeAnimationRef.current?.();
     },
     emitJellyfishPop: (x, worldY, scale) => {
       const ring = jellyRingPoolRef.current.pop() ?? ({} as JellyRing);
@@ -229,6 +235,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
         pop.elapsed = 0;
         jellyPopsRef.current.push(pop);
       }
+      wakeAnimationRef.current?.();
     },
     emitClickRipple: (x, screenY, theme) => {
       const delays = [0, 150, 300];
@@ -242,6 +249,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
         p.elapsed = 0;
         ripplesRef.current.push(p);
       }
+      wakeAnimationRef.current?.();
     },
     emitTransitionBurst: (direction) => {
       const palette = direction === 'dive'
@@ -263,6 +271,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
         p.opacity = 0.55 + Math.random() * 0.4;
         transitionParticlesRef.current.push(p);
       }
+      wakeAnimationRef.current?.();
     },
   }));
 
@@ -275,6 +284,16 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
     let animationFrameId = 0;
     let isVisible = !document.hidden;
     let lastTime = performance.now();
+
+    const hasActiveParticles = () => themeModeRef.current === 'deepsea'
+      || trailsRef.current.length > 0
+      || ambientBubblesRef.current.length > 0
+      || crumbsRef.current.length > 0
+      || jellyPopsRef.current.length > 0
+      || jellyRingsRef.current.length > 0
+      || ripplesRef.current.length > 0
+      || heartsRef.current.length > 0
+      || transitionParticlesRef.current.length > 0;
 
     const resize = () => {
       canvas.width = window.innerWidth;
@@ -757,13 +776,24 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
         arr.length = write;
       }
 
-      if (isVisible) animationFrameId = requestAnimationFrame(animate);
+      if (isVisible && hasActiveParticles()) {
+        animationFrameId = requestAnimationFrame(animate);
+      } else {
+        animationFrameId = 0;
+      }
     };
 
-    if (isVisible) animationFrameId = requestAnimationFrame(animate);
+    wakeAnimationRef.current = () => {
+      if (isVisible && animationFrameId === 0) {
+        lastTime = performance.now();
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+    wakeAnimationRef.current();
 
     return () => {
       cancelAnimationFrame(animationFrameId);
+      wakeAnimationRef.current = null;
       window.removeEventListener('resize', resize);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };

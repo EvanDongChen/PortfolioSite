@@ -54,7 +54,9 @@ const Fish: React.FC<FishProps> = ({ id, x, displayY, rotation, scale, color1, c
     willChange: 'transform',
     pointerEvents: isSilhouette ? 'none' : ((isPuffer || isGrabMode) ? 'auto' : 'none'),
     cursor: isSilhouette ? 'default' : (isGrabMode ? 'crosshair' : (isPuffer ? 'pointer' : 'default')),
-    transition: 'transform 450ms cubic-bezier(0.175, 0.885, 0.32, 1.275), width 450ms ease, height 450ms ease, opacity 300ms ease-out, filter 300ms ease-out',
+    // Position is updated imperatively by the aquarium simulation. A long
+    // transform transition makes each 30 FPS update chase the previous one.
+    transition: 'opacity 300ms ease-out, filter 300ms ease-out, width 450ms ease, height 450ms ease',
     opacity: isSilhouette ? 0.62 : (isFaded ? 0.15 : 1),
     filter: isSilhouette
       ? 'grayscale(1) brightness(0.08) contrast(1.2)'

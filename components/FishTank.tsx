@@ -21,6 +21,7 @@ const END_RADIUS = 15;
 const FOOD_ATTRACT_RADIUS = 240;
 const FOOD_ATTRACT_STRENGTH = 0.22;
 const FOOD_EAT_RADIUS = 24;
+const TANK_RENDER_FRAME_MS = 1000 / 30;
 
 const FishTank: React.FC<FishTankProps> = ({ 
   isOpen, 
@@ -45,6 +46,7 @@ const FishTank: React.FC<FishTankProps> = ({
   const foodsRef = useRef<FishFoodType[]>([]);
   const tankRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
+  const lastRenderTimeRef = useRef(0);
 
   // Sync internal fishes
   useEffect(() => {
@@ -258,8 +260,13 @@ const FishTank: React.FC<FishTankProps> = ({
 
     foodsRef.current = foodsRef.current.filter(food => !eatenFoodIds.has(food.id));
 
-    setInternalFishes([...fishesRef.current]);
-    setInternalFoods([...foodsRef.current]);
+    // The simulation can remain smooth at display refresh rate while React
+    // only reconciles the tank's fish subtree at 30 FPS.
+    if (timestamp - lastRenderTimeRef.current >= TANK_RENDER_FRAME_MS) {
+      lastRenderTimeRef.current = timestamp;
+      setInternalFishes([...fishesRef.current]);
+      setInternalFoods([...foodsRef.current]);
+    }
     requestRef.current = requestAnimationFrame(animate);
   }, [onFishBreed]);
 
