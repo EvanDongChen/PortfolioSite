@@ -1013,11 +1013,7 @@ const App: React.FC = () => {
           if (isFarOffscreen) {
             x += vx;
             y += vy;
-            if (fish.variant === 'puffer') {
-              if (vx > 0 && x > window.innerWidth + FISH_DESPAWN_MARGIN) x = -FISH_DESPAWN_MARGIN;
-              else if (vx < 0 && x < -FISH_DESPAWN_MARGIN) x = window.innerWidth + FISH_DESPAWN_MARGIN;
-            }
-            if (fish.variant !== 'puffer' && (x < -FISH_DESPAWN_MARGIN || x > window.innerWidth + FISH_DESPAWN_MARGIN)) return null;
+            if (x < -FISH_DESPAWN_MARGIN || x > window.innerWidth + FISH_DESPAWN_MARGIN) return null;
             const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
             let delta = targetRotation - rotation;
             if (delta > 180) delta -= 360;
@@ -1387,13 +1383,6 @@ const App: React.FC = () => {
           x += vx;
           y += vy;
 
-          // Keep puffer fish persistent by wrapping it around the screen instead of letting it swim off and respawning.
-          // This prevents the 'teleportation' effect when a new fish is randomly chosen to be the puffer.
-          if (fish.variant === 'puffer') {
-            if (vx > 0 && x > window.innerWidth + FISH_DESPAWN_MARGIN) x = -FISH_DESPAWN_MARGIN;
-            else if (vx < 0 && x < -FISH_DESPAWN_MARGIN) x = window.innerWidth + FISH_DESPAWN_MARGIN;
-          }
-
           let delta = 0;
           if (newBehavior !== 'mating' || (fish as any).isPreamble) {
             const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
@@ -1430,8 +1419,7 @@ const App: React.FC = () => {
             puffStartTime: newPuffStartTime,
           };
         }).filter((fish): fish is FishType => fish !== null)
-          .filter(fish => fish.variant === 'puffer'
-            || (fish.x > -FISH_DESPAWN_MARGIN && fish.x < window.innerWidth + FISH_DESPAWN_MARGIN));
+          .filter(fish => fish.x > -FISH_DESPAWN_MARGIN && fish.x < window.innerWidth + FISH_DESPAWN_MARGIN);
 
         // Keep clown/puffer guarantees in underwater only.
         if (theme === 'underwater' && next.length > 0 && !next.some(f => f.variant === 'clown')) {
