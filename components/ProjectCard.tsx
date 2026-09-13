@@ -8,7 +8,7 @@ interface ProjectCardProps {
 }
 
 const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
-  const { title, description, image, tags, codeUrl } = project;
+  const { title, description, image, tags, codeUrl, linkLabel = 'View Code' } = project;
   const { theme } = useTheme();
   const cardRef = useRef<HTMLDivElement>(null);
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
@@ -172,7 +172,7 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
             className={`flex items-center space-x-2 ${colors.link} hover:text-white transition-colors duration-300`}
           >
             <CodeIcon className="w-5 h-5" />
-            <span>View Code</span>
+            <span>{linkLabel}</span>
           </a>
         </div>
       </div>

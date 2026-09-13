@@ -4,6 +4,7 @@ export interface Project {
   image: string;
   tags: string[];
   codeUrl: string;
+  linkLabel?: string;
 }
 
 export interface Bubble {

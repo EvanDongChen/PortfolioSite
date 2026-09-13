@@ -36,6 +36,7 @@ const LARGE_CREATURE_MIN_SEPARATION = 220;
 // Refill the current viewport quickly enough to keep the aquarium lively after
 // the initial arrival burst, without increasing the maximum fish count.
 const FISH_SPAWN_INTERVAL_MS = 320;
+const FISH_DESPAWN_MARGIN = 140;
 const LOW_FISH_REFILL_THRESHOLD = 42;
 const REFILL_BURST_COUNT = 24;
 const REFILL_BURST_INTERVAL_MS = 110;
@@ -282,6 +283,14 @@ const App: React.FC = () => {
     nextEntityIdRef.current += 1;
     return id;
   }, []);  const projects = useMemo<Project[]>(() => [
+    {
+      title: 'The Wishing Terminal',
+      description: 'Adventure horror game built in Roblox for the SFU Summer Summit 2026 game jam.',
+      image: `${BASE_URL}images/the_wishing_terminal.png`,
+      tags: ['Roblox', 'Lua', 'Adventure', 'Horror', 'Game Development', 'Hackathon'],
+      codeUrl: 'https://matchabatcha.itch.io/thewishingterminal',
+      linkLabel: 'View More',
+    },
     {
       title: 'Cramsino',
       description: 'AI-powered study app that uses computer vision to detect focus and rewards studying with gacha-style card pulls. Won Best UI at JourneyHacks 2026.',
@@ -1005,10 +1014,10 @@ const App: React.FC = () => {
             x += vx;
             y += vy;
             if (fish.variant === 'puffer') {
-              if (vx > 0 && x > window.innerWidth + 200) x = -200;
-              else if (vx < 0 && x < -200) x = window.innerWidth + 200;
+              if (vx > 0 && x > window.innerWidth + FISH_DESPAWN_MARGIN) x = -FISH_DESPAWN_MARGIN;
+              else if (vx < 0 && x < -FISH_DESPAWN_MARGIN) x = window.innerWidth + FISH_DESPAWN_MARGIN;
             }
-            if (x < -200 || x > window.innerWidth + 200) return null;
+            if (fish.variant !== 'puffer' && (x < -FISH_DESPAWN_MARGIN || x > window.innerWidth + FISH_DESPAWN_MARGIN)) return null;
             const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
             let delta = targetRotation - rotation;
             if (delta > 180) delta -= 360;
@@ -1381,8 +1390,8 @@ const App: React.FC = () => {
           // Keep puffer fish persistent by wrapping it around the screen instead of letting it swim off and respawning.
           // This prevents the 'teleportation' effect when a new fish is randomly chosen to be the puffer.
           if (fish.variant === 'puffer') {
-            if (vx > 0 && x > window.innerWidth + 200) x = -200;
-            else if (vx < 0 && x < -200) x = window.innerWidth + 200;
+            if (vx > 0 && x > window.innerWidth + FISH_DESPAWN_MARGIN) x = -FISH_DESPAWN_MARGIN;
+            else if (vx < 0 && x < -FISH_DESPAWN_MARGIN) x = window.innerWidth + FISH_DESPAWN_MARGIN;
           }
 
           let delta = 0;
@@ -1420,7 +1429,9 @@ const App: React.FC = () => {
             isPuffed: newIsPuffed,
             puffStartTime: newPuffStartTime,
           };
-        }).filter((fish): fish is FishType => fish !== null);
+        }).filter((fish): fish is FishType => fish !== null)
+          .filter(fish => fish.variant === 'puffer'
+            || (fish.x > -FISH_DESPAWN_MARGIN && fish.x < window.innerWidth + FISH_DESPAWN_MARGIN));
 
         // Keep clown/puffer guarantees in underwater only.
         if (theme === 'underwater' && next.length > 0 && !next.some(f => f.variant === 'clown')) {
