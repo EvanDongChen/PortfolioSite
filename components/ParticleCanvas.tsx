@@ -273,6 +273,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
     if (!ctx) return;
 
     let animationFrameId = 0;
+    let isVisible = !document.hidden;
     let lastTime = performance.now();
 
     const resize = () => {
@@ -286,7 +287,19 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
       }
     };
 
+    const handleVisibilityChange = () => {
+      isVisible = !document.hidden;
+      if (!isVisible) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = 0;
+      } else if (animationFrameId === 0) {
+        lastTime = performance.now();
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+
     window.addEventListener('resize', resize);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     resize();
 
     const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -744,14 +757,15 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
         arr.length = write;
       }
 
-      animationFrameId = requestAnimationFrame(animate);
+      if (isVisible) animationFrameId = requestAnimationFrame(animate);
     };
 
-    animationFrameId = requestAnimationFrame(animate);
+    if (isVisible) animationFrameId = requestAnimationFrame(animate);
 
     return () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 

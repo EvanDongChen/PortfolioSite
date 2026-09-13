@@ -84,6 +84,8 @@ const ProfilePhoto: React.FC = () => {
           src={`${BASE_URL}images/profile.jpg`}
           alt="Evan Chen"
           className="w-full h-full object-cover pointer-events-none"
+          fetchPriority="high"
+          decoding="async"
           draggable={false}
         />
       </div>

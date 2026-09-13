@@ -21,7 +21,7 @@ const NORMAL_PUFFER_PATH = "M 85,25 C 80,5 20,5 15,25 C 20,45 80,45 85,25";
 // The viewBox is 100x50. To make a circle in a square container, the path must be 100 units wide and 50 units tall.
 const BALL_PUFFER_PATH = "M 100,25 C 100,0 75,0 50,0 C 25,0 0,0 0,25 C 0,50 25,50 50,50 C 75,50 100,50 100,25";
 
-const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false, birthTime, isPuffed = false, onMouseDown, isGrabMode = false, isDeepSea = false, isSilhouette = false }) => {
+const Fish: React.FC<FishProps> = ({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false, birthTime, isPuffed = false, onMouseDown, isGrabMode = false, isDeepSea = false, isSilhouette = false }) => {
   const isClownFish = variant === 'clown';
   const isPuffer = variant === 'puffer';
   const isRainbowFish = variant === 'rainbow';
@@ -190,6 +190,27 @@ const Fish: React.FC<FishProps> = React.memo(({ id, x, displayY, rotation, scale
       {svgContent}
     </div>
   );
-});
+};
 
-export default Fish;
+// Movement is applied imperatively by the aquarium layer. Ignore only the
+// per-frame coordinates here so React can preserve each fish's SVG subtree.
+const areFishPropsEqual = (previous: FishProps, next: FishProps) => {
+  if (previous.birthTime || next.birthTime) return false;
+
+  return previous.id === next.id
+    && previous.scale === next.scale
+    && previous.color1 === next.color1
+    && previous.color2 === next.color2
+    && previous.isFlipped === next.isFlipped
+    && previous.isNibbling === next.isNibbling
+    && previous.variant === next.variant
+    && previous.isFaded === next.isFaded
+    && previous.isHighlighted === next.isHighlighted
+    && previous.isPuffed === next.isPuffed
+    && previous.onMouseDown === next.onMouseDown
+    && previous.isGrabMode === next.isGrabMode
+    && previous.isDeepSea === next.isDeepSea
+    && previous.isSilhouette === next.isSilhouette;
+};
+
+export default React.memo(Fish, areFishPropsEqual);

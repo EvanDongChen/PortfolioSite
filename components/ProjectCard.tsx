@@ -149,6 +149,8 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
           src={image}
           alt={title}
           className="w-full h-64 object-cover"
+          loading="lazy"
+          decoding="async"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
       </div>

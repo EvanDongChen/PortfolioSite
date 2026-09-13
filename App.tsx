@@ -33,7 +33,13 @@ const DEFAULT_FISH_LIMIT = 75;
 const MIN_FISH_LIMIT = 5;
 const MAX_FISH_LIMIT = 150;
 const LARGE_CREATURE_MIN_SEPARATION = 220;
-const FISH_SPAWN_INTERVAL_MS = 600;
+// Refill the current viewport quickly enough to keep the aquarium lively after
+// the initial arrival burst, without increasing the maximum fish count.
+const FISH_SPAWN_INTERVAL_MS = 320;
+const LOW_FISH_REFILL_THRESHOLD = 42;
+const REFILL_BURST_COUNT = 24;
+const REFILL_BURST_INTERVAL_MS = 110;
+const REFILL_BURST_COOLDOWN_MS = 7000;
 const PUFFER_FISH_CHANCE = 0.02;
 const RAINBOW_FISH_CHANCE = 0.005;
 const SCROLL_ACTIVE_WINDOW_MS = 140;
@@ -43,6 +49,33 @@ const THEME_TRANSITION_MS = 900;
 const SILHOUETTE_FADE_MS = 460;
 const ANGLER_REVEAL_RADIUS = 165;
 const randomInRange = (minMs: number, maxMs: number) => minMs + Math.random() * (maxMs - minMs);
+
+type AnimationSubscriber = (timestamp: number) => void;
+const creatureAnimationSubscribers = new Set<AnimationSubscriber>();
+let creatureAnimationFrame: number | null = null;
+
+const runCreatureAnimation = (timestamp: number) => {
+  creatureAnimationFrame = null;
+  creatureAnimationSubscribers.forEach(subscriber => subscriber(timestamp));
+  if (creatureAnimationSubscribers.size > 0) {
+    creatureAnimationFrame = window.requestAnimationFrame(runCreatureAnimation);
+  }
+};
+
+const subscribeToCreatureAnimation = (subscriber: AnimationSubscriber) => {
+  creatureAnimationSubscribers.add(subscriber);
+  if (creatureAnimationFrame === null) {
+    creatureAnimationFrame = window.requestAnimationFrame(runCreatureAnimation);
+  }
+
+  return () => {
+    creatureAnimationSubscribers.delete(subscriber);
+    if (creatureAnimationSubscribers.size === 0 && creatureAnimationFrame !== null) {
+      window.cancelAnimationFrame(creatureAnimationFrame);
+      creatureAnimationFrame = null;
+    }
+  };
+};
 
 const WHALE_INITIAL_DELAY_MIN_MS = 2500;
 const WHALE_INITIAL_DELAY_MAX_MS = 7000;
@@ -202,7 +235,9 @@ const App: React.FC = () => {
   const [isTankOpen, setIsTankOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const particleCanvasRef = useRef<ParticleCanvasRef>(null);
+  const nibblingFishIdsRef = useRef<Record<number, boolean>>({});
   useEffect(() => { isGrabModeRef.current = isGrabMode; }, [isGrabMode]);
+  useEffect(() => { nibblingFishIdsRef.current = nibblingFishIds; }, [nibblingFishIds]);
   useEffect(() => {
     const handleVisibility = () => { isPageHiddenRef.current = document.hidden; };
     document.addEventListener('visibilitychange', handleVisibility);
@@ -219,6 +254,7 @@ const App: React.FC = () => {
   const fishFoodsRef = useRef<FishFoodType[]>([]);
   const trailEmitRef = useRef<Record<number, number>>({});
   const grabbedFishRef = useRef<HTMLDivElement>(null);
+  const fishNodesRef = useRef<Map<number, HTMLElement>>(new Map());
   const nextWhaleSpawnRef = useRef(0);
   const nextTurtleSpawnRef = useRef(0);
   const nextJellyfishSpawnRef = useRef(0);
@@ -229,6 +265,8 @@ const App: React.FC = () => {
   const whaleHasSpawnedRef = useRef(false);
   const turtleHasSpawnedRef = useRef(false);
   const nextEntityIdRef = useRef(1);
+  const lastRefillBurstRef = useRef(0);
+  const refillBurstActiveRef = useRef(false);
   const fishLastFrameTimeRef = useRef(0);
   const whaleLastFrameTimeRef = useRef(0);
   const turtleLastFrameTimeRef = useRef(0);
@@ -412,7 +450,7 @@ const App: React.FC = () => {
     particleCanvasRef.current?.emitAmbientBubble?.(theme === 'deepsea');
   }, [theme, getNextEntityId]);
 
-  const createFish = useCallback(() => {
+  const createFish = useCallback((forceCurrentViewport = false) => {
     const id = getNextEntityId();
     const scale = Math.random() * 0.4 + 0.3;
     const speed = (Math.random() * 1 + 1);
@@ -433,15 +471,18 @@ const App: React.FC = () => {
     const viewportWorldBottom = viewportWorldTop + window.innerHeight;
     const spawnRoll = Math.random();
 
-    if (spawnRoll < 0.6) {
+    if (forceCurrentViewport) {
+      y = viewportWorldTop + window.innerHeight * (0.05 + Math.random() * 0.9);
+    } else if (spawnRoll < 0.6) {
       // Most fish spawn within the current viewport.
       y = viewportWorldTop + window.innerHeight * (0.05 + Math.random() * 0.9);
-    } else if (spawnRoll < 0.84) {
+    } else if (spawnRoll < 0.94) {
       // Some fish spawn just above or below view to swim in naturally.
       const band = window.innerHeight * (0.25 + Math.random() * 0.35);
       y = Math.random() > 0.5 ? viewportWorldTop - band : viewportWorldBottom + band;
     } else {
-      // A small percentage can spawn anywhere in the document.
+      // Keep only a small number of fish distributed through the full world;
+      // most steady-state spawns should remain visible near the current view.
       y = Math.random() * document.documentElement.scrollHeight;
     }
     vy = 0;
@@ -464,7 +505,8 @@ const App: React.FC = () => {
     ];
     const fishPalette = theme === 'deepsea' ? deepSeaPalette : underwaterPalette;
 
-    setFishes(prev => {
+    setFishes(() => {
+      const prev = fishesRef.current;
       if (prev.length >= fishLimit) {
         return prev;
       }
@@ -626,7 +668,11 @@ const App: React.FC = () => {
       const pufferEl = target.closest('[data-is-puffer="true"]');
       if (pufferEl) {
         const id = Number(pufferEl.getAttribute('data-fish-id'));
-        setFishes(prev => prev.map(f => f.id === id ? { ...f, isPuffed: true, puffStartTime: performance.now() } : f));
+        setFishes(() => {
+          const next = fishesRef.current.map(f => f.id === id ? { ...f, isPuffed: true, puffStartTime: performance.now() } : f);
+          fishesRef.current = next;
+          return next;
+        });
         return;
       }
 
@@ -680,15 +726,51 @@ const App: React.FC = () => {
     };
   }, [handleScroll]);
 
+  // Position updates are applied directly to the fish nodes. React still owns
+  // fish appearance and interactions, but does not reconcile every SVG subtree
+  // just because a fish moved a few pixels.
+  const syncFishPositions = useCallback((fishList: FishType[]) => {
+    const layers = [worldLayerRef.current, worldLayerForegroundRef.current].filter(
+      (layer): layer is HTMLDivElement => layer !== null,
+    );
+
+    fishList.forEach(fish => {
+      let fishElement = fishNodesRef.current.get(fish.id);
+      if (!fishElement?.isConnected) {
+        fishElement = layers
+          .map(layer => layer.querySelector<HTMLElement>(`[data-fish-id="${fish.id}"]`))
+          .find(Boolean);
+        if (fishElement) fishNodesRef.current.set(fish.id, fishElement);
+      }
+      if (!fishElement) return;
+
+      const nibbleTilt = nibblingFishIdsRef.current[fish.id]
+        ? (fish.isFlipped ? -14 : 14)
+        : 0;
+      const nibbleScale = nibblingFishIdsRef.current[fish.id] ? 1.2 : 1;
+      const puffScale = fish.isPuffed ? 1.5 : 1;
+      fishElement.style.transform = `translate(${fish.x}px, ${fish.displayY}px) rotate(${fish.rotation + nibbleTilt}deg) scale(${nibbleScale * puffScale}) ${fish.isFlipped ? 'scaleY(-1)' : ''}`;
+    });
+
+    const activeIds = new Set(fishList.map(fish => fish.id));
+    fishNodesRef.current.forEach((_, id) => {
+      if (!activeIds.has(id)) fishNodesRef.current.delete(id);
+    });
+  }, []);
+
+  useEffect(() => {
+    syncFishPositions(fishes);
+  }, [fishes, syncFishPositions, nibblingFishIds]);
+
   const handleGrabFish = useCallback((id: number, e?: React.MouseEvent) => {
     if (!isGrabMode || grabbedFish) return;
     e?.preventDefault();
-    const fishToGrab = fishes.find(f => f.id === id);
+    const fishToGrab = fishesRef.current.find(f => f.id === id);
     if (fishToGrab) {
       setGrabbedFish(fishToGrab);
       setFishes(prev => prev.filter(f => f.id !== id));
     }
-  }, [isGrabMode, grabbedFish, fishes]);
+  }, [isGrabMode, grabbedFish]);
 
   const handleDropFish = useCallback((clientX?: number, clientY?: number) => {
     if (!grabbedFish) return;
@@ -901,8 +983,11 @@ const App: React.FC = () => {
       const SCHOOL_SPEED_BOOST = 0.55;
       const MAX_SPEED_SCHOOL = 3.5;
 
-      setFishes(currentFishes => {
-        const next = currentFishes.map(fish => {
+      const next = currentFishes.map(fish => {
+          const viewportTop = scrollYRef.current * SCROLL_PARALLAX;
+          const preloadMargin = window.innerHeight * 1.5;
+          const isFarOffscreen = fish.y < viewportTop - preloadMargin
+            || fish.y > viewportTop + window.innerHeight + preloadMargin;
           let { x, y, vx, vy, rotation, initialVx, isFlipped } = fish;
           let newBehavior = fish.behavior;
           let newCuriousTimer = fish.curiousTimer || 0;
@@ -913,6 +998,28 @@ const App: React.FC = () => {
           let newReadyToSpiral = fish.readyToSpiral;
           let newIsPuffed = fish.isPuffed;
           let newPuffStartTime = fish.puffStartTime;
+
+          // Keep distant fish moving, but defer food, mouse, schooling, and
+          // shockwave calculations until they approach the visible world.
+          if (isFarOffscreen) {
+            x += vx;
+            y += vy;
+            if (fish.variant === 'puffer') {
+              if (vx > 0 && x > window.innerWidth + 200) x = -200;
+              else if (vx < 0 && x < -200) x = window.innerWidth + 200;
+            }
+            if (x < -200 || x > window.innerWidth + 200) return null;
+            const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
+            let delta = targetRotation - rotation;
+            if (delta > 180) delta -= 360;
+            if (delta < -180) delta += 360;
+            return {
+              ...fish,
+              x, y, displayY: y, vx, vy,
+              rotation: rotation + delta * 0.1,
+              isFlipped: vx < 0,
+            };
+          }
 
           if (newIsPuffed && newPuffStartTime && (timestamp - newPuffStartTime > 3500)) {
             newIsPuffed = false;
@@ -1298,15 +1405,13 @@ const App: React.FC = () => {
             emitTrailBubble(x - direction * (26 * fish.scale), y + (Math.random() - 0.5) * 6);
           }
 
-          const fishDisplayY = fish.variant === 'puffer' 
-            ? y - scrollYRef.current * SCROLL_PARALLAX 
-            : y;
-
           return { 
             ...fish, 
             behavior: newBehavior, 
-            curiousTimer: newCuriousTimer, 
-            x, y, displayY: fishDisplayY, vx, vy, rotation,
+            curiousTimer: newCuriousTimer,
+            // The foreground layer already applies the world scroll offset.
+            // Keep the puffer in world coordinates to avoid scrolling twice.
+            x, y, displayY: y, vx, vy, rotation,
             matingStartTime: newMatingStartTime,
             matingPartnerId: newMatingPartnerId,
             matingCenter: newMatingCenter,
@@ -1315,10 +1420,7 @@ const App: React.FC = () => {
             isPuffed: newIsPuffed,
             puffStartTime: newPuffStartTime,
           };
-        })
-          .filter(fish =>
-            fish.x > -200 && fish.x < window.innerWidth + 200
-          );
+        }).filter((fish): fish is FishType => fish !== null);
 
         // Keep clown/puffer guarantees in underwater only.
         if (theme === 'underwater' && next.length > 0 && !next.some(f => f.variant === 'clown')) {
@@ -1333,9 +1435,23 @@ const App: React.FC = () => {
           next[targetIdx] = { ...next[targetIdx], variant: 'puffer' };
         }
 
-        return next;
-      }
-      );
+      const previousFishes = fishesRef.current;
+      fishesRef.current = next;
+      syncFishPositions(next);
+
+      // React only needs to know about structural or behavioral changes. The
+      // high-frequency position data remains in the ref and on the DOM nodes.
+      const hasMetadataChanges = next.length !== previousFishes.length
+        || next.some((fish, index) => {
+          const previous = previousFishes[index];
+          return !previous
+            || fish.id !== previous.id
+            || fish.behavior !== previous.behavior
+            || fish.variant !== previous.variant
+            || fish.isPuffed !== previous.isPuffed
+            || fish.readyToSpiral !== previous.readyToSpiral;
+        });
+      if (hasMetadataChanges) setFishes(next);
 
       if (eatenFoodIds.size > 0) {
         setFishFoods(prev => {
@@ -1450,6 +1566,48 @@ const App: React.FC = () => {
     }
   }, [theme, createBubble, createFish]);
 
+  // Recreate the sense of arrival after older fish have left the viewport,
+  // while keeping a cooldown and the normal fish cap as hard limits.
+  useEffect(() => {
+    if (theme !== 'underwater' && theme !== 'deepsea') return;
+
+    let burstInterval: ReturnType<typeof setInterval> | undefined;
+
+    const checkForRefill = () => {
+      const now = performance.now();
+      if (
+        refillBurstActiveRef.current
+        || now - lastRefillBurstRef.current < REFILL_BURST_COOLDOWN_MS
+        || fishesRef.current.length > LOW_FISH_REFILL_THRESHOLD
+      ) {
+        return;
+      }
+
+      lastRefillBurstRef.current = now;
+      refillBurstActiveRef.current = true;
+      let spawned = 0;
+
+      burstInterval = setInterval(() => {
+        if (fishesRef.current.length >= fishLimit || spawned >= REFILL_BURST_COUNT) {
+          if (burstInterval) clearInterval(burstInterval);
+          burstInterval = undefined;
+          refillBurstActiveRef.current = false;
+          return;
+        }
+
+        createFish(true);
+        spawned += 1;
+      }, REFILL_BURST_INTERVAL_MS);
+    };
+
+    const checkInterval = setInterval(checkForRefill, 1000);
+    return () => {
+      clearInterval(checkInterval);
+      if (burstInterval) clearInterval(burstInterval);
+      refillBurstActiveRef.current = false;
+    };
+  }, [theme, fishLimit, createFish]);
+
   useEffect(() => {
     if (fishesRef.current.length <= fishLimit) return;
     setFishes(prev => prev.slice(0, fishLimit));
@@ -1474,16 +1632,14 @@ const App: React.FC = () => {
   }, [theme]);
 
   useEffect(() => {
-    let animationFrameId: number;
-
     const randomWhaleDelay = () => randomInRange(WHALE_RESPAWN_DELAY_MIN_MS, WHALE_RESPAWN_DELAY_MAX_MS);
     if (nextWhaleSpawnRef.current === 0) {
       nextWhaleSpawnRef.current = performance.now() + randomInRange(WHALE_INITIAL_DELAY_MIN_MS, WHALE_INITIAL_DELAY_MAX_MS);
     }
 
     const animateWhale = (timestamp: number) => {
-      if (isPageHiddenRef.current) { animationFrameId = requestAnimationFrame(animateWhale); return; }
-      if (timestamp - whaleLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) { animationFrameId = requestAnimationFrame(animateWhale); return; }
+      if (isPageHiddenRef.current) return;
+      if (timestamp - whaleLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) return;
       whaleLastFrameTimeRef.current = timestamp;
       if (theme !== 'underwater') {
         setWhale(null);
@@ -1551,29 +1707,27 @@ const App: React.FC = () => {
         return { ...current, x, y, displayY };
       });
 
-      animationFrameId = requestAnimationFrame(animateWhale);
     };
 
-    if (theme === 'underwater') {
-      animationFrameId = requestAnimationFrame(animateWhale);
-    } else {
+    const unsubscribe = theme === 'underwater'
+      ? subscribeToCreatureAnimation(animateWhale)
+      : () => {};
+    if (theme !== 'underwater') {
       setWhale(null);
     }
 
-    return () => cancelAnimationFrame(animationFrameId);
+    return unsubscribe;
   }, [theme, getNextEntityId]);
 
   useEffect(() => {
-    let animationFrameId: number;
-
     const randomTurtleDelay = () => randomInRange(TURTLE_RESPAWN_DELAY_MIN_MS, TURTLE_RESPAWN_DELAY_MAX_MS);
     if (nextTurtleSpawnRef.current === 0) {
       nextTurtleSpawnRef.current = performance.now() + randomInRange(TURTLE_INITIAL_DELAY_MIN_MS, TURTLE_INITIAL_DELAY_MAX_MS);
     }
 
     const animateTurtle = (timestamp: number) => {
-      if (isPageHiddenRef.current) { animationFrameId = requestAnimationFrame(animateTurtle); return; }
-      if (timestamp - turtleLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) { animationFrameId = requestAnimationFrame(animateTurtle); return; }
+      if (isPageHiddenRef.current) return;
+      if (timestamp - turtleLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) return;
       turtleLastFrameTimeRef.current = timestamp;
       if (theme !== 'underwater') {
         setTurtle(null);
@@ -1657,29 +1811,27 @@ const App: React.FC = () => {
         return { ...current, x, y, baseY, displayY, vx, isFlipped: vx < 0 };
       });
 
-      animationFrameId = requestAnimationFrame(animateTurtle);
     };
 
-    if (theme === 'underwater') {
-      animationFrameId = requestAnimationFrame(animateTurtle);
-    } else {
+    const unsubscribe = theme === 'underwater'
+      ? subscribeToCreatureAnimation(animateTurtle)
+      : () => {};
+    if (theme !== 'underwater') {
       setTurtle(null);
     }
 
-    return () => cancelAnimationFrame(animationFrameId);
+    return unsubscribe;
   }, [theme, getNextEntityId]);
 
   useEffect(() => {
-    let animationFrameId: number;
-
     const randomJellyfishDelay = () => randomInRange(JELLYFISH_RESPAWN_DELAY_MIN_MS, JELLYFISH_RESPAWN_DELAY_MAX_MS);
     if (nextJellyfishSpawnRef.current === 0) {
       nextJellyfishSpawnRef.current = performance.now() + randomInRange(JELLYFISH_INITIAL_DELAY_MIN_MS, JELLYFISH_INITIAL_DELAY_MAX_MS);
     }
 
     const animateJellyfish = (timestamp: number) => {
-      if (isPageHiddenRef.current) { animationFrameId = requestAnimationFrame(animateJellyfish); return; }
-      if (timestamp - jellyfishLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) { animationFrameId = requestAnimationFrame(animateJellyfish); return; }
+      if (isPageHiddenRef.current) return;
+      if (timestamp - jellyfishLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) return;
       jellyfishLastFrameTimeRef.current = timestamp;
       if (theme !== 'underwater') {
         setJellyfish(null);
@@ -1745,24 +1897,22 @@ const App: React.FC = () => {
         return { ...current, x, y, displayY };
       });
 
-      animationFrameId = requestAnimationFrame(animateJellyfish);
     };
 
-    if (theme === 'underwater') {
-      animationFrameId = requestAnimationFrame(animateJellyfish);
-    } else {
+    const unsubscribe = theme === 'underwater'
+      ? subscribeToCreatureAnimation(animateJellyfish)
+      : () => {};
+    if (theme !== 'underwater') {
       setJellyfish(null);
     }
 
-    return () => cancelAnimationFrame(animationFrameId);
+    return unsubscribe;
   }, [theme, getNextEntityId, emitJellyfishPop]);
 
   useEffect(() => {
-    let animationFrameId: number;
-
     const animateAnglerFish = (timestamp: number) => {
-      if (isPageHiddenRef.current) { animationFrameId = requestAnimationFrame(animateAnglerFish); return; }
-      if (timestamp - anglerLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) { animationFrameId = requestAnimationFrame(animateAnglerFish); return; }
+      if (isPageHiddenRef.current) return;
+      if (timestamp - anglerLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) return;
       anglerLastFrameTimeRef.current = timestamp;
 
       if (theme !== 'deepsea') {
@@ -1803,19 +1953,21 @@ const App: React.FC = () => {
         return { ...current, x, y, baseY, vx };
       });
 
-      animationFrameId = requestAnimationFrame(animateAnglerFish);
     };
 
-    if (theme === 'deepsea') {
-      animationFrameId = requestAnimationFrame(animateAnglerFish);
-    } else {
+    const unsubscribe = theme === 'deepsea'
+      ? subscribeToCreatureAnimation(animateAnglerFish)
+      : () => {};
+    if (theme !== 'deepsea') {
       setAnglerFish(null);
     }
 
-    return () => cancelAnimationFrame(animationFrameId);
+    return unsubscribe;
   }, [theme, getNextEntityId]);
 
-  const colors = theme === 'underwater' ? {
+  // Keep this reference stable between animation frames so the static portfolio
+  // content can remain memoized while the aquarium simulation updates.
+  const colors = useMemo(() => theme === 'underwater' ? {
     text: 'text-cyan-100', textLighter: 'text-cyan-100/90', highlight: 'text-cyan-300',
     highlightStrong: 'text-cyan-200', border: 'border-cyan-400/20', timeline: 'bg-cyan-400/30',
     timelineDot: 'bg-cyan-500', timelineDotBorder: 'border-[#002851]', cardBg: 'bg-black/20',
@@ -1831,7 +1983,7 @@ const App: React.FC = () => {
     toolTagHoverBg: 'hover:bg-slate-800/70', searchBg: 'bg-black/60', searchBorder: 'border-emerald-400/25',
     searchRing: 'focus:ring-emerald-400', searchPlaceholder: 'placeholder-emerald-200/40', periodBg: 'bg-[#001208]',
     heroGradient: 'from-emerald-300 to-cyan-400', contactIcon: 'text-emerald-300'
-  };
+  }, [theme]);
 
 
   const worldTransitionClass = isThemeTransitionActive
@@ -2045,7 +2197,7 @@ const App: React.FC = () => {
           <div className="fixed bottom-8 left-24 z-40 w-56 px-1 opacity-50">
             <div className="mb-1 flex items-center justify-between text-xs text-cyan-100/90">
               <span className="font-semibold tracking-wide">Fish Count</span>
-              <span className="font-semibold">{fishLimit}</span>
+               <span className="font-semibold">{fishes.length} / {fishLimit}</span>
             </div>
             <input
               type="range"
