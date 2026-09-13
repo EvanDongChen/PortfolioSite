@@ -21,7 +21,7 @@ const TutorialButton: React.FC<TutorialButtonProps> = ({ isOpen, onToggle }) => 
       type="button"
       onClick={onToggle}
       data-is-tutorial="true"
-      className={`fixed bottom-40 right-8 z-[70] h-12 w-12 rounded-full backdrop-blur-sm shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 transition-all duration-300 font-extrabold text-2xl leading-none ${ringClass} ${
+      className={`fixed bottom-40 right-8 z-[55] h-12 w-12 rounded-full backdrop-blur-sm shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 transition-all duration-300 font-extrabold text-2xl leading-none ${ringClass} ${
         isOpen ? activeClass : inactiveClass
       }`}
       title={isOpen ? 'Close tutorial' : 'Open tutorial'}

@@ -316,7 +316,7 @@ const FishTank: React.FC<FishTankProps> = ({
       <div className="relative w-full h-full">
         {internalFishes.map(fish => (
           <div key={fish.id} style={{ position: 'absolute', left: fish.x, top: fish.y, cursor: isGrabMode ? 'crosshair' : 'default', pointerEvents: isGrabMode ? 'auto' : 'none', zIndex: 30 }} onMouseDown={(e) => { if (isGrabMode) { onGrabFishFromTank(fish); e.stopPropagation(); } }}>
-            <Fish {...fish} x={0} displayY={0} isGrabMode={isGrabMode} />
+            <Fish {...fish} x={0} displayY={0} isGrabMode={isGrabMode} isTankFish />
           </div>
         ))}
         {internalFishes.length === 0 && !hasGrabbedFish && (
