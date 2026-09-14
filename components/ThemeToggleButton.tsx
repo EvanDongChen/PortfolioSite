@@ -1,9 +1,11 @@
 import React from 'react';
-import { useTheme } from '../contexts/ThemeContext';
+import { DEEP_SEA_MODE_ENABLED, useTheme } from '../contexts/ThemeContext';
 import { DiveIcon, SurfaceIcon } from './Icons';
 
 const ThemeToggleButton: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
+
+  if (!DEEP_SEA_MODE_ENABLED) return null;
 
   const buttonColors = theme === 'underwater'
     ? "bg-cyan-500/30 border-cyan-400/30 hover:bg-cyan-500/50 focus:ring-cyan-400"

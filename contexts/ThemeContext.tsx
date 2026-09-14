@@ -2,6 +2,9 @@ import React, { createContext, useState, useContext, ReactNode } from 'react';
 
 type Theme = 'underwater' | 'deepsea';
 
+// Keep deep-sea support available while it is temporarily disabled in the UI.
+export const DEEP_SEA_MODE_ENABLED = false;
+
 interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
@@ -13,6 +16,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [theme, setTheme] = useState<Theme>('underwater');
 
   const toggleTheme = () => {
+    if (!DEEP_SEA_MODE_ENABLED) return;
     setTheme(prevTheme => (prevTheme === 'underwater' ? 'deepsea' : 'underwater'));
   };
 

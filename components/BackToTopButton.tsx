@@ -22,7 +22,7 @@ const BackToTopButton: React.FC = () => {
       type="button"
       onClick={scrollToTop}
       aria-label="Go to top"
-      className={`fixed bottom-24 right-8 z-40 p-3 rounded-full backdrop-blur-sm text-white shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 transition-all duration-300 opacity-100 translate-y-0 ${buttonColors}`}
+      className={`fixed bottom-8 right-8 z-40 p-3 rounded-full backdrop-blur-sm text-white shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 transition-all duration-300 opacity-100 translate-y-0 ${buttonColors}`}
     >
       <ArrowUpIcon className="w-6 h-6" />
     </button>
