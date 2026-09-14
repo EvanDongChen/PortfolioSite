@@ -58,6 +58,7 @@ let creatureAnimationFrame: number | null = null;
 
 const runCreatureAnimation = (timestamp: number) => {
   creatureAnimationFrame = null;
+  if (document.hidden) return;
   creatureAnimationSubscribers.forEach(subscriber => subscriber(timestamp));
   if (creatureAnimationSubscribers.size > 0) {
     creatureAnimationFrame = window.requestAnimationFrame(runCreatureAnimation);
@@ -158,8 +159,8 @@ interface AnglerFishState {
 
 const App: React.FC = () => {
   const { theme } = useTheme();
-  const [bubbles, setBubbles] = useState<BubbleType[]>([]);
   const [fishes, setFishes] = useState<FishType[]>([]);
+  const [bubbles, setBubbles] = useState<BubbleType[]>([]);
   const [isThemeTransitionActive, setIsThemeTransitionActive] = useState(false);
   const [themeTransitionDirection, setThemeTransitionDirection] = useState<'dive' | 'surface'>('dive');
   const [silhouetteFishes, setSilhouetteFishes] = useState<FishType[]>([]);
@@ -242,7 +243,12 @@ const App: React.FC = () => {
   useEffect(() => { isGrabModeRef.current = isGrabMode; }, [isGrabMode]);
   useEffect(() => { nibblingFishIdsRef.current = nibblingFishIds; }, [nibblingFishIds]);
   useEffect(() => {
-    const handleVisibility = () => { isPageHiddenRef.current = document.hidden; };
+    const handleVisibility = () => {
+      isPageHiddenRef.current = document.hidden;
+      if (!document.hidden && creatureAnimationFrame === null && creatureAnimationSubscribers.size > 0) {
+        creatureAnimationFrame = window.requestAnimationFrame(runCreatureAnimation);
+      }
+    };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
@@ -275,7 +281,7 @@ const App: React.FC = () => {
   const turtleLastFrameTimeRef = useRef(0);
   const jellyfishLastFrameTimeRef = useRef(0);
   const anglerLastFrameTimeRef = useRef(0);
-  const isPageHiddenRef = useRef(false);
+  const isPageHiddenRef = useRef(document.hidden);
   const shockwavesRef = useRef<{ id: number; x: number; worldY: number; timestamp: number }[]>([]);
   const lastScrollTimestampRef = useRef(0);
   const isGrabModeRef = useRef(isGrabMode);
@@ -868,7 +874,7 @@ const App: React.FC = () => {
     fishLastFrameTimeRef.current = 0;
 
     const animate = (timestamp: number) => {
-      if (isPageHiddenRef.current) { animationFrameId = requestAnimationFrame(animate); return; }
+      if (isPageHiddenRef.current) { animationFrameId = 0; return; }
       if (fishLastFrameTimeRef.current !== 0 && timestamp - fishLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) {
         animationFrameId = requestAnimationFrame(animate);
         return;
@@ -1509,10 +1515,21 @@ const App: React.FC = () => {
 
       animationFrameId = requestAnimationFrame(animate);
     };
+    const handleVisibilityChange = () => {
+      isPageHiddenRef.current = document.hidden;
+      if (!document.hidden && animationFrameId === 0) {
+        fishLastFrameTimeRef.current = 0;
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     if (theme === 'underwater' || theme === 'deepsea') {
       animationFrameId = requestAnimationFrame(animate);
     }
-    return () => cancelAnimationFrame(animationFrameId);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      cancelAnimationFrame(animationFrameId);
+    };
   }, [theme, emitTrailBubble, emitFoodCrumbs]);
 
   useEffect(() => {

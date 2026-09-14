@@ -48,6 +48,31 @@ const FishTank: React.FC<FishTankProps> = ({
   const requestRef = useRef<number>(0);
   const lastRenderTimeRef = useRef(0);
 
+  const syncTankVisuals = useCallback(() => {
+    const tank = tankRef.current;
+    if (!tank) return;
+
+    fishesRef.current.forEach(fish => {
+      const wrapper = tank.querySelector<HTMLElement>(`[data-tank-fish-id="${fish.id}"]`);
+      const fishElement = wrapper?.querySelector<HTMLElement>(`[data-fish-id="${fish.id}"]`);
+      if (wrapper) {
+        wrapper.style.left = `${fish.x}px`;
+        wrapper.style.top = `${fish.y}px`;
+      }
+      if (fishElement) {
+        fishElement.style.transform = `translate(0px, 0px) rotate(${fish.rotation}deg) scale(1) ${fish.isFlipped ? 'scaleY(-1)' : ''}`;
+      }
+    });
+
+    foodsRef.current.forEach(food => {
+      const foodElement = tank.querySelector<HTMLElement>(`[data-tank-food-id="${food.id}"]`);
+      if (foodElement) {
+        foodElement.style.left = `${food.x}px`;
+        foodElement.style.top = `${food.y}px`;
+      }
+    });
+  }, []);
+
   // Sync internal fishes
   useEffect(() => {
     fishesRef.current = tankFishes.map(f => {
@@ -260,23 +285,46 @@ const FishTank: React.FC<FishTankProps> = ({
 
     foodsRef.current = foodsRef.current.filter(food => !eatenFoodIds.has(food.id));
 
-    // The simulation can remain smooth at display refresh rate while React
-    // only reconciles the tank's fish subtree at 30 FPS.
-    if (timestamp - lastRenderTimeRef.current >= TANK_RENDER_FRAME_MS) {
+    syncTankVisuals();
+
+    // Positions are applied directly to existing nodes. React only reconciles
+    // when the visible entity set changes, avoiding repeated SVG work.
+    const renderedFishIds = new Set(
+      Array.from(tankRef.current?.querySelectorAll('[data-tank-fish-id]') ?? [])
+        .map(element => element.getAttribute('data-tank-fish-id')),
+    );
+    const renderedFoodIds = new Set(
+      Array.from(tankRef.current?.querySelectorAll('[data-tank-food-id]') ?? [])
+        .map(element => element.getAttribute('data-tank-food-id')),
+    );
+    const fishStructureChanged = renderedFishIds.size !== fishesRef.current.length
+      || fishesRef.current.some(fish => !renderedFishIds.has(String(fish.id)));
+    const foodStructureChanged = renderedFoodIds.size !== foodsRef.current.length
+      || foodsRef.current.some(food => !renderedFoodIds.has(String(food.id)));
+    if (fishStructureChanged || foodStructureChanged || timestamp - lastRenderTimeRef.current >= TANK_RENDER_FRAME_MS * 4) {
       lastRenderTimeRef.current = timestamp;
       setInternalFishes([...fishesRef.current]);
       setInternalFoods([...foodsRef.current]);
     }
     requestRef.current = requestAnimationFrame(animate);
-  }, [onFishBreed]);
+  }, [onFishBreed, syncTankVisuals]);
 
   useEffect(() => {
-    if (isOpen) {
-      requestRef.current = requestAnimationFrame(animate);
-    } else {
+    const handleVisibilityChange = () => {
       cancelAnimationFrame(requestRef.current);
+      if (!document.hidden && isOpen) {
+        requestRef.current = requestAnimationFrame(animate);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    if (isOpen && !document.hidden) {
+      requestRef.current = requestAnimationFrame(animate);
     }
-    return () => cancelAnimationFrame(requestRef.current);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      cancelAnimationFrame(requestRef.current);
+    };
   }, [isOpen, animate]);
 
   if (!isOpen) return null;
@@ -311,7 +359,7 @@ const FishTank: React.FC<FishTankProps> = ({
       )}
 
       {internalFoods.map(food => (
-        <div key={food.id} className={`absolute rounded-full blur-[1px] animate-bounce flex items-center justify-center ${food.type === 'love' ? 'w-4 h-4 text-pink-400' : 'w-2 h-2 bg-amber-400'}`} style={{ left: food.x, top: food.y }}>
+        <div key={food.id} data-tank-food-id={food.id} className={`absolute rounded-full blur-[1px] animate-bounce flex items-center justify-center ${food.type === 'love' ? 'w-4 h-4 text-pink-400' : 'w-2 h-2 bg-amber-400'}`} style={{ left: food.x, top: food.y }}>
           {food.type === 'love' && (
             <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full drop-shadow-[0_0_5px_rgba(244,114,182,0.8)]">
               <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
@@ -322,8 +370,8 @@ const FishTank: React.FC<FishTankProps> = ({
 
       <div className="relative w-full h-full">
         {internalFishes.map(fish => (
-          <div key={fish.id} style={{ position: 'absolute', left: fish.x, top: fish.y, cursor: isGrabMode ? 'crosshair' : 'default', pointerEvents: isGrabMode ? 'auto' : 'none', zIndex: 30 }} onMouseDown={(e) => { if (isGrabMode) { onGrabFishFromTank(fish); e.stopPropagation(); } }}>
-            <Fish {...fish} x={0} displayY={0} isGrabMode={isGrabMode} isTankFish />
+          <div key={fish.id} data-tank-fish-id={fish.id} style={{ position: 'absolute', left: fish.x, top: fish.y, cursor: isGrabMode ? 'crosshair' : 'default', pointerEvents: isGrabMode ? 'auto' : 'none', zIndex: 30 }} onMouseDown={(e) => { if (isGrabMode) { onGrabFishFromTank(fishesRef.current.find(currentFish => currentFish.id === fish.id) ?? fish); e.stopPropagation(); } }}>
+            <Fish {...fish} x={0} displayY={0} rotation={0} isFlipped={false} isGrabMode={isGrabMode} isTankFish />
           </div>
         ))}
         {internalFishes.length === 0 && !hasGrabbedFish && (
