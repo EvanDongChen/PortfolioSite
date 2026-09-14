@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React from 'react';
 import { Project } from '../types';
 import { CodeIcon } from './Icons';
 import { useTheme } from '../contexts/ThemeContext';
@@ -10,9 +10,6 @@ interface ProjectCardProps {
 const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
   const { title, description, image, tags, codeUrl, linkLabel = 'View Code' } = project;
   const { theme } = useTheme();
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
-  const [isHovered, setIsHovered] = useState(false);
 
   const colors = theme === 'underwater' ? {
     border: 'border-cyan-400/20',
@@ -24,8 +21,6 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
     tagText: 'text-cyan-200',
     bottomBorder: 'border-cyan-400/10',
     link: 'text-cyan-300',
-    glareColor: 'rgba(0, 255, 255, 0.08)',
-    edgeGlow: 'rgba(0, 255, 255, 0.4)',
   } : {
     border: 'border-indigo-400/20',
     borderHover: 'hover:border-indigo-400/50',
@@ -36,114 +31,12 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
     tagText: 'text-indigo-200',
     bottomBorder: 'border-indigo-400/10',
     link: 'text-indigo-300',
-    glareColor: 'rgba(129, 140, 248, 0.1)',
-    edgeGlow: 'rgba(129, 140, 248, 0.5)',
-  };
-
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-
-    // Balatro uses a pretty aggressive tilt — ~15-20 degrees max
-    const maxTilt = 15;
-    const rotateY = ((x - centerX) / centerX) * maxTilt;
-    const rotateX = ((centerY - y) / centerY) * maxTilt;
-
-    // Glare position as percentage for the radial gradient
-    const glareX = (x / rect.width) * 100;
-    const glareY = (y / rect.height) * 100;
-
-    setTilt({ rotateX, rotateY, glareX, glareY });
-  }, []);
-
-  const handleMouseEnter = useCallback(() => {
-    setIsHovered(true);
-  }, []);
-
-  const handleMouseLeave = useCallback(() => {
-    setIsHovered(false);
-    setTilt({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
-  }, []);
-
-  const cardStyle: React.CSSProperties = {
-    transform: isHovered
-      ? `perspective(800px) rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg) scale3d(1.05, 1.05, 1.05)`
-      : 'perspective(800px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
-    transition: isHovered
-      ? 'transform 0.1s ease-out, box-shadow 0.2s ease-out'
-      : 'transform 0.5s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.5s ease-out',
-    transformStyle: 'preserve-3d' as const,
-    willChange: 'transform',
-    boxShadow: isHovered
-      ? `${tilt.rotateY * -0.5}px ${tilt.rotateX * 0.5 + 15}px 30px rgba(0,0,0,0.35),
-         0 0 20px ${colors.edgeGlow},
-         inset 0 0 0 1px ${colors.edgeGlow}`
-      : '0 4px 15px rgba(0,0,0,0.15)',
-  };
-
-  // Glare / holographic shine overlay
-  const glareStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 'inherit',
-    pointerEvents: 'none',
-    zIndex: 30,
-    opacity: isHovered ? 1 : 0,
-    transition: 'opacity 0.3s ease-out',
-    background: `
-      radial-gradient(
-        circle at ${tilt.glareX}% ${tilt.glareY}%,
-        rgba(255, 255, 255, 0.2) 0%,
-        ${colors.glareColor} 40%,
-        transparent 70%
-      )
-    `,
-    mixBlendMode: 'overlay' as const,
-  };
-
-  // Subtle edge highlight that shifts with tilt
-  const edgeHighlightStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 'inherit',
-    pointerEvents: 'none',
-    zIndex: 31,
-    opacity: isHovered ? 0.6 : 0,
-    transition: 'opacity 0.3s ease-out',
-    background: `
-      linear-gradient(
-        ${135 + tilt.rotateY * 2}deg,
-        rgba(255,255,255,0.15) 0%,
-        transparent 50%,
-        transparent 100%
-      )
-    `,
   };
 
   return (
     <div
-      ref={cardRef}
-      className={`balatro-card bg-black/20 backdrop-blur-md rounded-xl overflow-hidden shadow-lg border ${colors.border} group`}
-      style={cardStyle}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      className={`bg-black/20 backdrop-blur-md rounded-xl overflow-hidden shadow-lg border ${colors.border} group`}
     >
-      {/* Glare overlay */}
-      <div style={glareStyle} />
-      {/* Edge highlight */}
-      <div style={edgeHighlightStyle} />
-
       <div className="relative overflow-hidden" style={{ zIndex: 1 }}>
         <img
           src={image}
