@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+﻿import React, { useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { DiveIcon, NetIcon, SurfaceIcon, TankIcon } from './Icons';
 
@@ -25,7 +25,7 @@ const TutorialPanel: React.FC<TutorialPanelProps> = ({ isOpen, onClose }) => {
       id: 'fish',
       title: 'Fish',
       description: 'Fish spawn and swim around the world with different behaviors and variants.',
-      images: ['tutorialfish.png'],
+      images: ['tutorialfish.webp'],
       details: [
         'Behavior types: cruise, dart, loiter, conga, and curious, use census to highlight fish with specific behaviors.',
         'Pufferfish behavior: click a pufferfish to make it puff up briefly.',
@@ -39,31 +39,31 @@ const TutorialPanel: React.FC<TutorialPanelProps> = ({ isOpen, onClose }) => {
       id: 'theme-toggle',
       title: 'Theme Toggle Button',
       description: 'Switch between the underwater and deep-sea world themes to catch different fish.',
-      images: ['abovewatertheme.png', 'belowwatertheme.png'],
+      images: ['abovewatertheme.webp', 'belowwatertheme.webp'],
     },
     {
       id: 'fish-census',
       title: 'Fish Census Button',
       description: 'Open the fish census panel and inspect live behavior counts. Click on the behaviors to highlight the fish of the corresponding behavior.',
-      images: ['fishcencus.png', 'highlightedfish.png'],
+      images: ['fishcencus.webp', 'highlightedfish.webp'],
     },
     {
       id: 'love-mode',
       title: 'Love Mode Button',
       description: 'Toggle love mode so fish react to heart bait. They will swim to it, perform a dance, and create a baby.',
-      images: ['breeding.png'],
+      images: ['breeding.webp'],
     },
     {
       id: 'fish-food',
       title: 'Fish Food Button',
       description: 'Enable placement mode to drop fish food into the world. Fish will swim over and eat the food.',
-      images: ['fishfood.png'],
+      images: ['fishfood.webp'],
     },
     {
       id: 'grab-and-tank',
       title: 'Grabber + Fish Tank Buttons',
       description: 'Use Grab Mode to pick up fish, then open the Portable Tank to store and manage them. You can breed fish in the tank and drag them in and out.',
-      images: ['fishtank.png'],
+      images: ['fishtank.webp'],
     },
   ];
 

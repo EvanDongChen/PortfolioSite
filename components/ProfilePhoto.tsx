@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 
 const BASE_URL = import.meta.env.BASE_URL;
@@ -81,7 +81,7 @@ const ProfilePhoto: React.FC = () => {
         }}
       >
         <img
-          src={`${BASE_URL}images/profile.jpg`}
+          src={`${BASE_URL}images/profile.webp`}
           alt="Evan Chen"
           className="w-full h-full object-cover pointer-events-none"
           fetchPriority="high"

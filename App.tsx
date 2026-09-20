@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Header from './components/Header';
 import Section from './components/Section';
 import ProjectCard from './components/ProjectCard';
@@ -294,7 +294,7 @@ const App: React.FC = () => {
     {
       title: 'The Wishing Terminal',
       description: 'Adventure horror game built in Roblox for the SFU Summer Summit 2026 game jam.',
-      image: `${BASE_URL}images/the_wishing_terminal.png`,
+      image: `${BASE_URL}images/the_wishing_terminal.webp`,
       tags: ['Roblox', 'Lua', 'Adventure', 'Horror', 'Game Development', 'Hackathon'],
       codeUrl: 'https://matchabatcha.itch.io/thewishingterminal',
       linkLabel: 'View More',
@@ -302,91 +302,91 @@ const App: React.FC = () => {
     {
       title: 'Cramsino',
       description: 'AI-powered study app that uses computer vision to detect focus and rewards studying with gacha-style card pulls. Won Best UI at JourneyHacks 2026.',
-      image: `${BASE_URL}images/cramsino.jpg`,
+      image: `${BASE_URL}images/cramsino.webp`,
       tags: ['Next.js', 'FastAPI', 'OpenCV', 'PostgreSQL', 'Hackathon'],
       codeUrl: 'https://devpost.com/software/cramsino',
     },
     {
       title: 'WitchDog',
       description: 'Real-time multiplayer trivia game built in Unity with Socket.IO networking and custom multi-phase gameplay.',
-      image: `${BASE_URL}images/witch_dog.png`,
+      image: `${BASE_URL}images/witch_dog.webp`,
       tags: ['Unity', 'C#', 'Multiplayer', 'Hackathon'],
       codeUrl: 'https://devpost.com/software/witch-dog',
     },
     {
       title: 'Money Mango',
       description: 'Personal finance Android app prototype built with Android Studio and Kotlin. Features OCR receipt parsing, manual entry, tags, spending goals, reminders, and analytics.',
-      image: `${BASE_URL}images/money_mango.png`,
+      image: `${BASE_URL}images/money_mango.webp`,
       tags: ['Android', 'Kotlin', 'ML Kit', 'OCR', 'Mobile', 'Finance', 'Notifications', 'Analytics'],
       codeUrl: 'https://github.com/EvanDongChen/MoneyMango',
     },
     {
       title: 'Chord Breakers',
       description: '2D action game built in Unity with modular architecture, elemental combat, and AI using finite state machines.',
-      image: `${BASE_URL}images/chord_breakers.png`,
+      image: `${BASE_URL}images/chord_breakers.webp`,
       tags: ['Unity', 'C#', 'Game Development', 'Hackathon'],
       codeUrl: 'https://angrycow05.itch.io/chord-breaker',
     },
     {
       title: 'SAM for Medical Segmentation',
       description: 'Research project exploring Segment Anything Models for MRI brain tumor segmentation. Implemented fine-tuning and automated bounding box prompts.',
-      image: `${BASE_URL}images/sam.png`,
+      image: `${BASE_URL}images/sam.webp`,
       tags: ['Python', 'AI', 'Research', 'Medical Imaging'],
       codeUrl: 'https://www.youtube.com/watch?v=DGHAxlcROsQ',
     },
     {
       title: 'Library Database Application',
       description: 'Full-stack library platform with Flask and SQL. Automated 50% of manual tasks with complex database schema.',
-      image: `${BASE_URL}images/library_database.png`,
+      image: `${BASE_URL}images/library_database.webp`,
       tags: ['Flask', 'SQL', 'JavaScript', 'HTML/CSS'],
       codeUrl: 'https://github.com/EvanDongChen/CMPT354-LibraryDataBase',
     },
     {
       title: 'WanderWise',
       description: 'AI-powered trip planner using React and Google APIs. Generates full-day plans in 5 seconds with real-time recommendations.',
-      image: `${BASE_URL}images/wander_wise.png`,
+      image: `${BASE_URL}images/wander_wise.webp`,
       tags: ['React', 'AWS Amplify', 'Google APIs', 'AI'],
       codeUrl: 'https://www.youtube.com/watch?v=WI8YdPw-tSo',
     },
     {
       title: 'Krill Krushers',
       description: 'Unity 2D combat game inspired by vampire survivors. Created 50+ assets and won Best Entertainment Hack.',
-      image: `${BASE_URL}images/krill_krushers.png`,
+      image: `${BASE_URL}images/krill_krushers.webp`,
       tags: ['Unity', 'C#', 'Game Development', 'Team Leadership'],
       codeUrl: 'https://evandongchen.github.io/Krill-Krushers/',
     },
     {
       title: 'Lizard Wizard',
       description: '2D combat game where you combo elemental spells to defeat enemies. Built in Unity using C#.',
-      image: `${BASE_URL}images/lizard_wizard.png`,
+      image: `${BASE_URL}images/lizard_wizard.webp`,
       tags: ['Unity', 'C#', 'Game Development', '2D', 'Combat', 'Elemental'],
       codeUrl: 'https://github.com/cna52/LizardWizard',
     },
     {
       title: 'Bird Game',
       description: 'Unity 2D roguelike with custom level generation. Designed 30+ original assets and core gameplay mechanics.',
-      image: `${BASE_URL}images/bird_game.png`,
+      image: `${BASE_URL}images/bird_game.webp`,
       tags: ['Unity', 'C#', 'Game Design', 'Aseprite'],
       codeUrl: 'https://evandongchen.github.io/Bird-Game/',
     },
     {
       title: 'Raccoon Game',
       description: '2.5D platformer game developed for Mountain Madness 2024. Won Most Mountainous award.',
-      image: `${BASE_URL}images/racoon_game.png`,
+      image: `${BASE_URL}images/racoon_game.webp`,
       tags: ['Unity', 'Game Development', 'Hackathon', 'Incomplete'],
       codeUrl: 'https://github.com/emmyfong/racoongame',
     },
     {
       title: 'Dream On, Sing On',
       description: 'Web app for vocal/instrumental track separation with karaoke features. Displays synchronized lyrics for songs.',
-      image: `${BASE_URL}images/dream_on_sing_on.png`,
+      image: `${BASE_URL}images/dream_on_sing_on.webp`,
       tags: ['React', 'Python', 'Spleeter', 'Audio Processing', 'Hackathon', 'Incomplete'],
       codeUrl: 'https://devpost.com/software/dream-on-sing-on',
     },
     {
       title: 'Pastry Panic',
       description: 'Stack-based cake game with leaderboard. Built with Unity and integrated into a React website with SQL database.',
-      image: `${BASE_URL}images/pastry_panic.png`,
+      image: `${BASE_URL}images/pastry_panic.webp`,
       tags: ['Unity', 'C#', 'React', 'SQL', 'JavaScript', 'Hackathon', 'Incomplete'],
       codeUrl: 'https://devpost.com/software/pastry-panic',
     },
@@ -601,7 +601,7 @@ const App: React.FC = () => {
           const xBand = Math.min(2, Math.floor((x / window.innerWidth) * 3));
           const spawnDisplayY = y - scrollYRef.current * SCROLL_PARALLAX;
           const yBand = spawnDisplayY < window.innerHeight / 2 ? 0 : 1;
-          return xBand * 2 + yBand; // 0–5
+          return xBand * 2 + yBand; // 0â€“5
         })(),
         variant,
         behavior,
@@ -935,13 +935,13 @@ const App: React.FC = () => {
         }
       }
 
-      // ── Per-frame acceleration structures ──────────────────────────────────
+      // â”€â”€ Per-frame acceleration structures â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // Map<id, fish> for O(1) partner / predecessor lookups.
       const fishById = new Map<number, FishType>();
       // Spatial grid (cell size = SCHOOL_RADIUS) for O(1) neighbor queries.
       const CELL_SIZE = 140;
       const spatialGrid = new Map<string, FishType[]>();
-      // Conga predecessor map: `${leaderId}_${index}` → fish.
+      // Conga predecessor map: `${leaderId}_${index}` â†’ fish.
       const congaPredMap = new Map<string, FishType>();
 
       for (const f of currentFishes) {
@@ -1816,7 +1816,7 @@ const App: React.FC = () => {
           baseY += (jelly.y - baseY) * 0.025;
         }
 
-        // No viewport clamping — turtle lives at a fixed world position
+        // No viewport clamping â€” turtle lives at a fixed world position
         // and disappears naturally when you scroll away from it
 
         const x = current.x + vx;

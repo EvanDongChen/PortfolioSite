@@ -9,7 +9,7 @@ interface AnglerFishProps {
 }
 
 /**
- * Angler fish body = /images/angler.png (faces LEFT by default).
+ * Angler fish body = /images/angler.webp (faces LEFT by default).
  * Container: 240 x 200 at scale=1, centered on (x, displayY).
  * Illicium rod attachment approx (88, 42) in SVG coords, lure tip at (70, -2).
  * isFlipped=true mirrors the inner div so the fish faces right.
@@ -43,7 +43,7 @@ const AnglerFish: React.FC<AnglerFishProps> = React.memo(({ x, displayY, scale, 
       <div style={innerStyle}>
         {/* Body image — fades in when cursor is near the lure */}
         <img
-          src="/images/angler.png"
+          src="/images/angler.webp"
           alt=""
           style={{
             position: 'absolute',
