@@ -284,6 +284,7 @@ const App: React.FC = () => {
   const anglerLastFrameTimeRef = useRef(0);
   const isPageHiddenRef = useRef(document.hidden);
   const shockwavesRef = useRef<{ id: number; x: number; worldY: number; timestamp: number }[]>([]);
+  const lastRippleClickTimeRef = useRef(0);
   const lastScrollTimestampRef = useRef(0);
   const isGrabModeRef = useRef(isGrabMode);
 
@@ -682,6 +683,10 @@ const App: React.FC = () => {
   useEffect(() => {
     if (isFishFoodMode || isGrabMode) return;
     const handleRippleClick = (e: MouseEvent) => {
+      const now = performance.now();
+      if (now - lastRippleClickTimeRef.current < 90) return;
+      lastRippleClickTimeRef.current = now;
+
       const target = e.target as HTMLElement;
       const pufferEl = target.closest('[data-is-puffer="true"]');
       if (pufferEl) {
