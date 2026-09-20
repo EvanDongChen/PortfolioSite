@@ -45,4 +45,4 @@ const TankToggleButton: React.FC<TankToggleButtonProps> = ({ isActive, onToggle,
   );
 };
 
-export default TankToggleButton;
+export default React.memo(TankToggleButton);

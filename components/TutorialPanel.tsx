@@ -204,4 +204,4 @@ const TutorialPanel: React.FC<TutorialPanelProps> = ({ isOpen, onClose }) => {
   );
 };
 
-export default TutorialPanel;
+export default React.memo(TutorialPanel);

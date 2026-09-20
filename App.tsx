@@ -46,6 +46,7 @@ const REFILL_BURST_COOLDOWN_MS = 7000;
 const PUFFER_FISH_CHANCE = 0.02;
 const RAINBOW_FISH_CHANCE = 0.005;
 const SCROLL_ACTIVE_WINDOW_MS = 140;
+const RIPPLE_CLICK_COOLDOWN_MS = 1000;
 const FISH_SIMULATION_FPS = 30;
 const FISH_SIMULATION_FRAME_MS = 1000 / FISH_SIMULATION_FPS;
 const THEME_TRANSITION_MS = 900;
@@ -684,7 +685,7 @@ const App: React.FC = () => {
     if (isFishFoodMode || isGrabMode) return;
     const handleRippleClick = (e: MouseEvent) => {
       const now = performance.now();
-      if (now - lastRippleClickTimeRef.current < 90) return;
+      if (now - lastRippleClickTimeRef.current < RIPPLE_CLICK_COOLDOWN_MS) return;
       lastRippleClickTimeRef.current = now;
 
       const target = e.target as HTMLElement;
@@ -2025,6 +2026,46 @@ const App: React.FC = () => {
     ? Math.hypot(mousePosRef.current.x - anglerFish.x, mousePosRef.current.y - anglerDisplayY) < (ANGLER_REVEAL_RADIUS * anglerFish.scale)
     : false;
 
+  // Stable handler identities for the always-mounted UI buttons below. App
+  // re-renders ~30x/sec while fish are swimming; without useCallback these
+  // would be fresh inline closures every render, defeating each button's
+  // React.memo and forcing it to re-render in lockstep with the fish sim.
+  const toggleTutorial = useCallback(() => setIsTutorialOpen(prev => !prev), []);
+  const closeTutorial = useCallback(() => setIsTutorialOpen(false), []);
+
+  const toggleLoveMode = useCallback(() => {
+    if (isLoveMode) {
+      setIsLoveMode(false);
+      setIsFishFoodMode(false);
+    } else {
+      setIsLoveMode(true);
+      setIsFishFoodMode(true);
+    }
+  }, [isLoveMode]);
+
+  const toggleFishFoodMode = useCallback(() => {
+    if (isFishFoodMode && !isLoveMode) {
+      setIsFishFoodMode(false);
+    } else {
+      setIsFishFoodMode(true);
+      setIsLoveMode(false);
+      setIsGrabMode(false);
+    }
+  }, [isFishFoodMode, isLoveMode]);
+
+  const toggleGrabMode = useCallback(() => {
+    const nextMode = !isGrabMode;
+    setIsGrabMode(nextMode);
+    if (nextMode) {
+      setIsTankOpen(true); // Open tank when entering grab mode
+      setIsFishFoodMode(false);
+      setIsLoveMode(false);
+    }
+  }, [isGrabMode]);
+
+  const toggleTankOpen = useCallback(() => setIsTankOpen(prev => !prev), []);
+  const closeTank = useCallback(() => setIsTankOpen(false), []);
+
   return (
     <div className={`relative min-h-screen text-white overflow-x-hidden transition-colors duration-1000 ${
       grabbedFish ? 'select-none cursor-grabbing' : ''
@@ -2229,9 +2270,9 @@ const App: React.FC = () => {
       />
       <BackToTopButton />
       <ThemeToggleButton />
-      <TutorialButton isOpen={isTutorialOpen} onToggle={() => setIsTutorialOpen((prev) => !prev)} />
+      <TutorialButton isOpen={isTutorialOpen} onToggle={toggleTutorial} />
       <Suspense fallback={null}>
-        <TutorialPanel isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
+        <TutorialPanel isOpen={isTutorialOpen} onClose={closeTutorial} />
       </Suspense>
       {(theme === 'underwater' || theme === 'deepsea') && (
         <>
@@ -2255,50 +2296,26 @@ const App: React.FC = () => {
             highlightedBehavior={highlightedBehavior}
             onHighlightBehavior={setHighlightedBehavior} 
           />
-          <LoveModeButton 
-            isActive={isLoveMode} 
-            onToggle={() => {
-              if (isLoveMode) {
-                setIsLoveMode(false);
-                setIsFishFoodMode(false);
-              } else {
-                setIsLoveMode(true);
-                setIsFishFoodMode(true);
-              }
-            }} 
+          <LoveModeButton
+            isActive={isLoveMode}
+            onToggle={toggleLoveMode}
           />
         </>
       )}
-      <FishFoodButton isActive={isFishFoodMode && !isLoveMode} onToggle={() => {
-        if (isFishFoodMode && !isLoveMode) {
-          setIsFishFoodMode(false);
-        } else {
-          setIsFishFoodMode(true);
-          setIsLoveMode(false);
-          setIsGrabMode(false);
-        }
-      }} />
+      <FishFoodButton isActive={isFishFoodMode && !isLoveMode} onToggle={toggleFishFoodMode} />
 
-      <GrabModeButton isActive={isGrabMode} onToggle={() => {
-        const nextMode = !isGrabMode;
-        setIsGrabMode(nextMode);
-        if (nextMode) {
-          setIsTankOpen(true); // Open tank when entering grab mode
-          setIsFishFoodMode(false);
-          setIsLoveMode(false);
-        }
-      }} />
+      <GrabModeButton isActive={isGrabMode} onToggle={toggleGrabMode} />
 
-      <TankToggleButton 
-        isActive={isTankOpen} 
-        onToggle={() => setIsTankOpen(!isTankOpen)} 
+      <TankToggleButton
+        isActive={isTankOpen}
+        onToggle={toggleTankOpen}
         count={tankFishes.length}
       />
 
       <Suspense fallback={null}>
         <FishTank
           isOpen={isTankOpen}
-          onClose={() => setIsTankOpen(false)}
+          onClose={closeTank}
           tankFishes={tankFishes}
           onDropFish={handleDropFish}
           onGrabFishFromTank={handleGrabFishFromTank}

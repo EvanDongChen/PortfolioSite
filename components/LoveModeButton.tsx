@@ -33,4 +33,4 @@ const LoveModeButton: React.FC<LoveModeButtonProps> = ({ isActive, onToggle }) =
   );
 };
 
-export default LoveModeButton;
+export default React.memo(LoveModeButton);

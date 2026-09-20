@@ -40,4 +40,4 @@ const FishFoodButton: React.FC<FishFoodButtonProps> = ({ isActive, onToggle }) =
   );
 };
 
-export default FishFoodButton;
+export default React.memo(FishFoodButton);

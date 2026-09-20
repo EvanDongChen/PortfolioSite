@@ -33,4 +33,4 @@ const TutorialButton: React.FC<TutorialButtonProps> = ({ isOpen, onToggle }) => 
   );
 };
 
-export default TutorialButton;
+export default React.memo(TutorialButton);

@@ -29,4 +29,4 @@ const BackToTopButton: React.FC = () => {
   );
 };
 
-export default BackToTopButton;
+export default React.memo(BackToTopButton);

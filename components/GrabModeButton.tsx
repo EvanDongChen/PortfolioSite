@@ -44,4 +44,4 @@ const GrabModeButton: React.FC<GrabModeButtonProps> = ({ isActive, onToggle }) =
   );
 };
 
-export default GrabModeButton;
+export default React.memo(GrabModeButton);
