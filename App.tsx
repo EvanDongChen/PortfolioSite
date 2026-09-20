@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
 import Header from './components/Header';
 import Section from './components/Section';
 import ProjectCard from './components/ProjectCard';
@@ -18,10 +18,11 @@ import PortfolioContent from './components/PortfolioContent';
 import ParticleCanvas, { ParticleCanvasRef } from './components/ParticleCanvas';
 import FishCanvas, { FishCanvasRef } from './components/FishCanvas';
 import GrabModeButton from './components/GrabModeButton';
-import FishTank from './components/FishTank';
 import TankToggleButton from './components/TankToggleButton';
 import TutorialButton from './components/TutorialButton';
-import TutorialPanel from './components/TutorialPanel';
+
+const FishTank = lazy(() => import('./components/FishTank'));
+const TutorialPanel = lazy(() => import('./components/TutorialPanel'));
 
 const BASE_URL = import.meta.env.BASE_URL;
 import ThemeToggleButton from './components/ThemeToggleButton';
@@ -2224,7 +2225,9 @@ const App: React.FC = () => {
       <BackToTopButton />
       <ThemeToggleButton />
       <TutorialButton isOpen={isTutorialOpen} onToggle={() => setIsTutorialOpen((prev) => !prev)} />
-      <TutorialPanel isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
+      <Suspense fallback={null}>
+        <TutorialPanel isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
+      </Suspense>
       {(theme === 'underwater' || theme === 'deepsea') && (
         <>
           <div className="fixed bottom-8 left-24 z-40 w-56 px-1 opacity-50">
@@ -2287,18 +2290,20 @@ const App: React.FC = () => {
         count={tankFishes.length}
       />
 
-      <FishTank 
-        isOpen={isTankOpen} 
-        onClose={() => setIsTankOpen(false)} 
-        tankFishes={tankFishes}
-        onDropFish={handleDropFish}
-        onGrabFishFromTank={handleGrabFishFromTank}
-        onFishBreed={handleFishBreed}
-        isGrabMode={isGrabMode}
-        hasGrabbedFish={!!grabbedFish}
-        isFishFoodMode={isFishFoodMode}
-        isLoveMode={isLoveMode}
-      />
+      <Suspense fallback={null}>
+        <FishTank
+          isOpen={isTankOpen}
+          onClose={() => setIsTankOpen(false)}
+          tankFishes={tankFishes}
+          onDropFish={handleDropFish}
+          onGrabFishFromTank={handleGrabFishFromTank}
+          onFishBreed={handleFishBreed}
+          isGrabMode={isGrabMode}
+          hasGrabbedFish={!!grabbedFish}
+          isFishFoodMode={isFishFoodMode}
+          isLoveMode={isLoveMode}
+        />
+      </Suspense>
 
       {grabbedFish && (
         <div 
