@@ -17,10 +17,37 @@ const FishCanvas = forwardRef<FishCanvasRef, FishCanvasProps>(({ enabled, isDeep
   const scrollYRef = useRef(0);
   const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
 
-  const getFishImage = (fish: FishType, redraw: () => void) => {
-    const key = `${fish.color1}|${fish.color2}`;
+  const getFishImage = (fish: FishType, isDeepSeaVariant: boolean, redraw: () => void) => {
+    // isDeepSea is baked into the key/SVG so the brightness/saturation/glow
+    // boost is rasterized once per color pair instead of being applied via
+    // ctx.filter + ctx.shadowBlur on every drawImage call (ctx.filter in
+    // particular forces a slow per-pixel software path in most browsers,
+    // and was previously paid for by every one of up to ~150 fish, every frame).
+    const key = `${fish.color1}|${fish.color2}|${isDeepSeaVariant ? 'deep' : 'normal'}`;
     const cached = imageCacheRef.current.get(key);
     if (cached) return cached;
+
+    const glowFilter = isDeepSeaVariant
+      ? `
+          <feColorMatrix in="SourceGraphic" type="saturate" values="2.2" result="saturated" />
+          <feComponentTransfer in="saturated" result="brightened">
+            <feFuncR type="linear" slope="1.6" />
+            <feFuncG type="linear" slope="1.6" />
+            <feFuncB type="linear" slope="1.6" />
+          </feComponentTransfer>
+          <feGaussianBlur in="brightened" stdDeviation="3" result="coloredBlur" />
+          <feMerge>
+            <feMergeNode in="coloredBlur" />
+            <feMergeNode in="brightened" />
+          </feMerge>
+        `
+      : `
+          <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="coloredBlur" />
+          <feMerge>
+            <feMergeNode in="coloredBlur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        `;
 
     const svg = `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" width="120" height="50" preserveAspectRatio="none">
@@ -29,12 +56,8 @@ const FishCanvas = forwardRef<FishCanvasRef, FishCanvasProps>(({ enabled, isDeep
             <stop offset="0%" stop-color="${fish.color1}" stop-opacity="0.85" />
             <stop offset="100%" stop-color="${fish.color2}" stop-opacity="0.7" />
           </linearGradient>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="1.5" result="coloredBlur" />
-            <feMerge>
-              <feMergeNode in="coloredBlur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            ${glowFilter}
           </filter>
         </defs>
         <g filter="url(#glow)">
@@ -67,19 +90,13 @@ const FishCanvas = forwardRef<FishCanvasRef, FishCanvasProps>(({ enabled, isDeep
 
       const width = 120 * fish.scale;
       const height = 50 * fish.scale;
-      const image = getFishImage(fish, draw);
+      const image = getFishImage(fish, isDeepSea, draw);
       if (!image.complete || image.naturalWidth === 0) continue;
 
       ctx.save();
       ctx.translate(fish.x + width / 2, displayY + height / 2);
       ctx.rotate(fish.rotation * Math.PI / 180);
       ctx.scale(1, fish.isFlipped ? -1 : 1);
-      ctx.filter = isDeepSea ? 'brightness(1.6) saturate(2.2)' : 'none';
-
-      if (isDeepSea) {
-        ctx.shadowColor = fish.color1;
-        ctx.shadowBlur = 10;
-      }
 
       ctx.drawImage(image, -width / 2, -height / 2, width, height);
       ctx.restore();

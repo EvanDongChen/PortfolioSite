@@ -284,6 +284,11 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
     let animationFrameId = 0;
     let isVisible = !document.hidden;
     let lastTime = performance.now();
+    let lastFrameTime = lastTime;
+    // Cap this canvas's own redraw rate independent of monitor refresh rate
+    // (the fish simulation is already 30fps-throttled; this loop previously
+    // ran uncapped, which is up to 4x the draw work on 120Hz+ displays).
+    const FRAME_INTERVAL_MS = 1000 / 30;
 
     const hasActiveParticles = () => themeModeRef.current === 'deepsea'
       || trailsRef.current.length > 0
@@ -362,7 +367,15 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
     };
 
     const animate = (time: number) => {
+      if (time - lastFrameTime < FRAME_INTERVAL_MS) {
+        animationFrameId = (isVisible && hasActiveParticles())
+          ? requestAnimationFrame(animate)
+          : 0;
+        return;
+      }
+
       const dtRaw = time - lastTime;
+      lastFrameTime = time;
       lastTime = time;
       const dt = Math.min(50, Math.max(0, dtRaw));
 
@@ -420,9 +433,11 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
           const color = `hsla(${p.hue}, 98%, 72%, ${alpha})`;
           ctx.save();
           ctx.translate(p.x, p.y);
+          // Was ctx.shadowBlur (expensive, and this runs for 36-78 particles
+          // every frame in deep-sea theme) — use the same cheap gradient-halo
+          // technique as ambient bubbles instead.
+          drawGlow(p.size / 2, p.size * 2.5, color);
           ctx.fillStyle = color;
-          ctx.shadowColor = color;
-          ctx.shadowBlur = p.size * 6;
           ctx.beginPath();
           ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
           ctx.fill();

@@ -2250,9 +2250,9 @@ const App: React.FC = () => {
               aria-label="Fish spawn limit"
             />
           </div>
-          <FishCensus 
-            fishes={fishes} 
-            highlightedBehavior={highlightedBehavior} 
+          <FishCensus
+            fishesRef={fishesRef}
+            highlightedBehavior={highlightedBehavior}
             onHighlightBehavior={setHighlightedBehavior} 
           />
           <LoveModeButton 

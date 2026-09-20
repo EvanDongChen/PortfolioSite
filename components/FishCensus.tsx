@@ -2,14 +2,35 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Fish as FishType } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 
+interface CensusStats {
+  total: number;
+  behaviors: Record<'cruise' | 'dart' | 'loiter' | 'conga' | 'curious' | 'mating', number>;
+}
+
+const EMPTY_BEHAVIORS: CensusStats['behaviors'] = {
+  cruise: 0,
+  dart: 0,
+  loiter: 0,
+  conga: 0,
+  curious: 0,
+  mating: 0,
+};
+
 interface FishCensusProps {
-  fishes: FishType[];
+  // A ref (not live state) so this component isn't forced to re-render every
+  // time the fish simulation ticks (~30x/sec) while the panel is closed or
+  // not even mounted-visible. Stats are sampled on a slow interval instead,
+  // only while the panel is open.
+  fishesRef: React.RefObject<FishType[]>;
   highlightedBehavior: FishType['behavior'] | null;
   onHighlightBehavior: (behavior: FishType['behavior'] | null) => void;
 }
 
-const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, onHighlightBehavior }) => {
+const CENSUS_REFRESH_MS = 400;
+
+const FishCensus: React.FC<FishCensusProps> = ({ fishesRef, highlightedBehavior, onHighlightBehavior }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [stats, setStats] = useState<CensusStats>({ total: 0, behaviors: EMPTY_BEHAVIORS });
   const [panelPosition, setPanelPosition] = useState({ x: 32, y: 240 });
   const [isDragging, setIsDragging] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -63,6 +84,25 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
     };
   }, [isDragging]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const sample = () => {
+      const fishes = fishesRef.current ?? [];
+      const behaviors: CensusStats['behaviors'] = { ...EMPTY_BEHAVIORS };
+      for (const f of fishes) {
+        if (behaviors[f.behavior as keyof typeof behaviors] !== undefined) {
+          behaviors[f.behavior as keyof typeof behaviors]++;
+        }
+      }
+      setStats({ total: fishes.length, behaviors });
+    };
+
+    sample();
+    const intervalId = window.setInterval(sample, CENSUS_REFRESH_MS);
+    return () => window.clearInterval(intervalId);
+  }, [isOpen, fishesRef]);
+
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!panelRef.current) return;
     const rect = panelRef.current.getBoundingClientRect();
@@ -80,23 +120,6 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
   const headerBorderClass = isDeepSea ? 'border-emerald-500/20' : 'border-cyan-500/20';
   const headerTextClass = isDeepSea ? 'text-emerald-300' : 'text-cyan-300';
   const sectionLabelClass = isDeepSea ? 'text-emerald-500/70' : 'text-cyan-500/70';
-
-  // Derive stats
-  const total = fishes.length;
-  const behaviors = {
-    cruise: 0,
-    dart: 0,
-    loiter: 0,
-    conga: 0,
-    curious: 0,
-    mating: 0,
-  };
-
-  fishes.forEach(f => {
-    if (behaviors[f.behavior] !== undefined) {
-      behaviors[f.behavior]++;
-    }
-  });
 
   return (
     <>
@@ -143,7 +166,7 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
           <div className="space-y-3 font-mono text-sm">
             <div className="flex justify-between items-center">
               <span className="text-slate-400">Total Fish</span>
-              <span className="text-white font-bold">{total}</span>
+              <span className="text-white font-bold">{stats.total}</span>
             </div>
 
             <div className="pt-2">
@@ -164,7 +187,7 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
                     aria-label={`Highlight ${b.label} fish`}
                   >
                     <span className="text-slate-400 pointer-events-none">{b.label}</span>
-                    <span className={`${b.color} pointer-events-none`}>{behaviors[b.id as keyof typeof behaviors]}</span>
+                    <span className={`${b.color} pointer-events-none`}>{stats.behaviors[b.id as keyof typeof stats.behaviors]}</span>
                   </button>
                 ))}
               </div>
@@ -177,4 +200,4 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishes, highlightedBehavior, on
   );
 };
 
-export default FishCensus;
+export default React.memo(FishCensus);
