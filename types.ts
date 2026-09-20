@@ -87,6 +87,54 @@ export interface ShootingStar {
   rotation: number;
 }
 
+export interface WhaleState {
+  id: number;
+  x: number;
+  y: number;
+  baseY: number;
+  displayY: number;
+  vx: number;
+  scale: number;
+  isFlipped: boolean;
+  phase: number;
+}
+
+export interface TurtleState {
+  id: number;
+  x: number;
+  y: number;
+  baseY: number;
+  displayY: number;
+  vx: number;
+  scale: number;
+  isFlipped: boolean;
+  phase: number;
+}
+
+export interface JellyfishState {
+  id: number;
+  x: number;
+  y: number;
+  baseY: number;
+  displayY: number;
+  vx: number;
+  scale: number;
+  isFlipped: boolean;
+  phase: number;
+  color1: string;
+  color2: string;
+}
+
+export interface AnglerFishState {
+  id: number;
+  x: number;
+  y: number;
+  baseY: number;
+  vx: number;
+  scale: number;
+  phase: number;
+}
+
 // Fix: Add missing Nebula and Planet type definitions.
 export interface Nebula {
   id: number;

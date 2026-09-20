@@ -4,10 +4,9 @@ import Section from './components/Section';
 import ProjectCard from './components/ProjectCard';
 import Bubble from './components/Bubble';
 import Fish from './components/Fish';
-import Turtle from './components/Turtle';
-import Jellyfish from './components/Jellyfish';
-import Whale from './components/Whale';
-import AnglerFish from './components/AnglerFish';
+import WhaleTurtleLayer from './components/WhaleTurtleLayer';
+import JellyfishLayer from './components/JellyfishLayer';
+import AnglerFishLayer from './components/AnglerFishLayer';
 import SandDune from './components/SandDune';
 import GodRays from './components/GodRays';
 import FishCensus from './components/FishCensus';
@@ -34,7 +33,6 @@ const SCROLL_PARALLAX = 1.0;
 const DEFAULT_FISH_LIMIT = 75;
 const MIN_FISH_LIMIT = 5;
 const MAX_FISH_LIMIT = 150;
-const LARGE_CREATURE_MIN_SEPARATION = 220;
 // Refill the current viewport quickly enough to keep the aquarium lively after
 // the initial arrival burst, without increasing the maximum fish count.
 const FISH_SPAWN_INTERVAL_MS = 320;
@@ -51,57 +49,6 @@ const FISH_SIMULATION_FPS = 30;
 const FISH_SIMULATION_FRAME_MS = 1000 / FISH_SIMULATION_FPS;
 const THEME_TRANSITION_MS = 900;
 const SILHOUETTE_FADE_MS = 460;
-const ANGLER_REVEAL_RADIUS = 165;
-const randomInRange = (minMs: number, maxMs: number) => minMs + Math.random() * (maxMs - minMs);
-
-type AnimationSubscriber = (timestamp: number) => void;
-const creatureAnimationSubscribers = new Set<AnimationSubscriber>();
-let creatureAnimationFrame: number | null = null;
-
-const runCreatureAnimation = (timestamp: number) => {
-  creatureAnimationFrame = null;
-  if (document.hidden) return;
-  creatureAnimationSubscribers.forEach(subscriber => subscriber(timestamp));
-  if (creatureAnimationSubscribers.size > 0) {
-    creatureAnimationFrame = window.requestAnimationFrame(runCreatureAnimation);
-  }
-};
-
-const subscribeToCreatureAnimation = (subscriber: AnimationSubscriber) => {
-  creatureAnimationSubscribers.add(subscriber);
-  if (creatureAnimationFrame === null) {
-    creatureAnimationFrame = window.requestAnimationFrame(runCreatureAnimation);
-  }
-
-  return () => {
-    creatureAnimationSubscribers.delete(subscriber);
-    if (creatureAnimationSubscribers.size === 0 && creatureAnimationFrame !== null) {
-      window.cancelAnimationFrame(creatureAnimationFrame);
-      creatureAnimationFrame = null;
-    }
-  };
-};
-
-const WHALE_INITIAL_DELAY_MIN_MS = 2500;
-const WHALE_INITIAL_DELAY_MAX_MS = 7000;
-const WHALE_RESPAWN_DELAY_MIN_MS = 6000;
-const WHALE_RESPAWN_DELAY_MAX_MS = 14000;
-
-const TURTLE_INITIAL_DELAY_MIN_MS = 3000;
-const TURTLE_INITIAL_DELAY_MAX_MS = 8000;
-const TURTLE_RESPAWN_DELAY_MIN_MS = 7000;
-const TURTLE_RESPAWN_DELAY_MAX_MS = 16000;
-
-const JELLYFISH_INITIAL_DELAY_MIN_MS = 1500;
-const JELLYFISH_INITIAL_DELAY_MAX_MS = 5000;
-const JELLYFISH_RESPAWN_DELAY_MIN_MS = 4000;
-const JELLYFISH_RESPAWN_DELAY_MAX_MS = 10000;
-const JELLYFISH_COLORS: [string, string][] = [
-  ['#fda4af', '#fb7185'],
-  ['#f9a8d4', '#f472b6'],
-  ['#fbcfe8', '#ec4899'],
-  ['#fda4af', '#db2777'],
-];
 
 interface JellyPopRing {
   id: number;
@@ -109,54 +56,6 @@ interface JellyPopRing {
   y: number;
   size: number;
   durationMs: number;
-}
-
-interface WhaleState {
-  id: number;
-  x: number;
-  y: number;
-  baseY: number;
-  displayY: number;
-  vx: number;
-  scale: number;
-  isFlipped: boolean;
-  phase: number;
-}
-
-interface TurtleState {
-  id: number;
-  x: number;
-  y: number;
-  baseY: number;
-  displayY: number;
-  vx: number;
-  scale: number;
-  isFlipped: boolean;
-  phase: number;
-}
-
-interface JellyfishState {
-  id: number;
-  x: number;
-  y: number;
-  baseY: number;
-  displayY: number;
-  vx: number;
-  scale: number;
-  isFlipped: boolean;
-  phase: number;
-  color1: string;
-  color2: string;
-}
-
-interface AnglerFishState {
-  id: number;
-  x: number;
-  y: number;
-  baseY: number;
-  vx: number;
-  scale: number;
-  phase: number;
 }
 
 const App: React.FC = () => {
@@ -222,10 +121,6 @@ const App: React.FC = () => {
       if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
     };
   }, []);
-  const [whale, setWhale] = useState<WhaleState | null>(null);
-  const [turtle, setTurtle] = useState<TurtleState | null>(null);
-  const [jellyfish, setJellyfish] = useState<JellyfishState | null>(null);
-  const [anglerFish, setAnglerFish] = useState<AnglerFishState | null>(null);
   const [fishFoods, setFishFoods] = useState<FishFoodType[]>([]);
   const [nibblingFishIds, setNibblingFishIds] = useState<Record<number, boolean>>({});
   const [fishLimit, setFishLimit] = useState(DEFAULT_FISH_LIMIT);
@@ -245,16 +140,6 @@ const App: React.FC = () => {
   useEffect(() => { isGrabModeRef.current = isGrabMode; }, [isGrabMode]);
   useEffect(() => { nibblingFishIdsRef.current = nibblingFishIds; }, [nibblingFishIds]);
   useEffect(() => {
-    const handleVisibility = () => {
-      isPageHiddenRef.current = document.hidden;
-      if (!document.hidden && creatureAnimationFrame === null && creatureAnimationSubscribers.size > 0) {
-        creatureAnimationFrame = window.requestAnimationFrame(runCreatureAnimation);
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, []);
-  useEffect(() => {
     particleCanvasRef.current?.setThemeMode?.(theme === 'underwater' || theme === 'deepsea' ? theme : 'other');
   }, [theme]);
   const scrollYRef = useRef(0);
@@ -266,23 +151,10 @@ const App: React.FC = () => {
   const trailEmitRef = useRef<Record<number, number>>({});
   const grabbedFishRef = useRef<HTMLDivElement>(null);
   const fishNodesRef = useRef<Map<number, HTMLElement>>(new Map());
-  const nextWhaleSpawnRef = useRef(0);
-  const nextTurtleSpawnRef = useRef(0);
-  const nextJellyfishSpawnRef = useRef(0);
-  const whaleRef = useRef<WhaleState | null>(null);
-  const turtleRef = useRef<TurtleState | null>(null);
-  const jellyfishRef = useRef<JellyfishState | null>(null);
-  const firstLargeCreatureSideRef = useRef<'left' | 'right' | null>(null);
-  const whaleHasSpawnedRef = useRef(false);
-  const turtleHasSpawnedRef = useRef(false);
   const nextEntityIdRef = useRef(1);
   const lastRefillBurstRef = useRef(0);
   const refillBurstActiveRef = useRef(false);
   const fishLastFrameTimeRef = useRef(0);
-  const whaleLastFrameTimeRef = useRef(0);
-  const turtleLastFrameTimeRef = useRef(0);
-  const jellyfishLastFrameTimeRef = useRef(0);
-  const anglerLastFrameTimeRef = useRef(0);
   const isPageHiddenRef = useRef(document.hidden);
   const shockwavesRef = useRef<{ id: number; x: number; worldY: number; timestamp: number }[]>([]);
   const lastRippleClickTimeRef = useRef(0);
@@ -621,24 +493,6 @@ const App: React.FC = () => {
   useEffect(() => {
     fishFoodsRef.current = fishFoods;
   }, [fishFoods]);
-
-  useEffect(() => {
-    whaleRef.current = whale;
-  }, [whale]);
-
-  useEffect(() => {
-    turtleRef.current = turtle;
-  }, [turtle]);
-
-  useEffect(() => {
-    jellyfishRef.current = jellyfish;
-  }, [jellyfish]);
-
-  useEffect(() => {
-    firstLargeCreatureSideRef.current = null;
-    whaleHasSpawnedRef.current = false;
-    turtleHasSpawnedRef.current = false;
-  }, [theme]);
 
   const emitTrailBubble = useCallback((x: number, worldY: number) => {
     particleCanvasRef.current?.emitTrailBubble?.(x, worldY, theme === 'deepsea');
@@ -1658,339 +1512,6 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
-  useEffect(() => {
-    const randomWhaleDelay = () => randomInRange(WHALE_RESPAWN_DELAY_MIN_MS, WHALE_RESPAWN_DELAY_MAX_MS);
-    if (nextWhaleSpawnRef.current === 0) {
-      nextWhaleSpawnRef.current = performance.now() + randomInRange(WHALE_INITIAL_DELAY_MIN_MS, WHALE_INITIAL_DELAY_MAX_MS);
-    }
-
-    const animateWhale = (timestamp: number) => {
-      if (isPageHiddenRef.current) return;
-      if (timestamp - whaleLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) return;
-      whaleLastFrameTimeRef.current = timestamp;
-      if (theme !== 'underwater') {
-        setWhale(null);
-        nextWhaleSpawnRef.current = timestamp + randomInRange(WHALE_INITIAL_DELAY_MIN_MS, WHALE_INITIAL_DELAY_MAX_MS);
-        return;
-      }
-
-      setWhale(current => {
-        if (!current) {
-          if (timestamp < nextWhaleSpawnRef.current) return null;
-
-          let fromLeft = Math.random() > 0.5;
-          if (!whaleHasSpawnedRef.current) {
-            if (turtleHasSpawnedRef.current && firstLargeCreatureSideRef.current) {
-              fromLeft = firstLargeCreatureSideRef.current === 'left' ? false : true;
-            } else {
-              firstLargeCreatureSideRef.current = fromLeft ? 'left' : 'right';
-            }
-          }
-          const scale = 1.0 + Math.random() * 0.5;
-          const speed = 0.4 + Math.random() * 0.35;
-          const x = fromLeft ? -420 : window.innerWidth + 420;
-          const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
-          const minSpawnY = viewportWorldTop + window.innerHeight * 0.12;
-          const maxSpawnY = viewportWorldTop + window.innerHeight * 0.88;
-          let baseY = viewportWorldTop + window.innerHeight * (0.15 + Math.random() * 0.65);
-          const turtleY = turtleRef.current?.y;
-          if (typeof turtleY === 'number' && Math.abs(baseY - turtleY) < LARGE_CREATURE_MIN_SEPARATION) {
-            const shifted = turtleY + (baseY < turtleY ? -LARGE_CREATURE_MIN_SEPARATION : LARGE_CREATURE_MIN_SEPARATION);
-            baseY = Math.max(minSpawnY, Math.min(maxSpawnY, shifted));
-            if (Math.abs(baseY - turtleY) < LARGE_CREATURE_MIN_SEPARATION) {
-              nextWhaleSpawnRef.current = timestamp + 900;
-              return null;
-            }
-          }
-          const y = baseY;
-
-          whaleHasSpawnedRef.current = true;
-          if (!firstLargeCreatureSideRef.current) {
-            firstLargeCreatureSideRef.current = fromLeft ? 'left' : 'right';
-          }
-
-          return {
-            id: getNextEntityId(),
-            x,
-            y,
-            baseY,
-            displayY: y - scrollYRef.current * SCROLL_PARALLAX,
-            vx: fromLeft ? speed : -speed,
-            scale,
-            isFlipped: !fromLeft,
-            phase: Math.random() * Math.PI * 2,
-          };
-        }
-
-        const x = current.x + current.vx;
-        const y = current.baseY + Math.sin(timestamp / 1400 + current.phase) * 12;
-        const displayY = y - scrollYRef.current * SCROLL_PARALLAX;
-
-        if (x < -520 || x > window.innerWidth + 520) {
-          nextWhaleSpawnRef.current = timestamp + randomWhaleDelay();
-          return null;
-        }
-
-        return { ...current, x, y, displayY };
-      });
-
-    };
-
-    const unsubscribe = theme === 'underwater'
-      ? subscribeToCreatureAnimation(animateWhale)
-      : () => {};
-    if (theme !== 'underwater') {
-      setWhale(null);
-    }
-
-    return unsubscribe;
-  }, [theme, getNextEntityId]);
-
-  useEffect(() => {
-    const randomTurtleDelay = () => randomInRange(TURTLE_RESPAWN_DELAY_MIN_MS, TURTLE_RESPAWN_DELAY_MAX_MS);
-    if (nextTurtleSpawnRef.current === 0) {
-      nextTurtleSpawnRef.current = performance.now() + randomInRange(TURTLE_INITIAL_DELAY_MIN_MS, TURTLE_INITIAL_DELAY_MAX_MS);
-    }
-
-    const animateTurtle = (timestamp: number) => {
-      if (isPageHiddenRef.current) return;
-      if (timestamp - turtleLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) return;
-      turtleLastFrameTimeRef.current = timestamp;
-      if (theme !== 'underwater') {
-        setTurtle(null);
-        nextTurtleSpawnRef.current = timestamp + randomInRange(TURTLE_INITIAL_DELAY_MIN_MS, TURTLE_INITIAL_DELAY_MAX_MS);
-        return;
-      }
-
-      setTurtle(current => {
-        if (!current) {
-          if (timestamp < nextTurtleSpawnRef.current) return null;
-
-          let fromLeft = Math.random() > 0.5;
-          if (!turtleHasSpawnedRef.current) {
-            if (whaleHasSpawnedRef.current && firstLargeCreatureSideRef.current) {
-              fromLeft = firstLargeCreatureSideRef.current === 'left' ? false : true;
-            } else {
-              firstLargeCreatureSideRef.current = fromLeft ? 'left' : 'right';
-            }
-          }
-          const scale = 0.8 + Math.random() * 0.45;
-          const speed = 0.28 + Math.random() * 0.24;
-          const x = fromLeft ? -260 : window.innerWidth + 260;
-          const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
-          const minSpawnY = viewportWorldTop + window.innerHeight * 0.14;
-          const maxSpawnY = viewportWorldTop + window.innerHeight * 0.9;
-          let baseY = viewportWorldTop + window.innerHeight * (0.2 + Math.random() * 0.65);
-          const whaleY = whaleRef.current?.y;
-          if (typeof whaleY === 'number' && Math.abs(baseY - whaleY) < LARGE_CREATURE_MIN_SEPARATION) {
-            const shifted = whaleY + (baseY < whaleY ? -LARGE_CREATURE_MIN_SEPARATION : LARGE_CREATURE_MIN_SEPARATION);
-            baseY = Math.max(minSpawnY, Math.min(maxSpawnY, shifted));
-            if (Math.abs(baseY - whaleY) < LARGE_CREATURE_MIN_SEPARATION) {
-              nextTurtleSpawnRef.current = timestamp + 900;
-              return null;
-            }
-          }
-
-          turtleHasSpawnedRef.current = true;
-          if (!firstLargeCreatureSideRef.current) {
-            firstLargeCreatureSideRef.current = fromLeft ? 'left' : 'right';
-          }
-
-          return {
-            id: getNextEntityId(),
-            x,
-            y: baseY,
-            baseY,
-            displayY: baseY - scrollYRef.current * SCROLL_PARALLAX,
-            vx: fromLeft ? speed : -speed,
-            scale,
-            isFlipped: !fromLeft,
-            phase: Math.random() * Math.PI * 2,
-          };
-        }
-
-        let vx = current.vx;
-        let baseY = current.baseY; // world-space Y
-        const jelly = jellyfishRef.current;
-
-        if (jelly) {
-          // Steer X toward jellyfish
-          const dx = jelly.x - current.x;
-          const desiredDirection = dx >= 0 ? 1 : -1;
-          const desiredSpeed = Math.min(1.2, Math.max(0.42, Math.abs(dx) * 0.004 + 0.35));
-          vx += (desiredDirection * desiredSpeed - vx) * 0.075;
-          // Steer Y toward jellyfish world Y
-          baseY += (jelly.y - baseY) * 0.025;
-        }
-
-        // No viewport clamping â€” turtle lives at a fixed world position
-        // and disappears naturally when you scroll away from it
-
-        const x = current.x + vx;
-        const y = baseY + Math.sin(timestamp / 1800 + current.phase) * 9;
-        const displayY = y - scrollYRef.current * SCROLL_PARALLAX;
-
-        if (x < -320 || x > window.innerWidth + 320) {
-          nextTurtleSpawnRef.current = timestamp + randomTurtleDelay();
-          return null;
-        }
-
-        return { ...current, x, y, baseY, displayY, vx, isFlipped: vx < 0 };
-      });
-
-    };
-
-    const unsubscribe = theme === 'underwater'
-      ? subscribeToCreatureAnimation(animateTurtle)
-      : () => {};
-    if (theme !== 'underwater') {
-      setTurtle(null);
-    }
-
-    return unsubscribe;
-  }, [theme, getNextEntityId]);
-
-  useEffect(() => {
-    const randomJellyfishDelay = () => randomInRange(JELLYFISH_RESPAWN_DELAY_MIN_MS, JELLYFISH_RESPAWN_DELAY_MAX_MS);
-    if (nextJellyfishSpawnRef.current === 0) {
-      nextJellyfishSpawnRef.current = performance.now() + randomInRange(JELLYFISH_INITIAL_DELAY_MIN_MS, JELLYFISH_INITIAL_DELAY_MAX_MS);
-    }
-
-    const animateJellyfish = (timestamp: number) => {
-      if (isPageHiddenRef.current) return;
-      if (timestamp - jellyfishLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) return;
-      jellyfishLastFrameTimeRef.current = timestamp;
-      if (theme !== 'underwater') {
-        setJellyfish(null);
-        nextJellyfishSpawnRef.current = timestamp + randomInRange(JELLYFISH_INITIAL_DELAY_MIN_MS, JELLYFISH_INITIAL_DELAY_MAX_MS);
-        return;
-      }
-
-      setJellyfish(current => {
-        if (!current) {
-          if (timestamp < nextJellyfishSpawnRef.current) return null;
-
-          const fromLeft = Math.random() > 0.5;
-          const scale = 0.9 + Math.random() * 0.55;
-          const speed = 0.18 + Math.random() * 0.17;
-          const x = fromLeft ? -120 : window.innerWidth + 120;
-          const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
-          const baseY = viewportWorldTop + window.innerHeight * (0.15 + Math.random() * 0.65);
-          const [color1, color2] = JELLYFISH_COLORS[Math.floor(Math.random() * JELLYFISH_COLORS.length)];
-
-          return {
-            id: getNextEntityId(),
-            x,
-            y: baseY,
-            baseY,
-            displayY: baseY - scrollYRef.current * SCROLL_PARALLAX,
-            vx: fromLeft ? speed : -speed,
-            scale,
-            isFlipped: !fromLeft,
-            phase: Math.random() * Math.PI * 2,
-            color1,
-            color2,
-          };
-        }
-
-        const turtle = turtleRef.current;
-        if (turtle) {
-          const dx = turtle.x - current.x;
-          const dy = turtle.y - current.y;
-          const eatRadius = (45 * turtle.scale) + (28 * current.scale);
-          if ((dx * dx + dy * dy) < (eatRadius * eatRadius)) {
-            const scrollWorldOffset = scrollYRef.current * SCROLL_PARALLAX;
-            const turtleCenterX = turtle.x + 90 * turtle.scale;
-            const turtleCenterY = (turtle.y - scrollWorldOffset) + 55 * turtle.scale;
-            const jellyCenterX = current.x + 40 * current.scale;
-            const jellyCenterY = (current.y - scrollWorldOffset) + 50 * current.scale;
-            const popX = (turtleCenterX + jellyCenterX) * 0.5;
-            const popY = (turtleCenterY + jellyCenterY) * 0.5;
-            emitJellyfishPop(popX, popY, current.scale);
-            nextJellyfishSpawnRef.current = timestamp + randomJellyfishDelay();
-            return null;
-          }
-        }
-
-        const x = current.x + current.vx;
-        const y = current.baseY + Math.sin(timestamp / 2200 + current.phase) * 20;
-        const displayY = y - scrollYRef.current * SCROLL_PARALLAX;
-
-        if (x < -160 || x > window.innerWidth + 160) {
-          nextJellyfishSpawnRef.current = timestamp + randomJellyfishDelay();
-          return null;
-        }
-
-        return { ...current, x, y, displayY };
-      });
-
-    };
-
-    const unsubscribe = theme === 'underwater'
-      ? subscribeToCreatureAnimation(animateJellyfish)
-      : () => {};
-    if (theme !== 'underwater') {
-      setJellyfish(null);
-    }
-
-    return unsubscribe;
-  }, [theme, getNextEntityId, emitJellyfishPop]);
-
-  useEffect(() => {
-    const animateAnglerFish = (timestamp: number) => {
-      if (isPageHiddenRef.current) return;
-      if (timestamp - anglerLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) return;
-      anglerLastFrameTimeRef.current = timestamp;
-
-      if (theme !== 'deepsea') {
-        setAnglerFish(null);
-        return;
-      }
-
-      setAnglerFish(current => {
-        const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
-
-        if (!current) {
-          const spawnX = randomInRange(window.innerWidth * 0.18, window.innerWidth * 0.82);
-          const spawnBaseY = viewportWorldTop + window.innerHeight * (0.3 + Math.random() * 0.45);
-          return {
-            id: getNextEntityId(),
-            x: spawnX,
-            y: spawnBaseY,
-            baseY: spawnBaseY,
-            vx: (Math.random() > 0.5 ? 1 : -1) * randomInRange(0.22, 0.38),
-            scale: randomInRange(0.8, 1.15),
-            phase: Math.random() * Math.PI * 2,
-          };
-        }
-
-        let vx = current.vx;
-        let x = current.x + vx;
-        const edgePad = 120;
-        if (x < edgePad || x > window.innerWidth - edgePad) {
-          vx *= -1;
-          x = Math.max(edgePad, Math.min(window.innerWidth - edgePad, x));
-        }
-
-        let baseY = current.baseY;
-        const targetY = viewportWorldTop + window.innerHeight * 0.42;
-        baseY += (targetY - baseY) * 0.018;
-        const y = baseY + Math.sin(timestamp / 1700 + current.phase) * 16;
-
-        return { ...current, x, y, baseY, vx };
-      });
-
-    };
-
-    const unsubscribe = theme === 'deepsea'
-      ? subscribeToCreatureAnimation(animateAnglerFish)
-      : () => {};
-    if (theme !== 'deepsea') {
-      setAnglerFish(null);
-    }
-
-    return unsubscribe;
-  }, [theme, getNextEntityId]);
 
   // Keep this reference stable between animation frames so the static portfolio
   // content can remain memoized while the aquarium simulation updates.
@@ -2021,11 +1542,6 @@ const App: React.FC = () => {
     && !isGrabMode
     && highlightedBehavior === null
     && Object.keys(nibblingFishIds).length === 0;
-  const anglerDisplayY = anglerFish ? (anglerFish.y - scrollYRef.current * SCROLL_PARALLAX) : 0;
-  const isAnglerRevealed = anglerFish
-    ? Math.hypot(mousePosRef.current.x - anglerFish.x, mousePosRef.current.y - anglerDisplayY) < (ANGLER_REVEAL_RADIUS * anglerFish.scale)
-    : false;
-
   // Stable handler identities for the always-mounted UI buttons below. App
   // re-renders ~30x/sec while fish are swimming; without useCallback these
   // would be fresh inline closures every render, defeating each button's
@@ -2084,8 +1600,6 @@ const App: React.FC = () => {
             {bubbles.map(bubble => (
               <Bubble key={bubble.id} {...bubble} />
             ))}
-            {whale && <Whale x={whale.x} displayY={whale.displayY} scale={whale.scale} isFlipped={whale.isFlipped} />}
-            {turtle && <Turtle x={turtle.x} displayY={turtle.displayY} scale={turtle.scale} isFlipped={turtle.isFlipped} />}
           </>
         ) : (
           // Deep Sea: bioluminescent plankton orbs only.
@@ -2106,17 +1620,13 @@ const App: React.FC = () => {
                 } as React.CSSProperties}
               />
             ))}
-            {anglerFish && (
-              <AnglerFish
-                x={anglerFish.x}
-                displayY={anglerDisplayY}
-                scale={anglerFish.scale}
-                revealBody={isAnglerRevealed}
-                isFlipped={anglerFish.vx > 0}
-              />
-            )}
           </>
         )}
+        {/* Own their position state locally so their ~30fps movement ticks
+            don't force this whole app to re-render; each renders nothing
+            when its creature isn't active for the current theme. */}
+        <WhaleTurtleLayer theme={theme} scrollYRef={scrollYRef} getNextEntityId={getNextEntityId} />
+        <AnglerFishLayer theme={theme} scrollYRef={scrollYRef} getNextEntityId={getNextEntityId} mousePosRef={mousePosRef} />
       </div>
       {isThemeTransitionActive && (
         <div
@@ -2243,17 +1753,12 @@ const App: React.FC = () => {
 
       {theme === 'underwater' && (
         <div className={`fixed inset-0 z-20 pointer-events-none ${worldTransitionClass}`}>
-          {jellyfish && (
-            <Jellyfish
-              id={jellyfish.id}
-              x={jellyfish.x}
-              displayY={jellyfish.displayY}
-              scale={jellyfish.scale}
-              isFlipped={jellyfish.isFlipped}
-              color1={jellyfish.color1}
-              color2={jellyfish.color2}
-            />
-          )}
+          <JellyfishLayer
+            theme={theme}
+            scrollYRef={scrollYRef}
+            getNextEntityId={getNextEntityId}
+            emitJellyfishPop={emitJellyfishPop}
+          />
         </div>
       )}
 
