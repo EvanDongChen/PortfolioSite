@@ -324,6 +324,25 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
     const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
     const easeOutQuad = (t: number) => t * (2 - t);
 
+    // Cheap stand-in for ctx.shadowBlur: a radial gradient halo drawn behind
+    // the shape instead of a real per-pixel blur pass (shadowBlur is one of
+    // the most expensive canvas ops and these run every frame).
+    const withAlpha = (color: string, mult: number) =>
+      color.replace(/,\s*([\d.]+)\)\s*$/, (_m, a) => `,${parseFloat(a) * mult})`);
+    const transparentStop = (color: string) => color.replace(/,\s*[\d.]+\)\s*$/, ',0)');
+    const drawGlow = (r: number, spread: number, color: string) => {
+      if (spread <= 0 || r <= 0) return;
+      const glowR = r + spread * 1.8;
+      const grad = ctx.createRadialGradient(0, 0, r * 0.85, 0, 0, glowR);
+      grad.addColorStop(0, color);
+      grad.addColorStop(0.5, withAlpha(color, 0.3));
+      grad.addColorStop(1, transparentStop(color));
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, glowR, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
     const ensurePlankton = () => {
       if (themeModeRef.current !== 'deepsea') return;
       if (planktonRef.current.length > 0) return;
@@ -436,11 +455,9 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
             ctx.save();
             ctx.translate(drawX, drawY);
             if (p.isDeepSea) {
-              ctx.shadowColor = `rgba(42,48,56,${opacity * 0.7})`;
-              ctx.shadowBlur = 4;
+              drawGlow(r, 4, `rgba(42,48,56,${opacity * 0.7})`);
             } else {
-              ctx.shadowColor = `rgba(125,211,252,${opacity * 0.95})`;
-              ctx.shadowBlur = 8;
+              drawGlow(r, 8, `rgba(125,211,252,${opacity * 0.95})`);
             }
 
             const grad = ctx.createRadialGradient(-r * 0.35, -r * 0.35, 0, 0, 0, r);
