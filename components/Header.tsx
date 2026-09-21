@@ -1,18 +1,27 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 
 const Header: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { theme } = useTheme();
+  const scrollRafRef = useRef<number | null>(null);
 
   useEffect(() => {
+    // Coalesce to once per animation frame -- native 'scroll' events can
+    // fire far more often than that, and each call was showing up as a
+    // measurable chunk of main-thread time under CPU throttling.
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
+      if (scrollRafRef.current !== null) return;
+      scrollRafRef.current = window.requestAnimationFrame(() => {
+        setIsScrolled(window.scrollY > 10);
+        scrollRafRef.current = null;
+      });
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', handleScroll);
+      if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
     };
   }, []);
 
