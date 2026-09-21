@@ -24,18 +24,22 @@ const ProfilePhoto: React.FC = () => {
         spin.velocity = 0;
         spin.idleFrames++;
 
-        // After ~1 second of idle (60 frames), smoothly return to 0
-        if (spin.idleFrames > 60 && Math.abs(spin.rotation % 360) > 0.5) {
-          // Normalize rotation to nearest equivalent within [-180, 180]
-          let target = spin.rotation % 360;
-          if (target > 180) target -= 360;
-          if (target < -180) target += 360;
-          spin.rotation -= target * 0.06;
-          // Snap when close enough
-          if (Math.abs(spin.rotation % 360) < 0.5) {
-            spin.rotation = 0;
+        // Keep polling while rotated away from 0 -- either still counting
+        // toward the 1s idle delay below, or actively snapping back.
+        if (Math.abs(spin.rotation % 360) > 0.5) {
+          // After ~1 second of idle (60 frames), smoothly return to 0
+          if (spin.idleFrames > 60) {
+            // Normalize rotation to nearest equivalent within [-180, 180]
+            let target = spin.rotation % 360;
+            if (target > 180) target -= 360;
+            if (target < -180) target += 360;
+            spin.rotation -= target * 0.06;
+            // Snap when close enough
+            if (Math.abs(spin.rotation % 360) < 0.5) {
+              spin.rotation = 0;
+            }
+            setPhotoRotation(spin.rotation);
           }
-          setPhotoRotation(spin.rotation);
           scheduleNext = true;
         }
       }
