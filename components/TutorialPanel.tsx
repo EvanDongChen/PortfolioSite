@@ -38,7 +38,7 @@ const TutorialPanel: React.FC<TutorialPanelProps> = ({ isOpen, onClose }) => {
     {
       id: 'theme-toggle',
       title: 'Theme Toggle Button',
-      description: 'Switch between the underwater and deep-sea world themes to catch different fish.',
+      description: 'Switch between the underwater and deep-sea world themes to catch different fish. Deep-sea world has been temporarily disabled for performance updates.',
       images: ['abovewatertheme.webp', 'belowwatertheme.webp'],
     },
     {
