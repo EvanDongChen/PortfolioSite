@@ -4,9 +4,6 @@ import Section from './components/Section';
 import ProjectCard from './components/ProjectCard';
 import Bubble from './components/Bubble';
 import Fish from './components/Fish';
-import WhaleTurtleLayer from './components/WhaleTurtleLayer';
-import JellyfishLayer from './components/JellyfishLayer';
-import AnglerFishLayer from './components/AnglerFishLayer';
 import SandDune from './components/SandDune';
 import GodRays from './components/GodRays';
 import FishCensus from './components/FishCensus';
@@ -22,6 +19,12 @@ import TutorialButton from './components/TutorialButton';
 
 const FishTank = lazy(() => import('./components/FishTank'));
 const TutorialPanel = lazy(() => import('./components/TutorialPanel'));
+// These creatures never appear within seconds of first paint (whale/turtle
+// respawn after 6-16s, jellyfish after 1.5s+, angler fish only in deep-sea
+// theme), so deferring their code has no visible effect on load.
+const WhaleTurtleLayer = lazy(() => import('./components/WhaleTurtleLayer'));
+const JellyfishLayer = lazy(() => import('./components/JellyfishLayer'));
+const AnglerFishLayer = lazy(() => import('./components/AnglerFishLayer'));
 
 const BASE_URL = import.meta.env.BASE_URL;
 import ThemeToggleButton from './components/ThemeToggleButton';
@@ -694,7 +697,7 @@ const App: React.FC = () => {
     const handleMouseMove = (e: MouseEvent) => {
       mousePosRef.current = { x: e.clientX, y: e.clientY };
     };
-    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
@@ -712,7 +715,7 @@ const App: React.FC = () => {
     };
 
     window.addEventListener('mouseup', handleGlobalMouseUp);
-    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mousemove', handleGlobalMouseMove, { passive: true });
     return () => {
       window.removeEventListener('mouseup', handleGlobalMouseUp);
       window.removeEventListener('mousemove', handleGlobalMouseMove);
@@ -1625,8 +1628,10 @@ const App: React.FC = () => {
         {/* Own their position state locally so their ~30fps movement ticks
             don't force this whole app to re-render; each renders nothing
             when its creature isn't active for the current theme. */}
-        <WhaleTurtleLayer theme={theme} scrollYRef={scrollYRef} getNextEntityId={getNextEntityId} />
-        <AnglerFishLayer theme={theme} scrollYRef={scrollYRef} getNextEntityId={getNextEntityId} mousePosRef={mousePosRef} />
+        <Suspense fallback={null}>
+          <WhaleTurtleLayer theme={theme} scrollYRef={scrollYRef} getNextEntityId={getNextEntityId} />
+          <AnglerFishLayer theme={theme} scrollYRef={scrollYRef} getNextEntityId={getNextEntityId} mousePosRef={mousePosRef} />
+        </Suspense>
       </div>
       {isThemeTransitionActive && (
         <div
@@ -1753,12 +1758,14 @@ const App: React.FC = () => {
 
       {theme === 'underwater' && (
         <div className={`fixed inset-0 z-20 pointer-events-none ${worldTransitionClass}`}>
-          <JellyfishLayer
-            theme={theme}
-            scrollYRef={scrollYRef}
-            getNextEntityId={getNextEntityId}
-            emitJellyfishPop={emitJellyfishPop}
-          />
+          <Suspense fallback={null}>
+            <JellyfishLayer
+              theme={theme}
+              scrollYRef={scrollYRef}
+              getNextEntityId={getNextEntityId}
+              emitJellyfishPop={emitJellyfishPop}
+            />
+          </Suspense>
         </div>
       )}
 

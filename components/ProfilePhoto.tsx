@@ -9,14 +9,17 @@ const ProfilePhoto: React.FC = () => {
   const photoSpinRef = useRef({ isDragging: false, lastX: 0, velocity: 0, rotation: 0, idleFrames: 0 });
   const photoAnimRef = useRef<number>(0);
 
-  useEffect(() => {
+  const ensureAnimating = useCallback(() => {
+    if (photoAnimRef.current) return;
     const spin = photoSpinRef.current;
     const animate = () => {
+      let scheduleNext = false;
       if (!spin.isDragging && Math.abs(spin.velocity) > 0.1) {
         spin.velocity *= 0.97;
         spin.rotation += spin.velocity;
         spin.idleFrames = 0;
         setPhotoRotation(spin.rotation);
+        scheduleNext = true;
       } else if (!spin.isDragging) {
         spin.velocity = 0;
         spin.idleFrames++;
@@ -33,12 +36,19 @@ const ProfilePhoto: React.FC = () => {
             spin.rotation = 0;
           }
           setPhotoRotation(spin.rotation);
+          scheduleNext = true;
         }
       }
-      photoAnimRef.current = requestAnimationFrame(animate);
+      // Stop polling once settled instead of looping forever with nothing to do.
+      photoAnimRef.current = scheduleNext ? requestAnimationFrame(animate) : 0;
     };
     photoAnimRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(photoAnimRef.current);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (photoAnimRef.current) cancelAnimationFrame(photoAnimRef.current);
+    };
   }, []);
 
   const handlePhotoPointerDown = useCallback((e: React.PointerEvent) => {
@@ -61,7 +71,8 @@ const ProfilePhoto: React.FC = () => {
 
   const handlePhotoPointerUp = useCallback(() => {
     photoSpinRef.current.isDragging = false;
-  }, []);
+    ensureAnimating();
+  }, [ensureAnimating]);
 
   return (
     <div

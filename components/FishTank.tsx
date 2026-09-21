@@ -105,14 +105,14 @@ const FishTank: React.FC<FishTankProps> = ({
       const nextX = e.clientX - dragOffsetRef.current.x;
       const nextY = e.clientY - dragOffsetRef.current.y;
       tankPosRef.current = { x: nextX, y: nextY };
-      tankRef.current.style.left = `${nextX}px`;
-      tankRef.current.style.top = `${nextY}px`;
+      // transform instead of left/top: avoids a layout reflow on every drag move.
+      tankRef.current.style.transform = `translate(${nextX}px, ${nextY}px)`;
     };
     const handleMouseUp = () => {
       isDraggingRef.current = false;
       if (tankRef.current) tankRef.current.style.cursor = 'default';
     };
-    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
     window.addEventListener('mouseup', handleMouseUp);
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
@@ -332,14 +332,18 @@ const FishTank: React.FC<FishTankProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div 
+    <div
       ref={tankRef}
       data-is-tank="true"
-      style={{ left: `${tankPosRef.current.x}px`, top: `${tankPosRef.current.y}px` }}
-      className="fixed z-[60] w-[480px] h-[360px] bg-slate-900/40 backdrop-blur-2xl border border-cyan-500/30 rounded-3xl shadow-2xl overflow-hidden animate-fade-in-up"
+      style={{ top: 0, left: 0, transform: `translate(${tankPosRef.current.x}px, ${tankPosRef.current.y}px)` }}
+      className="fixed z-[60] w-[480px] h-[360px] bg-slate-900/40 backdrop-blur-2xl border border-cyan-500/30 rounded-3xl shadow-2xl overflow-hidden"
       onMouseDown={isFishFoodMode ? undefined : handleMouseDown}
       onClick={isFishFoodMode ? dropFood : undefined}
     >
+      {/* Entrance animation lives on this inner wrapper, not tankRef itself,
+          since tankRef's transform is driven every drag frame and would
+          fight with an animated transform on the same element. */}
+      <div className="absolute inset-0 animate-fade-in-up">
       <div className="absolute top-0 left-0 w-full p-3 flex justify-between items-center bg-gradient-to-b from-cyan-900/40 to-transparent z-10 cursor-grab active:cursor-grabbing tank-header" onMouseDown={handleMouseDown}>
         <h3 className="text-cyan-100 text-[11px] font-bold tracking-widest uppercase flex items-center gap-2 select-none">
           <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse"></span>
@@ -353,7 +357,7 @@ const FishTank: React.FC<FishTankProps> = ({
       </div>
 
       <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/10 to-blue-900/20 pointer-events-none"></div>
-      
+
       {isGrabMode && hasGrabbedFish && (
         <div className="absolute inset-0 bg-amber-500/10 border-2 border-dashed border-amber-400/40 rounded-3xl flex items-center justify-center z-20 animate-pulse pointer-events-none">
           <span className="text-amber-200 text-[11px] font-semibold bg-slate-900/80 px-4 py-2 rounded-full backdrop-blur-sm">Drop Fish Here</span>
@@ -382,6 +386,7 @@ const FishTank: React.FC<FishTankProps> = ({
       </div>
 
       <div className="absolute bottom-0 left-0 w-full h-6 bg-gradient-to-t from-amber-200/20 to-transparent"></div>
+      </div>
     </div>
   );
 };
