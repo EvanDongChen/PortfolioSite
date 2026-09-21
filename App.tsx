@@ -136,6 +136,10 @@ const App: React.FC = () => {
   const [grabbedFish, setGrabbedFish] = useState<FishType | null>(null);
   const [tankFishes, setTankFishes] = useState<FishType[]>([]);
   const [isTankOpen, setIsTankOpen] = useState(false);
+  // Mounts FishTank (and triggers its lazy chunk fetch) only once the user
+  // has actually opened it, instead of on every page load; tankFishes stays
+  // empty until then anyway, so this can't skip any state the tank needs.
+  const hasOpenedTankRef = useRef(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const particleCanvasRef = useRef<ParticleCanvasRef>(null);
   const fishCanvasRef = useRef<FishCanvasRef>(null);
@@ -1576,13 +1580,17 @@ const App: React.FC = () => {
     const nextMode = !isGrabMode;
     setIsGrabMode(nextMode);
     if (nextMode) {
+      hasOpenedTankRef.current = true;
       setIsTankOpen(true); // Open tank when entering grab mode
       setIsFishFoodMode(false);
       setIsLoveMode(false);
     }
   }, [isGrabMode]);
 
-  const toggleTankOpen = useCallback(() => setIsTankOpen(prev => !prev), []);
+  const toggleTankOpen = useCallback(() => {
+    hasOpenedTankRef.current = true;
+    setIsTankOpen(prev => !prev);
+  }, []);
   const closeTank = useCallback(() => setIsTankOpen(false), []);
 
   return (
@@ -1824,20 +1832,22 @@ const App: React.FC = () => {
         count={tankFishes.length}
       />
 
-      <Suspense fallback={null}>
-        <FishTank
-          isOpen={isTankOpen}
-          onClose={closeTank}
-          tankFishes={tankFishes}
-          onDropFish={handleDropFish}
-          onGrabFishFromTank={handleGrabFishFromTank}
-          onFishBreed={handleFishBreed}
-          isGrabMode={isGrabMode}
-          hasGrabbedFish={!!grabbedFish}
-          isFishFoodMode={isFishFoodMode}
-          isLoveMode={isLoveMode}
-        />
-      </Suspense>
+      {hasOpenedTankRef.current && (
+        <Suspense fallback={null}>
+          <FishTank
+            isOpen={isTankOpen}
+            onClose={closeTank}
+            tankFishes={tankFishes}
+            onDropFish={handleDropFish}
+            onGrabFishFromTank={handleGrabFishFromTank}
+            onFishBreed={handleFishBreed}
+            isGrabMode={isGrabMode}
+            hasGrabbedFish={!!grabbedFish}
+            isFishFoodMode={isFishFoodMode}
+            isLoveMode={isLoveMode}
+          />
+        </Suspense>
+      )}
 
       {grabbedFish && (
         <div 

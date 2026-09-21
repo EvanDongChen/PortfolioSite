@@ -18,16 +18,6 @@ const GodRays: React.FC = () => {
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none mix-blend-overlay" style={{ zIndex: 0 }}>
-      <style>{`
-        @keyframes godRaySway {
-          0%, 100% {
-            transform: rotate(var(--ray-rot)) skewX(calc(var(--ray-rot) * -0.2)) translateX(0px);
-          }
-          50% {
-            transform: rotate(var(--ray-rot)) skewX(calc(var(--ray-rot) * -0.2)) translateX(60px);
-          }
-        }
-      `}</style>
       {rays.map((ray) => (
         <div
           key={ray.id}

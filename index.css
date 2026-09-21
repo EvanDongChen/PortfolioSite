@@ -149,6 +149,15 @@ body {
   transform-origin: center center;
 }
 
+@keyframes godRaySway {
+  0%, 100% {
+    transform: rotate(var(--ray-rot)) skewX(calc(var(--ray-rot) * -0.2)) translateX(0px);
+  }
+  50% {
+    transform: rotate(var(--ray-rot)) skewX(calc(var(--ray-rot) * -0.2)) translateX(60px);
+  }
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;
