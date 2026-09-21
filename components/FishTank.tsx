@@ -56,8 +56,10 @@ const FishTank: React.FC<FishTankProps> = ({
       const wrapper = tank.querySelector<HTMLElement>(`[data-tank-fish-id="${fish.id}"]`);
       const fishElement = wrapper?.querySelector<HTMLElement>(`[data-fish-id="${fish.id}"]`);
       if (wrapper) {
-        wrapper.style.left = `${fish.x}px`;
-        wrapper.style.top = `${fish.y}px`;
+        // transform instead of left/top: this runs every frame for every
+        // tank fish while the tank is open, and left/top triggers layout
+        // reflow while transform is compositor-only.
+        wrapper.style.transform = `translate(${fish.x}px, ${fish.y}px)`;
       }
       if (fishElement) {
         fishElement.style.transform = `translate(0px, 0px) rotate(${fish.rotation}deg) scale(1) ${fish.isFlipped ? 'scaleY(-1)' : ''}`;
@@ -370,7 +372,7 @@ const FishTank: React.FC<FishTankProps> = ({
 
       <div className="relative w-full h-full">
         {internalFishes.map(fish => (
-          <div key={fish.id} data-tank-fish-id={fish.id} style={{ position: 'absolute', left: fish.x, top: fish.y, cursor: isGrabMode ? 'crosshair' : 'default', pointerEvents: isGrabMode ? 'auto' : 'none', zIndex: 30 }} onMouseDown={(e) => { if (isGrabMode) { onGrabFishFromTank(fishesRef.current.find(currentFish => currentFish.id === fish.id) ?? fish); e.stopPropagation(); } }}>
+          <div key={fish.id} data-tank-fish-id={fish.id} style={{ position: 'absolute', left: 0, top: 0, transform: `translate(${fish.x}px, ${fish.y}px)`, cursor: isGrabMode ? 'crosshair' : 'default', pointerEvents: isGrabMode ? 'auto' : 'none', zIndex: 30 }} onMouseDown={(e) => { if (isGrabMode) { onGrabFishFromTank(fishesRef.current.find(currentFish => currentFish.id === fish.id) ?? fish); e.stopPropagation(); } }}>
             <Fish {...fish} x={0} displayY={0} rotation={0} isFlipped={false} isGrabMode={isGrabMode} isTankFish />
           </div>
         ))}

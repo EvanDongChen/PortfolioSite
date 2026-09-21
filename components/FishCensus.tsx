@@ -140,7 +140,7 @@ const FishCensus: React.FC<FishCensusProps> = ({ fishesRef, highlightedBehavior,
           ref={panelRef}
           data-is-census="true"
           className={`fixed z-[70] bg-slate-900/60 backdrop-blur-xl border rounded-2xl p-5 shadow-2xl w-64 text-slate-200 pointer-events-auto ${panelBorderClass}`}
-          style={{ left: panelPosition.x, top: panelPosition.y }}
+          style={{ left: 0, top: 0, transform: `translate(${panelPosition.x}px, ${panelPosition.y}px)` }}
         >
           <div
             onPointerDown={startDrag}

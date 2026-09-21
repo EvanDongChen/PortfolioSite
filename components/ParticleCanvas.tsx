@@ -433,11 +433,9 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
           const color = `hsla(${p.hue}, 98%, 72%, ${alpha})`;
           ctx.save();
           ctx.translate(p.x, p.y);
-          // Was ctx.shadowBlur (expensive, and this runs for 36-78 particles
-          // every frame in deep-sea theme) — use the same cheap gradient-halo
-          // technique as ambient bubbles instead.
-          drawGlow(p.size / 2, p.size * 2.5, color);
           ctx.fillStyle = color;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = p.size * 6;
           ctx.beginPath();
           ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
           ctx.fill();
@@ -739,6 +737,10 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
           ctx.translate(p.x, p.y);
           ctx.fillStyle = p.color;
           ctx.globalAlpha = clamp(alpha, 0, 1);
+          // p.color is a plain hex string here (not rgba), so it can't use
+          // drawGlow's alpha-stop rewriting — left as shadowBlur. Low-impact
+          // anyway: only fires on theme-transition bursts (dive/surface),
+          // which are unreachable while deep-sea mode is feature-flagged off.
           ctx.shadowColor = p.color;
           ctx.shadowBlur = 12;
           ctx.beginPath();
