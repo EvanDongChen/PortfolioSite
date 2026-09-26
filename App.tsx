@@ -16,6 +16,8 @@ import FishCanvas, { FishCanvasRef } from './components/FishCanvas';
 import GrabModeButton from './components/GrabModeButton';
 import TankToggleButton from './components/TankToggleButton';
 import TutorialButton from './components/TutorialButton';
+import PerformanceButton from './components/PerformanceButton';
+import PerformancePanel from './components/PerformancePanel';
 
 const FishTank = lazy(() => import('./components/FishTank'));
 const TutorialPanel = lazy(() => import('./components/TutorialPanel'));
@@ -31,11 +33,20 @@ import ThemeToggleButton from './components/ThemeToggleButton';
 import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from './components/Icons';
 import { Project, Bubble as BubbleType, Experience, Fish as FishType, FishFood as FishFoodType, Education, FishBehavior } from './types';
 import { useTheme } from './contexts/ThemeContext';
+import { usePerformance, PerformanceTier } from './contexts/PerformanceContext';
 
 const SCROLL_PARALLAX = 1.0;
 const DEFAULT_FISH_LIMIT = 75;
 const MIN_FISH_LIMIT = 5;
 const MAX_FISH_LIMIT = 150;
+// Starting fish count by device/perf tier. The slider still lets anyone go up
+// to MAX_FISH_LIMIT manually; this only picks a sane, cheap starting point so
+// lower-end devices don't get slammed with 75 fish before they can react.
+const TIER_DEFAULT_FISH_LIMIT: Record<PerformanceTier, number> = {
+  low: 25,
+  medium: 50,
+  high: DEFAULT_FISH_LIMIT,
+};
 // Refill the current viewport quickly enough to keep the aquarium lively after
 // the initial arrival burst, without increasing the maximum fish count.
 const FISH_SPAWN_INTERVAL_MS = 320;
@@ -48,8 +59,6 @@ const PUFFER_FISH_CHANCE = 0.02;
 const RAINBOW_FISH_CHANCE = 0.005;
 const SCROLL_ACTIVE_WINDOW_MS = 140;
 const RIPPLE_CLICK_COOLDOWN_MS = 1000;
-const FISH_SIMULATION_FPS = 30;
-const FISH_SIMULATION_FRAME_MS = 1000 / FISH_SIMULATION_FPS;
 const THEME_TRANSITION_MS = 900;
 const SILHOUETTE_FADE_MS = 460;
 
@@ -126,7 +135,26 @@ const App: React.FC = () => {
   }, []);
   const [fishFoods, setFishFoods] = useState<FishFoodType[]>([]);
   const [nibblingFishIds, setNibblingFishIds] = useState<Record<number, boolean>>({});
-  const [fishLimit, setFishLimit] = useState(DEFAULT_FISH_LIMIT);
+  const { tier: rawPerformanceTier, reducedMotion, override: performanceOverride, frameRate } = usePerformance();
+  // A user who asked the OS for reduced motion wants less animation
+  // regardless of how capable their hardware actually is. A manual debug
+  // override always wins, so forcing 'high' can be used to test reduced-motion
+  // devices at full quality too.
+  const performanceTier: PerformanceTier = performanceOverride ?? (reducedMotion ? 'low' : rawPerformanceTier);
+  // Read via a ref inside the fish-sim RAF loop below so toggling 30/60fps
+  // doesn't need to tear down and rebuild that whole effect.
+  const fishSimulationFrameMsRef = useRef(1000 / frameRate);
+  fishSimulationFrameMsRef.current = 1000 / frameRate;
+  const [fishLimit, setFishLimit] = useState(() => TIER_DEFAULT_FISH_LIMIT[performanceTier]);
+  const hasManualFishLimitRef = useRef(false);
+  // Perf tier can change in either direction after mount (live FPS sampling
+  // can downgrade it, and forcing a tier via the debug panel can go either
+  // way), so follow it in both directions as long as the user hasn't already
+  // touched the slider themselves.
+  useEffect(() => {
+    if (hasManualFishLimitRef.current) return;
+    setFishLimit(TIER_DEFAULT_FISH_LIMIT[performanceTier]);
+  }, [performanceTier]);
   const [highlightedBehavior, setHighlightedBehavior] = useState<FishBehavior | null>(null);
   const [isFishFoodMode, setIsFishFoodMode] = useState(false);
   const [isLoveMode, setIsLoveMode] = useState(false);
@@ -141,6 +169,7 @@ const App: React.FC = () => {
   // empty until then anyway, so this can't skip any state the tank needs.
   const hasOpenedTankRef = useRef(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [isPerformancePanelOpen, setIsPerformancePanelOpen] = useState(false);
   const particleCanvasRef = useRef<ParticleCanvasRef>(null);
   const fishCanvasRef = useRef<FishCanvasRef>(null);
   const nibblingFishIdsRef = useRef<Record<number, boolean>>({});
@@ -743,7 +772,7 @@ const App: React.FC = () => {
 
     const animate = (timestamp: number) => {
       if (isPageHiddenRef.current) { animationFrameId = 0; return; }
-      if (fishLastFrameTimeRef.current !== 0 && timestamp - fishLastFrameTimeRef.current < FISH_SIMULATION_FRAME_MS) {
+      if (fishLastFrameTimeRef.current !== 0 && timestamp - fishLastFrameTimeRef.current < fishSimulationFrameMsRef.current) {
         animationFrameId = requestAnimationFrame(animate);
         return;
       }
@@ -1555,6 +1584,8 @@ const App: React.FC = () => {
   // React.memo and forcing it to re-render in lockstep with the fish sim.
   const toggleTutorial = useCallback(() => setIsTutorialOpen(prev => !prev), []);
   const closeTutorial = useCallback(() => setIsTutorialOpen(false), []);
+  const togglePerformancePanel = useCallback(() => setIsPerformancePanelOpen(prev => !prev), []);
+  const closePerformancePanel = useCallback(() => setIsPerformancePanelOpen(false), []);
 
   const toggleLoveMode = useCallback(() => {
     if (isLoveMode) {
@@ -1602,7 +1633,7 @@ const App: React.FC = () => {
       }`}>
       <style>{`
       `}</style>
-      <ParticleCanvas ref={particleCanvasRef} />
+      <ParticleCanvas ref={particleCanvasRef} quality={performanceTier} frameRate={frameRate} />
       {/* Background Aquarium Layer: Environment and Large Creatures */}
       <div className={`fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none ${worldTransitionClass}`}>
         {theme === 'underwater' ? (
@@ -1709,6 +1740,7 @@ const App: React.FC = () => {
                 ref={fishCanvasRef}
                 enabled={fishCanvasEnabled}
                 isDeepSea={isDeepSea}
+                quality={performanceTier}
               />
               {/* Background World Layer: Regular fish swimming behind the content */}
               <div
@@ -1790,6 +1822,8 @@ const App: React.FC = () => {
       />
       <BackToTopButton />
       <ThemeToggleButton />
+      <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
+      <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
       <TutorialButton isOpen={isTutorialOpen} onToggle={toggleTutorial} />
       <Suspense fallback={null}>
         <TutorialPanel isOpen={isTutorialOpen} onClose={closeTutorial} />
@@ -1806,7 +1840,10 @@ const App: React.FC = () => {
               min={MIN_FISH_LIMIT}
               max={MAX_FISH_LIMIT}
               value={fishLimit}
-              onChange={(e) => setFishLimit(Number(e.target.value))}
+              onChange={(e) => {
+                hasManualFishLimitRef.current = true;
+                setFishLimit(Number(e.target.value));
+              }}
               className="w-full accent-cyan-400 opacity-90 hover:opacity-100 transition-opacity"
               aria-label="Fish spawn limit"
             />

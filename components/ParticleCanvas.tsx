@@ -1,6 +1,21 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import { PerformanceTier, SimulationFrameRate } from '../contexts/PerformanceContext';
 
 type ThemeMode = 'underwater' | 'deepsea' | 'other';
+
+interface ParticleCanvasProps {
+  quality?: PerformanceTier;
+  frameRate?: SimulationFrameRate;
+}
+
+// ctx.shadowBlur is one of the most expensive canvas ops; scale it down (or
+// off) instead of ripping out every call site individually. Particle counts
+// scale by the same factor so low-end devices draw fewer, cheaper particles.
+const QUALITY_SCALE: Record<PerformanceTier, number> = {
+  low: 0,
+  medium: 0.6,
+  high: 1,
+};
 
 interface FishSnapshot {
   x: number;
@@ -115,12 +130,18 @@ interface PlanktonParticle {
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
+const ParticleCanvas = forwardRef<ParticleCanvasRef, ParticleCanvasProps>(({ quality = 'high', frameRate = 30 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scrollYRef = useRef(0);
   const fishSnapshotRef = useRef<FishSnapshot[]>([]);
   const themeModeRef = useRef<ThemeMode>('underwater');
   const wakeAnimationRef = useRef<(() => void) | null>(null);
+  const qualityScaleRef = useRef(QUALITY_SCALE[quality]);
+  qualityScaleRef.current = QUALITY_SCALE[quality];
+  // Read via a ref inside the mount-only draw effect below so toggling the
+  // frame rate doesn't need to tear down and rebuild the whole RAF loop.
+  const frameIntervalMsRef = useRef(1000 / frameRate);
+  frameIntervalMsRef.current = 1000 / frameRate;
 
   // Active arrays
   const trailsRef = useRef<Trail[]>([]);
@@ -256,7 +277,8 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
         ? ['#7dd3fc', '#67e8f9', '#22d3ee', '#38bdf8']
         : ['#34d399', '#6ee7b7', '#2dd4bf', '#a7f3d0'];
 
-      for (let i = 0; i < 64; i++) {
+      const burstCount = Math.round(64 * (0.35 + qualityScaleRef.current * 0.65));
+      for (let i = 0; i < burstCount; i++) {
         const p = transitionParticlePoolRef.current.pop() ?? ({} as TransitionParticle);
         p.x = Math.random() * window.innerWidth;
         p.y = direction === 'dive' ? -24 - Math.random() * 40 : window.innerHeight + 24 + Math.random() * 40;
@@ -286,9 +308,9 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
     let lastTime = performance.now();
     let lastFrameTime = lastTime;
     // Cap this canvas's own redraw rate independent of monitor refresh rate
-    // (the fish simulation is already 30fps-throttled; this loop previously
-    // ran uncapped, which is up to 4x the draw work on 120Hz+ displays).
-    const FRAME_INTERVAL_MS = 1000 / 30;
+    // (this loop previously ran uncapped, which is up to 4x the draw work on
+    // 120Hz+ displays). Read from a ref so the 30/60fps setting can change
+    // without tearing down this effect.
 
     const hasActiveParticles = () => themeModeRef.current === 'deepsea'
       || trailsRef.current.length > 0
@@ -351,7 +373,8 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
     const ensurePlankton = () => {
       if (themeModeRef.current !== 'deepsea') return;
       if (planktonRef.current.length > 0) return;
-      const count = Math.max(36, Math.min(78, Math.floor(canvas.width / 18)));
+      const scale = 0.35 + qualityScaleRef.current * 0.65;
+      const count = Math.max(12, Math.min(78, Math.floor((canvas.width / 18) * scale)));
       for (let i = 0; i < count; i++) {
         planktonRef.current.push({
           x: Math.random() * canvas.width,
@@ -367,7 +390,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
     };
 
     const animate = (time: number) => {
-      if (time - lastFrameTime < FRAME_INTERVAL_MS) {
+      if (time - lastFrameTime < frameIntervalMsRef.current) {
         animationFrameId = (isVisible && hasActiveParticles())
           ? requestAnimationFrame(animate)
           : 0;
@@ -435,7 +458,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
           ctx.translate(p.x, p.y);
           ctx.fillStyle = color;
           ctx.shadowColor = color;
-          ctx.shadowBlur = p.size * 6;
+          ctx.shadowBlur = p.size * 6 * qualityScaleRef.current;
           ctx.beginPath();
           ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
           ctx.fill();
@@ -521,7 +544,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
               ? `rgba(58,64,72,${opacity * 0.55})`
               : `rgba(125,211,252,${opacity * 0.95})`;
             ctx.shadowColor = glowColor;
-            ctx.shadowBlur = p.isDeepSea ? 4 : 7;
+            ctx.shadowBlur = (p.isDeepSea ? 4 : 7) * qualityScaleRef.current;
 
             const grad = ctx.createRadialGradient(-r * 0.4, -r * 0.4, 0, 0, 0, r);
             grad.addColorStop(0, p.isDeepSea ? `rgba(112,120,132,${opacity * 0.48})` : `rgba(255,255,255,${opacity * 0.98})`);
@@ -566,7 +589,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
 
             const color = p.isLove ? 'rgba(244,63,94,' : 'rgba(251,191,36,';
             ctx.shadowColor = `${color}${opacity * 0.95})`;
-            ctx.shadowBlur = 6;
+            ctx.shadowBlur = 6 * qualityScaleRef.current;
 
             const grad = ctx.createRadialGradient(-r * 0.3, -r * 0.3, 0, 0, 0, r);
             grad.addColorStop(0, p.isLove ? `rgba(255,190,200,${opacity * 0.98})` : `rgba(255,243,182,${opacity * 0.98})`);
@@ -610,7 +633,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
           ctx.scale(scale / 20, scale / 20);
           ctx.fillStyle = `rgba(244,63,94,${opacity})`;
           ctx.shadowColor = `rgba(244,63,94,${opacity * 0.5})`;
-          ctx.shadowBlur = 10;
+          ctx.shadowBlur = 10 * qualityScaleRef.current;
 
           ctx.beginPath();
           ctx.moveTo(0, 5);
@@ -650,7 +673,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
             ctx.save();
             ctx.translate(p.x, drawY);
             ctx.shadowColor = `rgba(244,114,182,${opacity * 0.8})`;
-            ctx.shadowBlur = 14;
+            ctx.shadowBlur = 14 * qualityScaleRef.current;
             ctx.strokeStyle = `rgba(251,113,133,${opacity * 0.85})`;
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -689,7 +712,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
             ctx.save();
             ctx.translate(drawX, drawY);
             ctx.shadowColor = `rgba(236,72,153,${opacity * 0.9})`;
-            ctx.shadowBlur = 10;
+            ctx.shadowBlur = 10 * qualityScaleRef.current;
 
             const grad = ctx.createRadialGradient(-r * 0.4, -r * 0.4, 0, 0, 0, r);
             grad.addColorStop(0, `rgba(255,255,255,${opacity * 0.95})`);
@@ -742,7 +765,7 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
           // anyway: only fires on theme-transition bursts (dive/surface),
           // which are unreachable while deep-sea mode is feature-flagged off.
           ctx.shadowColor = p.color;
-          ctx.shadowBlur = 12;
+          ctx.shadowBlur = 12 * qualityScaleRef.current;
           ctx.beginPath();
           ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
           ctx.fill();
@@ -791,14 +814,14 @@ const ParticleCanvas = forwardRef<ParticleCanvasRef>((_, ref) => {
             ctx.shadowColor = isUnderwater
               ? `rgba(130,240,255,${opacity * 0.3})`
               : `rgba(167,139,250,${opacity * 0.6})`;
-            ctx.shadowBlur = isUnderwater ? 10 : 15;
+            ctx.shadowBlur = (isUnderwater ? 10 : 15) * qualityScaleRef.current;
 
             ctx.beginPath();
             ctx.arc(0, 0, r, 0, Math.PI * 2);
             ctx.stroke();
 
             if (isUnderwater) {
-              ctx.shadowBlur = 5;
+              ctx.shadowBlur = 5 * qualityScaleRef.current;
               ctx.stroke();
             }
             ctx.restore();

@@ -1,5 +1,6 @@
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import { Fish as FishType } from '../types';
+import { PerformanceTier } from '../contexts/PerformanceContext';
 
 export interface FishCanvasRef {
   setFishSnapshot: (fishes: FishType[]) => void;
@@ -9,9 +10,10 @@ export interface FishCanvasRef {
 interface FishCanvasProps {
   enabled: boolean;
   isDeepSea: boolean;
+  quality?: PerformanceTier;
 }
 
-const FishCanvas = forwardRef<FishCanvasRef, FishCanvasProps>(({ enabled, isDeepSea }, ref) => {
+const FishCanvas = forwardRef<FishCanvasRef, FishCanvasProps>(({ enabled, isDeepSea, quality = 'high' }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fishesRef = useRef<FishType[]>([]);
   const scrollYRef = useRef(0);
@@ -119,7 +121,8 @@ const FishCanvas = forwardRef<FishCanvasRef, FishCanvasProps>(({ enabled, isDeep
     if (!canvas) return;
 
     const resize = () => {
-      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      const maxPixelRatio = quality === 'low' ? 1 : 2;
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
       canvas.width = window.innerWidth * pixelRatio;
       canvas.height = window.innerHeight * pixelRatio;
       canvas.style.width = `${window.innerWidth}px`;
@@ -131,7 +134,7 @@ const FishCanvas = forwardRef<FishCanvasRef, FishCanvasProps>(({ enabled, isDeep
     resize();
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
-  }, [enabled, isDeepSea]);
+  }, [enabled, isDeepSea, quality]);
 
   React.useEffect(() => {
     draw();
