@@ -22,7 +22,12 @@ const Section: React.FC<SectionProps> = ({ id, children, className = '' }) => {
         }
       },
       {
-        threshold: 0.1,
+        // threshold is a fraction of the section's OWN height, not the
+        // viewport's -- a tall section (e.g. Projects stacked to a single
+        // column on mobile) can need more visible area than a phone's
+        // viewport can ever show at once, so it never crosses 0.1 and stays
+        // stuck at opacity 0. 0 fires as soon as any part is visible.
+        threshold: 0,
         rootMargin: '0px 0px -50px 0px',
       }
     );
