@@ -24,7 +24,11 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
   return (
     <div className="relative z-10">
       <Header />
-      <main className="container mx-auto px-6 md:px-10">
+      {/* Extra left padding below lg clears the fixed left-side button
+          stack (tank/grab/census/love/food), which sits at the same
+          bottom-left screen position regardless of scroll -- desktop
+          already has enough natural side margin to clear it. */}
+      <main className="container mx-auto pl-24 pr-6 md:pl-28 md:pr-10 lg:px-10">
         <Section id="home" className="min-h-screen flex flex-col justify-center items-center text-center">
           <ProfilePhoto />
           <h1 className={`text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r ${colors.heroGradient} animate-fade-in-down`}>
