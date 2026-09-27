@@ -61,6 +61,9 @@ const SCROLL_ACTIVE_WINDOW_MS = 140;
 const RIPPLE_CLICK_COOLDOWN_MS = 1000;
 const THEME_TRANSITION_MS = 900;
 const SILHOUETTE_FADE_MS = 460;
+// When the fish limit drops (e.g. switching to a lower performance tier), the
+// excess fish fade out over this window instead of vanishing instantly.
+const FISH_DESPAWN_FADE_MS = 500;
 
 interface JellyPopRing {
   id: number;
@@ -1525,10 +1528,38 @@ const App: React.FC = () => {
     };
   }, [theme, fishLimit, createFish]);
 
+  // Mark fish beyond the current limit to fade out instead of cutting them
+  // immediately, so lowering the performance tier doesn't make fish vanish in
+  // a single frame.
   useEffect(() => {
     if (fishesRef.current.length <= fishLimit) return;
-    setFishes(prev => prev.slice(0, fishLimit));
+    const now = performance.now();
+    setFishes(prev => {
+      if (prev.length <= fishLimit) return prev;
+      let changed = false;
+      const next = prev.map((fish, i) => {
+        if (i >= fishLimit && !fish.despawnAt) {
+          changed = true;
+          return { ...fish, despawnAt: now };
+        }
+        return fish;
+      });
+      return changed ? next : prev;
+    });
   }, [fishLimit]);
+
+  // Actually drop fish once their fade-out has finished.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (!fishesRef.current.some(f => f.despawnAt)) return;
+      const now = performance.now();
+      setFishes(prev => {
+        const next = prev.filter(f => !f.despawnAt || now - f.despawnAt < FISH_DESPAWN_FADE_MS);
+        return next.length === prev.length ? prev : next;
+      });
+    }, 150);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const DEEPSEA_ORB_COLORS = ['#00ff9f', '#ff006e', '#7b2fff', '#00e5ff', '#39ff14', '#ff4d6d', '#00b4d8', '#f72585'];
   useEffect(() => {
@@ -1721,6 +1752,7 @@ const App: React.FC = () => {
                 isNibbling={Boolean(nibblingFishIds[fish.id])}
                 isFaded={highlightedBehavior !== null && fish.behavior !== highlightedBehavior}
                 isHighlighted={highlightedBehavior !== null && fish.behavior === highlightedBehavior}
+                isDespawning={Boolean(fish.despawnAt)}
                 isGrabMode={isGrabMode}
                 isDeepSea={isDeepSea}
                 onMouseDown={handleGrabFish}

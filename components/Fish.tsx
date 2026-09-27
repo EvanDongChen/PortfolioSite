@@ -5,6 +5,7 @@ interface FishProps extends Omit<FishType, 'vx' | 'vy' | 'initialVx'> {
   isNibbling?: boolean;
   isFaded?: boolean;
   isHighlighted?: boolean;
+  isDespawning?: boolean;
   onMouseDown?: (id: number, e: React.MouseEvent) => void;
   isGrabMode?: boolean;
   isDeepSea?: boolean;
@@ -22,7 +23,7 @@ const NORMAL_PUFFER_PATH = "M 85,25 C 80,5 20,5 15,25 C 20,45 80,45 85,25";
 // The viewBox is 100x50. To make a circle in a square container, the path must be 100 units wide and 50 units tall.
 const BALL_PUFFER_PATH = "M 100,25 C 100,0 75,0 50,0 C 25,0 0,0 0,25 C 0,50 25,50 50,50 C 75,50 100,50 100,25";
 
-const Fish: React.FC<FishProps> = ({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false, birthTime, isPuffed = false, onMouseDown, isGrabMode = false, isDeepSea = false, isSilhouette = false, isTankFish = false }) => {
+const Fish: React.FC<FishProps> = ({ id, x, displayY, rotation, scale, color1, color2, isFlipped, isNibbling = false, variant = 'default', isFaded = false, isHighlighted = false, isDespawning = false, birthTime, isPuffed = false, onMouseDown, isGrabMode = false, isDeepSea = false, isSilhouette = false, isTankFish = false }) => {
   const isClownFish = variant === 'clown';
   const isPuffer = variant === 'puffer';
   const isRainbowFish = variant === 'rainbow';
@@ -57,7 +58,7 @@ const Fish: React.FC<FishProps> = ({ id, x, displayY, rotation, scale, color1, c
     // Position is updated imperatively by the aquarium simulation. A long
     // transform transition makes each 30 FPS update chase the previous one.
     transition: 'opacity 300ms ease-out, filter 300ms ease-out, width 450ms ease, height 450ms ease',
-    opacity: isSilhouette ? 0.62 : (isFaded ? 0.15 : 1),
+    opacity: isDespawning ? 0 : (isSilhouette ? 0.62 : (isFaded ? 0.15 : 1)),
     filter: isSilhouette
       ? 'grayscale(1) brightness(0.08) contrast(1.2)'
       : isHighlighted
@@ -210,6 +211,7 @@ const areFishPropsEqual = (previous: FishProps, next: FishProps) => {
     && previous.variant === next.variant
     && previous.isFaded === next.isFaded
     && previous.isHighlighted === next.isHighlighted
+    && previous.isDespawning === next.isDespawning
     && previous.isPuffed === next.isPuffed
     && previous.onMouseDown === next.onMouseDown
     && previous.isGrabMode === next.isGrabMode

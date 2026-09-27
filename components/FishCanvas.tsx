@@ -13,6 +13,10 @@ interface FishCanvasProps {
   quality?: PerformanceTier;
 }
 
+// Mirrors FISH_DESPAWN_FADE_MS in App.tsx: how long a fish cut for exceeding
+// the fish limit takes to fade out before it's actually removed.
+const FISH_DESPAWN_FADE_MS = 500;
+
 const FishCanvas = forwardRef<FishCanvasRef, FishCanvasProps>(({ enabled, isDeepSea, quality = 'high' }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fishesRef = useRef<FishType[]>([]);
@@ -96,6 +100,9 @@ const FishCanvas = forwardRef<FishCanvasRef, FishCanvasProps>(({ enabled, isDeep
       if (!image.complete || image.naturalWidth === 0) continue;
 
       ctx.save();
+      if (fish.despawnAt) {
+        ctx.globalAlpha = Math.max(0, 1 - (performance.now() - fish.despawnAt) / FISH_DESPAWN_FADE_MS);
+      }
       ctx.translate(fish.x + width / 2, displayY + height / 2);
       ctx.rotate(fish.rotation * Math.PI / 180);
       ctx.scale(1, fish.isFlipped ? -1 : 1);

@@ -61,6 +61,7 @@ export interface Fish {
   birthTime?: number;
   isPuffed?: boolean;
   puffStartTime?: number;
+  despawnAt?: number; // timestamp when this fish was cut for exceeding the fish limit; fades out then gets removed
 }
 
 export interface FishFood {
