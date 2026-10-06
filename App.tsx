@@ -206,6 +206,14 @@ const App: React.FC = () => {
     return id;
   }, []);  const projects = useMemo<Project[]>(() => [
     {
+      title: 'Blade & Brush',
+      description: 'Browser puzzle game set inside a procedurally generated Chinese ink landscape. Slash, burn, pour and push a falling-sand world until the painting matches the poem.',
+      image: `${BASE_URL}images/blade_and_brush.webp`,
+      tags: ['TypeScript', 'Vite', 'Canvas 2D', 'Procedural Generation', 'Game Development', 'Puzzle'],
+      codeUrl: 'https://evandongchen.github.io/BladeAndBrush/',
+      linkLabel: 'Play',
+    },
+    {
       title: 'The Wishing Terminal',
       description: 'Adventure horror game built in Roblox for the SFU Summer Summit 2026 game jam.',
       image: `${BASE_URL}images/the_wishing_terminal.webp`,
