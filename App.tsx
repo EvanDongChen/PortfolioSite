@@ -212,6 +212,7 @@ const App: React.FC = () => {
       tags: ['TypeScript', 'Vite', 'Canvas 2D', 'Procedural Generation', 'Game Development', 'Puzzle'],
       codeUrl: 'https://evandongchen.github.io/BladeAndBrush/',
       linkLabel: 'Play',
+      featured: true,
     },
     {
       title: 'The Wishing Terminal',
@@ -219,7 +220,6 @@ const App: React.FC = () => {
       image: `${BASE_URL}images/the_wishing_terminal.webp`,
       tags: ['Roblox', 'Lua', 'Adventure', 'Horror', 'Game Development', 'Hackathon'],
       codeUrl: 'https://matchabatcha.itch.io/thewishingterminal',
-      linkLabel: 'View More',
     },
     {
       title: 'Cramsino',
@@ -227,6 +227,7 @@ const App: React.FC = () => {
       image: `${BASE_URL}images/cramsino.webp`,
       tags: ['Next.js', 'FastAPI', 'OpenCV', 'PostgreSQL', 'Hackathon'],
       codeUrl: 'https://devpost.com/software/cramsino',
+      featured: true,
     },
     {
       title: 'WitchDog',
@@ -255,6 +256,7 @@ const App: React.FC = () => {
       image: `${BASE_URL}images/sam.webp`,
       tags: ['Python', 'AI', 'Research', 'Medical Imaging'],
       codeUrl: 'https://www.youtube.com/watch?v=DGHAxlcROsQ',
+      featured: true,
     },
     {
       title: 'Library Database Application',
@@ -563,7 +565,7 @@ const App: React.FC = () => {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
 
-      if (target.closest('button, a, input, [data-is-tank="true"], [data-is-tutorial="true"], [data-is-census="true"]')) return;
+      if (target.closest('button, a, input, [data-is-tank="true"], [data-is-tutorial="true"], [data-is-census="true"], [data-is-modal="true"]')) return;
       const id = getNextEntityId();
       const newFood: FishFoodType = {
         id,
@@ -601,7 +603,7 @@ const App: React.FC = () => {
         return;
       }
 
-      if (target.closest('button, a, input, [data-is-tank="true"], [data-is-tutorial="true"], [data-is-census="true"]')) return;
+      if (target.closest('button, a, input, [data-is-tank="true"], [data-is-tutorial="true"], [data-is-census="true"], [data-is-modal="true"]')) return;
       const id = getNextEntityId();
       particleCanvasRef.current?.emitClickRipple?.(e.clientX, e.clientY, theme);
 

@@ -1,14 +1,17 @@
 import React from 'react';
 import { Project } from '../types';
-import { CodeIcon } from './Icons';
+import { CodeIcon, ExternalLinkIcon } from './Icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { getProjectLinkLabel } from '../lib/projectLink';
 
 interface ProjectCardProps {
   project: Project;
 }
 
 const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
-  const { title, description, image, tags, codeUrl, linkLabel = 'View Code' } = project;
+  const { title, description, image, tags, codeUrl } = project;
+  const linkLabel = getProjectLinkLabel(project);
+  const LinkIcon = linkLabel === 'View Code' ? CodeIcon : ExternalLinkIcon;
   const { theme } = useTheme();
 
   const colors = theme === 'underwater' ? {
@@ -35,7 +38,7 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
 
   return (
     <div
-      className={`bg-black/20 backdrop-blur-md rounded-xl overflow-hidden shadow-lg border ${colors.border} group`}
+      className={`flex flex-col h-full bg-black/20 backdrop-blur-md rounded-xl overflow-hidden shadow-lg border ${colors.border} group`}
     >
       <div className="relative overflow-hidden" style={{ zIndex: 1 }}>
         <img
@@ -47,7 +50,7 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
       </div>
-      <div className="p-6 relative" style={{ zIndex: 2 }}>
+      <div className="p-6 relative flex flex-col flex-1" style={{ zIndex: 2 }}>
         <h3 className={`text-2xl font-bold ${colors.title} mb-2`}>{title}</h3>
         <p className={`${colors.description} mb-4`}>{description}</p>
         <div className="flex flex-wrap gap-2 mb-4">
@@ -64,7 +67,7 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
             rel="noopener noreferrer"
             className={`flex items-center space-x-2 ${colors.link} hover:text-white transition-colors duration-300`}
           >
-            <CodeIcon className="w-5 h-5" />
+            <LinkIcon className="w-5 h-5" />
             <span>{linkLabel}</span>
           </a>
         </div>

@@ -5,6 +5,7 @@ export interface Project {
   tags: string[];
   codeUrl: string;
   linkLabel?: string;
+  featured?: boolean;
 }
 
 export interface Bubble {

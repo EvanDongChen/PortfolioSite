@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import Header from './Header';
 import Section from './Section';
 import ProjectCard from './ProjectCard';
+import ProjectTile from './ProjectTile';
+import ProjectModal from './ProjectModal';
 import SandDune from './SandDune';
 import ProfilePhoto from './ProfilePhoto';
 import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from './Icons';
@@ -21,6 +23,25 @@ interface PortfolioContentProps {
 const PortfolioContent: React.FC<PortfolioContentProps> = ({
   theme, colors, searchTerm, setSearchTerm, filteredProjects, experiences, education, skills
 }) => {
+  const featuredProjects = useMemo(() => filteredProjects.filter(p => p.featured), [filteredProjects]);
+  const otherProjects = useMemo(() => filteredProjects.filter(p => !p.featured), [filteredProjects]);
+
+  const [openTitle, setOpenTitle] = useState<string | null>(null);
+  const modalTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const openIndex = openTitle === null ? -1 : otherProjects.findIndex(p => p.title === openTitle);
+
+  const openProject = useCallback((title: string, trigger: HTMLButtonElement) => {
+    modalTriggerRef.current = trigger;
+    setOpenTitle(title);
+  }, []);
+
+  const closeProject = useCallback(() => {
+    setOpenTitle(null);
+    modalTriggerRef.current?.focus();
+  }, []);
+
+  const isSearching = searchTerm.trim().length > 0;
+
   return (
     <div className="relative z-10">
       <Header />
@@ -145,16 +166,66 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredProjects.length > 0 ? (
-              filteredProjects.map((project, index) => (
-                <ProjectCard key={index} project={project} />
-              ))
-            ) : (
-              <p className={`text-center ${colors.highlightStrong} md:col-span-3`}>No projects found matching your search.</p>
-            )}
-          </div>
+          {filteredProjects.length === 0 ? (
+            <div className="text-center">
+              <p className={`${colors.highlightStrong} mb-4`}>No projects found matching "{searchTerm}".</p>
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className={`text-sm underline underline-offset-4 ${colors.highlightStrong} hover:text-white transition-colors`}
+              >
+                Clear search
+              </button>
+            </div>
+          ) : (
+            <>
+              {featuredProjects.length > 0 && (
+                <div className="mb-14">
+                  {!isSearching && (
+                    <h3 className={`text-sm font-semibold uppercase tracking-[0.2em] mb-5 ${colors.highlightStrong}`}>
+                      Featured
+                    </h3>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {featuredProjects.map(project => (
+                      <ProjectCard key={project.title} project={project} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {otherProjects.length > 0 && (
+                <div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 mb-5">
+                    <h3 className={`text-sm font-semibold uppercase tracking-[0.2em] ${colors.highlightStrong}`}>
+                      {isSearching ? 'Results' : 'More Projects'}
+                      <span className="ml-2 opacity-60 normal-case tracking-normal">({otherProjects.length})</span>
+                    </h3>
+                    <p className={`text-sm ${colors.text} opacity-70`}>Click any project for details</p>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+                    {otherProjects.map(project => (
+                      <ProjectTile
+                        key={project.title}
+                        project={project}
+                        onOpen={(trigger) => openProject(project.title, trigger)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </Section>
+
+        {openIndex >= 0 && (
+          <ProjectModal
+            projects={otherProjects}
+            index={openIndex}
+            onClose={closeProject}
+            onNavigate={(i) => setOpenTitle(otherProjects[i].title)}
+          />
+        )}
 
         <Section id="contact" className="py-20 text-center">
           <h2 className="text-4xl font-bold mb-4">Get In Touch</h2>
