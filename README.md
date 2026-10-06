@@ -1,42 +1,73 @@
-# Evan Chen Portfolio
+<p align="center">
+  <img src=".github/readme/logo.png" alt="EC" height="110" />
+</p>
 
-My personal portfolio site, built as an interactive aquarium. Schools of fish swim behind the content, react to your cursor and can be fed, grabbed and bred, while the page shows my projects, experience, education and skills.
+<h1 align="center">Evan Chen</h1>
 
-## Features
+<p align="center"><b>A portfolio that lives underwater.</b></p>
 
-- **Two themes:** a sunlit underwater reef and a dark deep-sea mode with angler fish, jellyfish and plankton, with an animated dive between them.
-- **Living fish:** fish school, dart, loiter, form conga lines, get curious about food and pair up to breed. Puffers puff up and the fish census tracks who is in the tank.
-- **Interactive tools:** drop fish food (or love food), grab and carry fish, open the fish tank, and follow the built-in tutorial.
-- **Searchable projects:** filter project cards by title, description or tag.
-- **Performance controls:** a performance panel to scale back the effects on slower devices.
+<p align="center"><a href="https://evanchen.info"><b>Dive in</b></a> · <a href="https://evanchen.info/#projects">Projects</a> · <a href="https://github.com/evandongchen">GitHub</a> · <a href="https://www.linkedin.com/in/evandongchen/">LinkedIn</a></p>
 
-## Projects
+![The portfolio landing page, with schools of fish swimming through the light](.github/readme/hero.webp)
 
-| Project | Summary |
+## About
+
+This is my portfolio, and it's also an aquarium. Light falls through the water, bubbles drift up past the text, and schools of fish swim behind everything you read.
+
+The fish are alive. Each one has a mood: some cruise with their school, some dart off on their own, some loiter, some line up behind a leader in a conga line, and some get curious and come over to see what you're doing. Move your cursor too close and they scatter. Drop food and they race for it. Drop a heart and two of them will swim to it, dance, and leave a baby behind.
+
+Somewhere between the fish are my projects, my experience and the things I've built.
+
+## How to play
+
+<p align="center">
+  <img src=".github/readme/fishfood.webp" alt="Drop fish food and watch the school race to eat it" width="25%" />
+  <img src=".github/readme/breeding.webp" alt="Drop a heart: two fish swim to it, dance, and make a baby" width="25%" />
+  <img src=".github/readme/fishtank.webp" alt="Grab fish and keep them in your portable tank" width="25%" />
+</p>
+
+The buttons on the left side of the screen are your tools:
+
+| | Tool | What it does |
+|---|---|---|
+| 🍤 | **Fish food** | Drop food into the water. Nearby fish swim over and eat it. |
+| 💗 | **Love mode** | Drop heart bait. Two fish meet at it, dance in a spiral and make a baby. |
+| 🪝 | **Grab** | Pick up a fish and carry it anywhere on the page. |
+| 🫙 | **Portable tank** | Keep the fish you've caught, breed them, and drag them back out. |
+| 📊 | **Fish census** | Count the fish by behavior. Click a behavior to light up every fish doing it. |
+
+**New here?** Press the **?** button in the corner for a tour of every tool.
+
+## The catch
+
+| Project | What it is |
 |---|---|
-| [Blade & Brush](https://evandongchen.github.io/BladeAndBrush/) | Browser puzzle game set inside a procedurally generated Chinese ink landscape, built with TypeScript and Canvas 2D. |
-| [The Wishing Terminal](https://matchabatcha.itch.io/thewishingterminal) | Adventure horror game built in Roblox for the SFU Summer Summit 2026 game jam. |
-| [Cramsino](https://devpost.com/software/cramsino) | AI study app with focus detection and gacha rewards. Best UI at JourneyHacks 2026. |
-| [WitchDog](https://devpost.com/software/witch-dog) | Real-time multiplayer trivia game in Unity with Socket.IO. |
-| [Money Mango](https://github.com/EvanDongChen/MoneyMango) | Android personal finance app with OCR receipt parsing. |
-| [Chord Breakers](https://angrycow05.itch.io/chord-breaker) | 2D action game in Unity with elemental combat and FSM-driven AI. |
+| [**Blade & Brush**](https://evandongchen.github.io/BladeAndBrush/) | A puzzle game inside a Chinese ink landscape painting. Slash, burn, pour and push until the painting matches the poem. |
+| [**The Wishing Terminal**](https://matchabatcha.itch.io/thewishingterminal) | An adventure horror game built in Roblox for the SFU Summer Summit 2026 game jam. |
+| [**Cramsino**](https://devpost.com/software/cramsino) | An AI study app that watches your focus and pays you in gacha card pulls. Best UI at JourneyHacks 2026. |
+| [**WitchDog**](https://devpost.com/software/witch-dog) | A real-time multiplayer trivia game in Unity, networked with Socket.IO. |
+| [**Money Mango**](https://github.com/EvanDongChen/MoneyMango) | An Android finance app that reads your receipts with OCR. |
+| [**Chord Breakers**](https://angrycow05.itch.io/chord-breaker) | A 2D action game with elemental combat and enemies driven by finite state machines. |
 
-The full list is on the site.
+The rest are [on the site](https://evanchen.info/#projects), where you can search them by title, tag or technology.
 
-## Tech stack
+![The projects section](.github/readme/projects.webp)
 
-React 19, TypeScript, Vite and Tailwind CSS. Deployed to GitHub Pages with `gh-pages`.
+## How it works
 
-## Running locally
+- **A simulation behind the page.** Every fish carries its own position, velocity, school and behavior, and an animation loop steers them each frame: schooling, fleeing the cursor, chasing food, following a conga leader, or spiralling with a partner.
+- **Fish with variants and life stages.** Clownfish, puffers that puff up when you click them, and rare rainbow fish swim among the rest. Babies are born small and grow up.
+- **Particles on canvas.** Bubbles, trails and click ripples are drawn on a canvas layer instead of as DOM elements, so the water stays busy without slowing the page.
+- **It adapts to your device.** The site measures how smoothly it's running and scales back the fish count and effects to keep up, and the ⚙️ panel lets you pick the frame rate yourself.
+
+Built with React, TypeScript, Vite and Tailwind CSS.
+
+## Running it locally
 
 ```sh
 npm install
-npm run dev      # http://localhost:3000
-npm run build    # production build in dist/
-npm run deploy   # build and publish to GitHub Pages
+npm run dev     # then open http://localhost:3000/
+npm run build
 ```
 
-### Adding a project
-
-1. Put the thumbnail in `image-originals/` and a 960px-wide `.webp` copy in `public/images/` (`scripts/optimize-images.mjs` converts PNG/JPG files in `public/images` to webp).
-2. Add an entry to the `projects` list in `App.tsx` with a `title`, `description`, `image`, `tags`, `codeUrl` and an optional `linkLabel` (defaults to "View Code").
+Pushing to the `update` branch deploys the site to [evanchen.info](https://evanchen.info) with GitHub Actions.
