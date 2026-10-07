@@ -206,6 +206,15 @@ const App: React.FC = () => {
     return id;
   }, []);  const projects = useMemo<Project[]>(() => [
     {
+      title: 'Gogh with the Flow',
+      description: "An endless Starry Night, procedurally painted stroke by stroke. Wander an infinite night through regions borrowed from Van Gogh's paintings, with a live-generated soundtrack and postcards you can send.",
+      image: `${BASE_URL}images/gogh_with_the_flow.webp`,
+      tags: ['TypeScript', 'Vite', 'Canvas 2D', 'Web Audio', 'Procedural Generation', 'Generative Art'],
+      codeUrl: 'https://evandongchen.github.io/GoghWithTheFlow/',
+      linkLabel: 'Play',
+      featured: true,
+    },
+    {
       title: 'Blade & Brush',
       description: 'Browser puzzle game set inside a procedurally generated Chinese ink landscape. Slash, burn, pour and push a falling-sand world until the painting matches the poem.',
       image: `${BASE_URL}images/blade_and_brush.webp`,
