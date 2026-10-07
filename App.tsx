@@ -236,7 +236,6 @@ const App: React.FC = () => {
       image: `${BASE_URL}images/cramsino.webp`,
       tags: ['Next.js', 'FastAPI', 'OpenCV', 'PostgreSQL', 'Hackathon'],
       codeUrl: 'https://devpost.com/software/cramsino',
-      featured: true,
     },
     {
       title: 'WitchDog',
