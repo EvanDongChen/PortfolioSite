@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import PortfolioContent from './components/PortfolioContent';
 import PixelOcean from './components/PixelOcean';
 import EcosystemPanel from './components/EcosystemPanel';
@@ -7,14 +7,22 @@ import BackToTopButton from './components/BackToTopButton';
 import PixelModeButton from './components/PixelModeButton';
 import PerformanceButton from './components/PerformanceButton';
 import PerformancePanel from './components/PerformancePanel';
+import PixelTransition from './components/PixelTransition';
 import { OceanStats } from './lib/pixelOcean';
 import { PIXEL_COLORS } from './lib/themeColors';
 import { filterProjects, experiences, education, skills } from './data/portfolio';
 import { useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
+import './pixel-theme.css';
 
 /** The portfolio over a simulated pixel ocean instead of the aquarium. */
 const PixelApp: React.FC = () => {
   useRestoreScrollAfterSwitch();
+  // On <html> rather than this page's root so portalled UI (the project
+  // modal) and the scrollbar pick up the pixel styles too.
+  useEffect(() => {
+    document.documentElement.classList.add('pixel-theme');
+    return () => document.documentElement.classList.remove('pixel-theme');
+  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [isFoodMode, setIsFoodMode] = useState(false);
   const [isPerformancePanelOpen, setIsPerformancePanelOpen] = useState(false);
@@ -45,6 +53,7 @@ const PixelApp: React.FC = () => {
       <PixelModeButton />
       <FishFoodButton isActive={isFoodMode} onToggle={toggleFoodMode} />
       <EcosystemPanel stats={stats} />
+      <PixelTransition />
     </div>
   );
 };

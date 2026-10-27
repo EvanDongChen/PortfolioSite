@@ -22,7 +22,7 @@ const PixelModeButton: React.FC = () => {
       title={label}
       aria-label={label}
       aria-pressed={isPixelMode}
-      className={`fixed ${isPixelMode ? 'bottom-[9rem]' : 'bottom-[12.5rem]'} right-8 z-[55] h-12 w-12 rounded-full backdrop-blur-sm shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-75 transition-all duration-300 flex items-center justify-center ${
+      className={`hud-btn fixed ${isPixelMode ? 'bottom-[9rem]' : 'bottom-[12.5rem]'} right-8 z-[55] h-12 w-12 rounded-full backdrop-blur-sm shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-opacity-75 transition-all duration-300 flex items-center justify-center ${
         isPixelMode
           ? 'bg-cyan-500/50 border-cyan-400/50 text-cyan-50'
           : 'bg-cyan-500/30 border-cyan-400/30 hover:bg-cyan-500/50 text-slate-100'

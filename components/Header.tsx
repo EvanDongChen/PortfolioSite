@@ -61,14 +61,14 @@ const Header: React.FC = () => {
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled || isMobileMenuOpen
+        className={`site-header fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled || isMobileMenuOpen
             ? 'bg-slate-900/50 backdrop-blur-lg shadow-lg'
             : 'bg-transparent'
           }`}
       >
         <nav className="w-full px-6 py-4 flex justify-between items-center">
           <a href="#home" onClick={(e) => handleNavClick(e, '#home')} className="flex items-center">
-            <span className={`text-3xl font-bold ${navTextColor} hover:text-white transition-colors duration-300`}>EC</span>
+            <span className={`site-logo text-3xl font-bold ${navTextColor} hover:text-white transition-colors duration-300`}>EC</span>
           </a>
 
           {/* Desktop nav */}
@@ -78,7 +78,7 @@ const Header: React.FC = () => {
                 key={link.name}
                 href={link.href}
                 onClick={(e) => handleNavClick(e, link.href)}
-                className={`text-lg ${navTextColor} hover:text-white transition-colors duration-300 relative group cursor-pointer`}
+                className={`nav-link text-lg ${navTextColor} hover:text-white transition-colors duration-300 relative group cursor-pointer`}
               >
                 {link.name}
                 <span className={`absolute bottom-0 left-0 w-0 h-0.5 ${linkUnderlineColor} transition-all duration-300 group-hover:w-full`}></span>
@@ -133,7 +133,7 @@ const Header: React.FC = () => {
               key={link.name}
               href={link.href}
               onClick={(e) => handleNavClick(e, link.href)}
-              className={`text-3xl font-semibold ${navTextColor} hover:text-white transition-all duration-300 py-4 cursor-pointer`}
+              className={`nav-link text-3xl font-semibold ${navTextColor} hover:text-white transition-all duration-300 py-4 cursor-pointer`}
               style={{
                 opacity: isMobileMenuOpen ? 1 : 0,
                 transform: isMobileMenuOpen ? 'translateY(0)' : 'translateY(20px)',

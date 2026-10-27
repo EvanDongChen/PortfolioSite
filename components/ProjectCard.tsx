@@ -38,7 +38,7 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
 
   return (
     <div
-      className={`flex flex-col h-full bg-black/20 backdrop-blur-md rounded-xl overflow-hidden shadow-lg border ${colors.border} group`}
+      className={`project-card flex flex-col h-full bg-black/20 backdrop-blur-md rounded-xl overflow-hidden shadow-lg border ${colors.border} group`}
     >
       <div className="relative overflow-hidden" style={{ zIndex: 1 }}>
         <img
@@ -51,11 +51,11 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
       </div>
       <div className="p-6 relative flex flex-col flex-1" style={{ zIndex: 2 }}>
-        <h3 className={`text-2xl font-bold ${colors.title} mb-2`}>{title}</h3>
+        <h3 className={`project-title text-2xl font-bold ${colors.title} mb-2`}>{title}</h3>
         <p className={`${colors.description} mb-4`}>{description}</p>
         <div className="flex flex-wrap gap-2 mb-4">
           {tags.map((tag, index) => (
-            <span key={index} className={`${colors.tagBg} ${colors.tagText} text-xs font-semibold px-3 py-1 rounded-full`}>
+            <span key={index} className={`project-tag ${colors.tagBg} ${colors.tagText} text-xs font-semibold px-3 py-1 rounded-full`}>
               {tag}
             </span>
           ))}
@@ -65,7 +65,7 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
             href={codeUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={`flex items-center space-x-2 ${colors.link} hover:text-white transition-colors duration-300`}
+            className={`project-link flex items-center space-x-2 ${colors.link} hover:text-white transition-colors duration-300`}
           >
             <LinkIcon className="w-5 h-5" />
             <span>{linkLabel}</span>

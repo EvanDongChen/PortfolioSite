@@ -38,7 +38,7 @@ const ProjectTile: React.FC<ProjectTileProps> = React.memo(({ project, onOpen })
       onClick={(e) => onOpen(e.currentTarget)}
       aria-haspopup="dialog"
       aria-label={`${title} — view details`}
-      className={`group text-left flex flex-col bg-black/25 backdrop-blur-md rounded-xl overflow-hidden border shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus:outline-none focus-visible:ring-2 ${colors.border} ${colors.shadow}`}
+      className={`project-tile group text-left flex flex-col bg-black/25 backdrop-blur-md rounded-xl overflow-hidden border shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus:outline-none focus-visible:ring-2 ${colors.border} ${colors.shadow}`}
     >
       <div className="relative w-full aspect-video overflow-hidden">
         <img
@@ -49,15 +49,15 @@ const ProjectTile: React.FC<ProjectTileProps> = React.memo(({ project, onOpen })
           decoding="async"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-        <span className={`absolute bottom-2 right-2 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-black/60 ${colors.hint} opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-300`}>
+        <span className={`tile-hint absolute bottom-2 right-2 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-black/60 ${colors.hint} opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-300`}>
           View details
         </span>
       </div>
       <div className="p-3 flex flex-col gap-2 flex-1">
-        <h3 className={`text-sm md:text-base font-semibold leading-snug ${colors.title}`}>{title}</h3>
+        <h3 className={`project-title text-sm md:text-base font-semibold leading-snug ${colors.title}`}>{title}</h3>
         <div className="flex flex-wrap gap-1.5 mt-auto">
           {visibleTags.map(tag => (
-            <span key={tag} className={`${colors.tagBg} ${colors.tagText} text-[11px] font-medium px-2 py-0.5 rounded-full`}>
+            <span key={tag} className={`project-tag ${colors.tagBg} ${colors.tagText} text-[11px] font-medium px-2 py-0.5 rounded-full`}>
               {tag}
             </span>
           ))}
