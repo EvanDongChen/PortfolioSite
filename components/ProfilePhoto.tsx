@@ -3,12 +3,9 @@ import { useTheme } from '../contexts/ThemeContext';
 
 const BASE_URL = import.meta.env.BASE_URL;
 const PHOTO_URL = `${BASE_URL}images/profile.webp`;
-// Pixel mode shows the photo at this many blocks across until hovered.
-const PIXEL_PHOTO_SIZE = 36;
 
 const ProfilePhoto: React.FC = () => {
-  const { theme, isPixelMode } = useTheme();
-  const pixelCanvasRef = useRef<HTMLCanvasElement>(null);
+  const { theme } = useTheme();
   const [photoRotation, setPhotoRotation] = useState(0);
   const photoSpinRef = useRef({ isDragging: false, lastX: 0, velocity: 0, rotation: 0, idleFrames: 0 });
   const photoAnimRef = useRef<number>(0);
@@ -59,20 +56,6 @@ const ProfilePhoto: React.FC = () => {
     };
   }, []);
 
-  // Draw a centre-cropped, low-resolution copy for the pixel look.
-  useEffect(() => {
-    const canvas = pixelCanvasRef.current;
-    if (!isPixelMode || !canvas) return;
-    const img = new Image();
-    img.onload = () => {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      const side = Math.min(img.naturalWidth, img.naturalHeight);
-      ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, PIXEL_PHOTO_SIZE, PIXEL_PHOTO_SIZE);
-    };
-    img.src = PHOTO_URL;
-  }, [isPixelMode]);
-
   const handlePhotoPointerDown = useCallback((e: React.PointerEvent) => {
     const spin = photoSpinRef.current;
     spin.isDragging = true;
@@ -98,7 +81,7 @@ const ProfilePhoto: React.FC = () => {
 
   return (
     <div
-      className="w-48 h-48 md:w-64 md:h-64 mb-8 cursor-grab active:cursor-grabbing select-none"
+      className="profile-photo w-48 h-48 md:w-64 md:h-64 mb-8 cursor-grab active:cursor-grabbing select-none"
       style={{ perspective: '800px' }}
       onPointerDown={handlePhotoPointerDown}
       onPointerMove={handlePhotoPointerMove}
@@ -106,7 +89,7 @@ const ProfilePhoto: React.FC = () => {
       onPointerCancel={handlePhotoPointerUp}
     >
       <div
-        className={`profile-frame group relative w-full h-full rounded-full shadow-2xl border-4 ${theme === 'underwater' ? 'border-cyan-400/50' : 'border-indigo-400/50'} overflow-hidden`}
+        className={`profile-frame w-full h-full rounded-full shadow-2xl border-4 ${theme === 'underwater' ? 'border-cyan-400/50' : 'border-indigo-400/50'} overflow-hidden`}
         style={{
           transform: `rotateY(${photoRotation}deg)`,
           transition: photoSpinRef.current.isDragging ? 'none' : 'transform 0.05s linear',
@@ -121,16 +104,6 @@ const ProfilePhoto: React.FC = () => {
           decoding="async"
           draggable={false}
         />
-        {isPixelMode && (
-          <canvas
-            ref={pixelCanvasRef}
-            width={PIXEL_PHOTO_SIZE}
-            height={PIXEL_PHOTO_SIZE}
-            className="profile-pixels absolute inset-0 w-full h-full pointer-events-none"
-            style={{ imageRendering: 'pixelated' }}
-            aria-hidden="true"
-          />
-        )}
       </div>
     </div>
   );

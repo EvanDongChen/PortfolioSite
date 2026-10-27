@@ -459,13 +459,6 @@ html.pixel-theme {
   background: #0a2740;
 }
 
-.profile-pixels {
-  transition: opacity 240ms steps(4, end);
-}
-.profile-frame:hover .profile-pixels {
-  opacity: 0;
-}
-
 .px-tooltip {
   position: fixed;
   left: 0;
