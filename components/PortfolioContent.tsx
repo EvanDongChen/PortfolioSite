@@ -18,10 +18,11 @@ interface PortfolioContentProps {
   experiences: Experience[];
   education: Education;
   skills: { languages: string[]; frameworksAndTools: string[] };
+  showSandDune?: boolean;
 }
 
 const PortfolioContent: React.FC<PortfolioContentProps> = ({
-  theme, colors, searchTerm, setSearchTerm, filteredProjects, experiences, education, skills
+  theme, colors, searchTerm, setSearchTerm, filteredProjects, experiences, education, skills, showSandDune = true
 }) => {
   const featuredProjects = useMemo(() => filteredProjects.filter(p => p.featured), [filteredProjects]);
   const otherProjects = useMemo(() => filteredProjects.filter(p => !p.featured), [filteredProjects]);
@@ -247,7 +248,7 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
       </main>
 
       <footer className="relative text-center pt-20 pb-6 overflow-hidden">
-        {theme === 'underwater' && <SandDune />}
+        {theme === 'underwater' && showSandDune && <SandDune />}
         <div className="relative z-10">
           <p className="text-white">&copy; 2026 Evan Chen. All rights reserved.</p>
         </div>

@@ -1,9 +1,22 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { ThemeProvider } from './contexts/ThemeContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { PerformanceProvider } from './contexts/PerformanceContext';
 import './index.css';
+
+// The pixel ecosystem is its own page, fetched only when someone switches to it.
+const PixelApp = lazy(() => import('./PixelApp'));
+
+const Page: React.FC = () => {
+  const { isPixelMode } = useTheme();
+  if (!isPixelMode) return <App />;
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#020b24]" />}>
+      <PixelApp />
+    </Suspense>
+  );
+};
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -15,7 +28,7 @@ root.render(
   <React.StrictMode>
     <PerformanceProvider>
       <ThemeProvider>
-        <App />
+        <Page />
       </ThemeProvider>
     </PerformanceProvider>
   </React.StrictMode>

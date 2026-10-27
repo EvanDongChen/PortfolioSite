@@ -29,9 +29,10 @@ const JellyfishLayer = lazy(() => import('./components/JellyfishLayer'));
 const AnglerFishLayer = lazy(() => import('./components/AnglerFishLayer'));
 
 import ThemeToggleButton from './components/ThemeToggleButton';
+import PixelModeButton from './components/PixelModeButton';
 import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from './components/Icons';
 import { Bubble as BubbleType, Fish as FishType, FishFood as FishFoodType, FishBehavior } from './types';
-import { useTheme } from './contexts/ThemeContext';
+import { useTheme, useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
 import { filterProjects, experiences, education, skills } from './data/portfolio';
 import { UNDERWATER_COLORS, DEEPSEA_COLORS } from './lib/themeColors';
 import { usePerformance, PerformanceTier } from './contexts/PerformanceContext';
@@ -75,6 +76,7 @@ interface JellyPopRing {
 }
 
 const App: React.FC = () => {
+  useRestoreScrollAfterSwitch();
   const { theme } = useTheme();
   const [fishes, setFishes] = useState<FishType[]>([]);
   const [bubbles, setBubbles] = useState<BubbleType[]>([]);
@@ -1689,6 +1691,7 @@ const App: React.FC = () => {
       />
       <BackToTopButton />
       <ThemeToggleButton />
+      <PixelModeButton />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
       <TutorialButton isOpen={isTutorialOpen} onToggle={toggleTutorial} />
