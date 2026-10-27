@@ -6,7 +6,7 @@
 // Both canvases cover the viewport plus a margin and sit in the page, so the
 // browser scrolls them natively between frames.
 
-import { PixelOcean, SURFACE } from './pixelOcean';
+import { Fish, PixelOcean, SURFACE } from './pixelOcean';
 import {
   FLOOR, buildCaustics, fishSprite, bonesSprite, bubbleSprite, pelletSprite,
   shadowSprite, rockSprite, coralSprite,
@@ -25,6 +25,8 @@ export class OceanView {
   /** Top of the drawn region, in page pixels. */
   regionTop = 0;
   regionHeight = 0;
+  /** The fish under inspection, drawn with a reticle. */
+  highlighted: Fish | null = null;
 
   private floorCtx: CanvasRenderingContext2D;
   private spriteCtx: CanvasRenderingContext2D;
@@ -72,6 +74,24 @@ export class OceanView {
       x: cx + (clientX / this.px - cx) / s,
       z: cz + ((this.scrollY + clientY) / this.px + h * ELEVATION - cz) / s,
     };
+  }
+
+  /** Where a fish is drawn, in viewport pixels. */
+  clientPosition(f: Fish) {
+    const p = this.project(f.x, f.z, f.h);
+    return { x: p.x, y: p.y + this.regionTop - this.scrollY };
+  }
+
+  /** The fish drawn nearest a viewport point, if one is within reach. */
+  pick(clientX: number, clientY: number, reach = 24): Fish | null {
+    let best: Fish | null = null;
+    let bestD = reach * reach;
+    for (const f of this.ocean.fish) {
+      const p = this.clientPosition(f);
+      const d = (p.x - clientX) ** 2 + (p.y - clientY) ** 2;
+      if (d < bestD) { bestD = d; best = f; }
+    }
+    return best;
   }
 
   // --- frame --------------------------------------------------------------
@@ -260,6 +280,27 @@ export class OceanView {
     items.sort((a, b) => a.depth - b.depth);
     for (const item of items) item.draw();
     ctx.globalAlpha = 1;
+    const target = this.highlighted;
+    if (target?.alive && visible(target.z)) this.drawReticle(target);
+  }
+
+  /** Blinking corner brackets around a fish, like a targeting cursor. */
+  private drawReticle(f: Fish) {
+    const { spriteCtx: ctx, px } = this;
+    const p = this.project(f.x, f.z, f.h);
+    const half = (f.kind === 'predator' ? 12 : 8) * px * p.s * 0.5 + px * 2;
+    const arm = px * 2;
+    const t = px * 0.75;
+    const pulse = (this.ocean.tick >> 3) & 1 ? px : 0;
+    const x0 = Math.round(p.x - half - pulse);
+    const x1 = Math.round(p.x + half + pulse);
+    const y0 = Math.round(p.y - half * 0.75 - pulse);
+    const y1 = Math.round(p.y + half * 0.75 + pulse);
+    ctx.fillStyle = '#ffd166';
+    for (const [x, y, dx, dy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
+      ctx.fillRect(dx > 0 ? x : x - arm, dy > 0 ? y : y - t, arm, t);
+      ctx.fillRect(dx > 0 ? x : x - t, dy > 0 ? y : y - arm, t, arm);
+    }
   }
 
   /** A kelp stalk rising toward the camera, swaying more toward its tip. */

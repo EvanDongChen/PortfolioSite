@@ -13,6 +13,16 @@ export const SURFACE = 110;
 
 export type FishKind = 'minnow' | 'predator';
 export type DeathCause = 'starved' | 'oldAge' | 'eaten';
+/** What a fish is up to this tick, for the inspector. */
+export type FishMood = 'cruising' | 'schooling' | 'foraging' | 'grazing' | 'fleeing' | 'hunting';
+
+export interface OceanEvent {
+  tick: number;
+  kind: 'birth' | DeathCause;
+  text: string;
+}
+
+export const TICKS_PER_SECOND = 30;
 
 export interface Particle {
   kind: 'plankton' | 'pellet';
@@ -33,7 +43,9 @@ export interface Remains {
 
 export interface Fish {
   id: number;
+  name: string;
   kind: FishKind;
+  mood: FishMood;
   x: number; z: number; h: number;
   vx: number; vz: number; vh: number;
   facing: 1 | -1;
@@ -59,14 +71,20 @@ export interface Kelp { x: number; z: number; length: number; maxLength: number;
 export interface Decor { kind: 'rock' | 'coral'; x: number; z: number; w: number; ht: number; seed: number; vent: boolean }
 
 export interface OceanStats {
+  tick: number;
   minnows: number;
   predators: number;
+  minnowCap: number;
+  predatorCap: number;
   plankton: number;
+  planktonCap: number;
   algae: number;
   food: number;
   remains: number;
   births: number;
   deaths: Record<DeathCause, number>;
+  /** Most recent first. */
+  events: OceanEvent[];
 }
 
 interface Species {
@@ -104,6 +122,10 @@ const BITE_UNITS = 3;
 const ALGAE_PER_UNIT = 16;
 const BUCKET = 32;
 
+const MINNOW_NAMES = ['Finn', 'Pip', 'Bloop', 'Skip', 'Gill', 'Marlo', 'Fizz', 'Wren', 'Juno', 'Tide', 'Pebble', 'Sprout', 'Mochi', 'Biscuit', 'Noodle', 'Sunny', 'Ripple', 'Dot'];
+const PREDATOR_NAMES = ['Fang', 'Razor', 'Shade', 'Barra', 'Spike', 'Vex', 'Grim', 'Moray'];
+const EVENT_LOG_SIZE = 6;
+
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
 
@@ -128,6 +150,7 @@ export class PixelOcean {
   private nextId = 1;
   private births = 0;
   private deaths: Record<DeathCause, number> = { starved: 0, oldAge: 0, eaten: 0 };
+  private events: OceanEvent[] = [];
   private fishGrid: Fish[][] = [];
   private foodGrid: Particle[][] = [];
   private gridCols = 0;
@@ -269,9 +292,13 @@ export class PixelOcean {
 
   private spawnFish(kind: FishKind, parent: Fish | null, energy = rand(0.55, 0.9)) {
     const sp = SPECIES[kind];
+    const id = this.nextId++;
+    const names = kind === 'minnow' ? MINNOW_NAMES : PREDATOR_NAMES;
     const fish: Fish = {
-      id: this.nextId++,
+      id,
+      name: `${names[id % names.length]} #${id}`,
       kind,
+      mood: 'cruising',
       x: parent ? parent.x + rand(-3, 3) : rand(4, this.w - 4),
       z: parent ? parent.z + rand(-3, 3) : rand(4, this.h - 4),
       h: parent ? parent.h : rand(sp.minH + 4, sp.maxH - 4),
@@ -440,10 +467,11 @@ export class PixelOcean {
         f.food = null;
         f.grazeCell = -1;
         busy = true;
+        f.mood = 'fleeing';
       } else if (f.hungry) {
         busy = this.forage(f);
       }
-      if (!busy) this.school(f);
+      if (!busy) f.mood = this.school(f) ? 'schooling' : 'cruising';
     } else if (f.hungry) {
       const prey = this.findPrey(f);
       if (prey) {
@@ -457,9 +485,11 @@ export class PixelOcean {
         maxSpeed = sp.burst;
         effort = 1.5;
         busy = true;
+        f.mood = 'hunting';
         if (Math.hypot(prey.x - (f.x + f.facing * 5), prey.z - f.z, prey.h - f.h) < 6) {
           prey.alive = false;
           this.deaths.eaten++;
+          this.logEvent('eaten', `${f.name} ate ${prey.name}`);
           f.energy = Math.min(1, f.energy + (SPECIES.minnow.body + prey.energy * SPECIES.minnow.units) / sp.units);
           f.prey = null;
         }
@@ -467,6 +497,7 @@ export class PixelOcean {
         busy = this.forage(f);
       }
     }
+    if (!busy && f.kind === 'predator') f.mood = 'cruising';
 
     // Wander and drift between cruising heights.
     f.heading += rand(-0.2, 0.2);
@@ -522,15 +553,22 @@ export class PixelOcean {
       for (let k = 0; k < litter; k++) this.spawnFish(f.kind, f, sp.breedCost / litter);
       counts[f.kind] += litter;
       this.births += litter;
+      this.logEvent('birth', `${f.name} had ${litter === 1 ? 'a baby' : `${litter} babies`}`);
       this.bubbles.push({ x: f.x, z: f.z, h: f.h + 3, phase: rand(0, 6), alive: true });
     }
 
     if (Math.random() < 0.0015) this.bubbles.push({ x: f.x + f.facing * 4, z: f.z, h: f.h + 2, phase: rand(0, 6), alive: true });
   }
 
+  private logEvent(kind: OceanEvent['kind'], text: string) {
+    this.events.unshift({ tick: this.tick, kind, text });
+    if (this.events.length > EVENT_LOG_SIZE) this.events.length = EVENT_LOG_SIZE;
+  }
+
   private die(f: Fish, cause: DeathCause) {
     f.alive = false;
     this.deaths[cause]++;
+    this.logEvent(cause, `${f.name} ${cause === 'starved' ? 'starved' : 'died of old age'}`);
     const sp = SPECIES[f.kind];
     const mass = Math.round(sp.body + Math.max(0, f.energy) * sp.units * 0.3);
     this.remains.push({ kind: f.kind, x: f.x, z: f.z, h: f.h, facing: f.facing, mass, fullMass: mass, alive: true });
@@ -557,6 +595,7 @@ export class PixelOcean {
       f.vx += dx / d * 0.06;
       f.vz += dz / d * 0.06;
       f.vh += dh / d * 0.06;
+      f.mood = 'foraging';
       if (d < 2.5) this.eat(f, t);
       return true;
     }
@@ -572,6 +611,7 @@ export class PixelOcean {
         f.vz += dz / d * 0.05;
       }
       f.vh += (2 - f.h) * 0.01;
+      f.mood = d < 4 ? 'grazing' : 'foraging';
       if (d < 4 && f.h < 5) {
         // Nibble the mouth's cell and its neighbours, one unit at a time.
         const i = this.cellAt(f.x + f.facing * 4 + rand(-1.5, 1.5), f.z + rand(-1.5, 1.5));
@@ -629,6 +669,7 @@ export class PixelOcean {
     f.food = null;
   }
 
+  /** Steers with nearby minnows; false when there are none. */
   private school(f: Fish) {
     let n = 0;
     let avx = 0, avz = 0, cx = 0, cz = 0, ch = 0, sx = 0, sz = 0;
@@ -643,10 +684,11 @@ export class PixelOcean {
       cx += dx; cz += dz; ch += o.h - f.h;
       if (d2 < 25) { sx -= dx; sz -= dz; }
     });
-    if (n === 0) return;
+    if (n === 0) return false;
     f.vx += (avx / n - f.vx) * 0.05 + cx / n * 0.003 + sx * 0.02;
     f.vz += (avz / n - f.vz) * 0.05 + cz / n * 0.003 + sz * 0.02;
     f.vh += ch / n * 0.004;
+    return true;
   }
 
   private findPrey(f: Fish) {
@@ -724,15 +766,21 @@ export class PixelOcean {
       if (p.kind === 'plankton') plankton++;
       else food++;
     }
+    const caps = this.caps();
     return {
+      tick: this.tick,
       minnows,
       predators,
+      minnowCap: caps.minnows,
+      predatorCap: caps.predators,
       plankton,
+      planktonCap: this.planktonCap(),
       algae: Math.round((algae / (255 * Math.max(1, this.algae.length))) * 100),
       food,
       remains: this.remains.length,
       births: this.births,
       deaths: { ...this.deaths },
+      events: [...this.events],
     };
   }
 }
