@@ -4,7 +4,7 @@ My personal portfolio site, built as an interactive aquarium. Schools of fish sw
 
 ## Features
 
-- **Pixel ecosystem:** the button at the bottom right swaps the aquarium for a simulated pixel ocean where every pixel is alive. Sand settles, kelp and plankton grow from a shared nutrient pool, minnows school, graze and flee, predators hunt them, and anything that dies sinks and rots back into nutrients. Drop food and watch the census.
+- **Pixel ecosystem:** the button at the bottom right swaps the aquarium for a pixel-art reef seen from slightly above, spread across the whole page. Every cell of the seabed is simulated: nutrients seep, algae grows, spreads and sheds plankton. Minnows school, graze and flee, predators hunt them, and anything that dies sinks and rots back into the seabed. Drop food and watch the census.
 - **Two themes:** a sunlit underwater reef and a dark deep-sea mode with angler fish, jellyfish and plankton, with an animated dive between them.
 - **Living fish:** fish school, dart, loiter, form conga lines, get curious about food and pair up to breed. Puffers puff up and the fish census tracks who is in the tank.
 - **Interactive tools:** drop fish food (or love food), grab and carry fish, open the fish tank, and follow the built-in tutorial.

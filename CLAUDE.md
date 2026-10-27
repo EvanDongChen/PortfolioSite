@@ -8,12 +8,12 @@ Search these first instead of sweeping the whole tree. There is no `src/` folder
 
 - `index.tsx`: mounts the providers and picks the page: `App` (the aquarium) or `PixelApp` (the pixel ecosystem, lazy-loaded).
 - `App.tsx`: the aquarium page. The fish simulation (a requestAnimationFrame loop in a big effect), spawning and refills, food/love/grab modes, the fish tank, theme transitions between `underwater` and `deepsea`. It is ~1,800 lines: grep for the piece you need rather than reading it whole.
-- `PixelApp.tsx`: the pixel-ecosystem page. Same portfolio content over `components/PixelOcean.tsx`, which drives `lib/pixelOcean.ts` (the cellular-automaton world: sand, rock, kelp, plankton, food, corpses, bubbles, a nutrient pool, and the minnow/predator agents that eat, flee, breed and die).
+- `PixelApp.tsx`: the pixel-ecosystem page: the same portfolio content over a 2.5D reef seen from slightly above, as tall as the page and scrolled with it. `components/PixelOcean.tsx` runs it. `lib/pixelOcean.ts` is the simulation (no DOM: the seabed grid where nutrients seep and algae grows, spreads and sheds plankton, plus the fish, plankton, food, remains, bubbles, kelp and rocks/corals as objects with a height off the floor). `lib/pixelOceanView.ts` is the camera and renderer (floor canvas, depth-sorted sprites, shadows), `lib/pixelOceanArt.ts` the pixel-art sprites and generated scenery.
 - `data/portfolio.ts`: projects, experience, education and skills. Add new projects here.
 - `lib/themeColors.ts`: the Tailwind class sets the content uses per theme.
 - `components/`: `PortfolioContent` (all page content: hero, projects, experience, skills, contact), `Header`, `ProjectCard`/`ProjectTile`/`ProjectModal`, the creature components (`Fish`, `FishCanvas`, `Whale`, `Turtle`, `Jellyfish*`, `AnglerFish*`), background effects (`ParticleCanvas`, `GodRays`, `SandDune`, `Bubble`), and the fixed buttons/panels (`FishFoodButton`, `GrabModeButton`, `TankToggleButton`, `FishCensus`, `LoveModeButton`, `PerformanceButton`/`PerformancePanel`, `TutorialButton`/`TutorialPanel`, `BackToTopButton`, `PixelModeButton`).
 - `contexts/`: `ThemeContext` (theme, deep-sea flag, pixel mode) and `PerformanceContext` (adaptive quality tier, reduced motion, 30/60fps cap).
-- `lib/`: `creatureAnimation`, `projectLink`, `pixelOcean`, `themeColors`.
+- `lib/`: `creatureAnimation`, `projectLink`, `pixelOcean*` (the reef), `themeColors`.
 - `types.ts`: shared types (`Project`, `Fish`, `FishFood`, ...).
 - `image-originals/` holds full-size images; `public/images/` holds the 960px `.webp` copies the site uses (`scripts/optimize-images.mjs` converts them).
 
