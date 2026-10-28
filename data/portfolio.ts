@@ -27,6 +27,7 @@ export const projects: Project[] = [
     image: `${BASE_URL}images/the_wishing_terminal.webp`,
     tags: ['Roblox', 'Lua', 'Adventure', 'Horror', 'Game Development', 'Hackathon'],
     codeUrl: 'https://matchabatcha.itch.io/thewishingterminal',
+    featured: true,
   },
   {
     title: 'Cramsino',
@@ -34,7 +35,6 @@ export const projects: Project[] = [
     image: `${BASE_URL}images/cramsino.webp`,
     tags: ['Next.js', 'FastAPI', 'OpenCV', 'PostgreSQL', 'Hackathon'],
     codeUrl: 'https://devpost.com/software/cramsino',
-    featured: true,
   },
   {
     title: 'WitchDog',
@@ -63,7 +63,6 @@ export const projects: Project[] = [
     image: `${BASE_URL}images/sam.webp`,
     tags: ['Python', 'AI', 'Research', 'Medical Imaging'],
     codeUrl: 'https://www.youtube.com/watch?v=DGHAxlcROsQ',
-    featured: true,
   },
   {
     title: 'Library Database Application',
