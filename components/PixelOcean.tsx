@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Creature, Mood, PixelOcean as Ocean, OceanStats, SPECIES, Species, TICKS_PER_SECOND } from '../lib/pixelOcean';
+import { Adoption, displayName, loadAdoption, saveAdoption } from '../lib/adoption';
 import PixelMeter from './PixelMeter';
 import { OceanView } from '../lib/pixelOceanView';
 import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext';
@@ -16,6 +17,8 @@ const INSPECT_INTERVAL_MS = 100;
 // Only a cursor moving at least this far between events startles fish, so a
 // gentle hover can inspect one without chasing it off.
 const STARTLE_DISTANCE = 10;
+const NOTICE_MS = 7000;
+const MAX_NAME_LENGTH = 16;
 
 const MOOD_LABEL: Record<Mood, string> = {
   cruising: 'Cruising',
@@ -27,6 +30,7 @@ const MOOD_LABEL: Record<Mood, string> = {
   hunting: 'Hunting',
   scavenging: 'Scavenging',
   drifting: 'Drifting',
+  sleeping: 'Sleeping',
 };
 
 interface Inspected {
@@ -37,6 +41,14 @@ interface Inspected {
   hungry: boolean;
   age: number;
   pinned: boolean;
+  adopted: boolean;
+}
+
+/** What the adopt bar can ask the running reef to do. */
+interface ReefActions {
+  adopt: (name: string) => void;
+  find: () => void;
+  letGo: () => void;
 }
 
 const formatAge = (ticks: number) => {
@@ -44,26 +56,48 @@ const formatAge = (ticks: number) => {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 };
 
+/** "Juno #170" -> "Juno": a sensible default name to adopt under. */
+const baseName = (name: string) => name.replace(/\s+#\d+$/, '');
+
 interface PixelOceanProps {
   isFoodMode: boolean;
+  /** 1 for day, 0 for night; the reef fades toward it. */
+  daylight: number;
   onStats: (stats: OceanStats) => void;
 }
 
 /** The reef behind the content: as tall as the page and scrolled with it. */
-const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
+const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, daylight, onStats }) => {
   const floorRef = useRef<HTMLCanvasElement>(null);
   const spriteRef = useRef<HTMLCanvasElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
+  const oceanRef = useRef<Ocean | null>(null);
+  const actionsRef = useRef<ReefActions | null>(null);
   const [inspected, setInspected] = useState<Inspected | null>(null);
+  const [adoption, setAdoption] = useState<Adoption | null>(() => loadAdoption());
+  const [notice, setNotice] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState('');
   const isFoodModeRef = useRef(isFoodMode);
   isFoodModeRef.current = isFoodMode;
   const onStatsRef = useRef(onStats);
   onStatsRef.current = onStats;
+  const daylightRef = useRef(daylight);
+  daylightRef.current = daylight;
 
   const { tier, reducedMotion, override, frameRate } = usePerformance();
   const px = PIXEL_SIZE[override ?? (reducedMotion ? 'low' : tier)];
   const frameMsRef = useRef(1000 / frameRate);
   frameMsRef.current = 1000 / frameRate;
+
+  useEffect(() => {
+    if (oceanRef.current) oceanRef.current.targetDaylight = daylight;
+  }, [daylight]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     const floor = floorRef.current;
@@ -76,8 +110,14 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     });
     const size = worldSize();
     const ocean = new Ocean(size.w, size.h);
+    ocean.daylight = ocean.targetDaylight = daylightRef.current;
+    oceanRef.current = ocean;
     const view = new OceanView(ocean, floor, sprites, px);
     const draw = () => view.render(window.scrollY, window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
+
+    // A returning visitor's creature swims back in.
+    const saved = loadAdoption();
+    let adopted: Creature | null = saved ? ocean.release(saved.species, displayName(saved), saved.palette) : null;
     draw();
 
     let raf = 0;
@@ -91,7 +131,53 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     let pinned: Creature | null = null;
     let shown = false;
 
-    // Follows the inspected fish every frame; refreshes its details less often.
+    // When the adopted creature dies, a child (if any) carries on the line.
+    const checkLine = () => {
+      if (!adopted || adopted.alive) return;
+      const line = loadAdoption();
+      const heir = ocean.heirOf(adopted);
+      if (line && heir) {
+        const next: Adoption = { ...line, generation: line.generation + 1, palette: heir.palette };
+        ocean.adopt(heir, displayName(next));
+        saveAdoption(next);
+        setAdoption(next);
+        setNotice(`${adopted.name} died. ${displayName(next)} carries on the line.`);
+        if (pinned === adopted) pinned = heir;
+        adopted = heir;
+      } else {
+        setNotice(`${adopted.name} died, and the line has ended. Click any creature to adopt another.`);
+        saveAdoption(null);
+        setAdoption(null);
+        adopted = null;
+      }
+    };
+
+    actionsRef.current = {
+      adopt: (name: string) => {
+        if (!pinned?.alive) return;
+        if (adopted && adopted !== pinned) adopted.adopted = false;
+        const line: Adoption = { name, species: pinned.species, palette: pinned.palette, generation: 1, since: Date.now() };
+        ocean.adopt(pinned, name);
+        adopted = pinned;
+        saveAdoption(line);
+        setAdoption(line);
+        lastInspect = 0;
+      },
+      find: () => {
+        if (!adopted?.alive) return;
+        pinned = adopted;
+        window.scrollTo({ top: adopted.z * px - window.innerHeight / 2, behavior: 'smooth' });
+      },
+      letGo: () => {
+        if (adopted) adopted.adopted = false;
+        adopted = null;
+        saveAdoption(null);
+        setAdoption(null);
+        lastInspect = 0;
+      },
+    };
+
+    // Follows the inspected creature every frame; refreshes its details less often.
     const inspect = (now: number) => {
       if (pinned && !pinned.alive) pinned = null;
       const target = pinned ?? (hovered?.alive ? hovered : null);
@@ -116,6 +202,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
         hungry: target.hungry,
         age: target.age,
         pinned: target === pinned,
+        adopted: target.adopted,
       });
     };
 
@@ -140,6 +227,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       }
       if (now - lastStats > STATS_INTERVAL_MS) {
         lastStats = now;
+        checkLine();
         onStatsRef.current(ocean.stats());
       }
     };
@@ -172,14 +260,15 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     };
     const handlePointerLeave = () => ocean.clearPointer();
     const handlePointerDown = (e: PointerEvent) => {
-      if ((e.target as Element | null)?.closest('button, a, input, textarea, select, [role="dialog"]')) return;
+      if ((e.target as Element | null)?.closest('button, a, input, textarea, select, [role="dialog"], [data-reef-ui]')) return;
       if (isFoodModeRef.current) {
         const p = view.screenToWorld(e.clientX, e.clientY, DROP_HEIGHT);
         ocean.dropFood(p.x, p.z, DROP_HEIGHT);
         return;
       }
-      // Clicking (or tapping) a fish keeps it under inspection; elsewhere lets go.
+      // Clicking (or tapping) a creature keeps it under inspection; elsewhere lets go.
       pinned = view.pick(e.clientX, e.clientY, 32);
+      lastInspect = 0;
     };
 
     window.addEventListener('resize', handleResize);
@@ -190,6 +279,8 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       cancelAnimationFrame(raf);
       window.clearTimeout(resizeTimer);
       observer.disconnect();
+      oceanRef.current = null;
+      actionsRef.current = null;
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('pointermove', handlePointerMove);
       document.documentElement.removeEventListener('pointerleave', handlePointerLeave);
@@ -197,33 +288,74 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     };
   }, [px]);
 
+  // Offer the followed creature's own name when a new one is picked.
+  const followedName = inspected?.pinned && !inspected.adopted ? inspected.name : null;
+  useEffect(() => {
+    if (followedName) setDraftName(baseName(followedName));
+  }, [followedName]);
+
+  const submitAdoption = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = draftName.trim().slice(0, MAX_NAME_LENGTH);
+    if (name) actionsRef.current?.adopt(name);
+  };
+
   // Both canvases sit in the page (not fixed) so native scrolling moves them
   // between frames; the clip keeps them from ever stretching the page.
   return (
     <>
-    <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
-      <canvas ref={floorRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated' }} />
-      <canvas ref={spriteRef} className="absolute left-0 top-0 block" />
-      {/* The top of the screen is further from the camera: fade it into the deep. */}
-      <div className="fixed inset-0 bg-gradient-to-b from-[#050d14]/60 via-[#050d14]/15 to-transparent" />
-    </div>
-    <div ref={tipRef} className={`px-tooltip ${inspected ? '' : 'hidden'}`} aria-live="polite">
-      {inspected && (
-        <>
-          <div className="px-tooltip-name">{inspected.name}</div>
-          <div className="px-tooltip-kind">{SPECIES[inspected.species].label} · age {formatAge(inspected.age)}</div>
-          <div className="px-tooltip-row">
-            <span>Energy</span>
-            <PixelMeter value={inspected.energy} color={inspected.energy < 0.25 ? '#ff6b6b' : '#7bd88f'} />
-          </div>
-          <div className="px-tooltip-mood">
-            {inspected.energy < 0.15 ? 'Starving' : MOOD_LABEL[inspected.mood]}
-            {inspected.hungry && inspected.mood !== 'foraging' && inspected.mood !== 'grazing' && inspected.energy >= 0.15 ? ' · hungry' : ''}
-          </div>
-          {inspected.pinned && <div className="px-tooltip-hint">Following · click away to release</div>}
-        </>
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
+        <canvas ref={floorRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated' }} />
+        <canvas ref={spriteRef} className="absolute left-0 top-0 block" />
+        {/* The top of the screen is further from the camera: fade it into the deep. */}
+        <div className="fixed inset-0 bg-gradient-to-b from-[#050d14]/60 via-[#050d14]/15 to-transparent" />
+      </div>
+      <div ref={tipRef} className={`px-tooltip ${inspected ? '' : 'hidden'}`} aria-live="polite">
+        {inspected && (
+          <>
+            <div className="px-tooltip-name">{inspected.adopted ? '★ ' : ''}{inspected.name}</div>
+            <div className="px-tooltip-kind">{SPECIES[inspected.species].label} · age {formatAge(inspected.age)}</div>
+            <div className="px-tooltip-row">
+              <span>Energy</span>
+              <PixelMeter value={inspected.energy} color={inspected.energy < 0.25 ? '#ff7a63' : '#7fd18b'} />
+            </div>
+            <div className="px-tooltip-mood">
+              {inspected.energy < 0.15 ? 'Starving' : MOOD_LABEL[inspected.mood]}
+              {inspected.hungry && inspected.mood !== 'foraging' && inspected.mood !== 'grazing' && inspected.energy >= 0.15 ? ' · hungry' : ''}
+            </div>
+            {inspected.pinned && <div className="px-tooltip-hint">Following · click away to release</div>}
+          </>
+        )}
+      </div>
+
+      {(followedName || adoption || notice) && (
+        <div className="adopt-bar" data-reef-ui role="region" aria-label="Your creature">
+          {notice && <p className="adopt-notice" role="status">{notice}</p>}
+          {followedName && inspected ? (
+            <form className="adopt-row" onSubmit={submitAdoption}>
+              <span className="adopt-label">Adopt this {SPECIES[inspected.species].label.toLowerCase()}?</span>
+              <input
+                className="adopt-input"
+                value={draftName}
+                maxLength={MAX_NAME_LENGTH}
+                onChange={e => setDraftName(e.target.value)}
+                aria-label="Name your creature"
+              />
+              <button type="submit" className="adopt-button">Adopt</button>
+            </form>
+          ) : adoption && (
+            <div className="adopt-row">
+              <span className="adopt-label">
+                <span className="adopt-star" aria-hidden="true">★</span>
+                {displayName(adoption)} · {SPECIES[adoption.species].label}
+                {adoption.generation > 1 && ` · generation ${adoption.generation}`}
+              </span>
+              <button type="button" className="adopt-button" onClick={() => actionsRef.current?.find()}>Find</button>
+              <button type="button" className="adopt-link" onClick={() => actionsRef.current?.letGo()}>Let go</button>
+            </div>
+          )}
+        </div>
       )}
-    </div>
     </>
   );
 };

@@ -2,15 +2,21 @@ import React, { useState } from 'react';
 import { OceanEvent, OceanStats, SPECIES_LIST, Species, TICKS_PER_SECOND } from '../lib/pixelOcean';
 import { creatureSprite } from '../lib/pixelOceanArt';
 import PixelMeter from './PixelMeter';
+import { Phase, TimeMode } from '../lib/reefClock';
 
 interface EcosystemPanelProps {
   stats: OceanStats | null;
+  timeMode: TimeMode;
+  phase: Phase;
+  onCycleTimeMode: () => void;
 }
+
+const TIME_LABEL: Record<TimeMode, string> = { auto: 'Local time', day: 'Always day', night: 'Always night' };
 
 // Algae cover rarely passes this, so it fills the meter.
 const ALGAE_FULL_PERCENT = 40;
 const FEED_LENGTH = 3;
-const OPEN_BY_DEFAULT_MIN_WIDTH = 1600;
+const OPEN_BY_DEFAULT_MIN_WIDTH = 1900;
 
 const EVENT_COLOR: Record<OceanEvent['kind'], string> = {
   birth: '#7fd18b',
@@ -62,7 +68,7 @@ const Row: React.FC<{ icon?: string; label: string; value: string | number; fill
 );
 
 /** Live census of the reef, bottom left by the food button. */
-const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
+const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats, timeMode, phase, onCycleTimeMode }) => {
   // Open by default only where it has room beside the content.
   const [isOpen, setIsOpen] = useState(() => window.innerWidth >= OPEN_BY_DEFAULT_MIN_WIDTH);
   if (!stats) return null;
@@ -84,6 +90,16 @@ const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
       </button>
       {isOpen && (
         <div className="eco-body">
+          <button
+            type="button"
+            className="eco-time"
+            onClick={onCycleTimeMode}
+            title="Switch between local time, always day and always night"
+          >
+            <span className={`eco-time-icon is-${phase}`} aria-hidden="true" />
+            <span className="eco-time-phase">{phase}</span>
+            <span className="eco-time-mode">{TIME_LABEL[timeMode]}</span>
+          </button>
           {SPECIES_LIST.map(s => (
             <Row
               key={s}
@@ -98,9 +114,10 @@ const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
           <Row label="Algae" value={`${stats.algae}%`} fill={stats.algae / ALGAE_FULL_PERCENT} color="#3a8a5a" />
           <ul className="eco-feed" aria-label="Recent events">
             {stats.events.slice(0, FEED_LENGTH).map(event => (
-              <li key={`${event.tick}-${event.text}`}>
+              <li key={`${event.tick}-${event.text}`} className={event.starred ? 'is-starred' : undefined}>
                 <span className="eco-feed-dot" style={{ background: EVENT_COLOR[event.kind] }} aria-hidden="true" />
                 <span className="eco-feed-time">{clock(event.tick)}</span>
+                {event.starred && <span className="adopt-star" aria-label="Your creature">★ </span>}
                 {event.text}
               </li>
             ))}
@@ -113,7 +130,7 @@ const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
             <span>{deaths.starved} starved</span>
             <span>{deaths.oldAge} old age</span>
           </div>
-          <p className="eco-hint">Hover or click any creature to inspect it.</p>
+          <p className="eco-hint">Click any creature to follow it, or adopt it as yours.</p>
         </div>
       )}
     </section>
