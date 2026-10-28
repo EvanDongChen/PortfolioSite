@@ -9,6 +9,10 @@ import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext'
 const PIXEL_SIZE: Record<PerformanceTier, number> = { high: 4, medium: 5, low: 6 };
 const TICK_MS = 1000 / TICKS_PER_SECOND;
 const STATS_INTERVAL_MS = 500;
+// When drawing a frame takes longer than this on average, animate at a lower
+// frame rate (SLOW_FRAME_MS apart) instead of stuttering.
+const SLOW_DRAW_MS = 14;
+const SLOW_FRAME_MS = 1000 / 20;
 // Food is dropped near the surface so it visibly sinks to the floor.
 const DROP_HEIGHT = 90;
 // Fish shy away from the cursor at roughly their own swimming height.
@@ -151,6 +155,8 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     let last = performance.now();
     let pending = 0;
     let lastDraw = 0;
+    // A running average of how long a frame takes to draw, in ms.
+    let drawCost = 0;
     let lastScroll = window.scrollY;
     let lastStats = 0;
     let lastInspect = 0;
@@ -246,11 +252,16 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       }
       // Redraw for new ticks, and while scrolling so the perspective follows.
       const scrolled = window.scrollY !== lastScroll;
-      if ((ticked || scrolled) && now - lastDraw >= frameMsRef.current - 2) {
+      // On a device that can't keep up, draw less often rather than stutter;
+      // the simulation itself keeps its pace either way.
+      const gap = drawCost > SLOW_DRAW_MS ? SLOW_FRAME_MS : frameMsRef.current;
+      if ((ticked || scrolled) && now - lastDraw >= gap - 2) {
         lastDraw = now;
         lastScroll = window.scrollY;
         inspect(now);
+        const started = performance.now();
         draw();
+        drawCost += (performance.now() - started - drawCost) * 0.1;
       }
       if (now - lastStats > STATS_INTERVAL_MS) {
         lastStats = now;

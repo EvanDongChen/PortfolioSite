@@ -20,6 +20,12 @@ const CAUSTIC_SIZE = 64;
 const CAUSTIC_FRAMES = 32;
 /** How much darker the seabed gets from the top of the page to the bottom. */
 const DEPTH_DARKENING = 0.4;
+/**
+ * Sprites are drawn only this far (in world units) beyond the viewport. The
+ * canvases cover a screen either side so native scrolling between frames
+ * never shows a gap, but nobody sees that far out before the next frame.
+ */
+const SPRITE_MARGIN = 60;
 
 /** Sprite widths in art pixels, for shadows and the inspection reticle. */
 const BODY_WIDTH: Record<Species, number> = {
@@ -69,6 +75,8 @@ export class OceanView {
   private viewW = 0;
   private viewH = 0;
   private dpr = 1;
+  /** What the floor canvas last showed; it is only repainted when this changes. */
+  private floorKey = '';
 
   constructor(
     private ocean: PixelOcean,
@@ -131,8 +139,11 @@ export class OceanView {
     this.viewH = viewH;
 
     // Viewport plus half a screen either side, clamped to the world.
-    const rows = Math.min(ocean.h, Math.ceil((viewH * 2) / px));
-    const top = Math.max(0, Math.min(ocean.h - rows, Math.floor((scrollY - viewH / 2) / px)));
+    // The region moves in quarter-screen steps, so scrolling only repaints
+    // the seabed when it has to (it still covers the viewport with room to spare).
+    const step = Math.max(1, Math.ceil(viewH / 4 / px));
+    const rows = Math.min(ocean.h, Math.ceil((viewH * 2) / px) + step);
+    const top = Math.max(0, Math.min(ocean.h - rows, Math.floor((scrollY - viewH / 2) / px / step) * step));
     const regionTop = top * px;
     const regionHeight = rows * px;
     if (regionTop !== this.regionTop || regionHeight !== this.regionHeight || dpr !== this.dpr
@@ -143,11 +154,18 @@ export class OceanView {
       this.place(rows);
     }
 
-    this.renderFloor(top, rows);
+    // The seabed changes slowly and its shimmer steps every other tick, so
+    // skip repainting it when nothing it shows has moved on.
+    const floorKey = `${top},${rows},${ocean.tick >> 1}`;
+    if (floorKey !== this.floorKey) {
+      this.floorKey = floorKey;
+      this.renderFloor(top, rows);
+    }
     this.renderSprites();
   }
 
   private place(rows: number) {
+    this.floorKey = '';
     const { floorCanvas, spriteCanvas, ocean, px } = this;
     // A canvas can outlive the view that sized it (React remounts the reef
     // onto the same element), so check for a buffer of our own as well.
@@ -253,10 +271,10 @@ export class OceanView {
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, this.viewW, this.regionHeight);
 
-    // Anything whose floor point is near the drawn region (tall or high
-    // things reach further up the screen than their footprint).
-    const z0 = this.regionTop / px - 10;
-    const z1 = (this.regionTop + this.regionHeight) / px + SURFACE * ELEVATION + 10;
+    // Anything whose floor point is near the viewport (tall or high things
+    // reach further up the screen than their footprint).
+    const z0 = Math.max(this.regionTop, this.scrollY) / px - SPRITE_MARGIN;
+    const z1 = Math.min(this.regionTop + this.regionHeight, this.scrollY + this.viewH) / px + SPRITE_MARGIN + SURFACE * ELEVATION;
     const visible = (z: number) => z >= z0 && z <= z1;
 
     const shadow = (x: number, z: number, h: number, width: number) => {
@@ -300,21 +318,21 @@ export class OceanView {
     for (const k of ocean.carcasses) {
       if (visible(k.z)) items.push({ depth: k.z + 0.1, draw: () => this.drawCarcass(k) });
     }
+    // Plankton are tiny specks that don't need depth sorting: draw them all in
+    // one pass, by colour, before everything else.
+    ctx.globalAlpha = 0.85;
+    for (const shade of [0, 32]) {
+      ctx.fillStyle = shade ? 'rgb(150,240,170)' : 'rgb(110,214,190)';
+      for (const p of ocean.particles) {
+        if (p.kind !== 'plankton' || (p.life & 32) !== shade || !visible(p.z)) continue;
+        const q = this.project(p.x, p.z, p.h);
+        const size = Math.max(2, Math.round(px * 0.75 * q.s));
+        ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
+      }
+    }
     for (const p of ocean.particles) {
-      if (!visible(p.z)) continue;
-      if (p.kind === 'pellet') {
+      if (p.kind === 'pellet' && visible(p.z)) {
         items.push({ depth: p.z + 0.2, draw: () => this.sprite(pelletSprite(), p.x, p.z, p.h) });
-      } else {
-        items.push({
-          depth: p.z + 0.2,
-          draw: () => {
-            const q = this.project(p.x, p.z, p.h);
-            const size = Math.max(2, Math.round(px * 0.75 * q.s));
-            ctx.globalAlpha = 0.85;
-            ctx.fillStyle = (p.life & 32) ? 'rgb(150,240,170)' : 'rgb(110,214,190)';
-            ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
-          },
-        });
       }
     }
     for (const d of ocean.drops) {
@@ -565,12 +583,12 @@ export class OceanView {
   private drawKelp(x: number, z: number, length: number, phase: number) {
     const { spriteCtx: ctx, px, ocean } = this;
     const t = ocean.tick * 0.04 + phase;
+    ctx.globalAlpha = 1;
     for (let i = 0; i <= length; i += 1.4) {
       const sway = Math.sin(t + i * 0.12) * (i / 14);
       const p = this.project(x + sway, z, i);
       const size = Math.ceil(px * p.s);
       const tip = i > length - 3;
-      ctx.globalAlpha = 1;
       ctx.fillStyle = tip ? 'rgb(120,200,110)' : i < length * 0.3 ? 'rgb(34,104,70)' : 'rgb(48,140,84)';
       ctx.fillRect(Math.round(p.x - size / 2), Math.round(p.y), size, size);
       // Leaves on alternating sides.
