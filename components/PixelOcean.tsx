@@ -19,6 +19,22 @@ const INSPECT_INTERVAL_MS = 100;
 const STARTLE_DISTANCE = 10;
 const NOTICE_MS = 7000;
 const MAX_NAME_LENGTH = 16;
+// Breathing room kept clear around the hero text, in page pixels.
+const HERO_CLEARANCE = 24;
+
+/** The area behind the hero's text (not the photo), in world units. */
+const heroZones = (px: number) => {
+  const items = Array.from(document.getElementById('home')?.children ?? [])
+    .filter(el => !el.classList.contains('profile-photo'))
+    .map(el => el.getBoundingClientRect())
+    .filter(r => r.width > 0 && r.height > 0);
+  if (!items.length) return [];
+  const top = Math.min(...items.map(r => r.top)) + window.scrollY - HERO_CLEARANCE;
+  const bottom = Math.max(...items.map(r => r.bottom)) + window.scrollY + HERO_CLEARANCE;
+  const left = Math.min(...items.map(r => r.left)) - HERO_CLEARANCE;
+  const right = Math.max(...items.map(r => r.right)) + HERO_CLEARANCE;
+  return [{ x0: left / px, z0: top / px, x1: right / px, z1: bottom / px }];
+};
 
 const MOOD_LABEL: Record<Mood, string> = {
   cruising: 'Cruising',
@@ -115,6 +131,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     const size = worldSize();
     const ocean = new Ocean(size.w, size.h);
     oceanRef.current = ocean;
+    ocean.setClearZones(heroZones(px));
     const view = new OceanView(ocean, floor, sprites, px);
     const draw = () => view.render(window.scrollY, window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
 
@@ -243,7 +260,8 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       resizeTimer = window.setTimeout(() => {
         const next = worldSize();
         ocean.resize(next.w, next.h);
-            draw();
+        ocean.setClearZones(heroZones(px));
+        draw();
       }, 150);
     };
     const observer = new ResizeObserver(handleResize);

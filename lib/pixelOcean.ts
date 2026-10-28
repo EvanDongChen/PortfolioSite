@@ -124,6 +124,9 @@ export interface Drop {
 
 export interface Bubble { x: number; z: number; h: number; phase: number; alive: boolean }
 export interface Kelp { x: number; z: number; length: number; maxLength: number; phase: number }
+/** An area of the seabed kept free of scenery and algae, in world units. */
+export interface ClearZone { x0: number; z0: number; x1: number; z1: number }
+
 export interface Decor { kind: 'rock' | 'coral'; x: number; z: number; w: number; ht: number; seed: number; vent: boolean }
 
 export interface OceanStats {
@@ -276,6 +279,8 @@ const HIDDEN_SIGHT = 11;
 const HOME_RANGE = 60;
 /** How long a seahorse carries its eggs before they hatch. */
 const CARRY_TICKS = 450;
+/** How far a clear zone's ragged edge reaches past its rectangle. */
+const CLEAR_EDGE = 7;
 
 /** 1 at the top of the page, falling toward 0 in the depths. */
 const sunlight = (z: number) => Math.exp(-z / SHALLOWS);
@@ -317,6 +322,7 @@ export class PixelOcean {
   private gridCols = 0;
   private gridRows = 0;
   private plankton = 0;
+  private clearZones: ClearZone[] = [];
   private noisePhase = Array.from({ length: 12 }, () => rand(0, Math.PI * 2));
 
   constructor(w: number, h: number) {
@@ -586,6 +592,41 @@ export class PixelOcean {
     if (this.events.length > EVENT_LOG_SIZE) this.events.length = EVENT_LOG_SIZE;
   }
 
+  // --- keeping the page readable ----------------------------------------------
+
+  /**
+   * Keeps areas (like the space behind the hero text) free of algae, rocks,
+   * corals and kelp. Things that stand up off the floor are drawn higher up
+   * the screen than their base, so anything rooted a little below a zone that
+   * would reach up into it goes too.
+   */
+  setClearZones(zones: ClearZone[]) {
+    this.clearZones = zones;
+    const blocks = (x: number, z: number, halfW: number, rise: number) =>
+      zones.some(r => x + halfW >= r.x0 && x - halfW <= r.x1 && z >= r.z0 && z - rise <= r.z1);
+    // Elevation lifts a unit of height about 0.55 of a unit up the screen.
+    this.decor = this.decor.filter(d => !blocks(d.x, d.z, d.w / 2, d.ht));
+    this.kelp = this.kelp.filter(k => !blocks(k.x, k.z, 2, k.maxLength * 0.6));
+    for (const c of this.creatures) if (c.kelp && !this.kelp.includes(c.kelp)) c.kelp = null;
+    const { w, algae, nutrients } = this;
+    for (const r of zones) {
+      for (let z = Math.max(0, Math.floor(r.z0 - CLEAR_EDGE)); z <= Math.min(this.h - 1, r.z1 + CLEAR_EDGE); z++) {
+        for (let x = Math.max(0, Math.floor(r.x0 - CLEAR_EDGE)); x <= Math.min(w - 1, r.x1 + CLEAR_EDGE); x++) {
+          const i = z * w + x;
+          if (!this.isClear(i, x, z)) continue;
+          nutrients[i] = Math.min(255, nutrients[i] + (algae[i] >> 4));
+          algae[i] = 0;
+        }
+      }
+    }
+  }
+
+  /** Inside a clear zone, whose edge is ragged so meadows thin out rather than stop dead. */
+  private isClear(i: number, x: number, z: number) {
+    const reach = (this.grain[i] & 7) * (CLEAR_EDGE / 8);
+    return this.clearZones.some(r => Math.max(r.x0 - x, x - r.x1, r.z0 - z, z - r.z1) < reach);
+  }
+
   // --- the visitor's creature ------------------------------------------------
 
   /** Names a creature and makes it the visitor's own. */
@@ -656,6 +697,8 @@ export class PixelOcean {
             : (i + w < n ? i + w : i);
       if (nutrients[i] > nutrients[j] + 1) { nutrients[i]--; nutrients[j]++; }
       if (stain[i] > 0) stain[i] = Math.max(0, stain[i] - 6);
+      // Nothing takes root behind the page's text.
+      if (this.isClear(i, x, (i / w) | 0)) continue;
 
       const a = algae[i];
       if (nutrients[i] > 0 && a <= 255 - ALGAE_PER_UNIT && (a > 0 || algae[j] >= 96 || Math.random() < 0.002)) {
