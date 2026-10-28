@@ -21,6 +21,8 @@ const NOTICE_MS = 7000;
 const MAX_NAME_LENGTH = 16;
 // Breathing room kept clear around the hero text, in page pixels.
 const HERO_CLEARANCE = 24;
+// Longer than the sections' 0.8s fade-and-slide-in.
+const HERO_SETTLE_MS = 1200;
 
 /** The area behind the hero's text (not the photo), in world units. */
 const heroZones = (px: number) => {
@@ -132,6 +134,11 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     const ocean = new Ocean(size.w, size.h);
     oceanRef.current = ocean;
     ocean.setClearZones(heroZones(px));
+    // The hero can still move after this: its web fonts load and it slides in
+    // as it fades up. Measure it again once both have settled.
+    const remeasure = () => { if (oceanRef.current === ocean) ocean.setClearZones(heroZones(px)); };
+    document.fonts?.ready.then(remeasure);
+    const settleTimer = window.setTimeout(remeasure, HERO_SETTLE_MS);
     const view = new OceanView(ocean, floor, sprites, px);
     const draw = () => view.render(window.scrollY, window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
 
@@ -299,6 +306,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     return () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(resizeTimer);
+      window.clearTimeout(settleTimer);
       observer.disconnect();
       oceanRef.current = null;
       actionsRef.current = null;
