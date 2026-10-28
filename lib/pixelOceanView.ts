@@ -149,7 +149,9 @@ export class OceanView {
 
   private place(rows: number) {
     const { floorCanvas, spriteCanvas, ocean, px } = this;
-    if (floorCanvas.width !== ocean.w || floorCanvas.height !== rows) {
+    // A canvas can outlive the view that sized it (React remounts the reef
+    // onto the same element), so check for a buffer of our own as well.
+    if (!this.floorImage || floorCanvas.width !== ocean.w || floorCanvas.height !== rows) {
       floorCanvas.width = ocean.w;
       floorCanvas.height = rows;
       this.floorImage = this.floorCtx.createImageData(ocean.w, rows);
