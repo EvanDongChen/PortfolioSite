@@ -22,7 +22,7 @@ const MAX_NAME_LENGTH = 16;
 // Breathing room kept clear around the hero text, in page pixels.
 const HERO_CLEARANCE = 24;
 
-/** Where the hero's text (not the photo) sits at the top of the page, in world units. */
+/** The area behind the hero's text (not the photo), in world units. */
 const heroZones = (px: number) => {
   const items = Array.from(document.getElementById('home')?.children ?? [])
     .filter(el => !el.classList.contains('profile-photo'))
@@ -87,7 +87,7 @@ interface PixelOceanProps {
   onStats: (stats: OceanStats) => void;
 }
 
-/** The reef behind the content: a fixed, one-screen backdrop the page scrolls over. */
+/** The reef behind the content: as tall as the page and scrolled with it. */
 const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
   const floorRef = useRef<HTMLCanvasElement>(null);
   const spriteRef = useRef<HTMLCanvasElement>(null);
@@ -124,19 +124,16 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     const sprites = spriteRef.current;
     if (!floor || !sprites) return;
 
-    // The reef is a fixed backdrop exactly one screen in size.
     const worldSize = () => ({
       w: Math.ceil(window.innerWidth / px),
-      h: Math.ceil(window.innerHeight / px),
+      h: Math.max(Math.ceil(window.innerHeight / px), Math.ceil(document.documentElement.scrollHeight / px)),
     });
     const size = worldSize();
     const ocean = new Ocean(size.w, size.h);
     oceanRef.current = ocean;
     ocean.setClearZones(heroZones(px));
-    // Web fonts can shift the hero once they load, so measure it again then.
-    document.fonts?.ready.then(() => { if (oceanRef.current === ocean) ocean.setClearZones(heroZones(px)); });
     const view = new OceanView(ocean, floor, sprites, px);
-    const draw = () => view.render(0, window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
+    const draw = () => view.render(window.scrollY, window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
 
     // A returning visitor's creature swims back in.
     const saved = loadAdoption();
@@ -147,6 +144,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     let last = performance.now();
     let pending = 0;
     let lastDraw = 0;
+    let lastScroll = window.scrollY;
     let lastStats = 0;
     let lastInspect = 0;
     let hovered: Creature | null = null;
@@ -186,7 +184,9 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
         lastInspect = 0;
       },
       find: () => {
-        if (adopted?.alive) pinned = adopted;
+        if (!adopted?.alive) return;
+        pinned = adopted;
+        window.scrollTo({ top: adopted.z * px - window.innerHeight / 2, behavior: 'smooth' });
       },
       letGo: () => {
         if (adopted) adopted.adopted = false;
@@ -237,8 +237,11 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
         pending -= TICK_MS;
         ticked = true;
       }
-      if (ticked && now - lastDraw >= frameMsRef.current - 2) {
+      // Redraw for new ticks, and while scrolling so the perspective follows.
+      const scrolled = window.scrollY !== lastScroll;
+      if ((ticked || scrolled) && now - lastDraw >= frameMsRef.current - 2) {
         lastDraw = now;
+        lastScroll = window.scrollY;
         inspect(now);
         draw();
       }
@@ -250,6 +253,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     };
     raf = requestAnimationFrame(frame);
 
+    // The world is as tall as the page, so follow the content's height too.
     let resizeTimer = 0;
     const handleResize = () => {
       window.clearTimeout(resizeTimer);
@@ -260,6 +264,8 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
         draw();
       }, 150);
     };
+    const observer = new ResizeObserver(handleResize);
+    observer.observe(document.body);
 
     let lastPointer = { x: 0, y: 0 };
     const handlePointerMove = (e: PointerEvent) => {
@@ -293,6 +299,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     return () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(resizeTimer);
+      observer.disconnect();
       oceanRef.current = null;
       actionsRef.current = null;
       window.removeEventListener('resize', handleResize);
@@ -314,10 +321,11 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     if (name) actionsRef.current?.adopt(name);
   };
 
-  // A fixed backdrop: the page content scrolls over the reef.
+  // Both canvases sit in the page (not fixed) so native scrolling moves them
+  // between frames; the clip keeps them from ever stretching the page.
   return (
     <>
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
         <canvas ref={floorRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated' }} />
         <canvas ref={spriteRef} className="absolute left-0 top-0 block" />
         {/* The top of the screen is further from the camera: fade it into the deep. */}
