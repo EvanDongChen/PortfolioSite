@@ -40,6 +40,9 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   );
 };
 
+/** True while a page is mounting because the reader switched to it (not on first load). */
+export const isSwitchingPages = () => pendingScrollY !== null;
+
 /** Call once in each page so the reader lands where they were before a switch. */
 export const useRestoreScrollAfterSwitch = () => {
   useLayoutEffect(() => {

@@ -13,7 +13,7 @@ import DiveCard from './components/DiveCard';
 import { OceanStats } from './lib/pixelOcean';
 import { PIXEL_COLORS } from './lib/themeColors';
 import { filterProjects, experiences, education, skills } from './data/portfolio';
-import { useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
+import { isSwitchingPages, useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
 import './pixel-theme.css';
 
 // Created once so the memoised page content never re-renders for it.
@@ -29,6 +29,10 @@ const PixelApp: React.FC = () => {
     document.documentElement.classList.add('pixel-theme');
     return () => document.documentElement.classList.remove('pixel-theme');
   }, []);
+  // The block dissolve only plays when switching over from the aquarium; on
+  // a first visit the reef simply appears. Read during render, before the
+  // scroll restore's layout effect clears the switch.
+  const [isSwitchIn] = useState(isSwitchingPages);
   const [searchTerm, setSearchTerm] = useState('');
   const [isFoodMode, setIsFoodMode] = useState(false);
   const [isPerformancePanelOpen, setIsPerformancePanelOpen] = useState(false);
@@ -61,7 +65,7 @@ const PixelApp: React.FC = () => {
       <PixelModeButton />
       <FishFoodButton isActive={isFoodMode} onToggle={toggleFoodMode} />
       <EcosystemPanel stats={stats} />
-      <PixelTransition />
+      {isSwitchIn && <PixelTransition />}
     </div>
   );
 };
