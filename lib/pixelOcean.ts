@@ -20,7 +20,7 @@ export type Species = 'minnow' | 'barracuda' | 'crab' | 'jelly' | 'turtle';
 export const SPECIES_LIST: Species[] = ['minnow', 'barracuda', 'crab', 'jelly', 'turtle'];
 export type DeathCause = 'eaten' | 'stung' | 'starved' | 'oldAge';
 /** What a creature is up to this tick, for the inspector. */
-export type Mood = 'cruising' | 'schooling' | 'foraging' | 'grazing' | 'fleeing' | 'hiding' | 'hunting' | 'scavenging' | 'drifting' | 'sleeping';
+export type Mood = 'cruising' | 'schooling' | 'foraging' | 'grazing' | 'fleeing' | 'hiding' | 'hunting' | 'scavenging' | 'drifting';
 
 export interface OceanEvent {
   tick: number;
@@ -223,9 +223,6 @@ export class PixelOcean {
   kelp: Kelp[] = [];
   decor: Decor[] = [];
   tick = 0;
-  /** 1 at noon, 0 at night; eases toward targetDaylight so changes fade in. */
-  daylight = 1;
-  targetDaylight = 1;
   pointer: { x: number; z: number } | null = null;
 
   private nextId = 1;
@@ -479,13 +476,8 @@ export class PixelOcean {
 
   // --- simulation ---------------------------------------------------------
 
-  /** Dusk and dawn, when the light is changing and hunters are out. */
-  private get isTwilight() { return this.daylight > 0.15 && this.daylight < 0.65; }
-  private get isNight() { return this.daylight <= 0.15; }
-
   step() {
     this.tick++;
-    this.daylight += (this.targetDaylight - this.daylight) * 0.03;
     this.updateFloor();
     this.updateKelp();
     this.buildGrids();
@@ -756,17 +748,6 @@ export class PixelOcean {
       c.mood = 'fleeing';
       return;
     }
-    if (this.isNight && !c.hungry) {
-      // Asleep: tuck into kelp if there is some nearby, otherwise just hang still.
-      c.mood = 'sleeping';
-      s.max = sp.cruise * 0.35;
-      if (k && kd < 50) {
-        s.x += (k.x - c.x) * 0.01;
-        s.z += (k.z - c.z) * 0.01;
-        s.h += (Math.min(k.length * 0.5, 20) - c.h) * 0.005;
-      }
-      return;
-    }
     if (c.hungry && this.forage(c, s)) return;
     c.mood = this.school(c, s) ? 'schooling' : 'cruising';
     // Idle schools loiter around the kelp.
@@ -789,15 +770,7 @@ export class PixelOcean {
   }
 
   private thinkBarracuda(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
-    // Barracuda hunt hardest in the half light and rest through the night.
-    const hunting = this.isTwilight ? c.energy < 0.95 : this.isNight ? c.energy < 0.4 : c.hungry;
-    if (this.isNight && !hunting) {
-      c.mood = 'sleeping';
-      s.max = SPECIES.barracuda.cruise * 0.4;
-      this.wander(c, s, 0.008);
-      return;
-    }
-    if (hunting) {
+    if (c.hungry) {
       const prey = this.findPrey(c, 'minnow');
       if (prey) {
         this.toward(c, s, { x: prey.x + prey.vx * 6, z: prey.z + prey.vz * 6, h: prey.h }, 0.09);
@@ -850,8 +823,7 @@ export class PixelOcean {
     c.mood = 'cruising';
     // Mostly stand still, then dart a short way.
     if (Math.random() < 0.01) c.heading = rand(0, Math.PI * 2);
-    // Crabs are bolder in the dark.
-    if ((this.tick + c.id * 13) % 240 < 90 + 100 * (1 - this.daylight)) {
+    if ((this.tick + c.id * 13) % 240 < 90) {
       s.x += Math.cos(c.heading) * 0.03;
       s.z += Math.sin(c.heading) * 0.015;
     }

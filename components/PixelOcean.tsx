@@ -30,7 +30,6 @@ const MOOD_LABEL: Record<Mood, string> = {
   hunting: 'Hunting',
   scavenging: 'Scavenging',
   drifting: 'Drifting',
-  sleeping: 'Sleeping',
 };
 
 interface Inspected {
@@ -61,13 +60,11 @@ const baseName = (name: string) => name.replace(/\s+#\d+$/, '');
 
 interface PixelOceanProps {
   isFoodMode: boolean;
-  /** 1 for day, 0 for night; the reef fades toward it. */
-  daylight: number;
   onStats: (stats: OceanStats) => void;
 }
 
 /** The reef behind the content: as tall as the page and scrolled with it. */
-const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, daylight, onStats }) => {
+const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
   const floorRef = useRef<HTMLCanvasElement>(null);
   const spriteRef = useRef<HTMLCanvasElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
@@ -81,17 +78,11 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, daylight, onStats }
   isFoodModeRef.current = isFoodMode;
   const onStatsRef = useRef(onStats);
   onStatsRef.current = onStats;
-  const daylightRef = useRef(daylight);
-  daylightRef.current = daylight;
 
   const { tier, reducedMotion, override, frameRate } = usePerformance();
   const px = PIXEL_SIZE[override ?? (reducedMotion ? 'low' : tier)];
   const frameMsRef = useRef(1000 / frameRate);
   frameMsRef.current = 1000 / frameRate;
-
-  useEffect(() => {
-    if (oceanRef.current) oceanRef.current.targetDaylight = daylight;
-  }, [daylight]);
 
   useEffect(() => {
     if (!notice) return;
@@ -110,7 +101,6 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, daylight, onStats }
     });
     const size = worldSize();
     const ocean = new Ocean(size.w, size.h);
-    ocean.daylight = ocean.targetDaylight = daylightRef.current;
     oceanRef.current = ocean;
     const view = new OceanView(ocean, floor, sprites, px);
     const draw = () => view.render(window.scrollY, window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);

@@ -791,43 +791,6 @@ html.pixel-theme {
   color: var(--px-sand-color);
 }
 
-/* Day and night. The hero's log line follows the reef's light. */
-html.pixel-theme[data-reef-time='night'] .hero-name::before { content: 'Night dive  \00B7  surface  \00B7  0 m'; }
-html.pixel-theme[data-reef-time='dusk'] .hero-name::before { content: 'Dusk dive  \00B7  surface  \00B7  0 m'; }
-html.pixel-theme[data-reef-time='dawn'] .hero-name::before { content: 'Dawn dive  \00B7  surface  \00B7  0 m'; }
-
-.eco-time {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 8px;
-  margin: 2px 0 6px;
-  font-size: 1.2rem;
-  line-height: 1.4;
-  text-align: left;
-}
-.eco-time-icon {
-  width: 10px;
-  height: 10px;
-  margin: 0 6px 0 6px;
-  background: var(--px-sand-color);
-}
-.eco-time-icon.is-dawn,
-.eco-time-icon.is-dusk { background: var(--px-coral); }
-/* A blocky crescent moon. */
-.eco-time-icon.is-night {
-  background: var(--px-foam);
-  clip-path: polygon(0 0, 60% 0, 60% 20%, 40% 20%, 40% 80%, 60% 80%, 60% 100%, 0 100%);
-}
-.eco-time-phase {
-  text-transform: capitalize;
-  color: var(--px-text);
-}
-.eco-time-mode {
-  margin-left: auto;
-  color: var(--px-mute);
-}
-.eco-time:hover .eco-time-mode { color: var(--px-sand-color); }
 .eco-feed li.is-starred { color: var(--px-sand-color); }
 
 /* The visitor's own creature: follow, adopt, find. */

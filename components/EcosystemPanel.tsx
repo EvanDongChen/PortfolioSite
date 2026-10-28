@@ -2,16 +2,10 @@ import React, { useState } from 'react';
 import { OceanEvent, OceanStats, SPECIES_LIST, Species, TICKS_PER_SECOND } from '../lib/pixelOcean';
 import { creatureSprite } from '../lib/pixelOceanArt';
 import PixelMeter from './PixelMeter';
-import { Phase, TimeMode } from '../lib/reefClock';
 
 interface EcosystemPanelProps {
   stats: OceanStats | null;
-  timeMode: TimeMode;
-  phase: Phase;
-  onCycleTimeMode: () => void;
 }
-
-const TIME_LABEL: Record<TimeMode, string> = { auto: 'Local time', day: 'Always day', night: 'Always night' };
 
 // Algae cover rarely passes this, so it fills the meter.
 const ALGAE_FULL_PERCENT = 40;
@@ -68,7 +62,7 @@ const Row: React.FC<{ icon?: string; label: string; value: string | number; fill
 );
 
 /** Live census of the reef, bottom left by the food button. */
-const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats, timeMode, phase, onCycleTimeMode }) => {
+const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
   // Open by default only where it has room beside the content.
   const [isOpen, setIsOpen] = useState(() => window.innerWidth >= OPEN_BY_DEFAULT_MIN_WIDTH);
   if (!stats) return null;
@@ -90,16 +84,6 @@ const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats, timeMode, phase,
       </button>
       {isOpen && (
         <div className="eco-body">
-          <button
-            type="button"
-            className="eco-time"
-            onClick={onCycleTimeMode}
-            title="Switch between local time, always day and always night"
-          >
-            <span className={`eco-time-icon is-${phase}`} aria-hidden="true" />
-            <span className="eco-time-phase">{phase}</span>
-            <span className="eco-time-mode">{TIME_LABEL[timeMode]}</span>
-          </button>
           {SPECIES_LIST.map(s => (
             <Row
               key={s}
