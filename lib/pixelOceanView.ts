@@ -1,10 +1,9 @@
 // Draws the reef from a camera looking down at the seabed at an angle.
 //
-// The seabed scrolls one-to-one with the page. Anything off the floor is
-// lifted up the screen by its height and spread out from the view's centre
-// (it is closer to the camera), with a shadow left on the floor beneath it.
-// Both canvases cover the viewport plus a margin and sit in the page, so the
-// browser scrolls them natively between frames.
+// Anything off the floor is lifted up the screen by its height and spread out
+// from the view's centre (it is closer to the camera), with a shadow left on
+// the floor beneath it. The renderer can follow a scroll position, but the
+// pixel page keeps the reef as a fixed, one-screen backdrop and passes 0.
 
 import { Carcass, Creature, PixelOcean, SPECIES, SURFACE, Species } from './pixelOcean';
 import {
