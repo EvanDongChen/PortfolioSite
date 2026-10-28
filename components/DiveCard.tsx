@@ -1,5 +1,5 @@
 import React from 'react';
-import { education, experiences, projects } from '../data/portfolio';
+import { education, experiences } from '../data/portfolio';
 
 /** The hero's at-a-glance summary, built from the portfolio data. */
 const DiveCard: React.FC = () => {
@@ -16,10 +16,6 @@ const DiveCard: React.FC = () => {
       <div>
         <dt>Study</dt>
         <dd>{education.degree.replace('Bachelor of Science, ', 'BSc ')} · {school}</dd>
-      </div>
-      <div>
-        <dt>Log</dt>
-        <dd>{projects.length} projects · {experiences.length} roles</dd>
       </div>
     </dl>
   );
