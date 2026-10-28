@@ -1,8 +1,8 @@
 // Draws the reef from a camera looking down at the seabed at an angle.
 //
 // The seabed scrolls one-to-one with the page. Anything off the floor is
-// lifted up the screen by its height and spread out from the view's centre
-// (it is closer to the camera), with a shadow left on the floor beneath it.
+// lifted up the screen by its height and drawn a little bigger (it is closer
+// to the camera), with a shadow left on the floor beneath it.
 // Both canvases cover the viewport plus a margin and sit in the page, so the
 // browser scrolls them natively between frames.
 
@@ -14,7 +14,7 @@ import {
 
 /** How far up the screen one unit of height lifts an object. */
 const ELEVATION = 0.55;
-/** How much bigger (and further from the centre) things get per unit of height. */
+/** How much bigger things get per unit of height. */
 const PERSPECTIVE = 0.0035;
 const CAUSTIC_SIZE = 64;
 const CAUSTIC_FRAMES = 32;
@@ -82,29 +82,25 @@ export class OceanView {
 
   // --- camera -------------------------------------------------------------
 
-  private get centerX() { return this.ocean.w / 2; }
-  private get centerZ() { return (this.scrollY + this.viewH / 2) / this.px; }
-
-  /** World point to region-local canvas pixels, plus its scale. */
+  /**
+   * World point to region-local canvas pixels, plus its scale. Height lifts a
+   * thing up the screen and makes it bigger, but it stays over its own spot on
+   * the page: spreading it from the view's centre would make tall kelp slide
+   * across the content as the page scrolls.
+   */
   private project(x: number, z: number, h: number) {
-    const s = 1 + h * PERSPECTIVE;
-    const cx = this.centerX;
-    const cz = this.centerZ;
     return {
-      x: (cx + (x - cx) * s) * this.px,
-      y: (cz + (z - cz) * s - h * ELEVATION) * this.px - this.regionTop,
-      s,
+      x: x * this.px,
+      y: (z - h * ELEVATION) * this.px - this.regionTop,
+      s: 1 + h * PERSPECTIVE,
     };
   }
 
   /** The world point under a viewport position at a given height. */
   screenToWorld(clientX: number, clientY: number, h: number) {
-    const s = 1 + h * PERSPECTIVE;
-    const cx = this.centerX;
-    const cz = this.centerZ;
     return {
-      x: cx + (clientX / this.px - cx) / s,
-      z: cz + ((this.scrollY + clientY) / this.px + h * ELEVATION - cz) / s,
+      x: clientX / this.px,
+      z: (this.scrollY + clientY) / this.px + h * ELEVATION,
     };
   }
 
