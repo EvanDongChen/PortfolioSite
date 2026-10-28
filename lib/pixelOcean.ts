@@ -13,6 +13,13 @@
 // reef sharks hunt barracuda and octopuses. Crabs and minnows pick at
 // carcasses, and carcasses and waste rot back into the seabed's nutrients.
 //
+// Clownfish shelter in stinging anemones, starfish creep over the rocks eating
+// urchins, cuttlefish hypnotise prey with rippling colours, dolphin pods visit
+// to herd minnows into bait balls, and now and then a whale carcass sinks and
+// the whole reef swarms it. Kills leave a scent trail that hunters follow in,
+// big fish queue at cleaner stations, and courting fish pair up before they
+// spawn.
+//
 // World units are art pixels: x across, z down the page, h up off the floor.
 
 export const SURFACE = 110;
@@ -20,19 +27,22 @@ export const TICKS_PER_SECOND = 30;
 
 export type Species =
   | 'minnow' | 'puffer' | 'seahorse' | 'barracuda' | 'eel' | 'angler' | 'shark'
-  | 'crab' | 'urchin' | 'octopus' | 'jelly' | 'turtle' | 'manta';
+  | 'crab' | 'urchin' | 'octopus' | 'jelly' | 'turtle' | 'manta'
+  | 'clownfish' | 'starfish' | 'cuttlefish' | 'dolphin';
 export const SPECIES_LIST: Species[] = [
-  'minnow', 'puffer', 'seahorse', 'barracuda', 'eel', 'angler', 'shark',
-  'crab', 'urchin', 'octopus', 'jelly', 'turtle', 'manta',
+  'minnow', 'puffer', 'seahorse', 'clownfish', 'barracuda', 'eel', 'angler', 'shark',
+  'crab', 'urchin', 'starfish', 'octopus', 'cuttlefish', 'jelly', 'turtle', 'manta', 'dolphin',
 ];
 export type DeathCause = 'eaten' | 'stung' | 'starved' | 'oldAge';
 /** What a creature is up to this tick, for the inspector. */
 export type Mood = 'cruising' | 'schooling' | 'foraging' | 'grazing' | 'fleeing' | 'hiding' | 'hunting' | 'scavenging' | 'drifting'
-  | 'clinging' | 'carrying' | 'camouflaged' | 'inking' | 'lurking' | 'striking' | 'puffed' | 'gliding';
+  | 'clinging' | 'carrying' | 'camouflaged' | 'inking' | 'lurking' | 'striking' | 'puffed' | 'gliding'
+  | 'tracking' | 'balling' | 'herding' | 'diving' | 'leaving' | 'courting' | 'queueing' | 'cleaning'
+  | 'hypnotising' | 'mesmerised' | 'eating' | 'nestled';
 
 export interface OceanEvent {
   tick: number;
-  kind: 'birth' | 'inked' | DeathCause;
+  kind: 'birth' | 'inked' | 'visit' | 'cleaned' | DeathCause;
   text: string;
   /** Involves a creature the visitor adopted. */
   starred: boolean;
@@ -64,7 +74,7 @@ export interface Creature {
   heading: number;
   cruiseH: number;
   waste: number;
-  food: Particle | Carcass | null;
+  food: Particle | Carcass | WhaleFall | null;
   grazeCell: number;
   /** Kelp a turtle is browsing, or a minnow is using for cover. */
   kelp: Kelp | null;
@@ -88,6 +98,25 @@ export interface Creature {
   timer: number;
   /** A seahorse carrying eggs: ticks until they hatch. */
   carrying: number;
+  /** Parasites picked up over time (0 to 1); big fish get them cleaned off. */
+  parasites: number;
+  /** The cleaner station it is queueing at, if any. */
+  station: Station | null;
+  /** Its partner while courting, and how much longer the courtship lasts. */
+  mate: Creature | null;
+  courting: number;
+  /** The partner who started the courtship (and so lays the eggs). */
+  courtLead: boolean;
+  /** Ticks spent looking for a partner, before giving up and spawning alone. */
+  courtWait: number;
+  /** Ticks left mesmerised by a cuttlefish (or pinned by a starfish). */
+  dazed: number;
+  /** A starfish's arms: nipped off by crabs and slowly regrown. */
+  limbs: number;
+  /** A clownfish's home. */
+  anemone: Anemone | null;
+  /** A dolphin's place in its pod. */
+  podIndex: number;
   scanIn: number;
   prey: Creature | null;
   alive: boolean;
@@ -113,13 +142,48 @@ export interface Carcass {
 
 /** A drop of blood (or jellyfish goo, or octopus ink) drifting in the water. */
 export interface Drop {
-  kind: 'blood' | 'goo' | 'ink';
+  kind: 'blood' | 'goo' | 'ink' | 'heart' | 'sand' | 'scent' | 'sparkle';
   x: number; z: number; h: number;
   vx: number; vz: number; vh: number;
   life: number;
   maxLife: number;
   shade: number;
   alive: boolean;
+}
+
+/** A stinging anemone on the seabed, home to clownfish. */
+export interface Anemone { x: number; z: number; palette: number; phase: number; retract: number; alive: boolean }
+
+/** A rock where cleaner shrimp pick parasites off the big fish that queue there. */
+export interface Station { rock: Decor; x: number; z: number; ht: number; side: 1 | -1; queue: Creature[] }
+
+/** A whale carcass: it sinks, feeds the reef for minutes, and leaves its skeleton. */
+export interface WhaleFall {
+  x: number; z: number; h: number; vh: number;
+  facing: 1 | -1;
+  mass: number;
+  fullMass: number;
+  alive: boolean;
+  landed: boolean;
+  /** When the bare skeleton finally crumbles (0 while there is still meat). */
+  bonesUntil: number;
+  /** Marks it apart from other food. */
+  whale: true;
+}
+
+/** The smell of blood in the water: it drifts and fades, and hunters follow it. */
+export interface Scent { x: number; z: number; strength: number; alive: boolean }
+
+interface Pod {
+  cx: number; cz: number; ch: number;
+  phase: 'arrive' | 'herd' | 'leave';
+  until: number;
+  diver: number;
+  diveUntil: number;
+  side: 1 | -1;
+  eaten: number;
+  /** Fish caught on the current dive: each pass snaps up only a couple. */
+  diveCatch: number;
 }
 
 export interface Bubble { x: number; z: number; h: number; phase: number; alive: boolean }
@@ -244,6 +308,31 @@ export const SPECIES: Record<Species, SpeciesDef> = {
     breedAt: 2, breedCost: 0, breedCooldown: 0, litter: [1, 1], units: 200, body: 80, minH: 40, maxH: 65,
     cap: [300000, 1, 1], palettes: 1,
   },
+  clownfish: {
+    label: 'Clownfish', names: ['Nemo', 'Marlin', 'Coral', 'Sunny', 'Bubbles', 'Peach', 'Tango', 'Ember'],
+    cruise: 0.2, burst: 0.6, vision: 14, metabolism: 0.0004, maxAge: [7000, 10000], mature: 700, hungerLine: 0.7,
+    breedAt: 0.85, breedCost: 0.45, breedCooldown: 1500, litter: [1, 2], units: 50, body: 10, minH: 2, maxH: 14,
+    cap: [18000, 4, 40], palettes: 1,
+  },
+  starfish: {
+    label: 'Starfish', names: ['Patrick', 'Stella', 'Astra', 'Comet', 'Twinkle', 'Nova'],
+    cruise: 0.015, burst: 0.015, vision: 40, metabolism: 0.00005, maxAge: [14000, 20000], mature: 2000, hungerLine: 0.8,
+    breedAt: 0.9, breedCost: 0.5, breedCooldown: 5000, litter: [1, 1], units: 60, body: 8, minH: 0, maxH: 0,
+    cap: [25000, 3, 24], palettes: 3,
+  },
+  cuttlefish: {
+    label: 'Cuttlefish', names: ['Sepia', 'Flicker', 'Prism', 'Mesmer', 'Strobe', 'Zebra'],
+    cruise: 0.12, burst: 0.45, vision: 34, metabolism: 0.0002, maxAge: [8000, 12000], mature: 1200, hungerLine: 0.7,
+    breedAt: 0.9, breedCost: 0.5, breedCooldown: 3000, litter: [1, 2], units: 100, body: 20, minH: 6, maxH: 30,
+    cap: [50000, 2, 10], palettes: 1,
+  },
+  dolphin: {
+    // Dolphins visit as a pod (see spawnPod) and never breed here.
+    label: 'Dolphin', names: ['Echo', 'Splash', 'Flip', 'Marina', 'Clicker', 'Sonar'],
+    cruise: 0.5, burst: 1.3, vision: 120, metabolism: 0.00002, maxAge: [60000, 60000], mature: 0, hungerLine: 0,
+    breedAt: 2, breedCost: 0, breedCooldown: 0, litter: [1, 1], units: 300, body: 100, minH: 10, maxH: 70,
+    cap: [1e9, 0, 6], palettes: 1,
+  },
   angler: {
     label: 'Anglerfish', names: ['Lantern', 'Gulp', 'Grin', 'Abyss', 'Murk', 'Lumen'],
     cruise: 0.05, burst: 0.5, vision: 30, metabolism: 0.0001, maxAge: [12000, 16000], mature: 2000, hungerLine: 0.8,
@@ -258,6 +347,14 @@ const PREY: Partial<Record<Species, Species[]>> = {
   shark: ['barracuda', 'octopus', 'puffer', 'minnow'],
   turtle: ['jelly', 'urchin'],
 };
+/** Big fish that pick up parasites and visit cleaner stations. */
+const CLEANED: Species[] = ['shark', 'barracuda', 'turtle', 'manta', 'cuttlefish'];
+/** Fish that court a partner before they spawn. */
+const COURTERS: Species[] = ['minnow', 'puffer', 'clownfish', 'barracuda', 'shark', 'cuttlefish', 'turtle'];
+/** What a clownfish darts home from. */
+const CLOWNFISH_THREATS: Species[] = ['barracuda', 'shark', 'cuttlefish', 'eel', 'dolphin'];
+/** Small fish an anemone stings if they brush against it. */
+const STUNG_BY_ANEMONES: Species[] = ['minnow', 'puffer', 'seahorse'];
 /** Creatures that position themselves rather than swim through move(). */
 const SELF_PLACED: Species[] = ['eel', 'seahorse'];
 const BUBBLERS: Species[] = ['minnow', 'barracuda', 'turtle', 'puffer', 'shark', 'angler', 'manta'];
@@ -281,6 +378,18 @@ const HOME_RANGE = 60;
 const CARRY_TICKS = 450;
 /** How far (in cells) moss fades out toward a clear zone. */
 const CLEAR_EDGE = 18;
+const COURT_TICKS = 120;
+/** How long a fish looks for a partner before spawning alone. */
+const COURT_PATIENCE = 240;
+const PARASITE_RATE = 0.0002;
+/** Parasite load at which a big fish heads for a cleaner station. */
+const PARASITE_ITCH = 0.6;
+/** How long a cuttlefish holds its hypnotic display before striking. */
+const HYPNO_TICKS = 60;
+const WHALE_MASS = 1500;
+/** How much of a whale one bite actually removes (it feeds the eater a full bite). */
+const WHALE_BITE_SHARE = 0.06;
+const MAX_SCENTS = 60;
 
 /** 1 at the top of the page, falling toward 0 in the depths. */
 const sunlight = (z: number) => Math.exp(-z / SHALLOWS);
@@ -310,6 +419,10 @@ export class PixelOcean {
   bubbles: Bubble[] = [];
   kelp: Kelp[] = [];
   decor: Decor[] = [];
+  anemones: Anemone[] = [];
+  stations: Station[] = [];
+  scents: Scent[] = [];
+  whale: WhaleFall | null = null;
   tick = 0;
   pointer: { x: number; z: number } | null = null;
 
@@ -323,12 +436,21 @@ export class PixelOcean {
   private gridRows = 0;
   private plankton = 0;
   private clearZones: ClearZone[] = [];
+  private pod: Pod | null = null;
+  /** When the next whale falls and the next dolphin pod visits (ticks). */
+  private nextWhale = randInt(1350, 2250);
+  private nextPod = randInt(750, 1350);
+  /** A slowly turning current that carries scent. */
+  private currentAngle = rand(0, Math.PI * 2);
   private noisePhase = Array.from({ length: 12 }, () => rand(0, Math.PI * 2));
 
   constructor(w: number, h: number) {
     this.resize(w, h);
     this.plantMeadows();
+    this.plantAnemones();
+    this.pickStations();
     for (const species of SPECIES_LIST) {
+      if (species === 'dolphin') continue;
       for (let n = Math.max(1, Math.round(this.cap(species) * 0.5)); n > 0; n--) this.spawn(species, null);
     }
     for (let n = Math.round(this.planktonCap() * 0.4); n > 0; n--) {
@@ -337,6 +459,32 @@ export class PixelOcean {
   }
 
   // --- world --------------------------------------------------------------
+
+  /** Anemones in the sunlit shallows, each with a pair of clownfish to come. */
+  private plantAnemones() {
+    const count = Math.max(3, Math.round(this.w / 70));
+    for (let k = 0; k < count; k++) {
+      this.anemones.push({
+        x: rand(10, this.w - 10),
+        z: rand(10, Math.min(this.h - 10, SHALLOWS * 1.4)),
+        palette: randInt(0, 2),
+        phase: rand(0, Math.PI * 2),
+        retract: 0,
+        alive: true,
+      });
+    }
+  }
+
+  /** A few of the bigger rocks become cleaner stations. */
+  private pickStations() {
+    const big = this.rocks().filter(r => r.ht >= 9);
+    const count = Math.max(1, Math.min(3, Math.round((this.w * this.h) / 180000)));
+    this.stations = [];
+    while (this.stations.length < count && big.length) {
+      const rock = big.splice(randInt(0, big.length - 1), 1)[0];
+      this.stations.push({ rock, x: rock.x, z: rock.z, ht: rock.ht, side: Math.random() < 0.5 ? 1 : -1, queue: [] });
+    }
+  }
 
   /**
    * Dense kelp meadows ringed by seagrass in the sunlit shallows at the top
@@ -525,6 +673,16 @@ export class PixelOcean {
       lunge: 0,
       timer: 0,
       carrying: 0,
+      parasites: rand(0, 0.4),
+      station: null,
+      mate: null,
+      courting: 0,
+      courtLead: false,
+      courtWait: 0,
+      dazed: 0,
+      limbs: 5,
+      anemone: parent?.anemone ?? null,
+      podIndex: 0,
       scanIn: randInt(0, 10),
       prey: null,
       alive: true,
@@ -532,6 +690,13 @@ export class PixelOcean {
     this.creatures.push(creature);
     if (species === 'eel') this.giveDen(creature);
     if (species === 'octopus') this.giveHomeRock(creature);
+    if (species === 'clownfish' && !parent) {
+      // Clownfish arrive at an anemone that isn't crowded yet.
+      const homes = this.anemones.filter(a => this.creatures.filter(o => o.anemone === a).length < 3);
+      const a = homes[randInt(0, homes.length - 1)] ?? null;
+      creature.anemone = a;
+      if (a) { creature.x = a.x + rand(-3, 3); creature.z = a.z + rand(-2, 2); creature.h = 4; creature.homeZ = a.z; }
+    }
     if (species === 'seahorse' && !parent) {
       // Seahorses arrive clinging to kelp in the shallows.
       const meadow = this.kelp.filter(k => k.z < SHALLOWS * 1.5 && k.length > 15);
@@ -544,7 +709,7 @@ export class PixelOcean {
   private spawnDepth(species: Species) {
     switch (species) {
       // Morays den in the rocks of the busy shallows.
-      case 'minnow': case 'barracuda': case 'puffer': case 'seahorse': case 'eel':
+      case 'minnow': case 'barracuda': case 'puffer': case 'seahorse': case 'eel': case 'cuttlefish':
         return shallowZ(this.h);
       case 'angler':
         // Anglerfish keep to the darkest, deepest water at the bottom of the page.
@@ -608,6 +773,12 @@ export class PixelOcean {
     this.decor = this.decor.filter(d => !blocks(d.x, d.z, d.w / 2, d.ht));
     this.kelp = this.kelp.filter(k => !blocks(k.x, k.z, 2, k.maxLength * 0.6));
     for (const c of this.creatures) if (c.kelp && !this.kelp.includes(c.kelp)) c.kelp = null;
+    for (const a of this.anemones) if (blocks(a.x, a.z, 4, 10)) a.alive = false;
+    this.anemones = this.anemones.filter(a => a.alive);
+    if (this.stations.some(st => !this.decor.includes(st.rock))) {
+      for (const c of this.creatures) c.station = null;
+      this.pickStations();
+    }
     const { w, algae, nutrients } = this;
     for (const r of zones) {
       for (let z = Math.max(0, Math.floor(r.z0 - CLEAR_EDGE)); z <= Math.min(this.h - 1, r.z1 + CLEAR_EDGE); z++) {
@@ -671,6 +842,10 @@ export class PixelOcean {
     this.updateKelp();
     this.buildGrids();
     this.updateCreatures();
+    this.updateAnemones();
+    this.updateWhale();
+    this.updatePod();
+    this.updateScents();
     this.updateParticles();
     this.updateCarcasses();
     this.updateDrops();
@@ -684,6 +859,8 @@ export class PixelOcean {
     this.carcasses = this.carcasses.filter(c => c.alive);
     this.drops = this.drops.filter(d => d.alive);
     this.bubbles = this.bubbles.filter(b => b.alive);
+    this.scents = this.scents.filter(sc => sc.alive);
+    for (const st of this.stations) st.queue = st.queue.filter(c => c.alive && c.station === st);
   }
 
   /** Samples random cells: nutrients seep, algae grows, spreads and sheds plankton, stains fade. */
@@ -781,7 +958,7 @@ export class PixelOcean {
       if (counts.jelly < 2 && Math.random() < 0.5) this.spawn('jelly', null);
       if (counts.turtle === 0 && counts.jelly > 3 && Math.random() < 0.15) this.spawn('turtle', null);
       // Every other species drifts back in now and then if it's down to its last few.
-      for (const sp of ['puffer', 'seahorse', 'urchin', 'octopus', 'eel', 'shark', 'manta', 'angler'] as Species[]) {
+      for (const sp of ['puffer', 'seahorse', 'urchin', 'octopus', 'eel', 'shark', 'manta', 'angler', 'clownfish', 'starfish', 'cuttlefish'] as Species[]) {
         if (counts[sp] < SPECIES[sp].cap[1] && Math.random() < 0.25) this.spawn(sp, null);
       }
     }
@@ -799,9 +976,13 @@ export class PixelOcean {
     if (c.breedCooldown > 0) c.breedCooldown--;
     if (c.energy < sp.hungerLine) c.hungry = true;
     else if (c.energy > 0.95) { c.hungry = false; c.food = null; c.grazeCell = -1; c.kelp = null; }
+    if (CLEANED.includes(c.species)) c.parasites = Math.min(1, c.parasites + PARASITE_RATE);
 
     const steer = { x: 0, z: 0, h: 0, max: sp.cruise, effort: 1 };
-    switch (c.species) {
+    // Courting and queueing to be cleaned take over from everyday life.
+    if (c.courting > 0 && this.court(c, steer)) { /* courting */ }
+    else if (this.visitStation(c, steer)) { /* at the cleaner station */ }
+    else switch (c.species) {
       case 'minnow': this.thinkMinnow(c, steer); break;
       case 'barracuda': this.thinkBarracuda(c, steer); break;
       case 'crab': this.thinkCrab(c, steer); break;
@@ -815,8 +996,18 @@ export class PixelOcean {
       case 'shark': this.thinkShark(c, steer); break;
       case 'manta': this.thinkManta(c, steer); break;
       case 'angler': this.thinkAngler(c, steer); break;
+      case 'clownfish': this.thinkClownfish(c, steer); break;
+      case 'starfish': this.thinkStarfish(c, steer); break;
+      case 'cuttlefish': this.thinkCuttlefish(c, steer); break;
+      case 'dolphin': this.thinkDolphin(c, steer); break;
     }
     if (!c.alive) return;
+    // Mesmerised by a cuttlefish, or pinned by a starfish: barely moving.
+    if (c.dazed > 0) {
+      c.dazed--;
+      steer.max = Math.min(steer.max, 0.04);
+      if (c.species !== 'urchin') c.mood = 'mesmerised';
+    }
     if (!SELF_PLACED.includes(c.species)) this.move(c, steer);
 
     const burned = sp.metabolism * steer.effort;
@@ -833,11 +1024,31 @@ export class PixelOcean {
 
     // Seahorse fathers carry the eggs for a while before they hatch.
     if (c.carrying > 0 && --c.carrying === 0) this.hatch(c, counts);
-    if (c.energy > sp.breedAt && c.age > sp.mature && c.breedCooldown === 0 && c.carrying === 0 && counts[c.species] < this.cap(c.species)) {
-      c.energy -= sp.breedCost;
-      c.breedCooldown = sp.breedCooldown;
-      if (c.species === 'seahorse') c.carrying = CARRY_TICKS;
-      else this.hatch(c, counts);
+    // A courtship ends in spawning. The partner who started it keeps the
+    // count (the other just follows along), so turn order can't cancel it.
+    if (c.courting > 0 && c.courtLead && --c.courting === 0) {
+      const mate = c.mate;
+      if (mate) { mate.mate = null; mate.courting = 0; }
+      c.mate = null;
+      if (mate?.alive) this.spawnBrood(c, counts, mate);
+    }
+    const ready = c.energy > sp.breedAt && c.age > sp.mature && c.breedCooldown === 0 && c.carrying === 0
+      && c.courting === 0 && !c.station && counts[c.species] < this.cap(c.species);
+    if (ready) {
+      if (!COURTERS.includes(c.species)) this.spawnBrood(c, counts, null);
+      else {
+        const mate = (this.tick + c.id) % 10 === 0 ? this.findMate(c) : null;
+        if (mate) {
+          c.mate = mate; mate.mate = c;
+          c.courting = mate.courting = COURT_TICKS;
+          c.courtLead = true; mate.courtLead = false;
+          c.courtWait = 0;
+          if (c.species !== 'minnow') this.logEvent('birth', `${c.name} is courting ${mate.name}`, c, mate);
+        } else if (++c.courtWait > COURT_PATIENCE) {
+          c.courtWait = 0;
+          this.spawnBrood(c, counts, null);
+        }
+      }
     }
 
     if (BUBBLERS.includes(c.species) && Math.random() < 0.0015) {
@@ -845,8 +1056,104 @@ export class PixelOcean {
     }
   }
 
+  /** Pays for a litter and lays it (or, for seahorses, starts carrying it). */
+  private spawnBrood(c: Creature, counts: Record<Species, number>, mate: Creature | null) {
+    const sp = SPECIES[c.species];
+    c.energy -= sp.breedCost;
+    c.breedCooldown = sp.breedCooldown;
+    if (mate) mate.breedCooldown = Math.max(mate.breedCooldown, sp.breedCooldown / 2);
+    if (c.species === 'seahorse') c.carrying = CARRY_TICKS;
+    else this.hatch(c, counts, mate);
+  }
+
+  /** A free adult of the same species nearby that is fit to court. */
+  private findMate(c: Creature) {
+    let best: Creature | null = null;
+    let bestD = 40 * 40;
+    this.near(this.grid, c.x, c.z, 40, o => {
+      if (o === c || o.species !== c.species || !o.alive || o.mate || o.courting || o.station) return;
+      if (o.age < SPECIES[o.species].mature || o.energy < 0.4) return;
+      const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2;
+      if (d < bestD) { bestD = d; best = o; }
+    });
+    return best as Creature | null;
+  }
+
+  /**
+   * Courting partners swim in a tight loop around each other, flashing their
+   * colours, with hearts rising from the pair.
+   */
+  private court(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    const mate = c.mate;
+    if (!mate?.alive) { c.mate = null; c.courting = 0; return false; }
+    const mx = (c.x + mate.x) / 2;
+    const mz = (c.z + mate.z) / 2;
+    const mh = Math.max(SPECIES[c.species].minH, (c.h + mate.h) / 2);
+    const radius = c.species === 'shark' ? 9 : c.species === 'turtle' || c.species === 'barracuda' ? 7 : 4;
+    const angle = this.tick * 0.12 + (c.courtLead ? 0 : Math.PI);
+    this.toward(c, s, { x: mx + Math.cos(angle) * radius, z: mz + Math.sin(angle) * radius * 0.6, h: mh + Math.sin(angle * 2) }, 0.1);
+    s.max = SPECIES[c.species].cruise * 1.3;
+    c.mood = 'courting';
+    // A heart now and then; minnows court so often that theirs get just one.
+    const heart = c.species === 'minnow' ? c.courting === COURT_TICKS - 1 : this.tick % 30 === 0;
+    if (c.courtLead && heart) this.splash('heart', { x: mx, z: mz, h: mh + 4 }, 1, [50, 70], 0.05);
+    return true;
+  }
+
+  /**
+   * Big fish carrying parasites queue at a cleaner station, hold still at
+   * the front while the shrimp work, then go on their way. Nobody hunts in
+   * the queue, not even the sharks.
+   */
+  private visitStation(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    if (!CLEANED.includes(c.species) || !this.stations.length) return false;
+    if (!c.station) {
+      if (c.parasites < PARASITE_ITCH || c.energy < 0.25) return false;
+      let best: Station | null = null;
+      let bestD = Infinity;
+      for (const st of this.stations) {
+        const d = (st.x - c.x) ** 2 + (st.z - c.z) ** 2 + st.queue.length * 2000;
+        if (d < bestD) { bestD = d; best = st; }
+      }
+      if (!best) return false;
+      best.queue.push(c);
+      c.station = best;
+      c.prey = null;
+      c.food = null;
+    }
+    const st = c.station;
+    const place = st.queue.indexOf(c);
+    if (place < 0 || !this.stations.includes(st)) { c.station = null; return false; }
+    c.homeZ = st.z;
+    if (place === 0) {
+      const d = this.toward(c, s, { x: st.x, z: st.z, h: st.ht + 5 }, 0.05);
+      s.max = d < 8 ? 0.04 : SPECIES[c.species].cruise;
+      if (d < 4) {
+        c.mood = 'cleaning';
+        c.parasites -= 0.005;
+        if (this.tick % 12 === 0) this.splash('sparkle', { x: c.x, z: c.z, h: c.h + 2 }, 1, [30, 50], 0.1);
+        if (c.parasites <= 0.02) {
+          c.parasites = 0;
+          st.queue.shift();
+          c.station = null;
+          this.splash('sparkle', { x: c.x, z: c.z, h: c.h + 2 }, 8, [30, 60], 0.2);
+          this.logEvent('cleaned', `${c.name} got cleaned at the cleaner station`, c);
+        }
+      } else {
+        c.mood = 'queueing';
+      }
+    } else {
+      // Waiting in line beside the rock.
+      const spot = { x: st.x + st.side * (14 + place * 12), z: st.z + 3, h: st.ht + 8 };
+      const d = this.toward(c, s, spot, 0.04);
+      s.max = d < 6 ? 0.03 : SPECIES[c.species].cruise;
+      c.mood = 'queueing';
+    }
+    return true;
+  }
+
   /** Brings a litter into the world; it shares what the parent spent on it. */
-  private hatch(c: Creature, counts: Record<Species, number>) {
+  private hatch(c: Creature, counts: Record<Species, number>, mate: Creature | null = null) {
     const sp = SPECIES[c.species];
     const litter = Math.min(this.cap(c.species) - counts[c.species], randInt(sp.litter[0], sp.litter[1]));
     if (litter <= 0) return;
@@ -856,7 +1163,8 @@ export class PixelOcean {
     }
     counts[c.species] += litter;
     this.births += litter;
-    this.logEvent('birth', `${c.name} had ${litter === 1 ? 'a baby' : `${litter} babies`}`, c);
+    const babies = litter === 1 ? 'a baby' : `${litter} babies`;
+    this.logEvent('birth', mate ? `${c.name} and ${mate.name} had ${babies}` : `${c.name} had ${babies}`, c, mate);
     if (BUBBLERS.includes(c.species) || c.species === 'seahorse') {
       this.bubbles.push({ x: c.x, z: c.z, h: c.h + 3, phase: rand(0, 6), alive: true });
     }
@@ -873,7 +1181,7 @@ export class PixelOcean {
     const stray = Math.abs(fromHome) - HOME_RANGE;
     if (stray > 0) s.z += Math.sign(fromHome) * Math.min(0.05, 0.012 + stray * 0.0004);
     if (sp.maxH > 0) {
-      if (c.h < sp.minH && c.grazeCell < 0) s.h += 0.03;
+      if (c.h < sp.minH && c.grazeCell < 0 && !c.station) s.h += 0.03;
       if (c.h > sp.maxH) s.h -= 0.03;
       // Rocks and corals are never taller than this.
       for (const d of c.h > 20 ? [] : this.decor) {
@@ -918,14 +1226,38 @@ export class PixelOcean {
   private thinkMinnow(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
     const sp = SPECIES.minnow;
     let threat: { x: number; z: number } | null = null;
-    let threatD = 40 * 40;
-    this.near(this.grid, c.x, c.z, 40, o => {
+    let threatD = 45 * 45;
+    let dolphins = false;
+    this.near(this.grid, c.x, c.z, 45, o => {
+      if (o.species === 'dolphin') { if ((o.x - c.x) ** 2 + (o.z - c.z) ** 2 < 45 * 45) dolphins = true; return; }
       if (o.species !== 'barracuda' && o.species !== 'jelly' && o.species !== 'shark') return;
+      if (o.station) return; // Queueing hunters are at peace.
       // Jellyfish are only worth avoiding up close; a shark scatters everything.
       const reach = o.species === 'jelly' ? 4 : o.species === 'shark' ? 40 : 28;
       const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2 + ((o.h - c.h) * 0.5) ** 2;
       if (d < reach * reach && d < threatD) { threatD = d; threat = o; }
     });
+    // Dolphins circling: pack in tight with the school and swirl.
+    if (dolphins) {
+      let n = 0, cx = 0, cz = 0, ch = 0;
+      this.near(this.grid, c.x, c.z, 20, o => {
+        if (o.species !== 'minnow' || o === c) return;
+        n++; cx += o.x; cz += o.z; ch += o.h;
+      });
+      if (n) {
+        cx /= n; cz /= n; ch /= n;
+        const dx = cx - c.x, dz = cz - c.z;
+        const d = Math.hypot(dx, dz) || 1;
+        s.x += dx / d * 0.08 - dz / d * 0.07;
+        s.z += dz / d * 0.08 + dx / d * 0.07;
+        s.h += (ch - c.h) * 0.02;
+        s.max = sp.burst;
+        s.effort = 1.6;
+        c.food = null;
+        c.mood = 'balling';
+        return;
+      }
+    }
     if (this.pointer) {
       const d = (this.pointer.x - c.x) ** 2 + (this.pointer.z - c.z) ** 2;
       if (d < 18 * 18 && d < threatD) { threatD = d; threat = this.pointer; }
@@ -1000,11 +1332,13 @@ export class PixelOcean {
   private thinkBarracuda(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
     if (this.fleeFrom(c, s, 'shark', 40)) return;
     if (c.hungry) {
+      if (this.feedOnWhale(c, s, 200)) return;
       const prey = this.findPrey(c, PREY.barracuda!);
       if (prey) {
         this.chase(c, s, prey, 5, 6);
         return;
       }
+      if (this.followScent(c, s, 160)) return;
       if (c.energy < 0.35 && this.forage(c, s)) return;
     }
     c.mood = 'cruising';
@@ -1014,6 +1348,17 @@ export class PixelOcean {
   /** Crabs scuttle sideways across the seabed to whatever has died or sunk. */
   private thinkCrab(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
     if (c.hungry) {
+      // A cheeky nip at a passing starfish's arm (it grows back).
+      this.near(this.grid, c.x, c.z, 4, o => {
+        if (o.species !== 'starfish' || o.limbs <= 3 || Math.random() > 0.002) return;
+        if ((o.x - c.x) ** 2 + (o.z - c.z) ** 2 > 16) return;
+        o.limbs--;
+        c.energy = Math.min(1, c.energy + 0.05);
+        this.splash('goo', { x: o.x, z: o.z, h: 1 }, 3);
+      });
+      if (this.whale?.alive && this.whale.landed && (this.whale.x - c.x) ** 2 + (this.whale.z - c.z) ** 2 < 150 * 150) {
+        c.food = this.whale;
+      }
       if (c.food && !c.food.alive) c.food = null;
       if (--c.scanIn <= 0 && !c.food) {
         c.scanIn = 20;
@@ -1034,7 +1379,8 @@ export class PixelOcean {
       }
       if (c.food) {
         const t = c.food;
-        const d = this.toward(c, s, { x: t.x, z: t.z, h: 0 }, 0.04);
+        const at = this.foodPoint(c, t);
+        const d = this.toward(c, s, { x: at.x, z: at.z, h: 0 }, 0.04);
         c.mood = 'scavenging';
         if (d < 3 && this.tick % 10 === 0) this.eat(c, t);
         return;
@@ -1337,11 +1683,13 @@ export class PixelOcean {
   /** Reef sharks patrol slowly and hunt barracuda, octopuses and pufferfish. */
   private thinkShark(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
     if (c.hungry) {
+      if (this.feedOnWhale(c, s, 320)) return;
       const prey = this.findPrey(c, PREY.shark!);
       if (prey) {
         this.chase(c, s, prey, 10, 7, 0.07);
         return;
       }
+      if (this.followScent(c, s, 260)) return;
     }
     c.mood = 'cruising';
     this.wander(c, s, 0.012);
@@ -1385,6 +1733,390 @@ export class PixelOcean {
     this.wander(c, s, 0.003);
   }
 
+  /** Where along a food item to aim: whale falls are long, so eaters spread out along them. */
+  private foodPoint(c: Creature, t: Particle | Carcass | WhaleFall) {
+    if (!('whale' in t)) return t;
+    const along = ((c.id * 29) % 41) - 20;
+    return { x: t.x + along * t.facing, z: t.z + ((c.id * 13) % 7) - 3, h: t.h + 2 + (c.id % 4) };
+  }
+
+  /** Hunters (and anything hungry nearby) feed on a whale fall. */
+  private feedOnWhale(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }, range: number) {
+    const wf = this.whale;
+    if (!wf?.alive || (wf.x - c.x) ** 2 + (wf.z - c.z) ** 2 > range * range) return false;
+    const d = this.toward(c, s, this.foodPoint(c, wf), 0.07);
+    s.max = d > 20 ? SPECIES[c.species].burst * 0.7 : SPECIES[c.species].cruise;
+    c.mood = 'scavenging';
+    if (d < 5 && this.tick % 8 === 0) this.eat(c, wf);
+    return true;
+  }
+
+  private addScent(x: number, z: number, strength: number) {
+    this.scents.push({ x, z, strength, alive: true });
+    if (this.scents.length > MAX_SCENTS) {
+      this.scents.sort((a, b) => b.strength - a.strength);
+      this.scents.length = MAX_SCENTS;
+    }
+  }
+
+  /**
+   * Follows the strongest scent of blood within range (stronger and nearer
+   * is better); scents it has already reached are ignored.
+   */
+  private followScent(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }, range: number) {
+    let best: Scent | null = null;
+    let bestScore = 0;
+    for (const sc of this.scents) {
+      const d = Math.hypot(sc.x - c.x, sc.z - c.z);
+      if (d > range || d < 8) continue;
+      const score = sc.strength / (1 + d / 40);
+      if (score > bestScore) { bestScore = score; best = sc; }
+    }
+    if (!best) return false;
+    this.toward(c, s, { x: best.x, z: best.z, h: c.h }, 0.05);
+    s.max = SPECIES[c.species].cruise * 1.5;
+    c.mood = 'tracking';
+    return true;
+  }
+
+  /** Scent drifts with a slow current, fades, and gives off faint wisps. */
+  private updateScents() {
+    this.currentAngle += rand(-0.01, 0.01);
+    const dx = Math.cos(this.currentAngle) * 0.03;
+    const dz = Math.sin(this.currentAngle) * 0.02;
+    for (const sc of this.scents) {
+      sc.strength *= 0.996;
+      sc.x = Math.max(0, Math.min(this.w - 1, sc.x + dx));
+      sc.z = Math.max(0, Math.min(this.h - 1, sc.z + dz));
+      if (sc.strength < 0.05) { sc.alive = false; continue; }
+      if (Math.random() < sc.strength * 0.08) {
+        this.splash('scent', { x: sc.x + rand(-4, 4), z: sc.z + rand(-3, 3), h: rand(2, 24) }, 1, [70, 130], 0.05);
+      }
+    }
+  }
+
+  /** Anemones sting small fish that brush against them, and flinch shut. */
+  private updateAnemones() {
+    for (const a of this.anemones) {
+      a.retract *= 0.97;
+      this.near(this.grid, a.x, a.z, 5, o => {
+        if (!o.alive || o.species === 'clownfish' || o.h > 7) return;
+        if ((o.x - a.x) ** 2 + (o.z - a.z) ** 2 > 16) return;
+        a.retract = 1;
+        if (STUNG_BY_ANEMONES.includes(o.species) && Math.random() < 0.03) this.kill(o, 'stung', null, false, 'An anemone');
+      });
+    }
+  }
+
+  /** Clownfish bob about their anemone and dart into its tentacles when anything big comes by. */
+  private thinkClownfish(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    if (!c.anemone?.alive) {
+      let best: Anemone | null = null;
+      let bestD = 300 * 300;
+      for (const a of this.anemones) {
+        const d = (a.x - c.x) ** 2 + (a.z - c.z) ** 2;
+        if (d < bestD) { bestD = d; best = a; }
+      }
+      c.anemone = best;
+      if (!best) { c.mood = 'cruising'; this.wander(c, s); return; }
+    }
+    const a = c.anemone!;
+    c.homeZ = a.z;
+    const home = { x: a.x, z: a.z, h: 3 };
+    let threat = false;
+    this.near(this.grid, c.x, c.z, 24, o => {
+      if (CLOWNFISH_THREATS.includes(o.species) && !o.station && (o.x - c.x) ** 2 + (o.z - c.z) ** 2 < 24 * 24) threat = true;
+    });
+    const d = dist3(c, home);
+    c.hidden = d < 3;
+    if (threat) {
+      this.toward(c, s, home, 0.15);
+      s.max = SPECIES.clownfish.burst;
+      c.mood = c.hidden ? 'hiding' : 'fleeing';
+      return;
+    }
+    if (c.hungry) {
+      // Only snaps up plankton that drifts close to home.
+      let food: Particle | null = null;
+      let bestD = 16 * 16;
+      this.near(this.foodGrid, a.x, a.z, 16, p => {
+        if (p.kind !== 'plankton') return;
+        const dd = (p.x - a.x) ** 2 + (p.z - a.z) ** 2;
+        if (dd < bestD) { bestD = dd; food = p; }
+      });
+      if (food) {
+        const t = food as Particle;
+        const fd = this.toward(c, s, t, 0.06, 3);
+        c.mood = 'foraging';
+        if (fd < 2.5) this.eat(c, t);
+        return;
+      }
+    }
+    // Bob in little loops over the tentacles.
+    const angle = this.tick * 0.05 + c.id;
+    this.toward(c, s, { x: a.x + Math.cos(angle) * 4, z: a.z + Math.sin(angle) * 2, h: 4 + Math.sin(angle * 1.7) * 2 }, 0.03);
+    c.mood = 'nestled';
+  }
+
+  /**
+   * Starfish creep over the seabed. They pin an urchin and slowly eat it,
+   * scavenge whatever has died, and regrow arms the crabs nip off.
+   */
+  private thinkStarfish(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    if (c.limbs < 5 && c.age % 1500 === 0) c.limbs++;
+    if (c.timer > 0) {
+      c.timer--;
+      c.mood = 'eating';
+      s.max = 0;
+      const prey = c.prey;
+      if (!prey?.alive) { c.timer = 0; c.prey = null; return; }
+      prey.dazed = Math.max(prey.dazed, 5);
+      if (c.timer === 0) this.devour(c, prey, true);
+      return;
+    }
+    if (c.hungry) {
+      const prey = this.findPrey(c, ['urchin']);
+      if (prey) {
+        const d = this.toward(c, s, { x: prey.x, z: prey.z, h: 0 }, 0.01);
+        c.heading += 0.004;
+        c.mood = 'hunting';
+        if (d < 3) { c.timer = 240; c.prey = prey; }
+        return;
+      }
+      let food: Carcass | null = null;
+      let bestD = SPECIES.starfish.vision ** 2;
+      for (const k of this.carcasses) {
+        if (k.h > 1) continue;
+        const dd = (k.x - c.x) ** 2 + (k.z - c.z) ** 2;
+        if (dd < bestD) { bestD = dd; food = k; }
+      }
+      if (food) {
+        const t = food as Carcass;
+        const d = this.toward(c, s, { x: t.x, z: t.z, h: 0 }, 0.01);
+        c.mood = 'scavenging';
+        if (d < 3 && this.tick % 20 === 0) this.eat(c, t);
+        return;
+      }
+    }
+    c.mood = 'cruising';
+    c.heading += rand(-0.03, 0.03);
+    s.x += Math.cos(c.heading) * 0.004;
+    s.z += Math.sin(c.heading) * 0.003;
+  }
+
+  /**
+   * Cuttlefish hover near the reef. Hunting, they creep up, hold still and
+   * ripple bands of colour until the prey stops moving, then shoot out their
+   * tentacles. Threatened, they ink and jet away.
+   */
+  private thinkCuttlefish(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    if (this.fleeFrom(c, s, 'shark', 30) || this.fleeFrom(c, s, 'barracuda', 22) || this.fleeFrom(c, s, 'dolphin', 30)) {
+      if (c.timer > 0 && Math.random() < 0.5) this.splash('ink', c, 14, [100, 200]);
+      c.timer = 0;
+      c.lunge = 0;
+      c.prey = null;
+      return;
+    }
+    if (c.hungry) {
+      const prey = c.prey?.alive ? c.prey : this.findPrey(c, ['minnow', 'crab', 'clownfish']);
+      if (prey) {
+        c.prey = prey;
+        const d = dist3(prey, c);
+        if (c.timer === 0 && d > 14) {
+          this.toward(c, s, prey, 0.03);
+          c.mood = 'hunting';
+          c.lunge = 0;
+          return;
+        }
+        if (d > 26) { c.timer = 0; c.prey = null; return; }
+        c.facing = prey.x > c.x ? 1 : -1;
+        c.timer++;
+        s.max = 0.02;
+        prey.dazed = Math.max(prey.dazed, 6);
+        if (c.timer < HYPNO_TICKS) { c.mood = 'hypnotising'; c.lunge = 0; return; }
+        c.mood = 'striking';
+        c.lunge = Math.min(1, c.lunge + 0.2);
+        if (c.lunge >= 1) {
+          if (d < 22) this.devour(c, prey, true);
+          c.timer = 0;
+          c.prey = null;
+        }
+        return;
+      }
+    }
+    c.timer = 0;
+    c.lunge = Math.max(0, c.lunge - 0.1);
+    c.mood = 'cruising';
+    this.wander(c, s, 0.01);
+  }
+
+  // --- visitors -------------------------------------------------------------
+
+  /** A whale carcass sinks every few minutes, feeds the reef, and leaves its bones. */
+  private updateWhale() {
+    const wf = this.whale;
+    if (!wf) {
+      if (this.tick >= this.nextWhale) {
+        this.whale = {
+          x: rand(30, this.w - 30), z: rand(60, this.h - 40), h: SURFACE - 10, vh: 0,
+          facing: Math.random() < 0.5 ? 1 : -1,
+          mass: WHALE_MASS, fullMass: WHALE_MASS, alive: true, landed: false, bonesUntil: 0,
+          whale: true,
+        };
+        this.logEvent('visit', 'A whale carcass is sinking toward the reef');
+      }
+      return;
+    }
+    if (!wf.landed) {
+      wf.vh = Math.max(-0.22, wf.vh - 0.004);
+      wf.h = Math.max(0, wf.h + wf.vh);
+      if (this.tick % 6 === 0) this.bubbles.push({ x: wf.x + rand(-20, 20), z: wf.z, h: wf.h + 4, phase: rand(0, 6), alive: true });
+      if (wf.h <= 0) {
+        wf.landed = true;
+        // A great cloud of sand thrown up along its length.
+        for (let k = 0; k < 6; k++) this.splash('sand', { x: wf.x + rand(-22, 22), z: wf.z + rand(-3, 3), h: 1 }, 10, [50, 110], 0.6);
+        this.addScent(wf.x, wf.z, 2);
+        this.logEvent('visit', 'A whale fall hit the seabed: the feast begins');
+      }
+      return;
+    }
+    if (wf.mass > 0) {
+      wf.mass = Math.max(0, wf.mass - 0.2);
+      if (this.tick % 20 === 0) this.fertilise(wf.x, wf.z, 4, 24);
+      if (this.tick % 40 === 0) this.addScent(wf.x + rand(-15, 15), wf.z, 1.2);
+      if (wf.mass <= 0) {
+        wf.alive = false;
+        wf.bonesUntil = this.tick + 3600;
+        this.logEvent('visit', 'The whale fall has been picked down to bones');
+      }
+    } else if (this.tick > wf.bonesUntil) {
+      this.whale = null;
+      this.nextWhale = this.tick + randInt(7200, 10800);
+    }
+  }
+
+  /** Every few minutes a pod of dolphins arrives to herd a school into a bait ball. */
+  private updatePod() {
+    const pod = this.pod;
+    if (!pod) {
+      if (this.tick >= this.nextPod) this.spawnPod();
+      return;
+    }
+    const pod2 = this.creatures.filter(c => c.species === 'dolphin' && c.alive);
+    if (!pod2.length) {
+      this.pod = null;
+      this.nextPod = this.tick + randInt(5400, 9000);
+      return;
+    }
+    if (pod.phase !== 'leave' && this.tick % 20 === 0) {
+      // Keep the circle centred on the school; if it slips away, go after
+      // the nearest minnows instead. Only an empty sea sends them home.
+      let n = 0, cx = 0, cz = 0, ch = 0;
+      this.near(this.grid, pod.cx, pod.cz, 60, o => {
+        if (o.species !== 'minnow' || (o.x - pod.cx) ** 2 + (o.z - pod.cz) ** 2 > 60 * 60) return;
+        n++; cx += o.x; cz += o.z; ch += o.h;
+      });
+      if (n >= 4) { pod.cx = cx / n; pod.cz = cz / n; pod.ch = Math.max(10, ch / n); }
+      else {
+        let best: Creature | null = null;
+        let bestD = 160 * 160;
+        for (const o of this.creatures) {
+          if (o.species !== 'minnow' || !o.alive) continue;
+          const d = (o.x - pod.cx) ** 2 + (o.z - pod.cz) ** 2;
+          if (d < bestD) { bestD = d; best = o; }
+        }
+        if (best) { pod.cx = best.x; pod.cz = best.z; pod.ch = Math.max(10, best.h); }
+        else pod.phase = 'leave';
+      }
+    }
+    if (pod.phase === 'arrive' && pod2.some(d => Math.hypot(d.x - pod.cx, d.z - pod.cz) < 40)) {
+      pod.phase = 'herd';
+      pod.until = this.tick + 750;
+    }
+    if (pod.phase === 'herd') {
+      if (this.tick > pod.until || pod.eaten >= 40) {
+        pod.phase = 'leave';
+        this.logEvent('visit', 'The dolphins are heading back out to sea');
+      } else if (this.tick >= pod.diveUntil + 20) {
+        // Take turns diving through the ball.
+        pod.diver = (pod.diver + 1) % pod2.length;
+        pod.diveUntil = this.tick + 45;
+        pod.diveCatch = 0;
+      }
+    }
+    if (pod.phase === 'arrive' && this.tick > pod.until) pod.phase = 'leave';
+  }
+
+  private spawnPod() {
+    const minnows = this.creatures.filter(c => c.species === 'minnow' && c.alive);
+    if (minnows.length < 20) { this.nextPod = this.tick + 1800; return; }
+    const shallow = minnows.filter(c => c.z < SHALLOWS * 1.5);
+    const school = (shallow.length ? shallow : minnows)[randInt(0, (shallow.length || minnows.length) - 1)];
+    const side: 1 | -1 = school.x < this.w / 2 ? -1 : 1;
+    const size = randInt(3, 5);
+    for (let k = 0; k < size; k++) {
+      const d = this.spawn('dolphin', null, 1);
+      d.x = side < 0 ? 3 + k * 3 : this.w - 4 - k * 3;
+      d.z = school.z + rand(-12, 12);
+      d.homeZ = d.z;
+      d.h = 25;
+      d.podIndex = k;
+      d.facing = side < 0 ? 1 : -1;
+    }
+    this.pod = { cx: school.x, cz: school.z, ch: Math.max(10, school.h), phase: 'arrive', until: this.tick + 1200, diver: -1, diveUntil: 0, side, eaten: 0, diveCatch: 0 };
+    this.logEvent('visit', `A pod of ${size} dolphins has arrived`);
+  }
+
+  /**
+   * Dolphins circle a school to pack it into a bait ball, take turns diving
+   * through it, then leave the way they came.
+   */
+  private thinkDolphin(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    c.homeZ = c.z;
+    c.energy = 1;
+    const pod = this.pod;
+    if (!pod || pod.phase === 'leave') {
+      const edge = (pod?.side ?? 1) < 0 ? 0 : this.w;
+      this.toward(c, s, { x: edge, z: c.z, h: 30 }, 0.08);
+      s.max = SPECIES.dolphin.burst * 0.8;
+      c.mood = 'leaving';
+      if (c.x < 8 || c.x > this.w - 9) c.alive = false;
+      return;
+    }
+    const centre = { x: pod.cx, z: pod.cz, h: pod.ch };
+    if (pod.phase === 'arrive') {
+      this.toward(c, s, centre, 0.08);
+      s.max = SPECIES.dolphin.burst * 0.8;
+      c.mood = 'hunting';
+      return;
+    }
+    const n = this.creatures.filter(o => o.species === 'dolphin' && o.alive).length || 1;
+    const diving = pod.diver === c.podIndex % n && this.tick < pod.diveUntil;
+    if (diving) {
+      // Through the middle of the ball and out the far side.
+      const dx = pod.cx - c.x, dz = pod.cz - c.z;
+      const d = Math.hypot(dx, dz) || 1;
+      this.toward(c, s, { x: pod.cx + dx / d * 18, z: pod.cz + dz / d * 18, h: pod.ch }, 0.25);
+      s.max = SPECIES.dolphin.burst;
+      s.effort = 2;
+      c.mood = 'diving';
+      if (this.tick % 3 === 0) this.bubbles.push({ x: c.x - c.facing * 6, z: c.z, h: c.h + 1, phase: rand(0, 6), alive: true });
+      const mouth = { x: c.x + c.facing * 10, z: c.z, h: c.h };
+      this.near(this.grid, mouth.x, mouth.z, 6, o => {
+        if (o.species === 'minnow' && o.alive && pod.diveCatch < 2 && dist3(o, mouth) < 5) {
+          this.devour(c, o, true);
+          pod.eaten++;
+          pod.diveCatch++;
+        }
+      });
+      return;
+    }
+    const angle = this.tick * 0.035 + (c.podIndex * Math.PI * 2) / n;
+    this.toward(c, s, { x: pod.cx + Math.cos(angle) * 26, z: pod.cz + Math.sin(angle) * 18, h: pod.ch + Math.sin(angle * 2) * 4 }, 0.12);
+    s.max = SPECIES.dolphin.cruise * 1.4;
+    c.mood = 'herding';
+  }
+
   /** Steers toward food. Minnows prefer drifting food, then graze the algae. */
   private forage(c: Creature, s: { x: number; z: number; h: number }): boolean {
     if (c.food && !c.food.alive) c.food = null;
@@ -1397,8 +2129,8 @@ export class PixelOcean {
 
     if (c.food) {
       const t = c.food;
-      const d = this.toward(c, s, t, 0.06, 4);
-      c.mood = 'foraging';
+      const d = this.toward(c, s, this.foodPoint(c, t), 0.06, 4);
+      c.mood = 'whale' in t ? 'scavenging' : 'foraging';
       if (d < 2.5) this.eat(c, t);
       return true;
     }
@@ -1437,11 +2169,11 @@ export class PixelOcean {
     return true;
   }
 
-  private scanForFood(c: Creature): Particle | Carcass | null {
+  private scanForFood(c: Creature): Particle | Carcass | WhaleFall | null {
     const r = SPECIES[c.species].vision;
-    let best: Particle | Carcass | null = null;
+    let best: Particle | Carcass | WhaleFall | null = null;
     let bestScore = r * r;
-    const consider = (t: Particle | Carcass, weight: number) => {
+    const consider = (t: Particle | Carcass | WhaleFall, weight: number) => {
       const score = ((t.x - c.x) ** 2 + (t.z - c.z) ** 2 + (t.h - c.h) ** 2) * weight;
       if (score < bestScore) { bestScore = score; best = t; }
     };
@@ -1452,6 +2184,9 @@ export class PixelOcean {
     for (const k of this.carcasses) {
       if (k.species !== 'jelly' && k.mass > 0) consider(k, 0.8);
     }
+    // A whale fall is worth a long swim.
+    const wf = this.whale;
+    if (wf?.alive && (wf.x - c.x) ** 2 + (wf.z - c.z) ** 2 < (r * 4) ** 2) consider(wf, 0.05);
     return best;
   }
 
@@ -1465,10 +2200,21 @@ export class PixelOcean {
     return best;
   }
 
-  private eat(c: Creature, t: Particle | Carcass) {
+  private eat(c: Creature, t: Particle | Carcass | WhaleFall) {
     const units = SPECIES[c.species].units;
     if ('fullMass' in t) {
-      const bite = Math.min(t.mass, BITE_UNITS);
+      const big = c.species === 'shark' ? 5 : c.species === 'barracuda' || c.species === 'turtle' ? 2 : 1;
+      if ('whale' in t) {
+        // A whale is huge: each eater takes a bite now and then, and a bite
+        // that fills a fish is only a sliver of the carcass.
+        if ((this.tick + c.id) % 8) return;
+        const bite = BITE_UNITS * big;
+        t.mass = Math.max(0, t.mass - bite * WHALE_BITE_SHARE);
+        c.energy = Math.min(1, c.energy + bite / units);
+        if (Math.random() < 0.3) this.splash('blood', { x: c.x, z: c.z, h: Math.max(1, c.h) }, 2);
+        return;
+      }
+      const bite = Math.min(t.mass, BITE_UNITS * big);
       t.mass -= bite;
       if (t.mass <= 0) t.alive = false;
       c.energy = Math.min(1, c.energy + bite / units);
@@ -1532,9 +2278,10 @@ export class PixelOcean {
    * Ends a creature. Bitten ones are torn in half in a spray of blood (or
    * burst into goo, for jellyfish); the rest go belly-up and sink.
    */
-  private kill(c: Creature, cause: DeathCause, killer: Creature | null, swallow = false) {
+  private kill(c: Creature, cause: DeathCause, killer: Creature | null, swallow = false, by = 'A jellyfish') {
     c.alive = false;
     this.deaths[cause]++;
+    if (cause === 'eaten' || cause === 'stung') this.addScent(c.x, c.z, 1);
     const sp = SPECIES[c.species];
     const mass = Math.round(sp.body + Math.max(0, c.energy) * sp.units * 0.3);
     const base = { species: c.species, palette: c.palette, x: c.x, z: c.z, h: c.h, facing: c.facing, alive: true };
@@ -1545,7 +2292,7 @@ export class PixelOcean {
       return;
     }
     if (cause === 'eaten' && swallow) {
-      this.splash('blood', c, 5);
+      this.splash(c.species === 'urchin' || c.species === 'starfish' ? 'goo' : 'blood', c, 5);
       this.logEvent(cause, `${killer?.name ?? 'Something'} swallowed ${c.name} whole`, killer, c);
       return;
     }
@@ -1565,16 +2312,16 @@ export class PixelOcean {
     this.carcasses.push({ ...base, part: 'whole', vx: c.vx * 0.3, vz: c.vz * 0.3, vh: 0, angle: 0, spin: 0, mass, fullMass: mass });
     if (cause === 'stung') {
       this.splash('blood', c, 6);
-      this.logEvent(cause, `${killer?.name ?? 'A jellyfish'} stung ${c.name}`, killer, c);
+      this.logEvent(cause, `${killer?.name ?? by} stung ${c.name}`, killer, c);
     } else {
       this.logEvent(cause, `${c.name} ${cause === 'starved' ? 'starved' : 'died of old age'}`, c);
     }
   }
 
-  private splash(kind: Drop['kind'], at: { x: number; z: number; h: number }, count: number, lives: [number, number] = [50, 130]) {
+  private splash(kind: Drop['kind'], at: { x: number; z: number; h: number }, count: number, lives: [number, number] = [50, 130], maxSpeed = kind === 'ink' ? 0.3 : 0.45) {
     for (let k = 0; k < count; k++) {
       const a = rand(0, Math.PI * 2);
-      const speed = rand(0.05, kind === 'ink' ? 0.3 : 0.45);
+      const speed = rand(0.05, maxSpeed);
       const life = randInt(lives[0], lives[1]);
       this.drops.push({
         kind,
@@ -1639,14 +2386,20 @@ export class PixelOcean {
       if (--d.life <= 0) { d.alive = false; continue; }
       d.vx *= 0.92;
       d.vz *= 0.92;
-      // Ink hangs in the water; blood and goo drift down.
-      d.vh = d.vh * 0.92 - (d.kind === 'ink' ? 0 : 0.004);
+      // Ink hangs in the water, hearts and sparkles float up, scent wisps
+      // drift, and blood, goo and sand sink.
+      switch (d.kind) {
+        case 'ink': d.vh *= 0.92; break;
+        case 'heart': case 'sparkle': d.vh = d.vh * 0.9 + 0.006; break;
+        case 'scent': d.vh = d.vh * 0.95 + 0.002; d.vx += Math.cos(this.currentAngle) * 0.004; break;
+        default: d.vh = d.vh * 0.92 - 0.004;
+      }
       d.x += d.vx;
       d.z += d.vz;
       d.h += d.vh;
       if (d.h <= 0) {
         d.alive = false;
-        if (d.kind === 'blood') {
+        if (d.kind === 'blood' && Math.random() < 0.7) {
           const i = this.cellAt(d.x, d.z);
           this.stain[i] = Math.min(255, this.stain[i] + 110);
         }

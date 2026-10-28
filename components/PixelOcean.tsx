@@ -60,6 +60,18 @@ const MOOD_LABEL: Record<Mood, string> = {
   striking: 'Striking!',
   puffed: 'Puffed up',
   gliding: 'Gliding',
+  tracking: 'Following a scent of blood',
+  balling: 'Packed into a bait ball',
+  herding: 'Herding a bait ball',
+  diving: 'Diving through the ball',
+  leaving: 'Heading out to sea',
+  courting: 'Courting',
+  queueing: 'Queueing to be cleaned',
+  cleaning: 'Being cleaned',
+  hypnotising: 'Hypnotising its prey',
+  mesmerised: 'Mesmerised',
+  eating: 'Eating',
+  nestled: 'Nestled in its anemone',
 };
 
 interface Inspected {
