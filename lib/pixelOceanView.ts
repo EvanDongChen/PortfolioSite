@@ -18,6 +18,10 @@ const ELEVATION = 0.55;
 const PERSPECTIVE = 0.0035;
 const CAUSTIC_SIZE = 64;
 const CAUSTIC_FRAMES = 32;
+/** Sand, moss and blood change slowly: repaint them every this many ticks. */
+const SEABED_EVERY = 8;
+/** The caustic light is darkened with depth in bands this many cells tall. */
+const CAUSTIC_BAND = 16;
 /** How much darker the seabed gets from the top of the page to the bottom. */
 const DEPTH_DARKENING = 0.4;
 /**
@@ -43,6 +47,10 @@ const BLOOD = ['rgb(110,10,24)', 'rgb(176,18,40)', 'rgb(226,44,64)'];
 const GOO = ['rgb(200,120,200)', 'rgb(240,170,230)', 'rgb(255,214,246)'];
 const INK = ['rgb(14,10,24)', 'rgb(24,18,38)', 'rgb(36,28,52)'];
 const DROP_COLORS = { blood: BLOOD, goo: GOO, ink: INK };
+const KELP_BASE = 'rgb(34,104,70)';
+const KELP_STALK = 'rgb(48,140,84)';
+const KELP_LEAF = 'rgb(64,160,90)';
+const KELP_TIP = 'rgb(120,200,110)';
 
 interface Drawable { depth: number; draw: () => void }
 
@@ -68,6 +76,7 @@ export class OceanView {
 
   private floorCtx: CanvasRenderingContext2D;
   private spriteCtx: CanvasRenderingContext2D;
+  private lightCtx: CanvasRenderingContext2D;
   private floorImage: ImageData | null = null;
   private floorPixels = new Uint32Array(0);
   private caustics = buildCaustics(CAUSTIC_SIZE, CAUSTIC_FRAMES);
@@ -77,14 +86,27 @@ export class OceanView {
   private dpr = 1;
   /** What the floor canvas last showed; it is only repainted when this changes. */
   private floorKey = '';
+  private seabedKey = '';
+  /** One tileable canvas per frame of the caustic light, built on first use. */
+  private causticTiles: HTMLCanvasElement[] = [];
+  /**
+   * Each seabed cell's finished colour when nothing is on it (sand, darkened
+   * for depth). Terrain never changes, so it is worked out once per world
+   * size; only cells with moss, blood or caustic light are mixed each frame.
+   */
+  private sandCache = new Uint32Array(0);
+  private sandCacheSize = '';
 
   constructor(
     private ocean: PixelOcean,
     private floorCanvas: HTMLCanvasElement,
+    /** The moving caustic light, on its own canvas blended over the floor. */
+    private lightCanvas: HTMLCanvasElement,
     private spriteCanvas: HTMLCanvasElement,
     private px: number,
   ) {
     this.floorCtx = floorCanvas.getContext('2d', { alpha: false })!;
+    this.lightCtx = lightCanvas.getContext('2d', { alpha: false })!;
     this.spriteCtx = spriteCanvas.getContext('2d')!;
   }
 
@@ -154,8 +176,15 @@ export class OceanView {
       this.place(rows);
     }
 
-    // The seabed changes slowly and its shimmer steps every other tick, so
-    // skip repainting it when nothing it shows has moved on.
+    // Sand, moss and blood change slowly, so their pixels are worked out on a
+    // slow clock. The caustic light moves every other tick, but it is just a
+    // tiled texture laid over them, which is cheap.
+    const seabedKey = `${top},${rows},${Math.floor(ocean.tick / SEABED_EVERY)}`;
+    if (seabedKey !== this.seabedKey) {
+      this.seabedKey = seabedKey;
+      this.renderSeabed(top, rows);
+      if (this.floorImage) this.floorCtx.putImageData(this.floorImage, 0, 0);
+    }
     const floorKey = `${top},${rows},${ocean.tick >> 1}`;
     if (floorKey !== this.floorKey) {
       this.floorKey = floorKey;
@@ -166,7 +195,8 @@ export class OceanView {
 
   private place(rows: number) {
     this.floorKey = '';
-    const { floorCanvas, spriteCanvas, ocean, px } = this;
+    this.seabedKey = '';
+    const { floorCanvas, lightCanvas, spriteCanvas, ocean, px } = this;
     // A canvas can outlive the view that sized it (React remounts the reef
     // onto the same element), so check for a buffer of our own as well.
     if (!this.floorImage || floorCanvas.width !== ocean.w || floorCanvas.height !== rows) {
@@ -178,6 +208,13 @@ export class OceanView {
     floorCanvas.style.width = `${ocean.w * px}px`;
     floorCanvas.style.height = `${rows * px}px`;
     floorCanvas.style.transform = `translateY(${this.regionTop}px)`;
+    if (lightCanvas.width !== ocean.w || lightCanvas.height !== rows) {
+      lightCanvas.width = ocean.w;
+      lightCanvas.height = rows;
+    }
+    lightCanvas.style.width = floorCanvas.style.width;
+    lightCanvas.style.height = floorCanvas.style.height;
+    lightCanvas.style.transform = floorCanvas.style.transform;
 
     const w = Math.ceil(this.viewW * this.dpr);
     const h = Math.ceil(this.regionHeight * this.dpr);
@@ -190,28 +227,59 @@ export class OceanView {
     spriteCanvas.style.transform = `translateY(${this.regionTop}px)`;
   }
 
-  private renderFloor(top: number, rows: number) {
-    const { ocean, floorPixels: out, caustics } = this;
+  /** The plain-sand colour of every cell (see sandCache). */
+  private plainSand() {
+    const { ocean } = this;
+    const size = `${ocean.w}x${ocean.h}`;
+    if (size === this.sandCacheSize) return this.sandCache;
+    const { w, h, terrain, grain } = ocean;
+    const { sandLight: sl, sandDark: sd } = FLOOR;
+    const cache = new Uint32Array(w * h);
+    for (let z = 0; z < h; z++) {
+      const dim = 256 - Math.round((z / h) * DEPTH_DARKENING * 256);
+      const dimBlue = Math.min(256, dim + 24);
+      for (let x = 0; x < w; x++) {
+        const i = z * w + x;
+        const t = Math.max(0, Math.min(255, terrain[i] + ((grain[i] & 31) - 16)));
+        const r = ((sd[0] + (((sl[0] - sd[0]) * t) >> 8)) * dim) >> 8;
+        const g = ((sd[1] + (((sl[1] - sd[1]) * t) >> 8)) * dim) >> 8;
+        const b = ((sd[2] + (((sl[2] - sd[2]) * t) >> 8)) * dimBlue) >> 8;
+        cache[i] = (255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r);
+      }
+    }
+    this.sandCache = cache;
+    this.sandCacheSize = size;
+    return cache;
+  }
+
+  /** Works out the seabed's pixels (sand, moss, blood) into the floor image. */
+  private renderSeabed(top: number, rows: number) {
+    const { ocean, floorPixels: out } = this;
     if (!this.floorImage) return;
     const { w, terrain, grain, algae, stain } = ocean;
-    const frame = ((ocean.tick >> 1) % CAUSTIC_FRAMES) * CAUSTIC_SIZE * CAUSTIC_SIZE;
-    const { sandLight: sl, sandDark: sd, algae: ag, algaeDense: ad, caustic: cl, blood: bl } = FLOOR;
+    const { sandLight: sl, sandDark: sd, algae: ag, algaeDense: ad, blood: bl } = FLOOR;
+    const sand = this.plainSand();
 
     for (let row = 0; row < rows; row++) {
       const z = top + row;
-      const crow = frame + (z & (CAUSTIC_SIZE - 1)) * CAUSTIC_SIZE;
       // Deeper down the page the light fades; blues hold out longest.
       const dim = 256 - Math.round((z / ocean.h) * DEPTH_DARKENING * 256);
       const dimBlue = Math.min(256, dim + 24);
       for (let x = 0; x < w; x++) {
         const i = z * w + x;
+        const a = algae[i];
+        const st = stain[i];
+        // Bare sand: the cached colour is already the answer.
+        if (st === 0 && (a === 0 || a + (grain[i] >> 1) <= 120)) {
+          out[row * w + x] = sand[i];
+          continue;
+        }
         // Sand tone from the terrain, roughened by the cell's grain.
         const t = Math.max(0, Math.min(255, terrain[i] + ((grain[i] & 31) - 16)));
         let r = sd[0] + (((sl[0] - sd[0]) * t) >> 8);
         let g = sd[1] + (((sl[1] - sd[1]) * t) >> 8);
         let b = sd[2] + (((sl[2] - sd[2]) * t) >> 8);
         // Algae: dithered speckle where thin, a carpet where thick.
-        const a = algae[i];
         if (a > 0 && a + (grain[i] >> 1) > 120) {
           const dense = a > 200 && (grain[i] & 3) === 0;
           const col = dense ? ad : ag;
@@ -220,18 +288,11 @@ export class OceanView {
           g += ((col[1] - g) * mix) >> 8;
           b += ((col[2] - b) * mix) >> 8;
         }
-        const st = stain[i];
         if (st > 0) {
           const mix = (st * 3) >> 2;
           r += ((bl[0] - r) * mix) >> 8;
           g += ((bl[1] - g) * mix) >> 8;
           b += ((bl[2] - b) * mix) >> 8;
-        }
-        const c = caustics[crow + (x & (CAUSTIC_SIZE - 1))];
-        if (c) {
-          r += (cl[0] * c) >> 2;
-          g += (cl[1] * c) >> 2;
-          b += (cl[2] * c) >> 2;
         }
         r = (r * dim) >> 8;
         g = (g * dim) >> 8;
@@ -239,7 +300,57 @@ export class OceanView {
         out[row * w + x] = (255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r);
       }
     }
-    this.floorCtx.putImageData(this.floorImage, 0, 0);
+  }
+
+  /**
+   * Draws the moving caustic light on its own canvas, which the page blends
+   * over the seabed (black adds nothing). Kept apart from the seabed canvas so
+   * that one only takes a pixel upload when the seabed itself changes.
+   */
+  private renderFloor(top: number, rows: number) {
+    const { ocean, lightCtx: ctx } = this;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, ocean.w, rows);
+    const tile = this.causticTile((ocean.tick >> 1) % CAUSTIC_FRAMES);
+    const pattern = ctx.createPattern(tile, 'repeat');
+    if (!pattern) return;
+    // Tile from the top of the world, so the light stays put as the region moves.
+    pattern.setTransform(new DOMMatrix([1, 0, 0, 1, 0, -(top % CAUSTIC_SIZE)]));
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = pattern;
+    for (let row = 0; row < rows; row += CAUSTIC_BAND) {
+      // Light fades with depth, like the seabed under it.
+      const z = top + row + CAUSTIC_BAND / 2;
+      ctx.globalAlpha = 1 - (z / ocean.h) * DEPTH_DARKENING;
+      ctx.fillRect(0, row, ocean.w, Math.min(CAUSTIC_BAND, rows - row));
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  /** A frame of the caustic light as a tileable canvas: black where there is none. */
+  private causticTile(frame: number) {
+    let tile = this.causticTiles[frame];
+    if (tile) return tile;
+    tile = document.createElement('canvas');
+    tile.width = CAUSTIC_SIZE;
+    tile.height = CAUSTIC_SIZE;
+    const tctx = tile.getContext('2d')!;
+    const img = tctx.createImageData(CAUSTIC_SIZE, CAUSTIC_SIZE);
+    const cl = FLOOR.caustic;
+    const base = frame * CAUSTIC_SIZE * CAUSTIC_SIZE;
+    for (let i = 0; i < CAUSTIC_SIZE * CAUSTIC_SIZE; i++) {
+      const c = this.caustics[base + i];
+      img.data[i * 4] = (cl[0] * c) >> 2;
+      img.data[i * 4 + 1] = (cl[1] * c) >> 2;
+      img.data[i * 4 + 2] = (cl[2] * c) >> 2;
+      img.data[i * 4 + 3] = 255;
+    }
+    tctx.putImageData(img, 0, 0);
+    this.causticTiles[frame] = tile;
+    return tile;
   }
 
   /** Draws a sprite (or a column range of it) at a world point, scaled for depth. */
@@ -583,21 +694,33 @@ export class OceanView {
   private drawKelp(x: number, z: number, length: number, phase: number) {
     const { spriteCtx: ctx, px, ocean } = this;
     const t = ocean.tick * 0.04 + phase;
-    ctx.globalAlpha = 1;
+    // One path per colour, filled once each, rather than a fillRect per square.
+    const base = new Path2D();
+    const stalk = new Path2D();
+    const leaves = new Path2D();
+    const tip = new Path2D();
     for (let i = 0; i <= length; i += 1.4) {
       const sway = Math.sin(t + i * 0.12) * (i / 14);
       const p = this.project(x + sway, z, i);
       const size = Math.ceil(px * p.s);
-      const tip = i > length - 3;
-      ctx.fillStyle = tip ? 'rgb(120,200,110)' : i < length * 0.3 ? 'rgb(34,104,70)' : 'rgb(48,140,84)';
-      ctx.fillRect(Math.round(p.x - size / 2), Math.round(p.y), size, size);
+      const left = Math.round(p.x - size / 2);
+      const top = Math.round(p.y);
+      (i > length - 3 ? tip : i < length * 0.3 ? base : stalk).rect(left, top, size, size);
       // Leaves on alternating sides.
       if (Math.floor(i / 1.4) % 4 === 0 && i > 3) {
         const side = Math.floor(i / 5.6) % 2 ? 1 : -1;
-        ctx.fillStyle = 'rgb(64,160,90)';
-        ctx.fillRect(Math.round(p.x - size / 2 + side * size), Math.round(p.y), size, size);
-        ctx.fillRect(Math.round(p.x - size / 2 + side * size * 2), Math.round(p.y + size), size, size);
+        leaves.rect(Math.round(p.x - size / 2 + side * size), top, size, size);
+        leaves.rect(Math.round(p.x - size / 2 + side * size * 2), Math.round(p.y + size), size, size);
       }
     }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = KELP_BASE;
+    ctx.fill(base);
+    ctx.fillStyle = KELP_STALK;
+    ctx.fill(stalk);
+    ctx.fillStyle = KELP_LEAF;
+    ctx.fill(leaves);
+    ctx.fillStyle = KELP_TIP;
+    ctx.fill(tip);
   }
 }

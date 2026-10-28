@@ -11,7 +11,7 @@ const TICK_MS = 1000 / TICKS_PER_SECOND;
 const STATS_INTERVAL_MS = 500;
 // When drawing a frame takes longer than this on average, animate at a lower
 // frame rate (SLOW_FRAME_MS apart) instead of stuttering.
-const SLOW_DRAW_MS = 14;
+const SLOW_DRAW_MS = 20;
 const SLOW_FRAME_MS = 1000 / 20;
 // Food is dropped near the surface so it visibly sinks to the floor.
 const DROP_HEIGHT = 90;
@@ -97,6 +97,7 @@ interface PixelOceanProps {
 const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
   const floorRef = useRef<HTMLCanvasElement>(null);
   const spriteRef = useRef<HTMLCanvasElement>(null);
+  const lightRef = useRef<HTMLCanvasElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const oceanRef = useRef<Ocean | null>(null);
   const actionsRef = useRef<ReefActions | null>(null);
@@ -128,7 +129,8 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
   useEffect(() => {
     const floor = floorRef.current;
     const sprites = spriteRef.current;
-    if (!floor || !sprites) return;
+    const light = lightRef.current;
+    if (!floor || !sprites || !light) return;
 
     const worldSize = () => ({
       w: Math.ceil(window.innerWidth / px),
@@ -143,7 +145,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     const remeasure = () => { if (oceanRef.current === ocean) ocean.setClearZones(heroZones(px)); };
     document.fonts?.ready.then(remeasure);
     const settleTimer = window.setTimeout(remeasure, HERO_SETTLE_MS);
-    const view = new OceanView(ocean, floor, sprites, px);
+    const view = new OceanView(ocean, floor, light, sprites, px);
     const draw = () => view.render(window.scrollY, window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
 
     // A returning visitor's creature swims back in.
@@ -346,6 +348,8 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     <>
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
         <canvas ref={floorRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated' }} />
+        {/* Caustic light, added onto the seabed by the browser. */}
+        <canvas ref={lightRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated', mixBlendMode: 'plus-lighter' }} />
         <canvas ref={spriteRef} className="absolute left-0 top-0 block" />
         {/* The top of the screen is further from the camera: fade it into the deep. */}
         <div className="fixed inset-0 bg-gradient-to-b from-[#050d14]/60 via-[#050d14]/15 to-transparent" />
