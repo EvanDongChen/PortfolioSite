@@ -204,7 +204,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       <canvas ref={floorRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated' }} />
       <canvas ref={spriteRef} className="absolute left-0 top-0 block" />
       {/* The top of the screen is further from the camera: fade it into the deep. */}
-      <div className="fixed inset-0 bg-gradient-to-b from-[#020b24]/60 via-[#020b24]/15 to-transparent" />
+      <div className="fixed inset-0 bg-gradient-to-b from-[#050d14]/60 via-[#050d14]/15 to-transparent" />
     </div>
     <div ref={tipRef} className={`px-tooltip ${inspected ? '' : 'hidden'}`} aria-live="polite">
       {inspected && (

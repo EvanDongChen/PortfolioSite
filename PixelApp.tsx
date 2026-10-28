@@ -8,13 +8,18 @@ import PixelModeButton from './components/PixelModeButton';
 import PerformanceButton from './components/PerformanceButton';
 import PerformancePanel from './components/PerformancePanel';
 import PixelTransition from './components/PixelTransition';
+import DiveGauge from './components/DiveGauge';
+import DiveCard from './components/DiveCard';
 import { OceanStats } from './lib/pixelOcean';
 import { PIXEL_COLORS } from './lib/themeColors';
 import { filterProjects, experiences, education, skills } from './data/portfolio';
 import { useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
 import './pixel-theme.css';
 
-/** The portfolio over a simulated pixel ocean instead of the aquarium. */
+// Created once so the memoised page content never re-renders for it.
+const HERO_EXTRA = <DiveCard />;
+
+/** The portfolio as a dive log over a simulated pixel reef. */
 const PixelApp: React.FC = () => {
   useRestoreScrollAfterSwitch();
   // On <html> rather than this page's root so portalled UI (the project
@@ -34,7 +39,7 @@ const PixelApp: React.FC = () => {
   const closePerformancePanel = useCallback(() => setIsPerformancePanelOpen(false), []);
 
   return (
-    <div className={`relative min-h-screen text-white overflow-x-hidden bg-[#020b24] ${isFoodMode ? 'cursor-crosshair' : ''}`}>
+    <div className={`relative min-h-screen text-white overflow-x-hidden bg-[#050d14] ${isFoodMode ? 'cursor-crosshair' : ''}`}>
       <PixelOcean isFoodMode={isFoodMode} onStats={setStats} />
       <PortfolioContent
         theme="underwater"
@@ -46,7 +51,9 @@ const PixelApp: React.FC = () => {
         education={education}
         skills={skills}
         showSandDune={false}
+        heroExtra={HERO_EXTRA}
       />
+      <DiveGauge />
       <BackToTopButton />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 const BLOCK = 32;
 const DURATION_MS = 750;
-const SHADES = ['#020a18', '#0a2740', '#11506f', '#0a2740', '#2b7aa0'];
+const SHADES = ['#050d14', '#0c2230', '#1d4256', '#0c2230', '#8fe3dc', '#050d14'];
 
 /** Covers the screen in blocks that dissolve in a ragged sweep, then removes itself. */
 const PixelTransition: React.FC = () => {

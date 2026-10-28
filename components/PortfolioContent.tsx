@@ -19,10 +19,12 @@ interface PortfolioContentProps {
   education: Education;
   skills: { languages: string[]; frameworksAndTools: string[] };
   showSandDune?: boolean;
+  /** Extra hero content shown above the social links. */
+  heroExtra?: React.ReactNode;
 }
 
 const PortfolioContent: React.FC<PortfolioContentProps> = ({
-  theme, colors, searchTerm, setSearchTerm, filteredProjects, experiences, education, skills, showSandDune = true
+  theme, colors, searchTerm, setSearchTerm, filteredProjects, experiences, education, skills, showSandDune = true, heroExtra
 }) => {
   const featuredProjects = useMemo(() => filteredProjects.filter(p => p.featured), [filteredProjects]);
   const otherProjects = useMemo(() => filteredProjects.filter(p => !p.featured), [filteredProjects]);
@@ -71,6 +73,7 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
             </a>
             .
           </p>
+          {heroExtra}
           <div className={`hero-links mt-8 flex flex-wrap justify-center items-center gap-x-6 gap-y-4 ${colors.highlightStrong}`}>
             <a href="https://github.com/evandongchen" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-white transition-colors">
               <GitHubIcon className="w-6 h-6" /> GitHub
