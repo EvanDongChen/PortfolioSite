@@ -20,12 +20,14 @@ export type Species = 'minnow' | 'barracuda' | 'crab' | 'jelly' | 'turtle';
 export const SPECIES_LIST: Species[] = ['minnow', 'barracuda', 'crab', 'jelly', 'turtle'];
 export type DeathCause = 'eaten' | 'stung' | 'starved' | 'oldAge';
 /** What a creature is up to this tick, for the inspector. */
-export type Mood = 'cruising' | 'schooling' | 'foraging' | 'grazing' | 'fleeing' | 'hiding' | 'hunting' | 'scavenging' | 'drifting';
+export type Mood = 'cruising' | 'schooling' | 'foraging' | 'grazing' | 'fleeing' | 'hiding' | 'hunting' | 'scavenging' | 'drifting' | 'sleeping';
 
 export interface OceanEvent {
   tick: number;
   kind: 'birth' | DeathCause;
   text: string;
+  /** Involves a creature the visitor adopted. */
+  starred: boolean;
 }
 
 export interface Particle {
@@ -62,6 +64,10 @@ export interface Creature {
   hidden: boolean;
   /** Where it was born (or its parent was); it drifts back if it strays far. */
   homeZ: number;
+  /** Shared by everyone descended from the same arrival: its family. */
+  lineId: number;
+  /** The visitor's own creature. */
+  adopted: boolean;
   scanIn: number;
   prey: Creature | null;
   alive: boolean;
@@ -217,6 +223,9 @@ export class PixelOcean {
   kelp: Kelp[] = [];
   decor: Decor[] = [];
   tick = 0;
+  /** 1 at noon, 0 at night; eases toward targetDaylight so changes fade in. */
+  daylight = 1;
+  targetDaylight = 1;
   pointer: { x: number; z: number } | null = null;
 
   private nextId = 1;
@@ -405,6 +414,8 @@ export class PixelOcean {
       x: parent ? parent.x + rand(-3, 3) : rand(4, this.w - 4),
       z,
       homeZ: parent ? parent.homeZ : z,
+      lineId: parent?.lineId ?? id,
+      adopted: false,
       h: parent ? parent.h : species === 'crab' ? 0 : rand(sp.minH + 2, sp.maxH - 2),
       vx: rand(-0.1, 0.1), vz: rand(-0.1, 0.1), vh: 0,
       facing: Math.random() < 0.5 ? 1 : -1,
@@ -429,15 +440,52 @@ export class PixelOcean {
     return creature;
   }
 
-  private logEvent(kind: OceanEvent['kind'], text: string) {
-    this.events.unshift({ tick: this.tick, kind, text });
+  private logEvent(kind: OceanEvent['kind'], text: string, ...involved: (Creature | null)[]) {
+    this.events.unshift({ tick: this.tick, kind, text, starred: involved.some(c => c?.adopted) });
     if (this.events.length > EVENT_LOG_SIZE) this.events.length = EVENT_LOG_SIZE;
+  }
+
+  // --- the visitor's creature ------------------------------------------------
+
+  /** Names a creature and makes it the visitor's own. */
+  adopt(c: Creature, name: string) {
+    c.name = name;
+    c.adopted = true;
+  }
+
+  /**
+   * Brings a returning visitor's creature back, grown, into the shallows,
+   * with a few relatives so its line has somewhere to go.
+   */
+  release(species: Species, name: string, palette: number) {
+    const c = this.spawn(species, null, 0.8);
+    c.palette = palette % SPECIES[species].palettes;
+    c.age = SPECIES[species].mature;
+    this.adopt(c, name);
+    for (let k = species === 'minnow' ? 4 : 1; k > 0; k--) {
+      this.spawn(species, c, rand(0.6, 0.85)).age = SPECIES[species].mature;
+    }
+    return c;
+  }
+
+  /** The oldest living member of a creature's family, to carry on its line. */
+  heirOf(c: Creature) {
+    let heir: Creature | null = null;
+    for (const o of this.creatures) {
+      if (o.alive && o !== c && o.lineId === c.lineId && (!heir || o.age > heir.age)) heir = o;
+    }
+    return heir;
   }
 
   // --- simulation ---------------------------------------------------------
 
+  /** Dusk and dawn, when the light is changing and hunters are out. */
+  private get isTwilight() { return this.daylight > 0.15 && this.daylight < 0.65; }
+  private get isNight() { return this.daylight <= 0.15; }
+
   step() {
     this.tick++;
+    this.daylight += (this.targetDaylight - this.daylight) * 0.03;
     this.updateFloor();
     this.updateKelp();
     this.buildGrids();
@@ -597,7 +645,7 @@ export class PixelOcean {
       for (let k = 0; k < litter; k++) this.spawn(c.species, c, sp.breedCost / litter);
       counts[c.species] += litter;
       this.births += litter;
-      this.logEvent('birth', `${c.name} had ${litter === 1 ? 'a baby' : `${litter} babies`}`);
+      this.logEvent('birth', `${c.name} had ${litter === 1 ? 'a baby' : `${litter} babies`}`, c);
       if (c.species !== 'crab') this.bubbles.push({ x: c.x, z: c.z, h: c.h + 3, phase: rand(0, 6), alive: true });
     }
 
@@ -708,6 +756,17 @@ export class PixelOcean {
       c.mood = 'fleeing';
       return;
     }
+    if (this.isNight && !c.hungry) {
+      // Asleep: tuck into kelp if there is some nearby, otherwise just hang still.
+      c.mood = 'sleeping';
+      s.max = sp.cruise * 0.35;
+      if (k && kd < 50) {
+        s.x += (k.x - c.x) * 0.01;
+        s.z += (k.z - c.z) * 0.01;
+        s.h += (Math.min(k.length * 0.5, 20) - c.h) * 0.005;
+      }
+      return;
+    }
     if (c.hungry && this.forage(c, s)) return;
     c.mood = this.school(c, s) ? 'schooling' : 'cruising';
     // Idle schools loiter around the kelp.
@@ -730,7 +789,15 @@ export class PixelOcean {
   }
 
   private thinkBarracuda(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
-    if (c.hungry) {
+    // Barracuda hunt hardest in the half light and rest through the night.
+    const hunting = this.isTwilight ? c.energy < 0.95 : this.isNight ? c.energy < 0.4 : c.hungry;
+    if (this.isNight && !hunting) {
+      c.mood = 'sleeping';
+      s.max = SPECIES.barracuda.cruise * 0.4;
+      this.wander(c, s, 0.008);
+      return;
+    }
+    if (hunting) {
       const prey = this.findPrey(c, 'minnow');
       if (prey) {
         this.toward(c, s, { x: prey.x + prey.vx * 6, z: prey.z + prey.vz * 6, h: prey.h }, 0.09);
@@ -783,7 +850,8 @@ export class PixelOcean {
     c.mood = 'cruising';
     // Mostly stand still, then dart a short way.
     if (Math.random() < 0.01) c.heading = rand(0, Math.PI * 2);
-    if ((this.tick + c.id * 13) % 240 < 90) {
+    // Crabs are bolder in the dark.
+    if ((this.tick + c.id * 13) % 240 < 90 + 100 * (1 - this.daylight)) {
       s.x += Math.cos(c.heading) * 0.03;
       s.z += Math.sin(c.heading) * 0.015;
     }
@@ -1023,7 +1091,7 @@ export class PixelOcean {
 
     if (cause === 'eaten' && c.species === 'jelly') {
       this.splash('goo', c, 16);
-      this.logEvent(cause, `${killer?.name ?? 'Something'} ate ${c.name}`);
+      this.logEvent(cause, `${killer?.name ?? 'Something'} ate ${c.name}`, killer, c);
       return;
     }
     if (cause === 'eaten') {
@@ -1035,16 +1103,16 @@ export class PixelOcean {
         { ...base, part: 'back', vx: -away * rand(0.2, 0.35), vz: rand(-0.15, 0.15), vh: rand(0, 0.1), angle: 0, spin: -rand(0.04, 0.09) * away, mass: half, fullMass: half },
       );
       this.splash('blood', c, 26);
-      this.logEvent(cause, `${killer?.name ?? 'Something'} bit ${c.name} in half`);
+      this.logEvent(cause, `${killer?.name ?? 'Something'} bit ${c.name} in half`, killer, c);
       return;
     }
 
     this.carcasses.push({ ...base, part: 'whole', vx: c.vx * 0.3, vz: c.vz * 0.3, vh: 0, angle: 0, spin: 0, mass, fullMass: mass });
     if (cause === 'stung') {
       this.splash('blood', c, 6);
-      this.logEvent(cause, `${killer?.name ?? 'A jellyfish'} stung ${c.name}`);
+      this.logEvent(cause, `${killer?.name ?? 'A jellyfish'} stung ${c.name}`, killer, c);
     } else {
-      this.logEvent(cause, `${c.name} ${cause === 'starved' ? 'starved' : 'died of old age'}`);
+      this.logEvent(cause, `${c.name} ${cause === 'starved' ? 'starved' : 'died of old age'}`, c);
     }
   }
 

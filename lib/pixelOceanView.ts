@@ -169,13 +169,19 @@ export class OceanView {
     const { w, terrain, grain, algae, stain } = ocean;
     const frame = ((ocean.tick >> 1) % CAUSTIC_FRAMES) * CAUSTIC_SIZE * CAUSTIC_SIZE;
     const { sandLight: sl, sandDark: sd, algae: ag, algaeDense: ad, caustic: cl, blood: bl } = FLOOR;
+    // Night dims everything and drains the caustic light; blue holds out best.
+    const night = 1 - ocean.daylight;
+    const lightK = 1 - night * 0.62;
+    const blueK = 1 - night * 0.4;
+    const causticK = Math.round(ocean.daylight * 4);
 
     for (let row = 0; row < rows; row++) {
       const z = top + row;
       const crow = frame + (z & (CAUSTIC_SIZE - 1)) * CAUSTIC_SIZE;
       // Deeper down the page the light fades; blues hold out longest.
-      const dim = 256 - Math.round((z / ocean.h) * DEPTH_DARKENING * 256);
-      const dimBlue = Math.min(256, dim + 24);
+      const depthDim = 256 - Math.round((z / ocean.h) * DEPTH_DARKENING * 256);
+      const dim = Math.round(depthDim * lightK);
+      const dimBlue = Math.min(256, Math.round((depthDim + 24) * blueK));
       for (let x = 0; x < w; x++) {
         const i = z * w + x;
         // Sand tone from the terrain, roughened by the cell's grain.
@@ -201,10 +207,10 @@ export class OceanView {
           b += ((bl[2] - b) * mix) >> 8;
         }
         const c = caustics[crow + (x & (CAUSTIC_SIZE - 1))];
-        if (c) {
-          r += (cl[0] * c) >> 2;
-          g += (cl[1] * c) >> 2;
-          b += (cl[2] * c) >> 2;
+        if (c && causticK) {
+          r += (cl[0] * c * causticK) >> 4;
+          g += (cl[1] * c * causticK) >> 4;
+          b += (cl[2] * c * causticK) >> 4;
         }
         r = (r * dim) >> 8;
         g = (g * dim) >> 8;
@@ -329,8 +335,41 @@ export class OceanView {
     items.sort((a, b) => a.depth - b.depth);
     for (const item of items) item.draw();
     ctx.globalAlpha = 1;
+    if (ocean.daylight < 0.95) this.drawNight(visible);
+    for (const c of ocean.creatures) if (c.adopted && visible(c.z)) this.drawAdoptedMarker(c);
     const target = this.highlighted;
     if (target?.alive && visible(target.z)) this.drawReticle(target);
+  }
+
+  /**
+   * Shades everything already drawn toward night blue, then lets plankton
+   * and jellyfish glow through the dark.
+   */
+  private drawNight(visible: (z: number) => boolean) {
+    const { spriteCtx: ctx, ocean, px } = this;
+    const night = 1 - ocean.daylight;
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.globalAlpha = night * 0.6;
+    ctx.fillStyle = 'rgb(4,10,30)';
+    ctx.fillRect(0, 0, this.viewW, this.regionHeight);
+
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of ocean.particles) {
+      if (p.kind !== 'plankton' || !visible(p.z)) continue;
+      const q = this.project(p.x, p.z, p.h);
+      const size = Math.max(2, Math.round(px * 0.75 * q.s));
+      // A slow twinkle, out of step from one speck to the next.
+      ctx.globalAlpha = night * (0.3 + 0.25 * Math.sin(ocean.tick * 0.08 + p.life));
+      ctx.fillStyle = 'rgb(60,220,190)';
+      ctx.fillRect(Math.round(q.x - size / 2), Math.round(q.y - size / 2), size * 2, size * 2);
+    }
+    for (const c of ocean.creatures) {
+      if (c.species !== 'jelly' || !visible(c.z)) continue;
+      const contracted = (ocean.tick + c.id * 17) % 50 < 10;
+      this.sprite(creatureSprite('jelly', c.palette, contracted ? 1 : 0), c.x, c.z, c.h, { alpha: night * 0.85, flipX: c.facing < 0 });
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
   }
 
   private drawCreature(c: Creature) {
@@ -394,6 +433,23 @@ export class OceanView {
     const edge = front ? (-sw * unit) / 2 : (sw * unit) / 2 - unit;
     ctx.fillRect(edge, -img.height * unit * 0.3, unit, img.height * unit * 0.6);
     ctx.restore();
+  }
+
+  /** A small bobbing sand arrow over the visitor's own creature. */
+  private drawAdoptedMarker(c: Creature) {
+    const { spriteCtx: ctx, px } = this;
+    const p = this.project(c.x, c.z, c.h);
+    const bob = (this.ocean.tick >> 4) & 1 ? px : 0;
+    const y = Math.round(p.y - (BODY_WIDTH[c.species] * 0.35 + 5) * px * p.s - bob);
+    const x = Math.round(p.x);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#050d14';
+    ctx.fillRect(x - px * 2.5, y - px * 0.5, px * 5, px * 2);
+    ctx.fillRect(x - px * 1.5, y + px * 1.5, px * 3, px);
+    ctx.fillRect(x - px * 0.5, y + px * 2.5, px, px);
+    ctx.fillStyle = '#f0d8a0';
+    ctx.fillRect(x - px * 2, y, px * 4, px);
+    ctx.fillRect(x - px, y + px, px * 2, px);
   }
 
   /** Blinking corner brackets around a creature, like a targeting cursor. */
