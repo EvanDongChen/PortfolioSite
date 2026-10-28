@@ -279,8 +279,8 @@ const HIDDEN_SIGHT = 11;
 const HOME_RANGE = 60;
 /** How long a seahorse carries its eggs before they hatch. */
 const CARRY_TICKS = 450;
-/** How far a clear zone's ragged edge reaches past its rectangle. */
-const CLEAR_EDGE = 7;
+/** How far (in cells) moss fades out toward a clear zone. */
+const CLEAR_EDGE = 18;
 
 /** 1 at the top of the page, falling toward 0 in the depths. */
 const sunlight = (z: number) => Math.exp(-z / SHALLOWS);
@@ -621,9 +621,13 @@ export class PixelOcean {
     }
   }
 
-  /** Inside a clear zone, whose edge is ragged so meadows thin out rather than stop dead. */
+  /**
+   * Inside a clear zone. Past its edge the chance of a cell being kept clear
+   * falls off evenly over CLEAR_EDGE cells, so meadows thin out gradually
+   * (as a dither, using each cell's random grain) instead of stopping dead.
+   */
   private isClear(i: number, x: number, z: number) {
-    const reach = (this.grain[i] & 7) * (CLEAR_EDGE / 8);
+    const reach = (this.grain[i] / 256) * CLEAR_EDGE;
     return this.clearZones.some(r => Math.max(r.x0 - x, x - r.x1, r.z0 - z, z - r.z1) < reach);
   }
 
