@@ -1,19 +1,20 @@
 import React, { Suspense, lazy } from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import PixelApp from './PixelApp';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { PerformanceProvider } from './contexts/PerformanceContext';
 import './index.css';
 
-// The pixel ecosystem is its own page, fetched only when someone switches to it.
-const PixelApp = lazy(() => import('./PixelApp'));
+// The pixel reef is the default page; the aquarium is fetched only when
+// someone switches to it.
+const App = lazy(() => import('./App'));
 
 const Page: React.FC = () => {
   const { isPixelMode } = useTheme();
-  if (!isPixelMode) return <App />;
+  if (isPixelMode) return <PixelApp />;
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#020b24]" />}>
-      <PixelApp />
+    <Suspense fallback={<div className="min-h-screen bg-[#000428]" />}>
+      <App />
     </Suspense>
   );
 };

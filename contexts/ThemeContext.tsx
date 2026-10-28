@@ -20,7 +20,8 @@ let pendingScrollY: number | null = null;
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>('underwater');
-  const [isPixelMode, setIsPixelMode] = useState(false);
+  // The pixel reef is the default look; the aquarium is one click away.
+  const [isPixelMode, setIsPixelMode] = useState(true);
 
   const toggleTheme = () => {
     if (!DEEP_SEA_MODE_ENABLED) return;
