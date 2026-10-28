@@ -15,7 +15,7 @@ const makeCanvas = (w: number, h: number) => {
 };
 
 /** Draws a character map; characters missing from `colors` are transparent. */
-const fromRows = (rows: string[], colors: Record<string, Rgb>, flip = false) => {
+const fromRows = (rows: string[], colors: Record<string, Rgb>) => {
   const w = rows[0].length;
   const c = makeCanvas(w, rows.length);
   const ctx = c.getContext('2d')!;
@@ -23,41 +23,73 @@ const fromRows = (rows: string[], colors: Record<string, Rgb>, flip = false) => 
     const col = colors[ch];
     if (!col) return;
     ctx.fillStyle = css(col);
-    ctx.fillRect(flip ? w - 1 - x : x, y, 1, 1);
+    ctx.fillRect(x, y, 1, 1);
   }));
   return c;
 };
 
-// Fish seen from slightly above: a lit back (D), body (B), belly (L),
-// fins and tail (T), eye (E). Drawn facing right; two tail frames each.
-const FISH_ROWS: Record<'minnow' | 'predator' | 'fry', [string[], string[]]> = {
+// Creatures drawn facing right (the renderer mirrors them), two frames each.
+export type SpriteKind = 'minnow' | 'fry' | 'barracuda' | 'crab' | 'jelly' | 'turtle';
+
+const ROWS: Record<SpriteKind, [string[], string[]]> = {
+  // Lit back (D), body (B), belly (L), fins and tail (T), eye (E).
   minnow: [
     ['....DD....', 'T..DBBBB..', 'TTBBBBBBEB', 'T..LLLLB..', '....T.....'],
     ['....DD....', '.T.DBBBB..', '.TTBBBBBEB', '.T.LLLLB..', '....T.....'],
-  ],
-  predator: [
-    ['.......TT.........', 'T....DDDDDDDD.....', 'TT..BBBBBBBBBBBB..', 'TTTBBBBBBBBBBBBBEB', 'TT..LLLLLLLLLLLB..', 'T.......T.........'],
-    ['.......TT.........', '.T...DDDDDDDD.....', '.TT.BBBBBBBBBBBB..', '..TTBBBBBBBBBBBBEB', '.TT.LLLLLLLLLLLB..', '.T......T.........'],
   ],
   fry: [
     ['..DD..', 'TBBBEB', '..LL..'],
     ['T.DD..', '.BBBEB', 'T.LL..'],
   ],
+  barracuda: [
+    ['.......TT.........', 'T....DDDDDDDD.....', 'TT..BBBBBBBBBBBB..', 'TTTBBBBBBBBBBBBBEB', 'TT..LLLLLLLLLLLB..', 'T.......T.........'],
+    ['.......TT.........', '.T...DDDDDDDD.....', '.TT.BBBBBBBBBBBB..', '..TTBBBBBBBBBBBBEB', '.TT.LLLLLLLLLLLB..', '.T......T.........'],
+  ],
+  // Shell (B), underside (D), claws and legs (T), eyes (E). Legs scuttle.
+  crab: [
+    ['TT.......TT', 'TT.E...E.TT', '.T.BBBBB.T.', '..BBBBBBB..', '.BDDDDDDDB.', '.T.T...T.T.'],
+    ['TT.......TT', 'TT.E...E.TT', '.T.BBBBB.T.', '..BBBBBBB..', '.BDDDDDDDB.', 'T.T.....T.T'],
+  ],
+  // Bell (B), highlight (D), tentacles (T). Open, then contracted.
+  jelly: [
+    ['..BBBBB..', '.BDDBBBB.', 'BDBBBBBBB', 'BBBBBBBBB', 'T.T.T.T.T', '.T.T.T.T.', 'T...T...T', '.T.....T.', '..T...T..'],
+    ['...BBB...', '..BDBBB..', '.BDBBBBB.', '.BBBBBBB.', '..T.T.T..', '..T.T.T..', '.T..T..T.', '.T..T..T.', 'T...T...T'],
+  ],
+  // Shell rim (D), shell (B), shell pattern (L), skin and flippers (T), eye (E).
+  turtle: [
+    ['....DDDDDD......', '..DBLBBLBBLD....', '.DBBLBBLBBLBD.TT', 'TTBBBBBBBBBBBDTE', '.DDDDDDDDDDDD.TT', '..TT......TT....'],
+    ['....DDDDDD......', '..DBLBBLBBLD....', '.DBBLBBLBBLBD.TT', '.TBBBBBBBBBBBDTE', '.DDDDDDDDDDDD.TT', '.TT........TT...'],
+  ],
 };
 
-// [back, body, belly, tail]
-const MINNOW_COLORS: Rgb[][] = [
+// [D, B, L, T] per palette.
+const MINNOW_PALETTES: Rgb[][] = [
   [[214, 234, 248], [160, 192, 222], [228, 238, 246], [120, 152, 196]],
   [[255, 226, 120], [244, 190, 60], [255, 232, 160], [214, 150, 40]],
   [[255, 178, 150], [244, 118, 92], [255, 200, 176], [210, 90, 74]],
   [[150, 240, 222], [70, 200, 182], [180, 244, 230], [44, 156, 148]],
   [[214, 190, 255], [164, 128, 236], [224, 210, 255], [126, 96, 204]],
 ];
-const PREDATOR_COLORS: Rgb[][] = [
-  [[170, 190, 186], [118, 140, 136], [210, 220, 212], [84, 104, 102]],
-  [[214, 120, 112], [168, 70, 72], [232, 180, 168], [124, 48, 54]],
-];
-const PALE: Rgb[] = [[190, 190, 186], [150, 150, 148], [210, 208, 204], [120, 120, 120]];
+const PALETTES: Record<SpriteKind, Rgb[][]> = {
+  minnow: MINNOW_PALETTES,
+  fry: MINNOW_PALETTES,
+  barracuda: [
+    [[170, 190, 186], [118, 140, 136], [210, 220, 212], [84, 104, 102]],
+    [[214, 120, 112], [168, 70, 72], [232, 180, 168], [124, 48, 54]],
+  ],
+  crab: [
+    [[168, 60, 42], [224, 96, 60], [224, 96, 60], [240, 128, 80]],
+    [[50, 90, 150], [80, 130, 200], [80, 130, 200], [110, 160, 230]],
+  ],
+  jelly: [
+    [[255, 236, 255], [232, 138, 216], [232, 138, 216], [192, 112, 192]],
+    [[236, 250, 255], [138, 208, 240], [138, 208, 240], [96, 160, 210]],
+    [[255, 246, 220], [250, 190, 110], [250, 190, 110], [210, 140, 70]],
+  ],
+  turtle: [
+    [[60, 90, 44], [110, 138, 58], [168, 184, 90], [130, 176, 112]],
+  ],
+};
 const EYE: Rgb = [12, 14, 26];
 
 const spriteCache = new Map<string, HTMLCanvasElement>();
@@ -67,15 +99,25 @@ const cached = (key: string, make: () => HTMLCanvasElement) => {
   return c;
 };
 
-export const fishSprite = (kind: 'minnow' | 'predator' | 'fry', palette: number, frame: number, facing: 1 | -1, pale: boolean) =>
-  cached(`fish-${kind}-${palette}-${frame}-${facing}-${pale}`, () => {
-    const set = pale ? PALE : (kind === 'predator' ? PREDATOR_COLORS : MINNOW_COLORS)[palette];
-    return fromRows(FISH_ROWS[kind][frame], { D: set[0], B: set[1], L: set[2], T: set[3], E: EYE }, facing < 0);
+/** Washed-out greys for the starving and the dead. */
+const pale = ([r, g, b]: Rgb): Rgb => {
+  const v = (r + g + b) / 3;
+  return [Math.round(v * 0.75 + 40), Math.round(v * 0.72 + 40), Math.round(v * 0.72 + 44)];
+};
+
+export const creatureSprite = (kind: SpriteKind, palette: number, frame: number, washed = false) =>
+  cached(`${kind}-${palette}-${frame}-${washed}`, () => {
+    const set = PALETTES[kind][palette % PALETTES[kind].length].map(c => (washed ? pale(c) : c));
+    return fromRows(ROWS[kind][frame], { D: set[0], B: set[1], L: set[2], T: set[3], E: EYE });
   });
 
-const BONES = ['.b.b.b...', 'bbbbbbbBK', '.b.b.b...'];
-export const bonesSprite = (facing: 1 | -1) =>
-  cached(`bones-${facing}`, () => fromRows(BONES, { b: [206, 212, 200], B: [226, 230, 220], K: [40, 44, 56] }, facing < 0));
+// What a picked-clean fish leaves behind, facing right.
+const BONES: Record<'minnow' | 'barracuda', string[]> = {
+  minnow: ['.b.b.b....', 'bbbbbbbbBK', '.b.b.b....'],
+  barracuda: ['..b.b.b.b.b.b.....', 'bbbbbbbbbbbbbbbbBK', '..b.b.b.b.b.b.....'],
+};
+export const bonesSprite = (kind: 'minnow' | 'barracuda') =>
+  cached(`bones-${kind}`, () => fromRows(BONES[kind], { b: [206, 212, 200], B: [226, 230, 220], K: [40, 44, 56] }));
 
 export const bubbleSprite = () =>
   cached('bubble', () => fromRows(['.ww.', 'wH.w', 'w..w', '.ww.'], { w: [170, 224, 250], H: [240, 250, 255] }));
@@ -210,6 +252,7 @@ export const FLOOR = {
   algae: [30, 88, 62] as Rgb,
   algaeDense: [20, 68, 48] as Rgb,
   caustic: [14, 24, 24] as Rgb,
+  blood: [104, 10, 22] as Rgb,
 };
 
 /**

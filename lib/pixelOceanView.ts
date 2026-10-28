@@ -6,9 +6,9 @@
 // Both canvases cover the viewport plus a margin and sit in the page, so the
 // browser scrolls them natively between frames.
 
-import { Fish, PixelOcean, SURFACE } from './pixelOcean';
+import { Carcass, Creature, PixelOcean, SPECIES, SURFACE, Species } from './pixelOcean';
 import {
-  FLOOR, buildCaustics, fishSprite, bonesSprite, bubbleSprite, pelletSprite,
+  FLOOR, SpriteKind, buildCaustics, creatureSprite, bonesSprite, bubbleSprite, pelletSprite,
   shadowSprite, rockSprite, coralSprite,
 } from './pixelOceanArt';
 
@@ -18,15 +18,36 @@ const ELEVATION = 0.55;
 const PERSPECTIVE = 0.0035;
 const CAUSTIC_SIZE = 64;
 const CAUSTIC_FRAMES = 32;
+/** How much darker the seabed gets from the top of the page to the bottom. */
+const DEPTH_DARKENING = 0.4;
+
+/** Sprite widths in art pixels, for shadows and the inspection reticle. */
+const BODY_WIDTH: Record<Species, number> = { minnow: 10, barracuda: 18, crab: 11, jelly: 9, turtle: 16 };
+
+const BLOOD = ['rgb(110,10,24)', 'rgb(176,18,40)', 'rgb(226,44,64)'];
+const GOO = ['rgb(200,120,200)', 'rgb(240,170,230)', 'rgb(255,214,246)'];
 
 interface Drawable { depth: number; draw: () => void }
+
+interface SpriteOptions {
+  alpha?: number;
+  flipX?: boolean;
+  /** -1 draws it upside down; values in between squash it mid-roll. */
+  scaleY?: number;
+  angle?: number;
+  scale?: number;
+  /** Draw only this column range of the sprite (a half). */
+  sx?: number;
+  sw?: number;
+  anchor?: 'bottom' | 'center';
+}
 
 export class OceanView {
   /** Top of the drawn region, in page pixels. */
   regionTop = 0;
   regionHeight = 0;
-  /** The fish under inspection, drawn with a reticle. */
-  highlighted: Fish | null = null;
+  /** The creature under inspection, drawn with a reticle. */
+  highlighted: Creature | null = null;
 
   private floorCtx: CanvasRenderingContext2D;
   private spriteCtx: CanvasRenderingContext2D;
@@ -76,20 +97,20 @@ export class OceanView {
     };
   }
 
-  /** Where a fish is drawn, in viewport pixels. */
-  clientPosition(f: Fish) {
-    const p = this.project(f.x, f.z, f.h);
+  /** Where a creature is drawn, in viewport pixels. */
+  clientPosition(c: Creature) {
+    const p = this.project(c.x, c.z, c.h);
     return { x: p.x, y: p.y + this.regionTop - this.scrollY };
   }
 
-  /** The fish drawn nearest a viewport point, if one is within reach. */
-  pick(clientX: number, clientY: number, reach = 24): Fish | null {
-    let best: Fish | null = null;
+  /** The creature drawn nearest a viewport point, if one is within reach. */
+  pick(clientX: number, clientY: number, reach = 24): Creature | null {
+    let best: Creature | null = null;
     let bestD = reach * reach;
-    for (const f of this.ocean.fish) {
-      const p = this.clientPosition(f);
+    for (const c of this.ocean.creatures) {
+      const p = this.clientPosition(c);
       const d = (p.x - clientX) ** 2 + (p.y - clientY) ** 2;
-      if (d < bestD) { bestD = d; best = f; }
+      if (d < bestD) { bestD = d; best = c; }
     }
     return best;
   }
@@ -145,13 +166,16 @@ export class OceanView {
   private renderFloor(top: number, rows: number) {
     const { ocean, floorPixels: out, caustics } = this;
     if (!this.floorImage) return;
-    const { w, terrain, grain, algae } = ocean;
+    const { w, terrain, grain, algae, stain } = ocean;
     const frame = ((ocean.tick >> 1) % CAUSTIC_FRAMES) * CAUSTIC_SIZE * CAUSTIC_SIZE;
-    const { sandLight: sl, sandDark: sd, algae: ag, algaeDense: ad, caustic: cl } = FLOOR;
+    const { sandLight: sl, sandDark: sd, algae: ag, algaeDense: ad, caustic: cl, blood: bl } = FLOOR;
 
     for (let row = 0; row < rows; row++) {
       const z = top + row;
       const crow = frame + (z & (CAUSTIC_SIZE - 1)) * CAUSTIC_SIZE;
+      // Deeper down the page the light fades; blues hold out longest.
+      const dim = 256 - Math.round((z / ocean.h) * DEPTH_DARKENING * 256);
+      const dimBlue = Math.min(256, dim + 24);
       for (let x = 0; x < w; x++) {
         const i = z * w + x;
         // Sand tone from the terrain, roughened by the cell's grain.
@@ -169,16 +193,49 @@ export class OceanView {
           g += ((col[1] - g) * mix) >> 8;
           b += ((col[2] - b) * mix) >> 8;
         }
+        const st = stain[i];
+        if (st > 0) {
+          const mix = (st * 3) >> 2;
+          r += ((bl[0] - r) * mix) >> 8;
+          g += ((bl[1] - g) * mix) >> 8;
+          b += ((bl[2] - b) * mix) >> 8;
+        }
         const c = caustics[crow + (x & (CAUSTIC_SIZE - 1))];
         if (c) {
           r += (cl[0] * c) >> 2;
           g += (cl[1] * c) >> 2;
           b += (cl[2] * c) >> 2;
         }
+        r = (r * dim) >> 8;
+        g = (g * dim) >> 8;
+        b = (b * dimBlue) >> 8;
         out[row * w + x] = (255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r);
       }
     }
     this.floorCtx.putImageData(this.floorImage, 0, 0);
+  }
+
+  /** Draws a sprite (or a column range of it) at a world point, scaled for depth. */
+  private sprite(img: HTMLCanvasElement, x: number, z: number, h: number, o: SpriteOptions = {}) {
+    const { spriteCtx: ctx, px } = this;
+    const p = this.project(x, z, h);
+    const sx = o.sx ?? 0;
+    const sw = o.sw ?? img.width;
+    const k = px * p.s * (o.scale ?? 1);
+    const w = Math.round(sw * k);
+    const hh = Math.round(img.height * k);
+    ctx.globalAlpha = o.alpha ?? 1;
+    if (!o.flipX && !o.angle && (o.scaleY ?? 1) === 1) {
+      const top = o.anchor === 'bottom' ? p.y - hh : p.y - hh / 2;
+      ctx.drawImage(img, sx, 0, sw, img.height, Math.round(p.x - w / 2), Math.round(top), w, hh);
+      return;
+    }
+    ctx.save();
+    ctx.translate(Math.round(p.x), Math.round(p.y));
+    if (o.angle) ctx.rotate(o.angle);
+    ctx.scale(o.flipX ? -1 : 1, o.scaleY ?? 1);
+    ctx.drawImage(img, sx, 0, sw, img.height, -w / 2, -hh / 2, w, hh);
+    ctx.restore();
   }
 
   private renderSprites() {
@@ -199,20 +256,13 @@ export class OceanView {
       const sw = Math.max(3, Math.round(width * (0.6 + fade * 0.4)));
       const p = this.project(x, z, 0);
       ctx.globalAlpha = 0.32 * fade;
-      const sprite = shadowSprite(sw);
-      ctx.drawImage(sprite, Math.round(p.x - (sw * px) / 2), Math.round(p.y - (sprite.height * px) / 2), sw * px, sprite.height * px);
-    };
-    const sprite = (img: HTMLCanvasElement, x: number, z: number, h: number, alpha = 1, anchor: 'bottom' | 'center' = 'center') => {
-      const p = this.project(x, z, h);
-      const w = img.width * px * p.s;
-      const hh = img.height * px * p.s;
-      ctx.globalAlpha = alpha;
-      ctx.drawImage(img, Math.round(p.x - w / 2), Math.round(anchor === 'bottom' ? p.y - hh : p.y - hh / 2), Math.round(w), Math.round(hh));
+      const img = shadowSprite(sw);
+      ctx.drawImage(img, Math.round(p.x - (sw * px) / 2), Math.round(p.y - (img.height * px) / 2), sw * px, img.height * px);
     };
 
     // Shadows lie on the floor under everything.
-    for (const f of ocean.fish) if (visible(f.z)) shadow(f.x, f.z, f.h, f.kind === 'predator' ? 14 : 7);
-    for (const r of ocean.remains) if (r.h > 0 && visible(r.z)) shadow(r.x, r.z, r.h, 7);
+    for (const c of ocean.creatures) if (visible(c.z)) shadow(c.x, c.z, c.h, BODY_WIDTH[c.species] * 0.75);
+    for (const k of ocean.carcasses) if (k.h > 0 && visible(k.z)) shadow(k.x, k.z, k.h, BODY_WIDTH[k.species] * (k.part === 'whole' ? 0.7 : 0.4));
     for (const p of ocean.particles) if (p.kind === 'pellet' && p.h > 0 && visible(p.z)) shadow(p.x, p.z, p.h, 3);
     for (const d of ocean.decor) if (visible(d.z)) shadow(d.x + 2, d.z, 0, d.w + 2);
 
@@ -222,9 +272,10 @@ export class OceanView {
       items.push({
         depth: d.z,
         draw: () => {
-          sprite(d.kind === 'rock' ? rockSprite(d.seed, d.w, d.ht) : coralSprite(d.seed, d.w, d.ht), d.x, d.z, 0, 1, 'bottom');
+          this.sprite(d.kind === 'rock' ? rockSprite(d.seed, d.w, d.ht) : coralSprite(d.seed, d.w, d.ht), d.x, d.z, 0, { anchor: 'bottom' });
           if (d.vent) {
             const p = this.project(d.x, d.z, 0);
+            ctx.globalAlpha = 1;
             ctx.fillStyle = ((ocean.tick >> 3) & 1) ? 'rgb(255,170,80)' : 'rgb(230,110,50)';
             ctx.fillRect(Math.round(p.x - px / 2), Math.round(p.y - d.ht * px), px, px);
           }
@@ -234,25 +285,13 @@ export class OceanView {
     for (const k of ocean.kelp) {
       if (visible(k.z)) items.push({ depth: k.z, draw: () => this.drawKelp(k.x, k.z, k.length, k.phase) });
     }
-    for (const r of ocean.remains) {
-      if (!visible(r.z)) continue;
-      const scale = r.kind === 'predator' ? 1.7 : 1;
-      items.push({
-        depth: r.z + 0.1,
-        draw: () => {
-          const img = bonesSprite(r.facing);
-          const p = this.project(r.x, r.z, r.h);
-          const w = img.width * px * p.s * scale;
-          const hh = img.height * px * p.s * scale;
-          ctx.globalAlpha = 0.35 + 0.65 * (r.mass / r.fullMass);
-          ctx.drawImage(img, Math.round(p.x - w / 2), Math.round(p.y - hh / 2), Math.round(w), Math.round(hh));
-        },
-      });
+    for (const k of ocean.carcasses) {
+      if (visible(k.z)) items.push({ depth: k.z + 0.1, draw: () => this.drawCarcass(k) });
     }
     for (const p of ocean.particles) {
       if (!visible(p.z)) continue;
       if (p.kind === 'pellet') {
-        items.push({ depth: p.z + 0.2, draw: () => sprite(pelletSprite(), p.x, p.z, p.h) });
+        items.push({ depth: p.z + 0.2, draw: () => this.sprite(pelletSprite(), p.x, p.z, p.h) });
       } else {
         items.push({
           depth: p.z + 0.2,
@@ -266,15 +305,24 @@ export class OceanView {
         });
       }
     }
-    for (const f of ocean.fish) {
-      if (!visible(f.z)) continue;
-      const kind = f.kind === 'predator' ? 'predator' : f.age < 450 ? 'fry' : 'minnow';
-      const speed = Math.hypot(f.vx, f.vz);
-      const frame = Math.floor((ocean.tick + f.id * 7) / (speed > 0.5 ? 3 : 7)) & 1;
-      items.push({ depth: f.z + 0.3, draw: () => sprite(fishSprite(kind, f.palette, frame, f.facing, f.energy < 0.15), f.x, f.z, f.h) });
+    for (const d of ocean.drops) {
+      if (!visible(d.z)) continue;
+      items.push({
+        depth: d.z + 0.25,
+        draw: () => {
+          const q = this.project(d.x, d.z, d.h);
+          const size = Math.max(2, Math.round(px * 0.8 * q.s));
+          ctx.globalAlpha = Math.min(1, (d.life / d.maxLife) * 1.6);
+          ctx.fillStyle = (d.kind === 'blood' ? BLOOD : GOO)[d.shade];
+          ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
+        },
+      });
+    }
+    for (const c of ocean.creatures) {
+      if (visible(c.z)) items.push({ depth: c.z + 0.3, draw: () => this.drawCreature(c) });
     }
     for (const b of ocean.bubbles) {
-      if (visible(b.z)) items.push({ depth: b.z + 0.4, draw: () => sprite(bubbleSprite(), b.x, b.z, b.h, 0.8) });
+      if (visible(b.z)) items.push({ depth: b.z + 0.4, draw: () => this.sprite(bubbleSprite(), b.x, b.z, b.h, { alpha: 0.8 }) });
     }
 
     items.sort((a, b) => a.depth - b.depth);
@@ -284,11 +332,74 @@ export class OceanView {
     if (target?.alive && visible(target.z)) this.drawReticle(target);
   }
 
-  /** Blinking corner brackets around a fish, like a targeting cursor. */
-  private drawReticle(f: Fish) {
+  private drawCreature(c: Creature) {
+    const tick = this.ocean.tick;
+    const washed = c.energy < 0.15;
+    switch (c.species) {
+      case 'crab': {
+        // Crabs face the camera; legs only move while they walk.
+        const walking = Math.hypot(c.vx, c.vz) > 0.03;
+        this.sprite(creatureSprite('crab', c.palette, walking ? (tick >> 2) & 1 : 0, washed), c.x, c.z, c.h, { anchor: 'bottom' });
+        return;
+      }
+      case 'jelly': {
+        const contracted = (tick + c.id * 17) % 50 < 10;
+        this.sprite(creatureSprite('jelly', c.palette, contracted ? 1 : 0, washed), c.x, c.z, c.h, { alpha: 0.82, flipX: c.facing < 0 });
+        return;
+      }
+      default: {
+        const kind: SpriteKind = c.species === 'minnow' && c.age < SPECIES.minnow.mature ? 'fry' : c.species;
+        const speed = Math.hypot(c.vx, c.vz);
+        const period = c.species === 'turtle' ? 14 : speed > 0.5 ? 3 : 7;
+        const frame = Math.floor((tick + c.id * 7) / period) & 1;
+        this.sprite(creatureSprite(kind, c.palette, frame, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
+      }
+    }
+  }
+
+  /**
+   * Bodies roll belly-up as they sink; halves tumble with a raw red edge.
+   * Picked over, fish turn to bones and everything else fades away.
+   */
+  private drawCarcass(k: Carcass) {
     const { spriteCtx: ctx, px } = this;
-    const p = this.project(f.x, f.z, f.h);
-    const half = (f.kind === 'predator' ? 12 : 8) * px * p.s * 0.5 + px * 2;
+    const left = k.mass / k.fullMass;
+    const fish = k.species === 'minnow' || k.species === 'barracuda';
+    const bones = fish && left < 0.4;
+    const img = bones
+      ? bonesSprite(k.species as 'minnow' | 'barracuda')
+      : creatureSprite(k.species, k.palette, 0, k.part === 'whole');
+    const fade = k.species === 'jelly' ? 0.2 + left * 0.6 : bones ? 0.5 + left : 1;
+
+    if (k.part === 'whole') {
+      this.sprite(img, k.x, k.z, k.h, { alpha: fade, flipX: k.facing < 0, scaleY: bones ? 1 : Math.cos(k.angle) });
+      return;
+    }
+    // The head end is on the right of a right-facing sprite.
+    const split = Math.floor(img.width / 2);
+    const front = k.part === 'front';
+    const sx = front ? split : 0;
+    const sw = front ? img.width - split : split;
+    this.sprite(img, k.x, k.z, k.h, { alpha: fade, flipX: k.facing < 0, angle: k.angle, sx, sw });
+    if (bones) return;
+    const p = this.project(k.x, k.z, k.h);
+    const unit = px * p.s;
+    ctx.save();
+    ctx.translate(Math.round(p.x), Math.round(p.y));
+    ctx.rotate(k.angle);
+    ctx.scale(k.facing < 0 ? -1 : 1, 1);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = BLOOD[1];
+    const edge = front ? (-sw * unit) / 2 : (sw * unit) / 2 - unit;
+    ctx.fillRect(edge, -img.height * unit * 0.3, unit, img.height * unit * 0.6);
+    ctx.restore();
+  }
+
+  /** Blinking corner brackets around a creature, like a targeting cursor. */
+  private drawReticle(c: Creature) {
+    const { spriteCtx: ctx, px } = this;
+    const p = this.project(c.x, c.z, c.h);
+    const half = BODY_WIDTH[c.species] * px * p.s * 0.5 + px * 2;
     const arm = px * 2;
     const t = px * 0.75;
     const pulse = (this.ocean.tick >> 3) & 1 ? px : 0;

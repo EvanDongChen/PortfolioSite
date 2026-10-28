@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Fish, FishMood, PixelOcean as Ocean, OceanStats, TICKS_PER_SECOND } from '../lib/pixelOcean';
+import { Creature, Mood, PixelOcean as Ocean, OceanStats, SPECIES, Species, TICKS_PER_SECOND } from '../lib/pixelOcean';
 import PixelMeter from './PixelMeter';
 import { OceanView } from '../lib/pixelOceanView';
 import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext';
@@ -17,19 +17,21 @@ const INSPECT_INTERVAL_MS = 100;
 // gentle hover can inspect one without chasing it off.
 const STARTLE_DISTANCE = 10;
 
-const MOOD_LABEL: Record<FishMood, string> = {
+const MOOD_LABEL: Record<Mood, string> = {
   cruising: 'Cruising',
   schooling: 'Schooling',
   foraging: 'Looking for food',
   grazing: 'Grazing algae',
   fleeing: 'Fleeing!',
   hunting: 'Hunting',
+  scavenging: 'Scavenging',
+  drifting: 'Drifting',
 };
 
 interface Inspected {
   name: string;
-  kind: Fish['kind'];
-  mood: FishMood;
+  species: Species;
+  mood: Mood;
   energy: number;
   hungry: boolean;
   age: number;
@@ -84,8 +86,8 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     let lastScroll = window.scrollY;
     let lastStats = 0;
     let lastInspect = 0;
-    let hovered: Fish | null = null;
-    let pinned: Fish | null = null;
+    let hovered: Creature | null = null;
+    let pinned: Creature | null = null;
     let shown = false;
 
     // Follows the inspected fish every frame; refreshes its details less often.
@@ -107,7 +109,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       shown = true;
       setInspected({
         name: target.name,
-        kind: target.kind,
+        species: target.species,
         mood: target.mood,
         energy: target.energy,
         hungry: target.hungry,
@@ -208,7 +210,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       {inspected && (
         <>
           <div className="px-tooltip-name">{inspected.name}</div>
-          <div className="px-tooltip-kind">{inspected.kind === 'predator' ? 'Predator' : 'Minnow'} · age {formatAge(inspected.age)}</div>
+          <div className="px-tooltip-kind">{SPECIES[inspected.species].label} · age {formatAge(inspected.age)}</div>
           <div className="px-tooltip-row">
             <span>Energy</span>
             <PixelMeter value={inspected.energy} color={inspected.energy < 0.25 ? '#ff6b6b' : '#7bd88f'} />

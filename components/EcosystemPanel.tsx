@@ -14,6 +14,7 @@ const OPEN_BY_DEFAULT_MIN_WIDTH = 1600;
 const EVENT_COLOR: Record<OceanEvent['kind'], string> = {
   birth: '#7bd88f',
   eaten: '#ff6b6b',
+  stung: '#e88ad8',
   starved: '#ffd166',
   oldAge: '#9af1ff',
 };
@@ -53,8 +54,8 @@ const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
       </button>
       {isOpen && (
         <div className="eco-body">
-          <Row label="Minnows" value={stats.minnows} fill={stats.minnows / stats.minnowCap} color="#9af1ff" />
-          <Row label="Predators" value={stats.predators} fill={stats.predators / stats.predatorCap} color="#ff6b6b" />
+          <Row label="Minnows" value={stats.counts.minnow} fill={stats.counts.minnow / stats.caps.minnow} color="#9af1ff" />
+          <Row label="Barracuda" value={stats.counts.barracuda} fill={stats.counts.barracuda / stats.caps.barracuda} color="#ff6b6b" />
           <Row label="Plankton" value={stats.plankton} fill={stats.plankton / stats.planktonCap} color="#7bd88f" />
           <Row label="Algae" value={`${stats.algae}%`} fill={stats.algae / ALGAE_FULL_PERCENT} color="#3aa86a" />
           <ul className="eco-feed" aria-label="Recent events">
