@@ -88,7 +88,12 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
   onStatsRef.current = onStats;
 
   const { tier, reducedMotion, override, frameRate } = usePerformance();
-  const px = PIXEL_SIZE[override ?? (reducedMotion ? 'low' : tier)];
+  // The pixel size is settled once, when the reef first appears: changing it
+  // rebuilds the whole world, which looks like a sudden zoom. Live frame-rate
+  // sampling can lower the tier a few seconds in, so only a tier picked by
+  // hand in the performance panel changes it afterwards.
+  const [startingPx] = useState(() => PIXEL_SIZE[reducedMotion ? 'low' : tier]);
+  const px = override ? PIXEL_SIZE[override] : startingPx;
   const frameMsRef = useRef(1000 / frameRate);
   frameMsRef.current = 1000 / frameRate;
 
@@ -238,7 +243,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       resizeTimer = window.setTimeout(() => {
         const next = worldSize();
         ocean.resize(next.w, next.h);
-        draw();
+            draw();
       }, 150);
     };
     const observer = new ResizeObserver(handleResize);
