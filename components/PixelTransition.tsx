@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 
 const BLOCK = 32;
 const DURATION_MS = 750;
@@ -9,7 +9,8 @@ const PixelTransition: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [done, setDone] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
 
-  useEffect(() => {
+  // Cover the screen before the first paint, so the page never flashes through.
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;

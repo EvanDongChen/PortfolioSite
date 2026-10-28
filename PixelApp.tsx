@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import PortfolioContent from './components/PortfolioContent';
 import PixelOcean from './components/PixelOcean';
 import EcosystemPanel from './components/EcosystemPanel';
@@ -23,8 +23,9 @@ const HERO_EXTRA = <DiveCard />;
 const PixelApp: React.FC = () => {
   useRestoreScrollAfterSwitch();
   // On <html> rather than this page's root so portalled UI (the project
-  // modal) and the scrollbar pick up the pixel styles too.
-  useEffect(() => {
+  // modal) and the scrollbar pick up the pixel styles too. Before paint, so
+  // the page never shows a frame without them.
+  useLayoutEffect(() => {
     document.documentElement.classList.add('pixel-theme');
     return () => document.documentElement.classList.remove('pixel-theme');
   }, []);
