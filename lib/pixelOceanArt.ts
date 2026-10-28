@@ -265,144 +265,124 @@ export const creatureSprite = (kind: SpriteKind, palette: number, frame: number,
   });
 };
 
-/** Paints a grid of colour keys (null = transparent) onto a new canvas. */
-const fromGrid = (grid: (Rgb | null)[][]) => {
-  const c = makeCanvas(grid[0].length, grid.length);
-  const ctx = c.getContext('2d')!;
-  grid.forEach((row, y) => row.forEach((col, x) => {
-    if (!col) return;
-    ctx.fillStyle = css(col);
-    ctx.fillRect(x, y, 1, 1);
-  }));
-  return c;
-};
-
-const hash2 = (x: number, y: number, seed = 0) => {
-  let h = (x * 374761393 + y * 668265263 + seed * 2147483647) | 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-};
+// --- hand-made sprites with variants -----------------------------------------
 
 /**
- * A starfish seen from above, drawn arm by arm so it stays crisp at any of
- * 16 rotations. Missing arms show as stubs; the arms curl one way or the other.
+ * A starfish from above, like the other sprites a hand-placed map: lit centre
+ * (D), body (B), pale arm tips (L) and speckles (T). Digits mark each arm's
+ * cells, so arms a crab has nipped off can be left as stubs.
  */
-export const starfishSprite = (palette: number, limbs: number, step: number, curl: number, washed = false) =>
-  cached(`star-${palette}-${limbs}-${step}-${curl}-${washed}`, () => {
-    const [outline, body, tip, speck] = creaturePalette('starfish', palette, washed);
-    const size = 17;
-    const mid = 8;
-    const grid: (Rgb | null)[][] = Array.from({ length: size }, () => Array(size).fill(null));
-    const put = (x: number, y: number, col: Rgb) => {
-      const px = Math.round(x), py = Math.round(y);
-      if (px >= 0 && py >= 0 && px < size && py < size) grid[py][px] = col;
-    };
-    for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) if (x * x + y * y <= 5) put(mid + x, mid + y, body);
-    for (let k = 0; k < 5; k++) {
-      const a = (step / 16) * Math.PI * 2 + (k / 5) * Math.PI * 2 - Math.PI / 2;
-      const length = k < limbs ? 7 : 2.5;
-      const bendSign = (k % 2 ? 1 : -1) * (curl ? 1 : -0.5);
-      for (let t = 0; t <= length; t += 0.25) {
-        const bend = bendSign * Math.sin((t / length) * Math.PI) * 1.2;
-        const x = mid + Math.cos(a) * t + Math.cos(a + Math.PI / 2) * bend;
-        const y = mid + Math.sin(a) * t + Math.sin(a + Math.PI / 2) * bend;
-        const col = t > length - 1.3 && k < limbs ? tip : body;
-        put(x, y, col);
-        if (t < length * 0.55) put(x + Math.cos(a + Math.PI / 2), y + Math.sin(a + Math.PI / 2), col);
-      }
-    }
-    // Speckles on the body, then a dark outline so it reads against the sand.
-    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-      if (grid[y][x] === body && hash2(x, y, palette) < 0.18) grid[y][x] = speck;
-    }
-    const filled = grid.map(row => row.map(c => c !== null));
-    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-      if (filled[y][x]) continue;
-      if ((filled[y - 1]?.[x]) || (filled[y + 1]?.[x]) || filled[y][x - 1] || filled[y][x + 1]) grid[y][x] = outline;
-    }
-    return fromGrid(grid);
+const STARFISH = [
+  ['......L......', '......1......', '.....111.....', '.....1D1.....', 'L555DDDDD222L', '.55BBBTBBB22.', '..5BTBBBTB2..', '...BBBTBBB...', '...4BBBBB3...', '..44.....33..', '.44.......33.', '.L.........L.'],
+  ['......L......', '......1......', '.....111.....', 'L....1D1....L', '.555DDDDD222.', '.55BBBTBBB22.', '..5BTBBBTB2..', '...BBBTBBB...', '...4BBBBB3...', '..44.....33..', '.44.......33.', '..L.......L..'],
+];
+const STAR_MID = { x: 6, y: 6 };
+
+export const starfishSprite = (palette: number, limbs: number, _step: number, curl: number, washed = false) =>
+  cached(`star-${palette}-${limbs}-${curl}-${washed}`, () => {
+    const [lit, body, tip, speck] = creaturePalette('starfish', palette, washed);
+    const rows = STARFISH[curl & 1].map((row, y) => [...row].map((ch, x) => {
+      // A missing arm keeps only the stub nearest the body.
+      const arm = Number(ch);
+      if (arm && arm > limbs && Math.hypot(x - STAR_MID.x, y - STAR_MID.y) > 3.2) return '.';
+      if (ch === 'L' && armOfTip(x, y) > limbs) return '.';
+      return arm ? 'B' : ch;
+    }).join(''));
+    return fromRows(rows, { D: lit, B: body, L: tip, T: speck });
   });
 
+/** Which arm a tip cell belongs to: 1 top, then clockwise. */
+const armOfTip = (x: number, y: number) => {
+  const a = Math.atan2(y - STAR_MID.y, x - STAR_MID.x);
+  const turns = ((a + Math.PI / 2) / (Math.PI * 2) + 1) % 1;
+  return (Math.round(turns * 5) % 5) + 1;
+};
+
 /**
- * A cuttlefish facing right: the fin fringe ripples along its mantle (four
- * frames), and when displaying, bands of dark and light roll across its body.
+ * A cuttlefish facing right: lit mantle (D), body (B), pale belly (L), fin
+ * fringe and arms (T), eye (E). The fringe ripples between two frames.
+ */
+const CUTTLE = [
+  ['..T.T.T.T.T....', '.DDDDDDDDDDD...', 'TBBBBBBBBBBEBTT', 'TBBBBBBBBBBBBT.', '.LLLLLLLLLLL..T', '..T.T.T.T.T....'],
+  ['...T.T.T.T.....', '.DDDDDDDDDDD...', 'TBBBBBBBBBBEBT.', 'TBBBBBBBBBBBBTT', '.LLLLLLLLLLL.T.', '...T.T.T.T.....'],
+];
+
+/**
+ * Cuttlefish frames. Displaying, diagonal bands of its own dark and pale
+ * tones roll back along the mantle over four frames.
  */
 export const cuttleSprite = (frame: number, display: boolean, washed = false) =>
   cached(`cuttle-${frame % 4}-${display}-${washed}`, () => {
-    const [back, body, belly, fin] = creaturePalette('cuttlefish', 0, washed);
-    const dark: Rgb = washed ? [120, 112, 110] : [70, 44, 40];
-    const light: Rgb = washed ? [214, 210, 206] : [252, 238, 218];
-    const w = 17, h = 9, cx = 7, cy = 4;
-    const grid: (Rgb | null)[][] = Array.from({ length: h }, () => Array(w).fill(null));
-    const f = frame % 4;
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const e = ((x - cx) / 6.5) ** 2 + ((y - cy) / 2.6) ** 2;
-      if (e <= 1) {
-        let col = y <= cy - 1 ? back : y >= cy + 2 ? belly : body;
-        if (!display && y <= cy && hash2(x, y, 7) < 0.25) col = belly;
-        if (display) col = Math.floor((x - f * 2 + y) / 2) % 2 === 0 ? dark : light;
-        grid[y][x] = col;
-      } else if (e <= 1.75 && (y <= cy - 2 || y >= cy + 2) && x >= 1 && x <= 13 && (x + f) % 2 === 0) {
-        grid[y][x] = fin;
-      }
-    }
-    // Head, eye and the bunch of arms, which wiggle.
-    for (let y = cy - 1; y <= cy + 1; y++) { grid[y][13] = body; grid[y][14] = body; }
-    grid[cy - 1][13] = EYE;
-    const arms = f % 2 ? [cy - 1, cy + 1] : [cy, cy];
-    grid[arms[0]][15] = fin;
-    grid[cy][15] = fin;
-    grid[arms[1]][16] = fin;
-    return fromGrid(grid);
+    const [lit, body, belly, fin] = creaturePalette('cuttlefish', 0, washed);
+    const band = shadeOfRgb(lit, 0.62);
+    const rows = CUTTLE[frame & 1].map((row, y) => [...row].map((ch, x) => {
+      if (!display || !'DBL'.includes(ch)) return ch;
+      return Math.floor((x + y - (frame % 4) * 2) / 2) % 2 === 0 ? 'S' : 'L';
+    }).join(''));
+    return fromRows(rows, { D: lit, B: body, L: belly, T: fin, E: EYE, S: band });
   });
 
+const shadeOfRgb = ([r, g, b]: Rgb, k: number): Rgb => [Math.round(r * k), Math.round(g * k), Math.round(b * k)];
+
 /**
- * A whale carcass lying on its side, in four stages: fresh, bitten, picked
- * to the ribs, and a bare skeleton.
+ * A whale carcass on its side, in four hand-drawn stages: whole, with two
+ * bites taken out of its back, picked to the ribs, and a bare skeleton.
+ * Tones as the other sprites: back (D), body (B), belly (L), fins (T), eye
+ * (E), plus raw meat (R) and bone (W).
  */
+const WHALE = [
+  [
+    '...........DDDDDDDDDDDDDDDDD..........',
+    '.........DDDDDDDDDDDDDDDDDDDDDD.......',
+    'T.......DBBBBBBBBBBBBBBBBBBBBBBDD.....',
+    'TT....BBBBBBBBBBBBBBBBBBBBBBBBBBBBD...',
+    'TTTBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBEBB..',
+    'TT....BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB.',
+    'T.......LLLLLLLLLLLLLLLLLLLLLLLLLLDDDD',
+    '.........LLLLLLLLLLLLLLLLLLLLLLLL.....',
+    '................TTT..........TTT.....',
+  ],
+  [
+    '...........DDDD.......DDDDDDDD........',
+    '.........DDDDDR.......RDDDDDDDDDD.....',
+    'T.......DBBBBBRR.....RRBBBBBBBBBDD....',
+    'TT....BBBBBBBBBRRRRRRRBBBB....RRBBBD..',
+    'TTTBBBBBBBBBBBBBBBBBBBBBBRRRRBBBBEBB..',
+    'TT....BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB.',
+    'T.......LLLLLLLLLLLLLLLLLLLLLLLLLLDDDD',
+    '.........LLLLLLLLLLLLLLLLLLLLLLLL.....',
+    '................TTT..........TTT.....',
+  ],
+  [
+    '...........DD........................',
+    '.........DDDR..W...W...W...W..RDDD....',
+    'T.......DBBBR..W...W...W...W..RBBDD...',
+    'TT....BBBBBBR..W...W...W...W..RBBBBD..',
+    'TTTBBBBBBBBBRWWWWWWWWWWWWWWWWWRBBBEBB.',
+    'TT....BBBBBBR..W...W...W...W..RBBBBBB.',
+    'T.......LLLLR..W...W...W...W..RLLLDDDD',
+    '.........LLLR.................RLL.....',
+    '................TTT..........TTT.....',
+  ],
+  [
+    '.....................................',
+    '...............W...W...W...W...WWW....',
+    '...............W...W...W...W..W...W...',
+    'W..............W...W...W...W..W....W..',
+    'WWW.WWWWWWWWWWWWWWWWWWWWWWWWWWW.....W.',
+    'W..............W...W...W...W..W....W..',
+    '...............W...W...W...W..W..WWW..',
+    '...............................WWW....',
+    '.....................................',
+  ],
+];
+const WHALE_COLORS = {
+  D: [52, 64, 86] as Rgb, B: [84, 100, 124] as Rgb, L: [170, 180, 196] as Rgb, T: [62, 76, 100] as Rgb,
+  E: EYE, R: [176, 64, 74] as Rgb, W: [228, 224, 206] as Rgb,
+};
+
 export const whaleSprite = (stage: number) =>
-  cached(`whale-${stage}`, () => {
-    const back: Rgb = [50, 62, 84], body: Rgb = [80, 96, 120], belly: Rgb = [172, 182, 198], fin: Rgb = [60, 74, 98];
-    const bone: Rgb = [228, 224, 206], flesh: Rgb = [176, 64, 74];
-    const w = 58, h = 17, cy = 8;
-    const grid: (Rgb | null)[][] = Array.from({ length: h }, () => Array(w).fill(null));
-    const half = (x: number) => x < 8 ? 1 + (8 - x) * 0.7 : x <= 46 ? 2 + 4.8 * Math.sin(Math.min(1, (x - 8) / 34) * Math.PI / 2) : 6.8 - (x - 46) * 0.25;
-    const eaten = [0, 0.22, 0.6, 1][stage];
-    for (let x = 0; x < w; x++) {
-      const hh = half(x);
-      for (let y = 0; y < h; y++) {
-        const dy = y - cy;
-        if (Math.abs(dy) > hh) continue;
-        const inMeat = x > 12 && x < 47;
-        const gone = inMeat && hash2(x, y, 3) < eaten + (Math.abs(dy) > hh - 1.5 ? 0 : 0.1);
-        const rib = x >= 16 && x <= 44 && x % 4 === 0 && Math.abs(dy) <= hh - 1;
-        const spine = dy === 0 && x >= 3 && x <= 50;
-        if (stage === 3) {
-          // Only bone is left: spine, ribs, the skull's outline and tail vertebrae.
-          const skull = x > 44 && (Math.abs(dy) > hh - 1.2 || x >= w - 2);
-          if (spine || rib || skull) grid[y][x] = bone;
-          continue;
-        }
-        if (gone) { grid[y][x] = rib || spine ? bone : null; continue; }
-        grid[y][x] = dy < -hh * 0.3 ? back : dy > hh * 0.4 ? belly : body;
-      }
-    }
-    if (stage < 3) {
-      // Raw edges around the bites.
-      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-        if (!grid[y][x] || grid[y][x] === bone) continue;
-        const holeNext = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ox, oy]) => {
-          const yy = y + oy, xx = x + ox;
-          return xx > 12 && xx < 47 && yy >= 0 && yy < h && Math.abs(yy - cy) <= half(xx) && (grid[yy][xx] === null || grid[yy][xx] === bone);
-        });
-        if (holeNext) grid[y][x] = flesh;
-      }
-      grid[cy + 1][51] = EYE;
-      for (let x = 49; x < w - 1; x++) if (grid[cy + 3]?.[x]) grid[cy + 3][x] = back;
-      for (let x = 36; x < 41; x++) for (let y = cy + 6; y < cy + 8 - (x - 36) * 0.4; y++) if (y < h) grid[y][x] = fin;
-    }
-    return fromGrid(grid);
-  });
+  cached(`whale-${stage}`, () => fromRows(WHALE[Math.max(0, Math.min(3, stage))], WHALE_COLORS));
 
 // What a picked-clean fish leaves behind, facing right.
 const BONES: Record<'minnow' | 'barracuda', string[]> = {
