@@ -20,7 +20,7 @@ export type Species = 'minnow' | 'barracuda' | 'crab' | 'jelly' | 'turtle';
 export const SPECIES_LIST: Species[] = ['minnow', 'barracuda', 'crab', 'jelly', 'turtle'];
 export type DeathCause = 'eaten' | 'stung' | 'starved' | 'oldAge';
 /** What a creature is up to this tick, for the inspector. */
-export type Mood = 'cruising' | 'schooling' | 'foraging' | 'grazing' | 'fleeing' | 'hunting' | 'scavenging' | 'drifting';
+export type Mood = 'cruising' | 'schooling' | 'foraging' | 'grazing' | 'fleeing' | 'hiding' | 'hunting' | 'scavenging' | 'drifting';
 
 export interface OceanEvent {
   tick: number;
@@ -56,7 +56,12 @@ export interface Creature {
   waste: number;
   food: Particle | Carcass | null;
   grazeCell: number;
+  /** Kelp a turtle is browsing, or a minnow is using for cover. */
   kelp: Kelp | null;
+  /** Tucked into kelp, where hunters only notice it up close. */
+  hidden: boolean;
+  /** Where it was born (or its parent was); it drifts back if it strays far. */
+  homeZ: number;
   scanIn: number;
   prey: Creature | null;
   alive: boolean;
@@ -145,7 +150,7 @@ export const SPECIES: Record<Species, SpeciesDef> = {
   },
   barracuda: {
     label: 'Barracuda', names: ['Fang', 'Razor', 'Shade', 'Barra', 'Spike', 'Vex', 'Grim', 'Moray'],
-    cruise: 0.26, burst: 1.1, vision: 60, metabolism: 0.0007, maxAge: [6000, 9000], mature: 900, hungerLine: 0.8,
+    cruise: 0.26, burst: 1.1, vision: 60, metabolism: 0.0005, maxAge: [6000, 9000], mature: 900, hungerLine: 0.8,
     breedAt: 0.8, breedCost: 0.5, breedCooldown: 1200, litter: [1, 1], units: 200, body: 50, minH: 12, maxH: 60,
     cap: [40000, 1, 14], palettes: 2,
   },
@@ -176,6 +181,17 @@ const BITE_UNITS = 3;
 const ALGAE_PER_UNIT = 16;
 const BUCKET = 32;
 const EVENT_LOG_SIZE = 6;
+/** The sunlit shallows: life is richest within about this far of the top. */
+const SHALLOWS = 260;
+/** How close a hunter must be to notice prey hiding in kelp. */
+const HIDDEN_SIGHT = 11;
+/** How far a creature roams up or down the page from home before turning back. */
+const HOME_RANGE = 60;
+
+/** 1 at the top of the page, falling toward 0 in the depths. */
+const sunlight = (z: number) => Math.exp(-z / SHALLOWS);
+/** A depth biased toward the shallows. */
+const shallowZ = (h: number) => Math.min(h - 4, 4 + h * Math.random() ** 2.2);
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
@@ -216,6 +232,7 @@ export class PixelOcean {
 
   constructor(w: number, h: number) {
     this.resize(w, h);
+    this.plantMeadows();
     for (const species of SPECIES_LIST) {
       for (let n = Math.max(1, Math.round(this.cap(species) * 0.5)); n > 0; n--) this.spawn(species, null);
     }
@@ -225,6 +242,37 @@ export class PixelOcean {
   }
 
   // --- world --------------------------------------------------------------
+
+  /**
+   * Dense kelp meadows ringed by seagrass in the sunlit shallows at the top
+   * of the page: cover for minnows and the busiest part of the reef.
+   */
+  private plantMeadows() {
+    const { w, h } = this;
+    const count = Math.max(4, Math.round(w / 45));
+    for (let m = 0; m < count; m++) {
+      const cx = rand(16, w - 16);
+      const cz = rand(10, Math.min(h - 10, SHALLOWS * 1.1));
+      for (let k = randInt(8, 14); k > 0; k--) {
+        const maxLength = randInt(30, 75);
+        this.kelp.push({
+          x: Math.min(w - 2, Math.max(2, cx + rand(-14, 14))),
+          z: Math.min(h - 2, Math.max(2, cz + rand(-8, 8))),
+          length: randInt(15, maxLength), maxLength, phase: rand(0, Math.PI * 2),
+        });
+      }
+      const r = randInt(18, 30);
+      for (let z = Math.max(0, Math.round(cz - r)); z < Math.min(h, cz + r); z++) {
+        for (let x = Math.max(0, Math.round(cx - r * 1.4)); x < Math.min(w, cx + r * 1.4); x++) {
+          const d = ((x - cx) / 1.4) ** 2 + (z - cz) ** 2;
+          if (d > r * r * (0.7 + Math.random() * 0.3)) continue;
+          const i = z * w + x;
+          this.algae[i] = Math.max(this.algae[i], randInt(160, 255));
+          this.nutrients[i] = Math.min(255, this.nutrients[i] + 4);
+        }
+      }
+    }
+  }
 
   /** Smooth value in [-1, 1]; the same everywhere for the life of the world. */
   private noise(x: number, z: number, octave: number) {
@@ -260,8 +308,9 @@ export class PixelOcean {
         this.terrain[i] = Math.round((this.noise(x, z, 0) * 0.7 + this.noise(x, z, 2) * 0.3 + 1) * 127);
         this.grain[i] = (Math.random() * 256) | 0;
         const fertile = this.noise(x, z, 1);
-        this.nutrients[i] = Math.max(0, Math.round(2 + fertile * 4 + Math.random() * 2));
-        if (fertile > 0.35) this.algae[i] = Math.min(255, Math.round((fertile - 0.35) * 500 + Math.random() * 40));
+        const sun = sunlight(z);
+        this.nutrients[i] = Math.max(0, Math.round(2 + fertile * 4 + sun * 4 + Math.random() * 2));
+        if (fertile > 0.35 - sun * 0.3) this.algae[i] = Math.min(255, Math.round((fertile - 0.35 + sun * 0.3) * 500 + Math.random() * 40));
       }
     }
 
@@ -347,13 +396,15 @@ export class PixelOcean {
   private spawn(species: Species, parent: Creature | null, energy = rand(0.55, 0.9)) {
     const sp = SPECIES[species];
     const id = this.nextId++;
+    const z = parent ? parent.z + rand(-3, 3) : species === 'minnow' || species === 'barracuda' ? shallowZ(this.h) : rand(4, this.h - 4);
     const creature: Creature = {
       id,
       name: `${sp.names[id % sp.names.length]} #${id}`,
       species,
       mood: species === 'jelly' ? 'drifting' : 'cruising',
       x: parent ? parent.x + rand(-3, 3) : rand(4, this.w - 4),
-      z: parent ? parent.z + rand(-3, 3) : rand(4, this.h - 4),
+      z,
+      homeZ: parent ? parent.homeZ : z,
       h: parent ? parent.h : species === 'crab' ? 0 : rand(sp.minH + 2, sp.maxH - 2),
       vx: rand(-0.1, 0.1), vz: rand(-0.1, 0.1), vh: 0,
       facing: Math.random() < 0.5 ? 1 : -1,
@@ -369,6 +420,7 @@ export class PixelOcean {
       food: null,
       grazeCell: -1,
       kelp: null,
+      hidden: false,
       scanIn: randInt(0, 10),
       prey: null,
       alive: true,
@@ -423,12 +475,14 @@ export class PixelOcean {
 
       const a = algae[i];
       if (nutrients[i] > 0 && a <= 255 - ALGAE_PER_UNIT && (a > 0 || algae[j] >= 96 || Math.random() < 0.002)) {
-        if (Math.random() < 0.5) { algae[i] = a + ALGAE_PER_UNIT; nutrients[i]--; }
+        // Algae grows fastest in the sunlit shallows.
+        if (Math.random() < 0.25 + 0.45 * sunlight(i / w)) { algae[i] = a + ALGAE_PER_UNIT; nutrients[i]--; }
       } else if (a >= ALGAE_PER_UNIT && Math.random() < 0.04) {
         algae[i] = a - ALGAE_PER_UNIT;
         if (nutrients[i] < 255) nutrients[i]++;
       }
-      if (algae[i] >= 224 && this.plankton < planktonCap && Math.random() < 0.004) {
+      // Sunlit algae sheds plankton fastest, so the shallows feed the most fish.
+      if (algae[i] >= 224 && this.plankton < planktonCap && Math.random() < 0.004 * (1 + 3 * sunlight(i / w))) {
         algae[i] -= PLANKTON_UNITS * ALGAE_PER_UNIT;
         this.spawnParticle('plankton', x, Math.floor(i / w), 1);
       }
@@ -475,17 +529,6 @@ export class PixelOcean {
     }
   }
 
-  private nearest(c: Creature, species: Species, radius: number) {
-    let best: Creature | null = null;
-    let bestD = radius * radius;
-    this.near(this.grid, c.x, c.z, radius, o => {
-      if (o.species !== species || !o.alive) return;
-      const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2 + (o.h - c.h) ** 2;
-      if (d < bestD) { bestD = d; best = o; }
-    });
-    return best as Creature | null;
-  }
-
   private updateCreatures() {
     const counts = this.counts();
     for (let n = 0, total = this.creatures.length; n < total; n++) {
@@ -495,7 +538,10 @@ export class PixelOcean {
 
     // Newcomers wander in so a crashed population can recover.
     if (this.tick % 150 === 0) {
-      if (counts.minnow < this.cap('minnow') * 0.15) {
+      // Schools keep arriving in the shallows from open water, so the top of
+      // the page recovers even when the rest of the reef is full.
+      const shallow = this.creatures.filter(c => c.species === 'minnow' && c.z < SHALLOWS * 1.5).length;
+      if (counts.minnow < this.cap('minnow') * 0.15 || shallow < this.cap('minnow') * 0.25) {
         const leader = this.spawn('minnow', null);
         for (let k = 0; k < 5; k++) this.spawn('minnow', leader, rand(0.5, 0.8)).age = SPECIES.minnow.mature;
       }
@@ -567,6 +613,9 @@ export class PixelOcean {
     if (c.x > this.w - 6) s.x -= 0.06;
     if (c.z < 6) s.z += 0.06;
     if (c.z > this.h - 6) s.z -= 0.06;
+    const fromHome = c.homeZ - c.z;
+    const stray = Math.abs(fromHome) - HOME_RANGE;
+    if (stray > 0) s.z += Math.sign(fromHome) * Math.min(0.05, 0.012 + stray * 0.0004);
     if (c.species !== 'crab') {
       if (c.h < sp.minH && c.grazeCell < 0) s.h += 0.03;
       if (c.h > sp.maxH) s.h -= 0.03;
@@ -625,22 +674,59 @@ export class PixelOcean {
       const d = (this.pointer.x - c.x) ** 2 + (this.pointer.z - c.z) ** 2;
       if (d < 18 * 18 && d < threatD) { threatD = d; threat = this.pointer; }
     }
+    // Keep track of the nearest kelp, a little at a time.
+    if ((this.tick + c.id) % 15 === 0 || (threat && !c.kelp)) c.kelp = this.nearestKelp(c, 50);
+    const k = c.kelp;
+    const kd = k ? Math.hypot(k.x - c.x, k.z - c.z) : Infinity;
+    c.hidden = !!k && kd < 5 && c.h < k.length;
+
     if (threat) {
       const t = threat as { x: number; z: number };
       const d = Math.sqrt(threatD) || 1;
+      c.food = null;
+      c.grazeCell = -1;
+      s.max = sp.burst;
+      s.effort = 1.8;
+      // Bolt for nearby kelp unless the hunter is in the way; otherwise just run.
+      const hunterInTheWay = (k ? (k.x - c.x) * (t.x - c.x) + (k.z - c.z) * (t.z - c.z) : 0) > kd * d * 0.5;
+      if (k && kd < 50 && !hunterInTheWay) {
+        const coverH = Math.min(k.length * 0.5, 20);
+        if (c.hidden) {
+          s.x += (k.x - c.x) * 0.02;
+          s.z += (k.z - c.z) * 0.02;
+          s.h += (coverH - c.h) * 0.01;
+          c.mood = 'hiding';
+        } else {
+          this.toward(c, s, { x: k.x, z: k.z, h: coverH }, 0.16);
+          c.mood = 'fleeing';
+        }
+        return;
+      }
       s.x += (c.x - t.x) / d * 0.14;
       s.z += (c.z - t.z) / d * 0.14;
       s.h += 0.03;
-      s.max = sp.burst;
-      s.effort = 1.8;
-      c.food = null;
-      c.grazeCell = -1;
       c.mood = 'fleeing';
       return;
     }
     if (c.hungry && this.forage(c, s)) return;
     c.mood = this.school(c, s) ? 'schooling' : 'cruising';
+    // Idle schools loiter around the kelp.
+    if (k && kd > 12 && kd < 50) {
+      s.x += (k.x - c.x) / kd * 0.008;
+      s.z += (k.z - c.z) / kd * 0.008;
+    }
     this.wander(c, s);
+  }
+
+  private nearestKelp(c: Creature, radius: number) {
+    let best: Kelp | null = null;
+    let bestD = radius * radius;
+    for (const k of this.kelp) {
+      if (k.length < 10) continue;
+      const d = (k.x - c.x) ** 2 + (k.z - c.z) ** 2;
+      if (d < bestD) { bestD = d; best = k; }
+    }
+    return best;
   }
 
   private thinkBarracuda(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
@@ -713,8 +799,8 @@ export class PixelOcean {
     if (--c.scanIn <= 0) {
       c.scanIn = 30;
       let best: Particle | null = null;
-      let bestD = 40 * 40;
-      this.near(this.foodGrid, c.x, c.z, 40, p => {
+      let bestD = 28 * 28;
+      this.near(this.foodGrid, c.x, c.z, 28, p => {
         if (p.kind !== 'plankton') return;
         const d = (p.x - c.x) ** 2 + (p.z - c.z) ** 2 + (p.h - c.h) ** 2;
         if (d < bestD) { bestD = d; best = p; }
@@ -899,11 +985,23 @@ export class PixelOcean {
     return true;
   }
 
+  /** The nearest prey this hunter can see; prey hiding in kelp only shows up close. */
   private findPrey(c: Creature, species: Species) {
+    const seen = (o: Creature, d2: number) => !o.hidden || d2 < HIDDEN_SIGHT * HIDDEN_SIGHT;
     const p = c.prey;
-    if (p && p.alive && (p.x - c.x) ** 2 + (p.z - c.z) ** 2 < 80 * 80) return p;
-    c.prey = this.nearest(c, species, SPECIES[c.species].vision);
-    return c.prey;
+    if (p && p.alive) {
+      const d2 = (p.x - c.x) ** 2 + (p.z - c.z) ** 2;
+      if (d2 < 80 * 80 && seen(p, d2)) return p;
+    }
+    let best: Creature | null = null;
+    let bestD = SPECIES[c.species].vision ** 2;
+    this.near(this.grid, c.x, c.z, SPECIES[c.species].vision, o => {
+      if (o.species !== species || !o.alive) return;
+      const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2 + (o.h - c.h) ** 2;
+      if (d < bestD && seen(o, d)) { bestD = d; best = o; }
+    });
+    c.prey = best;
+    return best;
   }
 
   // --- death --------------------------------------------------------------

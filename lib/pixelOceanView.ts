@@ -319,7 +319,8 @@ export class OceanView {
       });
     }
     for (const c of ocean.creatures) {
-      if (visible(c.z)) items.push({ depth: c.z + 0.3, draw: () => this.drawCreature(c) });
+      // Hiding minnows sit behind the kelp fronds around them.
+      if (visible(c.z)) items.push({ depth: c.hidden ? c.z - 6 : c.z + 0.3, draw: () => this.drawCreature(c) });
     }
     for (const b of ocean.bubbles) {
       if (visible(b.z)) items.push({ depth: b.z + 0.4, draw: () => this.sprite(bubbleSprite(), b.x, b.z, b.h, { alpha: 0.8 }) });
@@ -352,7 +353,7 @@ export class OceanView {
         const speed = Math.hypot(c.vx, c.vz);
         const period = c.species === 'turtle' ? 14 : speed > 0.5 ? 3 : 7;
         const frame = Math.floor((tick + c.id * 7) / period) & 1;
-        this.sprite(creatureSprite(kind, c.palette, frame, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
+        this.sprite(creatureSprite(kind, c.palette, frame, washed), c.x, c.z, c.h, { flipX: c.facing < 0, alpha: c.hidden ? 0.7 : 1 });
       }
     }
   }

@@ -23,6 +23,7 @@ const MOOD_LABEL: Record<Mood, string> = {
   foraging: 'Looking for food',
   grazing: 'Grazing algae',
   fleeing: 'Fleeing!',
+  hiding: 'Hiding in the kelp',
   hunting: 'Hunting',
   scavenging: 'Scavenging',
   drifting: 'Drifting',
