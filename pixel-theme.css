@@ -751,6 +751,26 @@ html.pixel-theme {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.eco-swatch {
+  width: 6px;
+  height: 6px;
+  justify-self: center;
+}
+.eco-species {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+  margin: 2px 0 6px;
+  font-size: 1.15rem;
+  line-height: 1.45;
+}
+.eco-species li {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 6px;
+}
+.eco-species li.is-absent { opacity: 0.4; }
 .eco-feed {
   margin-top: 8px;
   padding-top: 6px;

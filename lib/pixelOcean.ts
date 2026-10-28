@@ -6,25 +6,33 @@
 // Above the floor, creatures, plankton, food, carcasses, blood and bubbles are
 // free-moving objects with a height (h) off the seabed.
 //
-// Food web: algae -> plankton -> minnows and jellyfish; barracuda hunt
-// minnows, jellyfish sting them, turtles eat jellyfish and graze kelp, crabs
-// and minnows pick at carcasses, and carcasses and waste rot back into the
-// seabed's nutrients.
+// Food web: algae -> plankton -> minnows, pufferfish, seahorses, jellyfish
+// and manta rays; urchins graze the algae. Barracuda hunt the small fish,
+// morays strike from their rock dens, anglerfish lure minnows in the deep,
+// octopuses ambush crabs and urchins, turtles eat jellyfish and urchins, and
+// reef sharks hunt barracuda and octopuses. Crabs and minnows pick at
+// carcasses, and carcasses and waste rot back into the seabed's nutrients.
 //
 // World units are art pixels: x across, z down the page, h up off the floor.
 
 export const SURFACE = 110;
 export const TICKS_PER_SECOND = 30;
 
-export type Species = 'minnow' | 'barracuda' | 'crab' | 'jelly' | 'turtle';
-export const SPECIES_LIST: Species[] = ['minnow', 'barracuda', 'crab', 'jelly', 'turtle'];
+export type Species =
+  | 'minnow' | 'puffer' | 'seahorse' | 'barracuda' | 'eel' | 'angler' | 'shark'
+  | 'crab' | 'urchin' | 'octopus' | 'jelly' | 'turtle' | 'manta';
+export const SPECIES_LIST: Species[] = [
+  'minnow', 'puffer', 'seahorse', 'barracuda', 'eel', 'angler', 'shark',
+  'crab', 'urchin', 'octopus', 'jelly', 'turtle', 'manta',
+];
 export type DeathCause = 'eaten' | 'stung' | 'starved' | 'oldAge';
 /** What a creature is up to this tick, for the inspector. */
-export type Mood = 'cruising' | 'schooling' | 'foraging' | 'grazing' | 'fleeing' | 'hiding' | 'hunting' | 'scavenging' | 'drifting';
+export type Mood = 'cruising' | 'schooling' | 'foraging' | 'grazing' | 'fleeing' | 'hiding' | 'hunting' | 'scavenging' | 'drifting'
+  | 'clinging' | 'carrying' | 'camouflaged' | 'inking' | 'lurking' | 'striking' | 'puffed' | 'gliding';
 
 export interface OceanEvent {
   tick: number;
-  kind: 'birth' | DeathCause;
+  kind: 'birth' | 'inked' | DeathCause;
   text: string;
   /** Involves a creature the visitor adopted. */
   starred: boolean;
@@ -68,6 +76,18 @@ export interface Creature {
   lineId: number;
   /** The visitor's own creature. */
   adopted: boolean;
+  /** A moray's den, an octopus's home rock. */
+  anchorX: number;
+  anchorZ: number;
+  /** Animation-driving states, each 0 to 1: a puffer's inflation, an
+   * octopus's camouflage, how far a moray (or an anglerfish's jaw) is out. */
+  puff: number;
+  camo: number;
+  lunge: number;
+  /** Counts down a species' current state: puffed, inking, a strike. */
+  timer: number;
+  /** A seahorse carrying eggs: ticks until they hatch. */
+  carrying: number;
   scanIn: number;
   prey: Creature | null;
   alive: boolean;
@@ -91,9 +111,9 @@ export interface Carcass {
   alive: boolean;
 }
 
-/** A drop of blood (or jellyfish goo) drifting off a kill. */
+/** A drop of blood (or jellyfish goo, or octopus ink) drifting in the water. */
 export interface Drop {
-  kind: 'blood' | 'goo';
+  kind: 'blood' | 'goo' | 'ink';
   x: number; z: number; h: number;
   vx: number; vz: number; vh: number;
   life: number;
@@ -178,7 +198,68 @@ export const SPECIES: Record<Species, SpeciesDef> = {
     breedAt: 0.9, breedCost: 0.6, breedCooldown: 4000, litter: [1, 1], units: 200, body: 60, minH: 12, maxH: 45,
     cap: [120000, 1, 5], palettes: 1,
   },
+  puffer: {
+    label: 'Pufferfish', names: ['Pokey', 'Balloon', 'Puff', 'Prickles', 'Bloat', 'Nib', 'Bubba', 'Dumpling'],
+    cruise: 0.2, burst: 0.45, vision: 24, metabolism: 0.0008, maxAge: [5000, 8000], mature: 600, hungerLine: 0.7,
+    breedAt: 0.88, breedCost: 0.5, breedCooldown: 1200, litter: [1, 2], units: 60, body: 16, minH: 4, maxH: 40,
+    cap: [24000, 2, 26], palettes: 2,
+  },
+  seahorse: {
+    label: 'Seahorse', names: ['Twirl', 'Sprig', 'Curly', 'Bea', 'Kelpie', 'Hippo', 'Coralie', 'Swish'],
+    cruise: 0.07, burst: 0.1, vision: 10, metabolism: 0.00012, maxAge: [6000, 9000], mature: 700, hungerLine: 1,
+    breedAt: 0.8, breedCost: 0.4, breedCooldown: 1800, litter: [2, 3], units: 30, body: 4, minH: 4, maxH: 40,
+    cap: [30000, 3, 24], palettes: 3,
+  },
+  urchin: {
+    label: 'Sea urchin', names: ['Spiny', 'Bristle', 'Pin', 'Thistle', 'Burr', 'Quill'],
+    cruise: 0.02, burst: 0.02, vision: 30, metabolism: 0.00008, maxAge: [9000, 14000], mature: 1200, hungerLine: 0.8,
+    breedAt: 0.9, breedCost: 0.5, breedCooldown: 3000, litter: [1, 2], units: 40, body: 6, minH: 0, maxH: 0,
+    cap: [16000, 4, 40], palettes: 2,
+  },
+  octopus: {
+    label: 'Octopus', names: ['Inky', 'Otto', 'Squish', 'Ollie', 'Tako', 'Marbles'],
+    cruise: 0.13, burst: 1.0, vision: 32, metabolism: 0.00025, maxAge: [7000, 10000], mature: 1200, hungerLine: 0.75,
+    breedAt: 0.9, breedCost: 0.6, breedCooldown: 4000, litter: [1, 1], units: 120, body: 30, minH: 0, maxH: 6,
+    cap: [90000, 1, 6], palettes: 1,
+  },
+  eel: {
+    label: 'Moray eel', names: ['Gnasher', 'Slink', 'Ribbon', 'Snap', 'Murk', 'Vera'],
+    cruise: 0.1, burst: 0.7, vision: 15, metabolism: 0.00012, maxAge: [9000, 14000], mature: 1500, hungerLine: 0.8,
+    breedAt: 0.9, breedCost: 0.5, breedCooldown: 4000, litter: [1, 1], units: 120, body: 30, minH: 2, maxH: 10,
+    cap: [80000, 1, 6], palettes: 1,
+  },
+  shark: {
+    label: 'Reef shark', names: ['Grey', 'Brute', 'Duke', 'Sable', 'Rex', 'Tooth'],
+    cruise: 0.3, burst: 1.2, vision: 90, metabolism: 0.00015, maxAge: [12000, 18000], mature: 3000, hungerLine: 0.6,
+    breedAt: 0.95, breedCost: 0.6, breedCooldown: 8000, litter: [1, 1], units: 400, body: 120, minH: 20, maxH: 60,
+    cap: [250000, 1, 2], palettes: 1,
+  },
+  manta: {
+    // Mantas glide through and never breed here.
+    label: 'Manta ray', names: ['Glide', 'Halo', 'Atlas', 'Sky', 'Wing', 'Drift'],
+    cruise: 0.28, burst: 0.3, vision: 12, metabolism: 0.00005, maxAge: [15000, 20000], mature: 3000, hungerLine: 1,
+    breedAt: 2, breedCost: 0, breedCooldown: 0, litter: [1, 1], units: 200, body: 80, minH: 40, maxH: 65,
+    cap: [300000, 1, 1], palettes: 1,
+  },
+  angler: {
+    label: 'Anglerfish', names: ['Lantern', 'Gulp', 'Grin', 'Abyss', 'Murk', 'Lumen'],
+    cruise: 0.05, burst: 0.5, vision: 30, metabolism: 0.0001, maxAge: [12000, 16000], mature: 2000, hungerLine: 0.8,
+    breedAt: 0.9, breedCost: 0.5, breedCooldown: 5000, litter: [1, 1], units: 150, body: 30, minH: 6, maxH: 18,
+    cap: [100000, 1, 4], palettes: 1,
+  },
 };
+
+/** Who hunts whom (besides the special hunters: morays, octopuses, anglerfish). */
+const PREY: Partial<Record<Species, Species[]>> = {
+  barracuda: ['minnow', 'puffer', 'seahorse'],
+  shark: ['barracuda', 'octopus', 'puffer', 'minnow'],
+  turtle: ['jelly', 'urchin'],
+};
+/** Creatures that position themselves rather than swim through move(). */
+const SELF_PLACED: Species[] = ['eel', 'seahorse'];
+const BUBBLERS: Species[] = ['minnow', 'barracuda', 'turtle', 'puffer', 'shark', 'angler', 'manta'];
+/** How far a moray can reach out of its den. */
+const EEL_REACH = 22;
 
 const PLANKTON_UNITS = 5;
 const PELLET_UNITS = 12;
@@ -193,6 +274,8 @@ const SHALLOWS = 260;
 const HIDDEN_SIGHT = 11;
 /** How far a creature roams up or down the page from home before turning back. */
 const HOME_RANGE = 60;
+/** How long a seahorse carries its eggs before they hatch. */
+const CARRY_TICKS = 450;
 
 /** 1 at the top of the page, falling toward 0 in the depths. */
 const sunlight = (z: number) => Math.exp(-z / SHALLOWS);
@@ -402,7 +485,7 @@ export class PixelOcean {
   private spawn(species: Species, parent: Creature | null, energy = rand(0.55, 0.9)) {
     const sp = SPECIES[species];
     const id = this.nextId++;
-    const z = parent ? parent.z + rand(-3, 3) : species === 'minnow' || species === 'barracuda' ? shallowZ(this.h) : rand(4, this.h - 4);
+    const z = parent ? parent.z + rand(-3, 3) : this.spawnDepth(species);
     const creature: Creature = {
       id,
       name: `${sp.names[id % sp.names.length]} #${id}`,
@@ -413,7 +496,7 @@ export class PixelOcean {
       homeZ: parent ? parent.homeZ : z,
       lineId: parent?.lineId ?? id,
       adopted: false,
-      h: parent ? parent.h : species === 'crab' ? 0 : rand(sp.minH + 2, sp.maxH - 2),
+      h: parent ? parent.h : sp.maxH === 0 ? 0 : rand(sp.minH + 2, Math.max(sp.minH + 2, sp.maxH - 2)),
       vx: rand(-0.1, 0.1), vz: rand(-0.1, 0.1), vh: 0,
       facing: Math.random() < 0.5 ? 1 : -1,
       energy,
@@ -429,12 +512,73 @@ export class PixelOcean {
       grazeCell: -1,
       kelp: null,
       hidden: false,
+      anchorX: 0,
+      anchorZ: 0,
+      puff: 0,
+      camo: 0,
+      lunge: 0,
+      timer: 0,
+      carrying: 0,
       scanIn: randInt(0, 10),
       prey: null,
       alive: true,
     };
     this.creatures.push(creature);
+    if (species === 'eel') this.giveDen(creature);
+    if (species === 'octopus') this.giveHomeRock(creature);
+    if (species === 'seahorse' && !parent) {
+      // Seahorses arrive clinging to kelp in the shallows.
+      const meadow = this.kelp.filter(k => k.z < SHALLOWS * 1.5 && k.length > 15);
+      const k = meadow[randInt(0, meadow.length - 1)];
+      if (k) { creature.x = k.x; creature.z = k.z; creature.homeZ = k.z; creature.kelp = k; }
+    }
     return creature;
+  }
+
+  private spawnDepth(species: Species) {
+    switch (species) {
+      // Morays den in the rocks of the busy shallows.
+      case 'minnow': case 'barracuda': case 'puffer': case 'seahorse': case 'eel':
+        return shallowZ(this.h);
+      case 'angler':
+        // Anglerfish keep to the darkest, deepest water at the bottom of the page.
+        return rand(Math.max(4, this.h * 0.75), this.h - 4);
+      default:
+        return rand(4, this.h - 4);
+    }
+  }
+
+  private rocks() {
+    return this.decor.filter(d => d.kind === 'rock');
+  }
+
+  /** A moray takes the nearest free rock as its den (or a hole in the sand). */
+  private giveDen(c: Creature) {
+    const taken = new Set(this.creatures.filter(o => o.species === 'eel' && o !== c && o.alive).map(o => `${o.anchorX},${o.anchorZ}`));
+    let den: Decor | null = null;
+    let bestD = Infinity;
+    for (const r of this.rocks()) {
+      if (r.ht < 6 || taken.has(`${r.x},${r.z}`)) continue;
+      const d = (r.x - c.x) ** 2 + (r.z - c.z) ** 2;
+      if (d < bestD) { bestD = d; den = r; }
+    }
+    c.anchorX = den ? den.x : c.x;
+    c.anchorZ = den ? den.z : c.z;
+    c.x = c.anchorX;
+    c.z = c.anchorZ + 1;
+    c.h = 2;
+    c.homeZ = c.anchorZ;
+  }
+
+  private giveHomeRock(c: Creature) {
+    let best: Decor | null = null;
+    let bestD = Infinity;
+    for (const r of this.rocks()) {
+      const d = (r.x - c.x) ** 2 + (r.z - c.z) ** 2;
+      if (d < bestD) { bestD = d; best = r; }
+    }
+    c.anchorX = best ? best.x : c.x;
+    c.anchorZ = best ? best.z + 3 : c.z;
   }
 
   private logEvent(kind: OceanEvent['kind'], text: string, ...involved: (Creature | null)[]) {
@@ -589,11 +733,15 @@ export class PixelOcean {
       if (counts.crab < 2) this.spawn('crab', null);
       if (counts.jelly < 2 && Math.random() < 0.5) this.spawn('jelly', null);
       if (counts.turtle === 0 && counts.jelly > 3 && Math.random() < 0.15) this.spawn('turtle', null);
+      // Every other species drifts back in now and then if it's down to its last few.
+      for (const sp of ['puffer', 'seahorse', 'urchin', 'octopus', 'eel', 'shark', 'manta', 'angler'] as Species[]) {
+        if (counts[sp] < SPECIES[sp].cap[1] && Math.random() < 0.25) this.spawn(sp, null);
+      }
     }
   }
 
   private counts() {
-    const counts: Record<Species, number> = { minnow: 0, barracuda: 0, crab: 0, jelly: 0, turtle: 0 };
+    const counts = Object.fromEntries(SPECIES_LIST.map(s => [s, 0])) as Record<Species, number>;
     for (const c of this.creatures) if (c.alive) counts[c.species]++;
     return counts;
   }
@@ -612,9 +760,17 @@ export class PixelOcean {
       case 'crab': this.thinkCrab(c, steer); break;
       case 'jelly': this.thinkJelly(c, steer); break;
       case 'turtle': this.thinkTurtle(c, steer); break;
+      case 'puffer': this.thinkPuffer(c, steer); break;
+      case 'seahorse': this.thinkSeahorse(c); break;
+      case 'urchin': this.thinkUrchin(c, steer); break;
+      case 'octopus': this.thinkOctopus(c, steer); break;
+      case 'eel': this.thinkEel(c); break;
+      case 'shark': this.thinkShark(c, steer); break;
+      case 'manta': this.thinkManta(c, steer); break;
+      case 'angler': this.thinkAngler(c, steer); break;
     }
     if (!c.alive) return;
-    this.move(c, steer);
+    if (!SELF_PLACED.includes(c.species)) this.move(c, steer);
 
     const burned = sp.metabolism * steer.effort;
     c.energy -= burned;
@@ -628,21 +784,34 @@ export class PixelOcean {
     if (c.energy <= 0) { this.die(c, 'starved'); return; }
     if (c.age > c.maxAge) { this.die(c, 'oldAge'); return; }
 
-    const cap = this.cap(c.species);
-    if (c.energy > sp.breedAt && c.age > sp.mature && c.breedCooldown === 0 && counts[c.species] < cap) {
-      // The litter shares what the parent spent, so breeding never makes energy.
-      const litter = Math.min(cap - counts[c.species], randInt(sp.litter[0], sp.litter[1]));
+    // Seahorse fathers carry the eggs for a while before they hatch.
+    if (c.carrying > 0 && --c.carrying === 0) this.hatch(c, counts);
+    if (c.energy > sp.breedAt && c.age > sp.mature && c.breedCooldown === 0 && c.carrying === 0 && counts[c.species] < this.cap(c.species)) {
       c.energy -= sp.breedCost;
       c.breedCooldown = sp.breedCooldown;
-      for (let k = 0; k < litter; k++) this.spawn(c.species, c, sp.breedCost / litter);
-      counts[c.species] += litter;
-      this.births += litter;
-      this.logEvent('birth', `${c.name} had ${litter === 1 ? 'a baby' : `${litter} babies`}`, c);
-      if (c.species !== 'crab') this.bubbles.push({ x: c.x, z: c.z, h: c.h + 3, phase: rand(0, 6), alive: true });
+      if (c.species === 'seahorse') c.carrying = CARRY_TICKS;
+      else this.hatch(c, counts);
     }
 
-    if (c.species !== 'crab' && c.species !== 'jelly' && Math.random() < 0.0015) {
+    if (BUBBLERS.includes(c.species) && Math.random() < 0.0015) {
       this.bubbles.push({ x: c.x + c.facing * 4, z: c.z, h: c.h + 2, phase: rand(0, 6), alive: true });
+    }
+  }
+
+  /** Brings a litter into the world; it shares what the parent spent on it. */
+  private hatch(c: Creature, counts: Record<Species, number>) {
+    const sp = SPECIES[c.species];
+    const litter = Math.min(this.cap(c.species) - counts[c.species], randInt(sp.litter[0], sp.litter[1]));
+    if (litter <= 0) return;
+    for (let k = 0; k < litter; k++) {
+      const baby = this.spawn(c.species, c, sp.breedCost / litter);
+      if (c.species === 'seahorse') baby.kelp = c.kelp;
+    }
+    counts[c.species] += litter;
+    this.births += litter;
+    this.logEvent('birth', `${c.name} had ${litter === 1 ? 'a baby' : `${litter} babies`}`, c);
+    if (BUBBLERS.includes(c.species) || c.species === 'seahorse') {
+      this.bubbles.push({ x: c.x, z: c.z, h: c.h + 3, phase: rand(0, 6), alive: true });
     }
   }
 
@@ -656,7 +825,7 @@ export class PixelOcean {
     const fromHome = c.homeZ - c.z;
     const stray = Math.abs(fromHome) - HOME_RANGE;
     if (stray > 0) s.z += Math.sign(fromHome) * Math.min(0.05, 0.012 + stray * 0.0004);
-    if (c.species !== 'crab') {
+    if (sp.maxH > 0) {
       if (c.h < sp.minH && c.grazeCell < 0) s.h += 0.03;
       if (c.h > sp.maxH) s.h -= 0.03;
       // Rocks and corals are never taller than this.
@@ -674,7 +843,7 @@ export class PixelOcean {
     if (speed > s.max) { c.vx *= s.max / speed; c.vz *= s.max / speed; c.vh *= s.max / speed; }
     c.x = Math.max(1, Math.min(this.w - 2, c.x + c.vx));
     c.z = Math.max(1, Math.min(this.h - 2, c.z + c.vz));
-    c.h = c.species === 'crab' ? 0 : Math.max(1, Math.min(SURFACE - 8, c.h + c.vh));
+    c.h = sp.maxH === 0 ? 0 : Math.max(sp.minH === 0 ? 0 : 1, Math.min(SURFACE - 8, c.h + c.vh));
     if (c.vx > 0.03) c.facing = 1;
     else if (c.vx < -0.03) c.facing = -1;
   }
@@ -702,11 +871,11 @@ export class PixelOcean {
   private thinkMinnow(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
     const sp = SPECIES.minnow;
     let threat: { x: number; z: number } | null = null;
-    let threatD = 28 * 28;
-    this.near(this.grid, c.x, c.z, 28, o => {
-      if (o.species !== 'barracuda' && o.species !== 'jelly') return;
-      // Jellyfish are only worth avoiding up close.
-      const reach = o.species === 'jelly' ? 4 : 28;
+    let threatD = 40 * 40;
+    this.near(this.grid, c.x, c.z, 40, o => {
+      if (o.species !== 'barracuda' && o.species !== 'jelly' && o.species !== 'shark') return;
+      // Jellyfish are only worth avoiding up close; a shark scatters everything.
+      const reach = o.species === 'jelly' ? 4 : o.species === 'shark' ? 40 : 28;
       const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2 + ((o.h - c.h) * 0.5) ** 2;
       if (d < reach * reach && d < threatD) { threatD = d; threat = o; }
     });
@@ -748,6 +917,18 @@ export class PixelOcean {
       c.mood = 'fleeing';
       return;
     }
+    // A hungry minnow can't resist an anglerfish's glowing lure.
+    if (c.hungry) {
+      let lure: { x: number; z: number; h: number } | null = null;
+      this.near(this.grid, c.x, c.z, 45, o => {
+        if (o.species === 'angler' && o.alive) lure = this.lureOf(o);
+      });
+      if (lure) {
+        this.toward(c, s, lure, 0.05, 4);
+        c.mood = 'foraging';
+        return;
+      }
+    }
     if (c.hungry && this.forage(c, s)) return;
     c.mood = this.school(c, s) ? 'schooling' : 'cruising';
     // Idle schools loiter around the kelp.
@@ -758,11 +939,11 @@ export class PixelOcean {
     this.wander(c, s);
   }
 
-  private nearestKelp(c: Creature, radius: number) {
+  private nearestKelp(c: Creature, radius: number, except: Kelp | null = null) {
     let best: Kelp | null = null;
     let bestD = radius * radius;
     for (const k of this.kelp) {
-      if (k.length < 10) continue;
+      if (k.length < 10 || k === except) continue;
       const d = (k.x - c.x) ** 2 + (k.z - c.z) ** 2;
       if (d < bestD) { bestD = d; best = k; }
     }
@@ -770,18 +951,11 @@ export class PixelOcean {
   }
 
   private thinkBarracuda(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    if (this.fleeFrom(c, s, 'shark', 40)) return;
     if (c.hungry) {
-      const prey = this.findPrey(c, 'minnow');
+      const prey = this.findPrey(c, PREY.barracuda!);
       if (prey) {
-        this.toward(c, s, { x: prey.x + prey.vx * 6, z: prey.z + prey.vz * 6, h: prey.h }, 0.09);
-        s.max = SPECIES.barracuda.burst;
-        s.effort = 1.5;
-        c.mood = 'hunting';
-        if (Math.hypot(prey.x - (c.x + c.facing * 5), prey.z - c.z, prey.h - c.h) < 6) {
-          this.kill(prey, 'eaten', c);
-          c.energy = Math.min(1, c.energy + (SPECIES.minnow.body + prey.energy * SPECIES.minnow.units) / SPECIES.barracuda.units);
-          c.prey = null;
-        }
+        this.chase(c, s, prey, 5, 6);
         return;
       }
       if (c.energy < 0.35 && this.forage(c, s)) return;
@@ -867,19 +1041,12 @@ export class PixelOcean {
     });
   }
 
-  /** Turtles hunt jellyfish when hungry and otherwise browse the kelp. */
+  /** Turtles hunt jellyfish and urchins when hungry and otherwise browse the kelp. */
   private thinkTurtle(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
     if (c.hungry) {
-      const jelly = this.findPrey(c, 'jelly');
-      if (jelly) {
-        this.toward(c, s, jelly, 0.05);
-        s.max = SPECIES.turtle.burst;
-        c.mood = 'hunting';
-        if (dist3(jelly, { x: c.x + c.facing * 6, z: c.z, h: c.h }) < 6) {
-          this.kill(jelly, 'eaten', c);
-          c.energy = Math.min(1, c.energy + 40 / SPECIES.turtle.units);
-          c.prey = null;
-        }
+      const prey = this.findPrey(c, PREY.turtle!);
+      if (prey) {
+        this.chase(c, s, prey, 6, 6, 0.05);
         return;
       }
       if (!c.kelp || c.kelp.length < 8) {
@@ -908,6 +1075,269 @@ export class PixelOcean {
     this.wander(c, s, 0.012);
   }
 
+  /**
+   * Chases prey and eats it on contact. The energy gained is the prey's body
+   * plus whatever it had eaten.
+   */
+  private chase(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }, prey: Creature, mouth: number, reach: number, force = 0.09) {
+    const lead = c.species === 'turtle' ? 0 : 6;
+    this.toward(c, s, { x: prey.x + prey.vx * lead, z: prey.z + prey.vz * lead, h: prey.h }, force);
+    s.max = SPECIES[c.species].burst;
+    s.effort = 1.5;
+    c.mood = 'hunting';
+    if (Math.hypot(prey.x - (c.x + c.facing * mouth), prey.z - c.z, prey.h - c.h) < reach) this.devour(c, prey);
+  }
+
+  private devour(c: Creature, prey: Creature, swallow = false) {
+    const ps = SPECIES[prey.species];
+    this.kill(prey, 'eaten', c, swallow);
+    c.energy = Math.min(1, c.energy + (ps.body + prey.energy * ps.units * 0.5) / SPECIES[c.species].units);
+    c.prey = null;
+  }
+
+  /** Swims away from the nearest of a species if one is within range. */
+  private fleeFrom(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }, species: Species, range: number) {
+    let threat: Creature | null = null;
+    let bestD = range * range;
+    this.near(this.grid, c.x, c.z, range, o => {
+      if (o.species !== species || !o.alive) return;
+      const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2;
+      if (d < bestD) { bestD = d; threat = o; }
+    });
+    if (!threat) return false;
+    const t = threat as Creature;
+    const d = Math.sqrt(bestD) || 1;
+    s.x += (c.x - t.x) / d * 0.12;
+    s.z += (c.z - t.z) / d * 0.12;
+    s.max = SPECIES[c.species].burst;
+    s.effort = 1.6;
+    c.mood = 'fleeing';
+    return true;
+  }
+
+  /** Pufferfish forage like minnows, and swell into a spiky ball when cornered. */
+  private thinkPuffer(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    if (c.timer > 0) c.timer--;
+    let threat: Creature | null = null;
+    let threatD = 30 * 30;
+    this.near(this.grid, c.x, c.z, 30, o => {
+      if (o.species !== 'barracuda' && o.species !== 'shark') return;
+      const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2 + (o.h - c.h) ** 2;
+      if (d < threatD) { threatD = d; threat = o; }
+    });
+    if (threat && threatD < 14 * 14) c.timer = 150;
+    c.puff += ((c.timer > 0 ? 1 : 0) - c.puff) * 0.15;
+    if (c.timer > 0) {
+      // Puffed up, it can barely swim, but nothing will bite it.
+      c.mood = 'puffed';
+      s.max = 0.04;
+      s.effort = 1.4;
+      return;
+    }
+    if (threat) {
+      const t = threat as Creature;
+      const d = Math.sqrt(threatD) || 1;
+      s.x += (c.x - t.x) / d * 0.1;
+      s.z += (c.z - t.z) / d * 0.1;
+      s.max = SPECIES.puffer.burst;
+      c.mood = 'fleeing';
+      return;
+    }
+    if (c.hungry && this.forage(c, s)) return;
+    c.mood = 'cruising';
+    this.wander(c, s, 0.015);
+  }
+
+  /**
+   * Seahorses cling to a kelp stalk, sway with it and snap up passing
+   * plankton, now and then drifting over to another stalk.
+   */
+  private thinkSeahorse(c: Creature) {
+    if (!c.kelp || c.kelp.length < 8 || Math.random() < 0.0008) {
+      const here = c.kelp;
+      c.kelp = this.nearestKelp(c, here ? 40 : 400, here);
+      c.mood = 'cruising';
+    }
+    const k = c.kelp;
+    if (!k) return;
+    const holdH = Math.min(c.cruiseH, k.length - 3);
+    const dx = k.x + 1.5 - c.x;
+    const dz = k.z - c.z;
+    const dh = holdH - c.h;
+    const d = Math.hypot(dx, dz, dh);
+    if (d > 1) {
+      // Upright and slow: a seahorse bobs its way over to the stalk.
+      const step = Math.min(d, SPECIES.seahorse.cruise);
+      c.x += dx / d * step;
+      c.z += dz / d * step;
+      c.h += dh / d * step;
+      if (Math.abs(dx) > 0.2) c.facing = dx > 0 ? 1 : -1;
+      c.mood = 'cruising';
+    } else {
+      c.mood = c.carrying > 0 ? 'carrying' : 'clinging';
+    }
+    c.hidden = d < 3;
+    this.near(this.foodGrid, c.x, c.z, SPECIES.seahorse.vision, p => {
+      if (p.alive && p.kind === 'plankton' && dist3(p, c) < SPECIES.seahorse.vision) this.eat(c, p);
+    });
+  }
+
+  /** Urchins creep over the seabed grazing algae. */
+  private thinkUrchin(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    if (this.graze(c, s, 0, 0.01)) return;
+    c.mood = 'cruising';
+    this.wander(c, s, 0.004);
+  }
+
+  /**
+   * Octopuses sit camouflaged by their rock, crawl out to ambush crabs and
+   * urchins, and squirt ink and jet away from sharks and barracuda.
+   */
+  private thinkOctopus(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    if (c.timer > 0) c.timer--;
+    const moving = Math.hypot(c.vx, c.vz) > 0.05;
+    const nearRock = (c.x - c.anchorX) ** 2 + (c.z - c.anchorZ) ** 2 < 15 * 15;
+    c.camo += ((nearRock && !moving ? 1 : 0) - c.camo) * 0.03;
+    c.hidden = c.camo > 0.6;
+
+    let threat: Creature | null = null;
+    let threatD = 26 * 26;
+    this.near(this.grid, c.x, c.z, 26, o => {
+      if (o.species !== 'barracuda' && o.species !== 'shark') return;
+      const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2;
+      if (d < threatD) { threatD = d; threat = o; }
+    });
+    if (c.timer > 260) {
+      // Mid-escape: jetting away behind its ink.
+      s.x += Math.cos(c.heading) * 0.3;
+      s.z += Math.sin(c.heading) * 0.3;
+      s.max = SPECIES.octopus.burst;
+      s.effort = 2;
+      c.mood = 'inking';
+      return;
+    }
+    if (threat && !c.hidden && c.timer === 0) {
+      const t = threat as Creature;
+      this.splash('ink', c, 34, [140, 260]);
+      c.heading = Math.atan2(c.z - t.z, c.x - t.x);
+      c.timer = 300;
+      c.camo = 0;
+      this.logEvent('inked', `${c.name} inked and escaped ${t.name}`, c, t);
+      return;
+    }
+    if (c.hungry) {
+      const prey = this.findPrey(c, ['crab', 'urchin']);
+      if (prey) {
+        const d = Math.hypot(prey.x - c.x, prey.z - c.z);
+        if (d < 10) {
+          // Pounce.
+          this.chase(c, s, prey, 0, 4, 0.2);
+        } else {
+          this.toward(c, s, { x: prey.x, z: prey.z, h: 0 }, 0.03);
+          c.mood = 'hunting';
+        }
+        return;
+      }
+    }
+    // Head home and hide.
+    const home = { x: c.anchorX, z: c.anchorZ, h: 0 };
+    if (!nearRock) this.toward(c, s, home, 0.02);
+    c.mood = c.hidden ? 'camouflaged' : 'cruising';
+  }
+
+  /** Morays wait in their den with just the head out, then strike at passers-by. */
+  private thinkEel(c: Creature) {
+    const reachOut = Math.hypot(c.x - c.anchorX, c.z - (c.anchorZ + 1));
+    let target: Creature | null = null;
+    if (c.hungry) {
+      let bestD = EEL_REACH * EEL_REACH;
+      this.near(this.grid, c.anchorX, c.anchorZ, EEL_REACH, o => {
+        if (!o.alive || o.hidden || (o.species !== 'minnow' && o.species !== 'puffer' && o.species !== 'seahorse')) return;
+        if (o.species === 'puffer' && o.timer > 0) return;
+        const d = (o.x - c.anchorX) ** 2 + (o.z - c.anchorZ) ** 2;
+        if (d < bestD && o.h < 25) { bestD = d; target = o; }
+      });
+    }
+    let gx: number, gz: number, gh: number, speed: number;
+    if (target) {
+      const t = target as Creature;
+      gx = t.x; gz = t.z; gh = t.h; speed = SPECIES.eel.burst;
+      c.mood = 'striking';
+    } else {
+      // Peek out of the den, swaying, and slowly withdraw after a strike.
+      const peek = 14 + Math.sin(this.tick * 0.03 + c.id) * 3;
+      gx = c.anchorX + c.facing * peek; gz = c.anchorZ + 2; gh = 4; speed = 0.08;
+      c.mood = 'lurking';
+      if (Math.random() < 0.003) c.facing = c.facing > 0 ? -1 : 1;
+    }
+    const dx = gx - c.x, dz = gz - c.z, dh = gh - c.h;
+    const d = Math.hypot(dx, dz, dh);
+    if (d > 0.01) {
+      const step = Math.min(d, speed);
+      c.x += dx / d * step; c.z += dz / d * step; c.h += dh / d * step;
+    }
+    // Never further out than the body allows.
+    const out = Math.hypot(c.x - c.anchorX, c.z - (c.anchorZ + 1));
+    if (out > EEL_REACH) {
+      c.x = c.anchorX + (c.x - c.anchorX) * EEL_REACH / out;
+      c.z = c.anchorZ + 1 + (c.z - c.anchorZ - 1) * EEL_REACH / out;
+    }
+    if (Math.abs(c.x - c.anchorX) > 0.5) c.facing = c.x > c.anchorX ? 1 : -1;
+    c.lunge = Math.min(1, reachOut / EEL_REACH);
+    if (target && dist3(target, c) < 3) this.devour(c, target);
+  }
+
+  /** Reef sharks patrol slowly and hunt barracuda, octopuses and pufferfish. */
+  private thinkShark(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    if (c.hungry) {
+      const prey = this.findPrey(c, PREY.shark!);
+      if (prey) {
+        this.chase(c, s, prey, 10, 7, 0.07);
+        return;
+      }
+    }
+    c.mood = 'cruising';
+    this.wander(c, s, 0.012);
+  }
+
+  /** Manta rays glide in long, lazy arcs, filtering plankton as they go. */
+  private thinkManta(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    c.mood = 'gliding';
+    c.heading += Math.sin(this.tick * 0.003 + c.id) * 0.004;
+    s.x += Math.cos(c.heading) * 0.02;
+    s.z += Math.sin(c.heading) * 0.008;
+    s.h += (c.cruiseH - c.h) * 0.001;
+    this.near(this.foodGrid, c.x, c.z, SPECIES.manta.vision, p => {
+      if (p.alive && p.kind === 'plankton' && dist3(p, c) < SPECIES.manta.vision) this.eat(c, p);
+    });
+  }
+
+  /** Where an anglerfish's glowing lure dangles, in front of and above its head. */
+  lureOf(c: Creature) {
+    return { x: c.x + c.facing * 8, z: c.z, h: c.h + 6 + Math.sin(this.tick * 0.06 + c.id) * 1.2 };
+  }
+
+  /** Anglerfish hang still in the deep and swallow whatever their lure brings in. */
+  private thinkAngler(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    c.mood = 'lurking';
+    let near = Infinity;
+    let meal: Creature | null = null;
+    const mouth = { x: c.x + c.facing * 6, z: c.z, h: c.h };
+    this.near(this.grid, c.x, c.z, 12, o => {
+      if (o.species !== 'minnow' || !o.alive) return;
+      const d = dist3(o, mouth);
+      if (d < near) { near = d; meal = o; }
+    });
+    // The jaw creeps open as something swims close, then snaps.
+    c.lunge += ((near < 10 ? 1 : 0) - c.lunge) * 0.2;
+    if (meal && near < 4) {
+      this.devour(c, meal, true);
+      c.lunge = 0;
+    }
+    s.max = SPECIES.angler.cruise;
+    this.wander(c, s, 0.003);
+  }
+
   /** Steers toward food. Minnows prefer drifting food, then graze the algae. */
   private forage(c: Creature, s: { x: number; z: number; h: number }): boolean {
     if (c.food && !c.food.alive) c.food = null;
@@ -915,7 +1345,7 @@ export class PixelOcean {
       c.scanIn = 12;
       c.food = this.scanForFood(c);
       if (c.food) c.grazeCell = -1;
-      else if (c.species === 'minnow' && c.grazeCell < 0) c.grazeCell = this.scanForAlgae(c);
+      else if ((c.species === 'minnow' || c.species === 'puffer') && c.grazeCell < 0) c.grazeCell = this.scanForAlgae(c);
     }
 
     if (c.food) {
@@ -969,7 +1399,7 @@ export class PixelOcean {
       if (score < bestScore) { bestScore = score; best = t; }
     };
     this.near(this.foodGrid, c.x, c.z, r, p => {
-      if (c.species === 'minnow') consider(p, p.kind === 'pellet' ? 0.4 : 1);
+      if (c.species === 'minnow' || c.species === 'puffer') consider(p, p.kind === 'pellet' ? 0.4 : 1);
       else if (p.kind === 'pellet') consider(p, 1);
     });
     for (const k of this.carcasses) {
@@ -1026,8 +1456,9 @@ export class PixelOcean {
   }
 
   /** The nearest prey this hunter can see; prey hiding in kelp only shows up close. */
-  private findPrey(c: Creature, species: Species) {
-    const seen = (o: Creature, d2: number) => !o.hidden || d2 < HIDDEN_SIGHT * HIDDEN_SIGHT;
+  private findPrey(c: Creature, species: Species[]) {
+    const seen = (o: Creature, d2: number) =>
+      (!o.hidden || d2 < HIDDEN_SIGHT * HIDDEN_SIGHT) && !(o.species === 'puffer' && o.timer > 0);
     const p = c.prey;
     if (p && p.alive) {
       const d2 = (p.x - c.x) ** 2 + (p.z - c.z) ** 2;
@@ -1036,7 +1467,7 @@ export class PixelOcean {
     let best: Creature | null = null;
     let bestD = SPECIES[c.species].vision ** 2;
     this.near(this.grid, c.x, c.z, SPECIES[c.species].vision, o => {
-      if (o.species !== species || !o.alive) return;
+      if (!species.includes(o.species) || !o.alive) return;
       const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2 + (o.h - c.h) ** 2;
       if (d < bestD && seen(o, d)) { bestD = d; best = o; }
     });
@@ -1054,7 +1485,7 @@ export class PixelOcean {
    * Ends a creature. Bitten ones are torn in half in a spray of blood (or
    * burst into goo, for jellyfish); the rest go belly-up and sink.
    */
-  private kill(c: Creature, cause: DeathCause, killer: Creature | null) {
+  private kill(c: Creature, cause: DeathCause, killer: Creature | null, swallow = false) {
     c.alive = false;
     this.deaths[cause]++;
     const sp = SPECIES[c.species];
@@ -1064,6 +1495,11 @@ export class PixelOcean {
     if (cause === 'eaten' && c.species === 'jelly') {
       this.splash('goo', c, 16);
       this.logEvent(cause, `${killer?.name ?? 'Something'} ate ${c.name}`, killer, c);
+      return;
+    }
+    if (cause === 'eaten' && swallow) {
+      this.splash('blood', c, 5);
+      this.logEvent(cause, `${killer?.name ?? 'Something'} swallowed ${c.name} whole`, killer, c);
       return;
     }
     if (cause === 'eaten') {
@@ -1088,11 +1524,11 @@ export class PixelOcean {
     }
   }
 
-  private splash(kind: Drop['kind'], at: { x: number; z: number; h: number }, count: number) {
+  private splash(kind: Drop['kind'], at: { x: number; z: number; h: number }, count: number, lives: [number, number] = [50, 130]) {
     for (let k = 0; k < count; k++) {
       const a = rand(0, Math.PI * 2);
-      const speed = rand(0.05, 0.45);
-      const life = randInt(50, 130);
+      const speed = rand(0.05, kind === 'ink' ? 0.3 : 0.45);
+      const life = randInt(lives[0], lives[1]);
       this.drops.push({
         kind,
         x: at.x + rand(-1, 1), z: at.z + rand(-1, 1), h: at.h + rand(-1, 1),
@@ -1156,7 +1592,8 @@ export class PixelOcean {
       if (--d.life <= 0) { d.alive = false; continue; }
       d.vx *= 0.92;
       d.vz *= 0.92;
-      d.vh = d.vh * 0.92 - 0.004;
+      // Ink hangs in the water; blood and goo drift down.
+      d.vh = d.vh * 0.92 - (d.kind === 'ink' ? 0 : 0.004);
       d.x += d.vx;
       d.z += d.vz;
       d.h += d.vh;

@@ -16,7 +16,8 @@ const makeCanvas = (w: number, h: number) => {
 
 /** Draws a character map; characters missing from `colors` are transparent. */
 const fromRows = (rows: string[], colors: Record<string, Rgb>) => {
-  const w = rows[0].length;
+  // Rows may be ragged; shorter ones are padded with transparency.
+  const w = Math.max(...rows.map(r => r.length));
   const c = makeCanvas(w, rows.length);
   const ctx = c.getContext('2d')!;
   rows.forEach((row, y) => [...row].forEach((ch, x) => {
@@ -28,10 +29,15 @@ const fromRows = (rows: string[], colors: Record<string, Rgb>) => {
   return c;
 };
 
-// Creatures drawn facing right (the renderer mirrors them), two frames each.
-export type SpriteKind = 'minnow' | 'fry' | 'barracuda' | 'crab' | 'jelly' | 'turtle';
+// Creatures drawn facing right (the renderer mirrors them), as animation frames.
+// Roles: D lit back or highlight, B body, L belly or underside, T fins, tail,
+// tentacles or spines, E eye, W teeth.
+export type SpriteKind =
+  | 'minnow' | 'fry' | 'barracuda' | 'crab' | 'jelly' | 'turtle'
+  | 'puffer' | 'pufferPuffed' | 'seahorse' | 'urchin' | 'octopus'
+  | 'eel' | 'eelHead' | 'shark' | 'manta' | 'angler';
 
-const ROWS: Record<SpriteKind, [string[], string[]]> = {
+const ROWS: Record<SpriteKind, string[][]> = {
   // Lit back (D), body (B), belly (L), fins and tail (T), eye (E).
   minnow: [
     ['....DD....', 'T..DBBBB..', 'TTBBBBBBEB', 'T..LLLLB..', '....T.....'],
@@ -59,6 +65,57 @@ const ROWS: Record<SpriteKind, [string[], string[]]> = {
   turtle: [
     ['....DDDDDD......', '..DBLBBLBBLD....', '.DBBLBBLBBLBD.TT', 'TTBBBBBBBBBBBDTE', '.DDDDDDDDDDDD.TT', '..TT......TT....'],
     ['....DDDDDD......', '..DBLBBLBBLD....', '.DBBLBBLBBLBD.TT', '.TBBBBBBBBBBBDTE', '.DDDDDDDDDDDD.TT', '.TT........TT...'],
+  ],
+  // Tail and fins flick.
+  puffer: [
+    ['...DDD...', '..BBBBB..', 'TBBBBBEB.', 'TBLLLLBB.', '..LLLL...'],
+    ['...DDD...', '..BBBBB..', '.TBBBBBEB', '.TBLLLLBB', '...LLLL..'],
+  ],
+  // A spiky ball whose spines wobble.
+  pufferPuffed: [
+    ['...T.T.T...', '..TDDDDDT..', '.TBBBBBBBT.', 'TBBBBBBBEBT', '.BBBBBBBBB.', 'TLLLLLLLLLT', '.TLLLLLLLT.', '..TLLLLLT..', '...T.T.T...'],
+    ['..T.T.T.T..', '.T.DDDDD.T.', '..BBBBBBB..', 'TBBBBBBBEBT', 'TBBBBBBBBBT', '.LLLLLLLLL.', 'TLLLLLLLLLT', '..LLLLLLL..', '.T.T.T.T.T.'],
+  ],
+  // Upright: the fin flutters and the tail curls; the third frame carries eggs.
+  seahorse: [
+    ['..DD..', '.DBBE.', '.BBBBB', '..BB..', '.BBBT.', '.BBB..', '..BBB.', '...BB.', '..BB..', '.BB...'],
+    ['..DD..', '.DBBE.', '.BBBBB', '..BB..', '.BBB.T', '.BBB..', '..BBB.', '...BB.', '...BB.', '..BBB.'],
+    ['..DD..', '.DBBE.', '.BBBBB', '..BB..', '.BBBBT', 'BLLLB.', '.LLLB.', '..BBB.', '...BB.', '..BB..'],
+  ],
+  // Spines ripple.
+  urchin: [
+    ['T.T.T.T', '.TBDBT.', 'TBBBBBT', '.TBBBT.', 'T..T..T'],
+    ['.T.T.T.', 'T.BDB.T', 'TBBBBBT', 'T.BBB.T', '.T.T.T.'],
+  ],
+  // Tentacles curl one way, then the other.
+  octopus: [
+    ['...DDDDDD...', '..DBBBBBBD..', '..BEBBBBEB..', '..BBBBBBBB..', '...LLLLLL...', '..T.T..T.T..', '.T..T..T..T.', 'T...T..T...T', '.T..T..T..T.'],
+    ['...DDDDDD...', '..DBBBBBBD..', '..BEBBBBEB..', '..BBBBBBBB..', '...LLLLLL...', '..T..TT..T..', '.T.T....T.T.', '.T..T..T..T.', 'T..T....T..T'],
+  ],
+  // Laid out straight, for remains and icons; live morays are drawn segment by segment.
+  eel: [
+    ['..DDDDDDDDDDD...', 'BBBBBBBBBBBBBBEB', '.LLLLLLLLLLLLLL.'],
+  ],
+  // The head: jaw shut, then gaping with teeth showing.
+  eelHead: [
+    ['...DDD...', '..DBBBDD.', '.BBBBBBEB', 'BBBBBBBBB', 'BLLLLLLLB', '.LLLLLL..'],
+    ['...DDD...', '..DBBBDD.', '.BBBBBBEB', 'BBBBBBW.W', 'BBBBB....', 'BLLLLLW.W', '.LLLLLLL.'],
+  ],
+  // The tail sweeps through three positions.
+  shark: [
+    ['............D.............', '...........DD.............', 'T........DDDDDDDD.........', 'TT....BBBBBBBBBBBBBBBB....', 'TTTBBBBBBBBBBBBBBBBBBBBBEB', 'TT....LLLLLLLLLLLLLLLLLB..', 'T........T.......T........'],
+    ['............D.............', '...........DD.............', '.T.......DDDDDDDD.........', '.TT...BBBBBBBBBBBBBBBB....', '..TTBBBBBBBBBBBBBBBBBBBBEB', '.TT...LLLLLLLLLLLLLLLLLB..', '.T.......T.......T........'],
+    ['............D.............', 'T..........DD.............', 'TT.......DDDDDDDD.........', '.TT...BBBBBBBBBBBBBBBB....', '..TTBBBBBBBBBBBBBBBBBBBBEB', '......LLLLLLLLLLLLLLLLLB..', '.........T.......T........'],
+  ],
+  // Wings spread, then curled in at the tips (the renderer also flexes them).
+  manta: [
+    ['..........D.........', '..........DB........', '.........DBB........', '........DBBBB.......', '.......DBBBBBB......', '......DBBBBBBBBB....', 'TT...DBBBBBBBBBBBBD.', 'TTTTTBBBBBBBBBBBBBBE', 'TT...LBBBBBBBBBBBBD.', '......LBBBBBBBBB....', '.......LBBBBBB......', '........LBBBB.......', '.........LBB........', '..........LB........', '..........L.........'],
+    ['....................', '....................', '.........DBB........', '........DBBBB.......', '.......DBBBBBB......', '......DBBBBBBBBB....', 'TT...DBBBBBBBBBBBBD.', 'TTTTTBBBBBBBBBBBBBBE', 'TT...LBBBBBBBBBBBBD.', '......LBBBBBBBBB....', '.......LBBBBBB......', '........LBBBB.......', '.........LBB........', '....................', '....................'],
+  ],
+  // Jaw shut, then hanging open full of teeth. The lure is drawn separately.
+  angler: [
+    ['...DDDDD.....', '..DBBBBBDD...', '.DBBBBBBBBEB.', 'TBBBBBBBBBBBB', 'TBBBBBBBWBWBW', '.LLLLLLLLLLL.', '..LLLLLLLL...'],
+    ['...DDDDD.....', '..DBBBBBDD...', '.DBBBBBBBBEB.', 'TBBBBBBBBB...', 'TBBBBBBBBW.W.', '.LLLLLLLLLW.W', '..LLLLLLLLLL.'],
   ],
 };
 
@@ -89,8 +146,43 @@ const PALETTES: Record<SpriteKind, Rgb[][]> = {
   turtle: [
     [[60, 90, 44], [110, 138, 58], [168, 184, 90], [130, 176, 112]],
   ],
+  puffer: [
+    [[232, 200, 90], [214, 176, 70], [250, 238, 196], [150, 120, 50]],
+    [[200, 206, 210], [170, 180, 186], [236, 240, 240], [90, 100, 110]],
+  ],
+  pufferPuffed: [],
+  seahorse: [
+    [[255, 190, 90], [240, 150, 60], [255, 214, 150], [255, 220, 120]],
+    [[255, 236, 120], [236, 200, 60], [255, 240, 170], [255, 246, 160]],
+    [[255, 170, 200], [226, 110, 150], [255, 200, 220], [255, 190, 210]],
+  ],
+  urchin: [
+    [[200, 150, 230], [90, 50, 120], [90, 50, 120], [150, 90, 190]],
+    [[120, 120, 140], [30, 30, 44], [30, 30, 44], [70, 70, 90]],
+  ],
+  // The second set is its camouflage: the colours of the rocks.
+  octopus: [
+    [[240, 140, 110], [214, 92, 72], [240, 170, 150], [190, 76, 64]],
+    [[150, 166, 170], [104, 120, 134], [134, 150, 160], [80, 94, 110]],
+  ],
+  eel: [
+    [[70, 96, 44], [104, 132, 56], [170, 170, 96], [60, 80, 36]],
+  ],
+  eelHead: [],
+  shark: [
+    [[120, 140, 150], [150, 168, 176], [220, 226, 226], [110, 128, 138]],
+  ],
+  manta: [
+    [[40, 50, 70], [70, 84, 110], [200, 206, 214], [50, 60, 80]],
+  ],
+  angler: [
+    [[80, 70, 96], [56, 48, 70], [96, 86, 110], [44, 38, 56]],
+  ],
 };
+PALETTES.pufferPuffed = PALETTES.puffer;
+PALETTES.eelHead = PALETTES.eel;
 const EYE: Rgb = [12, 14, 26];
+const TEETH: Rgb = [232, 232, 220];
 
 const spriteCache = new Map<string, HTMLCanvasElement>();
 const cached = (key: string, make: () => HTMLCanvasElement) => {
@@ -105,10 +197,15 @@ const pale = ([r, g, b]: Rgb): Rgb => {
   return [Math.round(v * 0.75 + 40), Math.round(v * 0.72 + 40), Math.round(v * 0.72 + 44)];
 };
 
+/** A sprite's colours by role: [D, B, L, T]. */
+export const creaturePalette = (kind: SpriteKind, palette: number, washed = false) =>
+  PALETTES[kind][palette % PALETTES[kind].length].map(c => (washed ? pale(c) : c));
+
 export const creatureSprite = (kind: SpriteKind, palette: number, frame: number, washed = false) =>
   cached(`${kind}-${palette}-${frame}-${washed}`, () => {
     const set = PALETTES[kind][palette % PALETTES[kind].length].map(c => (washed ? pale(c) : c));
-    return fromRows(ROWS[kind][frame], { D: set[0], B: set[1], L: set[2], T: set[3], E: EYE });
+    const frames = ROWS[kind];
+    return fromRows(frames[frame % frames.length], { D: set[0], B: set[1], L: set[2], T: set[3], E: EYE, W: TEETH });
   });
 
 // What a picked-clean fish leaves behind, facing right.

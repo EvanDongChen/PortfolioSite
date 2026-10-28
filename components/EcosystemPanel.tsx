@@ -16,24 +16,25 @@ const EVENT_COLOR: Record<OceanEvent['kind'], string> = {
   birth: '#7fd18b',
   eaten: '#ff7a63',
   stung: '#e88ad8',
+  inked: '#8aa6b4',
   starved: '#f0d8a0',
   oldAge: '#8aa6b4',
 };
 
-const SPECIES_COLOR: Record<Species, string> = {
-  minnow: '#8fe3dc',
-  barracuda: '#ff7a63',
-  crab: '#e0603c',
-  jelly: '#e88ad8',
-  turtle: '#a8b85a',
-};
-
 const PLURAL: Record<Species, string> = {
   minnow: 'Minnows',
+  puffer: 'Puffers',
+  seahorse: 'Seahorses',
   barracuda: 'Barracuda',
+  eel: 'Morays',
+  angler: 'Anglers',
+  shark: 'Sharks',
   crab: 'Crabs',
+  urchin: 'Urchins',
+  octopus: 'Octopuses',
   jelly: 'Jellies',
   turtle: 'Turtles',
+  manta: 'Mantas',
 };
 
 // Each species' own sprite as a tiny icon, drawn once.
@@ -50,11 +51,9 @@ const clock = (ticks: number) => {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 };
 
-const Row: React.FC<{ icon?: string; label: string; value: string | number; fill: number; color: string }> = ({ icon, label, value, fill, color }) => (
+const Row: React.FC<{ label: string; value: string | number; fill: number; color: string }> = ({ label, value, fill, color }) => (
   <div className="eco-row">
-    {icon
-      ? <img className="eco-icon" src={icon} alt="" />
-      : <span className="eco-icon" style={{ background: color, width: 6, height: 6, justifySelf: 'center' }} />}
+    <span className="eco-swatch" style={{ background: color }} />
     <span>{label}</span>
     <PixelMeter value={fill} color={color} />
     <span className="eco-value">{value}</span>
@@ -84,16 +83,15 @@ const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
       </button>
       {isOpen && (
         <div className="eco-body">
-          {SPECIES_LIST.map(s => (
-            <Row
-              key={s}
-              icon={icon[s]}
-              label={PLURAL[s]}
-              value={stats.counts[s]}
-              fill={stats.counts[s] / stats.caps[s]}
-              color={SPECIES_COLOR[s]}
-            />
-          ))}
+          <ul className="eco-species" aria-label="Creatures">
+            {SPECIES_LIST.map(s => (
+              <li key={s} className={stats.counts[s] === 0 ? 'is-absent' : undefined}>
+                <img className="eco-icon" src={icon[s]} alt="" />
+                <span>{PLURAL[s]}</span>
+                <span className="eco-value">{stats.counts[s]}</span>
+              </li>
+            ))}
+          </ul>
           <Row label="Plankton" value={stats.plankton} fill={stats.plankton / stats.planktonCap} color="#7fd18b" />
           <Row label="Algae" value={`${stats.algae}%`} fill={stats.algae / ALGAE_FULL_PERCENT} color="#3a8a5a" />
           <ul className="eco-feed" aria-label="Recent events">

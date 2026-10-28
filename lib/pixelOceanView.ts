@@ -8,7 +8,7 @@
 
 import { Carcass, Creature, PixelOcean, SPECIES, SURFACE, Species } from './pixelOcean';
 import {
-  FLOOR, SpriteKind, buildCaustics, creatureSprite, bonesSprite, bubbleSprite, pelletSprite,
+  FLOOR, SpriteKind, buildCaustics, creatureSprite, creaturePalette, bonesSprite, bubbleSprite, pelletSprite,
   shadowSprite, rockSprite, coralSprite,
 } from './pixelOceanArt';
 
@@ -22,10 +22,21 @@ const CAUSTIC_FRAMES = 32;
 const DEPTH_DARKENING = 0.4;
 
 /** Sprite widths in art pixels, for shadows and the inspection reticle. */
-const BODY_WIDTH: Record<Species, number> = { minnow: 10, barracuda: 18, crab: 11, jelly: 9, turtle: 16 };
+const BODY_WIDTH: Record<Species, number> = {
+  minnow: 10, barracuda: 18, crab: 11, jelly: 9, turtle: 16, puffer: 9, seahorse: 6, urchin: 7,
+  octopus: 12, eel: 10, shark: 26, manta: 20, angler: 13,
+};
+
+/** Which bones a picked-clean fish leaves, and at what size. */
+const BONES_OF: Partial<Record<Species, ['minnow' | 'barracuda', number]>> = {
+  minnow: ['minnow', 1], puffer: ['minnow', 0.9], angler: ['minnow', 1.3],
+  barracuda: ['barracuda', 1], eel: ['barracuda', 0.9], shark: ['barracuda', 1.5],
+};
 
 const BLOOD = ['rgb(110,10,24)', 'rgb(176,18,40)', 'rgb(226,44,64)'];
 const GOO = ['rgb(200,120,200)', 'rgb(240,170,230)', 'rgb(255,214,246)'];
+const INK = ['rgb(14,10,24)', 'rgb(24,18,38)', 'rgb(36,28,52)'];
+const DROP_COLORS = { blood: BLOOD, goo: GOO, ink: INK };
 
 interface Drawable { depth: number; draw: () => void }
 
@@ -261,7 +272,10 @@ export class OceanView {
     };
 
     // Shadows lie on the floor under everything.
-    for (const c of ocean.creatures) if (visible(c.z)) shadow(c.x, c.z, c.h, BODY_WIDTH[c.species] * 0.75);
+    for (const c of ocean.creatures) {
+      if (!visible(c.z) || c.species === 'eel') continue;
+      shadow(c.x, c.z, c.species === 'manta' ? c.h * 0.4 : c.h, BODY_WIDTH[c.species] * 0.75);
+    }
     for (const k of ocean.carcasses) if (k.h > 0 && visible(k.z)) shadow(k.x, k.z, k.h, BODY_WIDTH[k.species] * (k.part === 'whole' ? 0.7 : 0.4));
     for (const p of ocean.particles) if (p.kind === 'pellet' && p.h > 0 && visible(p.z)) shadow(p.x, p.z, p.h, 3);
     for (const d of ocean.decor) if (visible(d.z)) shadow(d.x + 2, d.z, 0, d.w + 2);
@@ -311,16 +325,18 @@ export class OceanView {
         depth: d.z + 0.25,
         draw: () => {
           const q = this.project(d.x, d.z, d.h);
-          const size = Math.max(2, Math.round(px * 0.8 * q.s));
-          ctx.globalAlpha = Math.min(1, (d.life / d.maxLife) * 1.6);
-          ctx.fillStyle = (d.kind === 'blood' ? BLOOD : GOO)[d.shade];
+          const size = Math.max(2, Math.round(px * (d.kind === 'ink' ? 2.2 : 0.8) * q.s));
+          ctx.globalAlpha = Math.min(d.kind === 'ink' ? 0.75 : 1, (d.life / d.maxLife) * 1.6);
+          ctx.fillStyle = DROP_COLORS[d.kind][d.shade];
           ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
         },
       });
     }
     for (const c of ocean.creatures) {
       // Hiding minnows sit behind the kelp fronds around them.
-      if (visible(c.z)) items.push({ depth: c.hidden ? c.z - 6 : c.z + 0.3, draw: () => this.drawCreature(c) });
+      if (!visible(c.z)) continue;
+      const depth = c.species === 'eel' ? c.anchorZ + 0.2 : c.hidden ? c.z - 6 : c.z + 0.3;
+      items.push({ depth, draw: () => this.drawCreature(c) });
     }
     for (const b of ocean.bubbles) {
       if (visible(b.z)) items.push({ depth: b.z + 0.4, draw: () => this.sprite(bubbleSprite(), b.x, b.z, b.h, { alpha: 0.8 }) });
@@ -349,6 +365,55 @@ export class OceanView {
         this.sprite(creatureSprite('jelly', c.palette, contracted ? 1 : 0, washed), c.x, c.z, c.h, { alpha: 0.82, flipX: c.facing < 0 });
         return;
       }
+      case 'urchin':
+        this.sprite(creatureSprite('urchin', c.palette, ((tick + c.id * 7) >> 4) & 1, washed), c.x, c.z, c.h, { anchor: 'bottom' });
+        return;
+      case 'puffer': {
+        if (c.puff > 0.08) {
+          // Swelling up (and back down) into a ball whose spines wobble.
+          const img = creatureSprite('pufferPuffed', c.palette, (tick >> 3) & 1, washed);
+          this.sprite(img, c.x, c.z, c.h, { flipX: c.facing < 0, scale: 0.55 + 0.45 * c.puff });
+        } else {
+          this.sprite(creatureSprite('puffer', c.palette, ((tick + c.id * 5) >> 2) & 1, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
+        }
+        return;
+      }
+      case 'seahorse': {
+        // Hold on to the kelp and sway with it.
+        const k = c.kelp;
+        const sway = k && c.mood !== 'cruising' ? Math.sin(tick * 0.04 + k.phase + c.h * 0.12) * (c.h / 14) : 0;
+        const frame = c.carrying > 0 ? 2 : ((tick + c.id * 3) >> 3) & 1;
+        this.sprite(creatureSprite('seahorse', c.palette, frame, washed), c.x + sway, c.z, c.h, { flipX: c.facing < 0 });
+        return;
+      }
+      case 'octopus': {
+        // Tentacles curl faster as it crawls; it fades into the colours of the rock.
+        const period = Math.hypot(c.vx, c.vz) > 0.05 ? 4 : 12;
+        const frame = Math.floor((tick + c.id * 5) / period) & 1;
+        const stretch = c.mood === 'inking' ? { scaleY: 0.7 } : {};
+        if (c.camo < 0.98) this.sprite(creatureSprite('octopus', 0, frame, washed), c.x, c.z, c.h, { flipX: c.facing < 0, alpha: 1 - c.camo * 0.9, ...stretch });
+        if (c.camo > 0.02) this.sprite(creatureSprite('octopus', 1, frame, washed), c.x, c.z, c.h, { flipX: c.facing < 0, alpha: c.camo * 0.85, ...stretch });
+        return;
+      }
+      case 'eel':
+        this.drawEel(c, washed);
+        return;
+      case 'shark': {
+        const frame = Math.floor((tick + c.id * 5) / 6) % 3;
+        this.sprite(creatureSprite('shark', c.palette, frame, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
+        return;
+      }
+      case 'manta': {
+        // Slow, deep wingbeats: the wings flex and the tips curl on the downstroke.
+        const beat = Math.sin(tick * 0.06 + c.id);
+        const img = creatureSprite('manta', c.palette, beat < -0.3 ? 1 : 0, washed);
+        this.sprite(img, c.x, c.z, c.h + beat * 2, { flipX: c.facing < 0, scaleY: 0.8 + 0.2 * Math.abs(beat) });
+        return;
+      }
+      case 'angler':
+        this.sprite(creatureSprite('angler', c.palette, c.lunge > 0.5 ? 1 : 0, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
+        this.drawLure(c);
+        return;
       default: {
         const kind: SpriteKind = c.species === 'minnow' && c.age < SPECIES.minnow.mature ? 'fry' : c.species;
         const speed = Math.hypot(c.vx, c.vz);
@@ -360,21 +425,86 @@ export class OceanView {
   }
 
   /**
+   * A moray's body snakes out of its den to the head, rippling along its
+   * length; the jaw gapes as it strikes.
+   */
+  private drawEel(c: Creature, washed: boolean) {
+    const { spriteCtx: ctx, px, ocean } = this;
+    const den = this.project(c.anchorX, c.anchorZ, 0);
+    // The dark mouth of the den.
+    const hole = shadowSprite(8);
+    ctx.globalAlpha = 0.7;
+    ctx.drawImage(hole, Math.round(den.x - 4 * px), Math.round(den.y - hole.height * px * 0.5), 8 * px, hole.height * px);
+
+    const [spot, main] = creaturePalette('eel', c.palette, washed);
+    const dx = c.x - c.anchorX;
+    const dz = c.z - c.anchorZ;
+    const dh = c.h - 1;
+    const len = Math.hypot(dx, dz, dh);
+    const n = Math.max(4, Math.ceil(len / 0.9));
+    const nx = len ? -dz / len : 0;
+    const nz = len ? dx / len : 0;
+    ctx.globalAlpha = 1;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const wiggle = Math.sin(ocean.tick * 0.22 - t * 6 + c.id) * 2.2 * Math.sin(t * Math.PI);
+      const p = this.project(c.anchorX + dx * t + nx * wiggle, c.anchorZ + dz * t + nz * wiggle, 1 + dh * t);
+      const size = Math.ceil(px * p.s * 2);
+      const col = i % 3 === 0 ? spot : main;
+      ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+      ctx.fillRect(Math.round(p.x - size / 2), Math.round(p.y - size / 2), size, size);
+    }
+    const open = c.mood === 'striking' && c.lunge > 0.4;
+    this.sprite(creatureSprite('eelHead', c.palette, open ? 1 : 0, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
+  }
+
+  /** An anglerfish's lure: a thin stalk ending in a pulsing glow. */
+  private drawLure(c: Creature) {
+    const { spriteCtx: ctx, px, ocean } = this;
+    const lure = ocean.lureOf(c);
+    const base = { x: c.x + c.facing * 3, z: c.z, h: c.h + 3 };
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgb(70,62,84)';
+    for (let i = 1; i < 6; i++) {
+      const t = i / 6;
+      // The stalk arches up and over.
+      const p = this.project(base.x + (lure.x - base.x) * t, c.z, base.h + (lure.h - base.h) * t + Math.sin(t * Math.PI) * 2);
+      const size = Math.ceil(px * p.s * 0.8);
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), size, size);
+    }
+    const q = this.project(lure.x, lure.z, lure.h);
+    const pulse = 0.6 + 0.4 * Math.sin(ocean.tick * 0.12 + c.id);
+    const size = Math.ceil(px * q.s * 1.5);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.35 * pulse;
+    ctx.fillStyle = 'rgb(140,255,220)';
+    ctx.fillRect(Math.round(q.x - size * 1.5), Math.round(q.y - size * 1.5), size * 4, size * 4);
+    ctx.globalAlpha = 0.6 * pulse;
+    ctx.fillRect(Math.round(q.x - size * 0.5), Math.round(q.y - size * 0.5), size * 2, size * 2);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgb(230,255,240)';
+    ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
+  }
+
+  /**
    * Bodies roll belly-up as they sink; halves tumble with a raw red edge.
    * Picked over, fish turn to bones and everything else fades away.
    */
   private drawCarcass(k: Carcass) {
     const { spriteCtx: ctx, px } = this;
     const left = k.mass / k.fullMass;
-    const fish = k.species === 'minnow' || k.species === 'barracuda';
-    const bones = fish && left < 0.4;
-    const img = bones
-      ? bonesSprite(k.species as 'minnow' | 'barracuda')
+    const boneKind = BONES_OF[k.species];
+    const bones = !!boneKind && left < 0.4;
+    const img = boneKind && bones
+      ? bonesSprite(boneKind[0])
       : creatureSprite(k.species, k.palette, 0, k.part === 'whole');
-    const fade = k.species === 'jelly' ? 0.2 + left * 0.6 : bones ? 0.5 + left : 1;
+    const scale = boneKind && bones ? boneKind[1] : 1;
+    const soft = k.species === 'jelly' || k.species === 'seahorse' || k.species === 'manta';
+    const fade = soft ? 0.2 + left * 0.6 : bones ? 0.5 + left : 1;
 
     if (k.part === 'whole') {
-      this.sprite(img, k.x, k.z, k.h, { alpha: fade, flipX: k.facing < 0, scaleY: bones ? 1 : Math.cos(k.angle) });
+      this.sprite(img, k.x, k.z, k.h, { alpha: fade, flipX: k.facing < 0, scale, scaleY: bones ? 1 : Math.cos(k.angle) });
       return;
     }
     // The head end is on the right of a right-facing sprite.

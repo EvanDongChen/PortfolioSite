@@ -30,6 +30,14 @@ const MOOD_LABEL: Record<Mood, string> = {
   hunting: 'Hunting',
   scavenging: 'Scavenging',
   drifting: 'Drifting',
+  clinging: 'Clinging to the kelp',
+  carrying: 'Carrying eggs',
+  camouflaged: 'Camouflaged',
+  inking: 'Escaping in a cloud of ink',
+  lurking: 'Lurking',
+  striking: 'Striking!',
+  puffed: 'Puffed up',
+  gliding: 'Gliding',
 };
 
 interface Inspected {
