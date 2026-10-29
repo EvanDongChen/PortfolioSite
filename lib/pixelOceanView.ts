@@ -6,7 +6,7 @@
 // Both canvases cover the viewport plus a margin and sit in the page, so the
 // browser scrolls them natively between frames.
 
-import { Anemone, Carcass, Creature, Drop, PixelOcean, SPECIES, SURFACE, Species, Station, WhaleFall } from './pixelOcean';
+import { Anemone, Carcass, Creature, Drop, Kelp, PixelOcean, SPECIES, SURFACE, Species, Station, WhaleFall } from './pixelOcean';
 import {
   FLOOR, SpriteKind, buildCaustics, creatureSprite, creaturePalette, bonesSprite, bubbleSprite, pelletSprite,
   shadowSprite, rockSprite, coralSprite, starfishSprite, cuttleSprite, whaleSprite, silhouetteSprite,
@@ -64,6 +64,22 @@ const ANEMONE = [
   ['rgb(90,50,140)', 'rgb(160,110,220)', 'rgb(230,200,255)'],
   ['rgb(40,110,80)', 'rgb(80,190,130)', 'rgb(190,255,210)'],
 ];
+/** How fast each swimmer must go to leave a wake of disturbed water behind it. */
+const WAKE_SPEED: Partial<Record<Species, number>> = {
+  minnow: 0.55, barracuda: 0.6, shark: 0.55, dolphin: 0.7, cuttlefish: 0.35, puffer: 0.4, clownfish: 0.4, turtle: 0.35,
+};
+/** Coral spawn: pink eggs and white sperm bundles. */
+const SPAWN_COLORS = ['rgb(255,150,190)', 'rgb(255,240,246)'];
+/**
+ * God rays: shafts of sunlight slanting down through the water, swaying
+ * slowly and fading out with depth (in cells, the fade's scale).
+ */
+const RAYS = 5;
+const RAY_SLANT = 0.45;
+const RAY_DEPTH = 380;
+const RAY_COLOR: [number, number, number] = [44, 70, 62];
+/** How dark the water gets on a coral spawning night. */
+const NIGHT_SHADE = 0.42;
 const KELP_BASE = 'rgb(34,104,70)';
 const KELP_STALK = 'rgb(48,140,84)';
 const KELP_LEAF = 'rgb(64,160,90)';
@@ -122,6 +138,8 @@ export class OceanView {
   regionHeight = 0;
   /** Set while a courting creature is redrawn as a glow over itself. */
   private glow = false;
+  /** The creature being drawn's squash and stretch (positive stretches it along its length). */
+  private stretch = 0;
   /** The creature under inspection, drawn with a reticle. */
   highlighted: Creature | null = null;
 
@@ -376,11 +394,57 @@ export class OceanView {
     for (let row = 0; row < rows; row += CAUSTIC_BAND) {
       // Light fades with depth, like the seabed under it.
       const z = top + row + CAUSTIC_BAND / 2;
-      ctx.globalAlpha = 1 - (z / ocean.h) * DEPTH_DARKENING;
+      ctx.globalAlpha = (1 - (z / ocean.h) * DEPTH_DARKENING) * (1 - ocean.nightfall() * 0.7);
       ctx.fillRect(0, row, ocean.w, Math.min(CAUSTIC_BAND, rows - row));
     }
+    this.drawRays(top, rows);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+  }
+
+  /**
+   * Shafts of sunlight slanting down across the shallows. Each is a slanted
+   * band filled with one vertical gradient (by depth in the world, so it
+   * stays put as the region moves), swaying and shimmering slowly. The light
+   * canvas is a cell per pixel, so the edges come out as pixel steps.
+   */
+  private drawRays(top: number, rows: number) {
+    const { ocean, lightCtx: ctx } = this;
+    if (Math.exp(-top / RAY_DEPTH) < 0.03) return;
+    const bottom = Math.min(rows, RAY_DEPTH * 3.5 - top);
+    if (bottom <= 0) return;
+    const [r, g, b] = RAY_COLOR;
+    const grad = ctx.createLinearGradient(0, -top, 0, RAY_DEPTH * 3.5 - top);
+    for (const at of [0, 0.1, 0.25, 0.45, 0.7, 1]) {
+      const fade = Math.exp(-at * 3.5);
+      grad.addColorStop(at, `rgba(${r},${g},${b},${(fade * (at === 1 ? 0 : 1)).toFixed(3)})`);
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = grad;
+    const t = ocean.tick * 0.004;
+    const night = ocean.nightfall();
+    const span = ocean.w + bottom * RAY_SLANT + 80;
+    for (let k = 0; k < RAYS; k++) {
+      const width = 7 + ((k * 7) % 11);
+      const sway = Math.sin(t + k * 1.7) * 14 + Math.sin(t * 0.37 + k * 2.3) * 8;
+      // Where the shaft crosses the top of the world, wrapped so shafts slide on as others slide off.
+      const x0 = ((((k + 0.5) / RAYS) * span + sway) % span + span) % span - bottom * RAY_SLANT - 40;
+      const shimmer = (0.45 + 0.55 * Math.sin(t * 3.1 + k * 2.1) ** 2) * (1 - night * 0.85);
+      const xa = x0 + top * RAY_SLANT;
+      const xb = x0 + (top + bottom) * RAY_SLANT;
+      // A wide faint glow, then the brighter core of the shaft inside it.
+      for (const [grow, alpha] of [[2.2, 0.45], [1, 0.8]]) {
+        const pad = (width * (grow - 1)) / 2;
+        ctx.globalAlpha = shimmer * alpha;
+        ctx.beginPath();
+        ctx.moveTo(xa - pad, 0);
+        ctx.lineTo(xa + width + pad, 0);
+        ctx.lineTo(xb + (width + pad) * 1.6, bottom);
+        ctx.lineTo(xb - pad * 1.6, bottom);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
   }
 
   /** A frame of the caustic light as a tileable canvas: black where there is none. */
@@ -416,16 +480,18 @@ export class OceanView {
     const w = Math.round(sw * k);
     const hh = Math.round(img.height * k);
     ctx.globalAlpha = (o.alpha ?? 1) * (this.glow ? 0.45 : 1);
-    if (!o.flipX && !o.angle && (o.scaleY ?? 1) === 1) {
+    const st = this.stretch;
+    if (!o.flipX && !o.angle && (o.scaleY ?? 1) === 1 && !st) {
       const top = o.anchor === 'bottom' ? p.y - hh : p.y - hh / 2;
       ctx.drawImage(img, sx, 0, sw, img.height, Math.round(p.x - w / 2), Math.round(top), w, hh);
       return;
     }
+    // Stretching keeps the volume about the same: longer and thinner, or squat and wide.
     ctx.save();
     ctx.translate(Math.round(p.x), Math.round(p.y));
     if (o.angle) ctx.rotate(o.angle);
-    ctx.scale(o.flipX ? -1 : 1, o.scaleY ?? 1);
-    ctx.drawImage(img, sx, 0, sw, img.height, -w / 2, -hh / 2, w, hh);
+    ctx.scale((o.flipX ? -1 : 1) * (1 + st * 0.35), (o.scaleY ?? 1) * (1 - st * 0.3));
+    ctx.drawImage(img, sx, 0, sw, img.height, -w / 2, o.anchor === 'bottom' ? -hh : -hh / 2, w, hh);
     ctx.restore();
   }
 
@@ -434,6 +500,12 @@ export class OceanView {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, this.viewW, this.regionHeight);
+    const night = ocean.nightfall();
+    if (night > 0) {
+      ctx.globalAlpha = night * NIGHT_SHADE;
+      ctx.fillStyle = 'rgb(2,6,18)';
+      ctx.fillRect(0, this.scrollY - this.regionTop, this.viewW, this.viewH);
+    }
     this.drawPasser();
 
     // Anything whose floor point is near the viewport (tall or high things
@@ -483,7 +555,7 @@ export class OceanView {
       });
     }
     for (const k of ocean.kelp) {
-      if (visible(k.z)) items.push({ depth: k.z, draw: () => this.drawKelp(k.x, k.z, k.length, k.phase) });
+      if (visible(k.z)) items.push({ depth: k.z, draw: () => this.drawKelp(k) });
     }
     for (const a of ocean.anemones) {
       if (visible(a.z)) items.push({ depth: a.z, draw: () => this.drawAnemone(a) });
@@ -505,6 +577,19 @@ export class OceanView {
         const q = this.project(p.x, p.z, p.h);
         const size = Math.max(2, Math.round(px * 0.75 * q.s));
         ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
+      }
+    }
+    // Coral spawn twinkles between pink and white as it drifts.
+    if (ocean.spawnCount > 0) {
+      ctx.globalAlpha = 0.95;
+      for (let shade = 0; shade < 2; shade++) {
+        ctx.fillStyle = SPAWN_COLORS[shade];
+        for (const p of ocean.particles) {
+          if (p.kind !== 'spawn' || ((p.life >> 4) & 1) !== shade || !visible(p.z)) continue;
+          const q = this.project(p.x, p.z, p.h);
+          const size = Math.max(2, Math.round(px * q.s));
+          ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
+        }
       }
     }
     for (const p of ocean.particles) {
@@ -539,7 +624,11 @@ export class OceanView {
       items.push({
         depth,
         draw: () => {
+          const wake = WAKE_SPEED[c.species];
+          if (wake && !c.hidden && c.vx * c.vx + c.vz * c.vz > wake * wake) this.drawWake(c);
+          this.stretch = c.squash;
           this.drawCreature(c);
+          this.stretch = 0;
           // Courting fish flash their colours.
           if (c.courting > 0 && (ocean.tick >> 3) & 1) {
             this.glow = true;
@@ -564,6 +653,27 @@ export class OceanView {
     if (target?.alive && visible(target.z)) this.drawReticle(target);
   }
 
+  /**
+   * A short trail of disturbed water behind a fast swimmer: pale specks that
+   * thin out behind it, jostled to either side.
+   */
+  private drawWake(c: Creature) {
+    const { spriteCtx: ctx, px, ocean } = this;
+    const speed = Math.hypot(c.vx, c.vz) || 1;
+    const nx = -c.vz / speed, nz = c.vx / speed;
+    const back = BODY_WIDTH[c.species] * 0.45;
+    const count = c.species === 'minnow' ? 3 : 5;
+    ctx.fillStyle = 'rgb(196,232,240)';
+    for (let i = 0; i < count; i++) {
+      const along = back + i * 2.2;
+      const side = (((ocean.tick >> 1) + i + c.id) & 1 ? 1 : -1) * (0.4 + i * 0.35);
+      const q = this.project(c.x - c.vx / speed * along + nx * side, c.z - c.vz / speed * along + nz * side, c.h - c.vh / speed * along);
+      ctx.globalAlpha = 0.42 * (1 - i / count);
+      const size = Math.max(2, Math.round(px * 0.7 * q.s));
+      ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
+    }
+  }
+
   private drawCreature(c: Creature) {
     const tick = this.ocean.tick;
     const washed = c.energy < 0.15;
@@ -583,10 +693,13 @@ export class OceanView {
         this.sprite(creatureSprite('urchin', c.palette, ((tick + c.id * 7) >> 4) & 1, washed), c.x, c.z, c.h, { anchor: 'bottom' });
         return;
       case 'puffer': {
+        // A puffer's squash is a swell all round, not a stretch.
+        const swell = 1 + this.stretch * 0.35;
+        this.stretch = 0;
         if (c.puff > 0.08) {
           // Swelling up (and back down) into a ball whose spines wobble.
           const img = creatureSprite('pufferPuffed', c.palette, (tick >> 3) & 1, washed);
-          this.sprite(img, c.x, c.z, c.h, { flipX: c.facing < 0, scale: 0.55 + 0.45 * c.puff });
+          this.sprite(img, c.x, c.z, c.h, { flipX: c.facing < 0, scale: (0.55 + 0.45 * c.puff) * swell });
         } else {
           this.sprite(creatureSprite('puffer', c.palette, ((tick + c.id * 5) >> 2) & 1, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
         }
@@ -760,8 +873,9 @@ export class OceanView {
       const root = (k - 4) * 1.3;
       const lean = (k - 4) * 0.6;
       for (let t = 1; t <= reach; t += 0.6) {
-        const sway = Math.sin(ocean.tick * 0.08 + a.phase + k * 0.7) * (t / 8) * 2;
-        const p = this.project(a.x + root + lean * t * 0.4 + sway, a.z, t);
+        const give = (t / 10) ** 1.3;
+        const sway = Math.sin(ocean.tick * 0.08 + a.phase + k * 0.7) * (t / 8) * 2 + a.bx * give;
+        const p = this.project(a.x + root + lean * t * 0.4 + sway, a.z + a.bz * give, t);
         const size = Math.ceil(px * p.s);
         (t > reach - 1 ? tips : stalk).rect(Math.round(p.x - size / 2), Math.round(p.y), size, size);
       }
@@ -988,17 +1102,20 @@ export class OceanView {
   }
 
   /** A kelp stalk rising toward the camera, swaying more toward its tip. */
-  private drawKelp(x: number, z: number, length: number, phase: number) {
+  private drawKelp(k: Kelp) {
     const { spriteCtx: ctx, px, ocean } = this;
-    const t = ocean.tick * 0.04 + phase;
+    const { x, z, length } = k;
+    const t = ocean.tick * 0.04 + k.phase;
     // One path per colour, filled once each, rather than a fillRect per square.
     const base = new Path2D();
     const stalk = new Path2D();
     const leaves = new Path2D();
     const tip = new Path2D();
     for (let i = 0; i <= length; i += 1.4) {
-      const sway = Math.sin(t + i * 0.12) * (i / 14);
-      const p = this.project(x + sway, z, i);
+      // Pushed over by whatever swims through: the tip moves furthest.
+      const give = (i / length) ** 1.5;
+      const sway = Math.sin(t + i * 0.12) * (i / 14) + k.bx * give;
+      const p = this.project(x + sway, z + k.bz * give, i);
       const size = Math.ceil(px * p.s);
       const left = Math.round(p.x - size / 2);
       const top = Math.round(p.y);

@@ -514,7 +514,7 @@ const CORAL_SETS: Rgb[][] = [
 
 /** Either a branching coral or a round brain coral. */
 export const coralSprite = (seed: number, w: number, h: number) =>
-  cached(`coral-${seed}`, () => {
+  cached(`coral-${seed}-${w}-${h}`, () => {
     const rnd = seeded(seed);
     const set = CORAL_SETS[Math.floor(rnd() * CORAL_SETS.length)];
     const c = makeCanvas(w, h);

@@ -49,7 +49,8 @@ export interface OceanEvent {
 }
 
 export interface Particle {
-  kind: 'plankton' | 'pellet';
+  /** Plankton, a food pellet, or coral spawn released on a spawning night. */
+  kind: 'plankton' | 'pellet' | 'spawn';
   x: number; z: number; h: number;
   vx: number; vz: number; vh: number;
   life: number;
@@ -119,6 +120,9 @@ export interface Creature {
   podIndex: number;
   /** Ticks before it may turn around again, so hovering fish don't flicker. */
   turnHold: number;
+  /** Squash and stretch, a spring kicked by a strike, a birth or a puff: positive stretches. */
+  squash: number;
+  squashV: number;
   scanIn: number;
   prey: Creature | null;
   alive: boolean;
@@ -154,7 +158,11 @@ export interface Drop {
 }
 
 /** A stinging anemone on the seabed, home to clownfish. */
-export interface Anemone { x: number; z: number; palette: number; phase: number; retract: number; alive: boolean }
+export interface Anemone extends Bend { x: number; z: number; palette: number; phase: number; retract: number; alive: boolean }
+
+/** How far a plant is pushed over by things swimming through it, and how fast it springs back. */
+export interface Bend { bx: number; bz: number; bvx: number; bvz: number }
+const upright = (): Bend => ({ bx: 0, bz: 0, bvx: 0, bvz: 0 });
 
 /** A rock where cleaner shrimp pick parasites off the big fish that queue there. */
 export interface Station { rock: Decor; x: number; z: number; ht: number; side: 1 | -1; queue: Creature[] }
@@ -189,11 +197,15 @@ interface Pod {
 }
 
 export interface Bubble { x: number; z: number; h: number; phase: number; alive: boolean }
-export interface Kelp { x: number; z: number; length: number; maxLength: number; phase: number }
+export interface Kelp extends Bend { x: number; z: number; length: number; maxLength: number; phase: number }
 /** An area of the seabed kept free of scenery and algae, in world units. */
 export interface ClearZone { x0: number; z0: number; x1: number; z1: number }
 
-export interface Decor { kind: 'rock' | 'coral'; x: number; z: number; w: number; ht: number; seed: number; vent: boolean }
+export interface Decor {
+  kind: 'rock' | 'coral'; x: number; z: number; w: number; ht: number; seed: number; vent: boolean;
+  /** A young coral's full size, while it is still growing toward it. */
+  grow?: { w: number; ht: number };
+}
 
 export interface OceanStats {
   tick: number;
@@ -353,6 +365,27 @@ const PREY: Partial<Record<Species, Species[]>> = {
 const SPACING: Partial<Record<Species, number>> = {
   puffer: 9, clownfish: 5, cuttlefish: 14, turtle: 18, barracuda: 14, shark: 24, starfish: 10, crab: 9, octopus: 12, jelly: 9,
 };
+/** How hard things swimming through kelp and anemones push them over, and how far (cells). */
+const BEND_FORCE = 0.06;
+const MAX_BEND = 6;
+/** Ticks between sand puffs for the creatures that stir it up. */
+const SAND_STIRRERS: Partial<Record<Species, number>> = { crab: 20, octopus: 26, turtle: 10, manta: 10 };
+/**
+ * A coral spawning: how long it lasts, each coral's chance a tick of
+ * releasing a plume of spawn (and how big), and the most in the water.
+ */
+const SPAWNING_TICKS = 900;
+const SPAWN_RATE = 0.012;
+const PLUME = 6;
+const MAX_SPAWN = 1500;
+/** The chance a grain of spawn that reaches the seabed settles into a new coral. */
+const SETTLE_CHANCE = 0.01;
+/** Minnows only pack into a bait ball with at least this many around them (dolphins always herd one). */
+const BALL_SIZE = 10;
+/** How long (ticks) a scare holds a minnow in the ball; it weakens as it spreads to other schools. */
+const BALL_ALARM = 120;
+/** A hunter charging through a bait ball snaps up a fish this rarely each tick: the swirl confuses it. */
+const BALL_CATCH = 0.05;
 /** What a minnow keeps an eye out for. */
 const MINNOW_WATCHES: Species[] = ['barracuda', 'jelly', 'shark', 'dolphin'];
 /** Big fish that pick up parasites and visit cleaner stations. */
@@ -452,12 +485,19 @@ export class PixelOcean {
   private decorGrid: Decor[][] = [];
   /** Just the hunters minnows watch for, by bucket, so they needn't scan every creature. */
   private hunterGrid: Creature[][] = [];
+  /** Bait balls this tick: centre, size, and how fresh the alarm is that holds them together. */
+  private balls: { x: number; z: number; h: number; n: number; alarm: number }[] = [];
   /** State of the seabed's fast random numbers (it draws thousands a tick). */
   private seed = (Math.random() * 0xffffffff) >>> 0 || 1;
   private pod: Pod | null = null;
   /** When the next whale falls and the next dolphin pod visits (ticks). */
   private nextWhale = randInt(1350, 2250);
   private nextPod = randInt(750, 1350);
+  /** Ticks left of a coral spawning, and when the next one starts. */
+  spawning = 0;
+  private nextSpawning = randInt(5400, 9000);
+  /** Grains of coral spawn in the water. */
+  spawnCount = 0;
   /** A slowly turning current that carries scent. */
   private currentAngle = rand(0, Math.PI * 2);
   private noisePhase = Array.from({ length: 12 }, () => rand(0, Math.PI * 2));
@@ -489,6 +529,7 @@ export class PixelOcean {
         phase: rand(0, Math.PI * 2),
         retract: 0,
         alive: true,
+        ...upright(),
       });
     }
   }
@@ -519,7 +560,7 @@ export class PixelOcean {
         this.kelp.push({
           x: Math.min(w - 2, Math.max(2, cx + rand(-14, 14))),
           z: Math.min(h - 2, Math.max(2, cz + rand(-8, 8))),
-          length: randInt(15, maxLength), maxLength, phase: rand(0, Math.PI * 2),
+          length: randInt(15, maxLength), maxLength, phase: rand(0, Math.PI * 2), ...upright(),
         });
       }
       const r = randInt(18, 30);
@@ -598,7 +639,7 @@ export class PixelOcean {
     scatter(Math.round(area / 30000), (x, z) => {
       for (let k = randInt(3, 7); k > 0; k--) {
         const maxLength = randInt(25, 70);
-        this.kelp.push({ x: Math.min(w - 2, Math.max(2, x + rand(-10, 10))), z: Math.min(h - 2, Math.max(2, z + rand(-6, 6))), length: randInt(8, maxLength), maxLength, phase: rand(0, Math.PI * 2) });
+        this.kelp.push({ x: Math.min(w - 2, Math.max(2, x + rand(-10, 10))), z: Math.min(h - 2, Math.max(2, z + rand(-6, 6))), length: randInt(8, maxLength), maxLength, phase: rand(0, Math.PI * 2), ...upright() });
       }
     });
 
@@ -722,11 +763,15 @@ export class PixelOcean {
       anemone: parent?.anemone ?? null,
       podIndex: 0,
       turnHold: 0,
+      squash: 0,
+      squashV: 0,
       scanIn: randInt(0, 10),
       prey: null,
       alive: true,
     };
     this.creatures.push(creature);
+    // Newborns pop into the world with a little bounce.
+    if (parent) creature.squashV = -0.5;
     if (species === 'eel') this.giveDen(creature);
     if (species === 'octopus') this.giveHomeRock(creature);
     if (species === 'clownfish' && !parent) {
@@ -885,6 +930,7 @@ export class PixelOcean {
     this.buildGrids();
     this.updateCreatures();
     this.updateAnemones();
+    this.updateCorals();
     this.updateWhale();
     this.updatePod();
     this.updateScents();
@@ -945,6 +991,13 @@ export class PixelOcean {
   }
 
   private updateKelp() {
+    // Things only push the kelp on alternate ticks (half the stalks each);
+    // every stalk springs back each tick.
+    const parity = this.tick & 1;
+    for (let n = 0; n < this.kelp.length; n++) {
+      const k = this.kelp[n];
+      this.bend(k, k.x, k.z, 6, k.length, (n & 1) === parity);
+    }
     for (const k of this.kelp) {
       const i = this.cellAt(k.x, k.z);
       if (k.length < k.maxLength && this.nutrients[i] >= 2 && Math.random() < 0.01) {
@@ -955,6 +1008,32 @@ export class PixelOcean {
         this.fertilise(k.x, k.z, 2, 2);
       }
     }
+  }
+
+  /**
+   * Pushes a plant away from anything swimming through it (and along the way
+   * it swims), then lets it spring back upright.
+   */
+  private bend(b: Bend, x: number, z: number, reach: number, height: number, push: boolean) {
+    if (push && this.grid.length) {
+      this.near(this.grid, x, z, reach, o => {
+        if (o.h > height + 2 || o.species === 'seahorse') return;
+        const dx = x - o.x, dz = z - o.z;
+        const d = Math.hypot(dx, dz);
+        if (d >= reach) return;
+        const speed = Math.hypot(o.vx, o.vz);
+        if (speed < 0.05) return;
+        const f = (1 - d / reach) * Math.min(1, speed * 2) * BEND_FORCE;
+        b.bvx += ((d ? dx / d : 0) * 0.4 + o.vx) * f;
+        b.bvz += ((d ? dz / d : 0) * 0.4 + o.vz) * f * 0.6;
+      });
+    }
+    if (b.bx === 0 && b.bz === 0 && b.bvx === 0 && b.bvz === 0) return;
+    b.bvx = (b.bvx - b.bx * 0.03) * 0.88;
+    b.bvz = (b.bvz - b.bz * 0.03) * 0.88;
+    b.bx = Math.max(-MAX_BEND, Math.min(MAX_BEND, b.bx + b.bvx));
+    b.bz = Math.max(-MAX_BEND, Math.min(MAX_BEND, b.bz + b.bvz));
+    if (Math.abs(b.bx) + Math.abs(b.bz) + Math.abs(b.bvx) + Math.abs(b.bvz) < 0.02) b.bx = b.bz = b.bvx = b.bvz = 0;
   }
 
   private buildGrids() {
@@ -968,16 +1047,33 @@ export class PixelOcean {
     const bucket = (x: number, z: number) =>
       Math.min(this.gridRows - 1, Math.max(0, (z / BUCKET) | 0)) * this.gridCols
       + Math.min(this.gridCols - 1, Math.max(0, (x / BUCKET) | 0));
+    this.balls.length = 0;
     for (const c of this.creatures) {
       const b = bucket(c.x, c.z);
       this.grid[b].push(c);
       if (MINNOW_WATCHES.includes(c.species)) this.hunterGrid[b].push(c);
+      if (c.mood === 'balling' && c.alive) this.addToBall(c);
     }
+    for (const ball of this.balls) { ball.x /= ball.n; ball.z /= ball.n; ball.h /= ball.n; }
     this.plankton = 0;
+    this.spawnCount = 0;
     for (const p of this.particles) {
       this.foodGrid[bucket(p.x, p.z)].push(p);
       if (p.kind === 'plankton') this.plankton++;
+      else if (p.kind === 'spawn') this.spawnCount++;
     }
+  }
+
+  /** Files a balling minnow under the bait ball it belongs to (summed; averaged once all are in). */
+  private addToBall(c: Creature) {
+    for (const ball of this.balls) {
+      if ((ball.x / ball.n - c.x) ** 2 + (ball.z / ball.n - c.z) ** 2 < 25 * 25) {
+        ball.x += c.x; ball.z += c.z; ball.h += c.h; ball.n++;
+        ball.alarm = Math.max(ball.alarm, c.timer);
+        return;
+      }
+    }
+    this.balls.push({ x: c.x, z: c.z, h: c.h, n: 1, alarm: c.timer });
   }
 
   private near<T>(grid: T[][], x: number, z: number, radius: number, visit: (item: T) => void) {
@@ -1029,6 +1125,11 @@ export class PixelOcean {
     const sp = SPECIES[c.species];
     c.age++;
     if (c.breedCooldown > 0) c.breedCooldown--;
+    if (c.squash !== 0 || c.squashV !== 0) {
+      c.squashV = (c.squashV - c.squash * 0.25) * 0.78;
+      c.squash += c.squashV;
+      if (Math.abs(c.squash) + Math.abs(c.squashV) < 0.015) c.squash = c.squashV = 0;
+    }
     if (c.energy < sp.hungerLine) c.hungry = true;
     else if (c.energy > 0.95) { c.hungry = false; c.food = null; c.grazeCell = -1; c.kelp = null; }
     if (CLEANED.includes(c.species)) c.parasites = Math.min(1, c.parasites + PARASITE_RATE);
@@ -1064,6 +1165,7 @@ export class PixelOcean {
       if (c.species !== 'urchin') c.mood = 'mesmerised';
     }
     if (!SELF_PLACED.includes(c.species)) this.move(c, steer);
+    this.stirSand(c);
 
     const burned = sp.metabolism * steer.effort;
     c.energy -= burned;
@@ -1260,6 +1362,31 @@ export class PixelOcean {
     this.turn(c, c.vx, 0.05);
   }
 
+  /** Crabs and octopuses scuff the sand as they walk; rays and turtles stir it up skimming low. */
+  private stirSand(c: Creature) {
+    const every = SAND_STIRRERS[c.species];
+    if (!every || (this.tick + c.id) % every) return;
+    const speed = Math.hypot(c.vx, c.vz);
+    if (c.species === 'crab' || c.species === 'octopus') {
+      if (speed > 0.03 && c.h < 2) this.kickSand(c.x, c.z, 2, 1);
+    } else if (c.h < 7 && speed > 0.08) {
+      this.kickSand(c.x - c.vx * 4, c.z, 3, 3);
+    }
+  }
+
+  /** A little cloud of sand puffed up off the seabed. */
+  private kickSand(x: number, z: number, count: number, spread: number) {
+    for (let k = 0; k < count; k++) {
+      const life = randInt(26, 55);
+      this.drops.push({
+        kind: 'sand',
+        x: x + rand(-spread, spread), z: z + rand(-spread, spread) * 0.5, h: 0.6,
+        vx: rand(-0.12, 0.12), vz: rand(-0.05, 0.05), vh: rand(0.05, 0.16),
+        life, maxLife: life, shade: randInt(0, 2), alive: true,
+      });
+    }
+  }
+
   /**
    * Faces the way it is moving, but only once it is clearly moving that way,
    * and not again for a moment, so a fish that hovers or nudges back and
@@ -1312,6 +1439,7 @@ export class PixelOcean {
     let threat: { x: number; z: number } | null = null;
     let threatD = 45 * 45;
     let dolphins = false;
+    let hunted = false;
     this.near(this.hunterGrid, c.x, c.z, 45, o => {
       if (o.species === 'dolphin') { if ((o.x - c.x) ** 2 + (o.z - c.z) ** 2 < 45 * 45) dolphins = true; return; }
       if (o.species !== 'barracuda' && o.species !== 'jelly' && o.species !== 'shark') return;
@@ -1319,22 +1447,43 @@ export class PixelOcean {
       // Jellyfish are only worth avoiding up close; a shark scatters everything.
       const reach = o.species === 'jelly' ? 4 : o.species === 'shark' ? 40 : 28;
       const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2 + ((o.h - c.h) * 0.5) ** 2;
-      if (d < reach * reach && d < threatD) { threatD = d; threat = o; }
+      if (d < reach * reach && d < threatD) { threatD = d; threat = o; hunted = o.species !== 'jelly'; }
     });
-    // Dolphins circling: pack in tight with the school and swirl.
-    if (dolphins) {
+    // Herded by dolphins, or chased with a big school around it: pack into a
+    // spinning bait ball. The alarm spreads to nearby schools, which rush in
+    // and join, so the ball grows. Each fish holds its own height as the ball
+    // turns, so it reads as a sphere, not a disc.
+    if (c.timer > 0) c.timer--;
+    if (dolphins || hunted) c.timer = BALL_ALARM;
+    let ball: { x: number; z: number; h: number; n: number; alarm: number } | null = null;
+    for (const b of this.balls) {
+      if (b.alarm > 20 && (b.x - c.x) ** 2 + (b.z - c.z) ** 2 < 45 * 45) { ball = b; break; }
+    }
+    if (ball && ball.alarm - 20 > c.timer) c.timer = ball.alarm - 20;
+    if (c.timer > 0) {
       let n = 0, cx = 0, cz = 0, ch = 0;
       this.near(this.grid, c.x, c.z, 20, o => {
         if (o.species !== 'minnow' || o === c) return;
         n++; cx += o.x; cz += o.z; ch += o.h;
       });
-      if (n) {
+      if (ball && !(n >= BALL_SIZE && (ball.x - c.x) ** 2 + (ball.z - c.z) ** 2 < 22 * 22)) {
+        // Rush over and join the ball.
+        this.toward(c, s, ball, 0.12);
+        s.max = sp.burst;
+        s.effort = 1.6;
+        c.food = null;
+        c.mood = 'balling';
+        return;
+      }
+      if (n && (dolphins || n >= BALL_SIZE)) {
         cx /= n; cz /= n; ch /= n;
         const dx = cx - c.x, dz = cz - c.z;
         const d = Math.hypot(dx, dz) || 1;
-        s.x += dx / d * 0.08 - dz / d * 0.07;
-        s.z += dz / d * 0.08 + dx / d * 0.07;
-        s.h += (ch - c.h) * 0.02;
+        const r = 5 + Math.sqrt(n) * 1.6;
+        const pull = d > r ? 0.09 : d < r * 0.5 ? -0.03 : 0.02;
+        s.x += dx / d * pull - dz / d * 0.08;
+        s.z += dz / d * pull + dx / d * 0.08;
+        s.h += (ch + Math.sin(this.tick * 0.08 + c.id) * r * 0.8 - c.h) * 0.03;
         s.max = sp.burst;
         s.effort = 1.6;
         c.food = null;
@@ -1415,7 +1564,8 @@ export class PixelOcean {
   }
 
   private thinkBarracuda(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
-    if (this.fleeFrom(c, s, 'shark', 40)) return;
+    const atBall = c.prey?.alive && c.prey.mood === 'balling';
+    if (!atBall && this.fleeFrom(c, s, 'shark', 40)) return;
     if (c.hungry) {
       if (this.feedOnWhale(c, s, 200)) return;
       const prey = this.findPrey(c, PREY.barracuda!);
@@ -1493,7 +1643,7 @@ export class PixelOcean {
       let best: Particle | null = null;
       let bestD = 28 * 28;
       this.near(this.foodGrid, c.x, c.z, 28, p => {
-        if (p.kind !== 'plankton') return;
+        if (p.kind === 'pellet') return;
         const d = (p.x - c.x) ** 2 + (p.z - c.z) ** 2 + (p.h - c.h) ** 2;
         if (d < bestD) { bestD = d; best = p; }
       });
@@ -1509,7 +1659,7 @@ export class PixelOcean {
 
     const reach = SPECIES.jelly.vision;
     this.near(this.foodGrid, c.x, c.z, reach, p => {
-      if (p.alive && p.kind === 'plankton' && dist3(p, c) < reach) this.eat(c, p);
+      if (p.alive && p.kind !== 'pellet' && dist3(p, c) < reach) this.eat(c, p);
     });
     this.near(this.grid, c.x, c.z, 5, o => {
       if (o.species === 'minnow' && o.alive && Math.hypot(o.x - c.x, o.z - c.z, o.h - (c.h - 3)) < 4) {
@@ -1558,16 +1708,34 @@ export class PixelOcean {
    * plus whatever it had eaten.
    */
   private chase(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }, prey: Creature, mouth: number, reach: number, force = 0.09) {
+    // Hunters each take a bait ball from their own side: swing round to it,
+    // then charge straight through.
+    if (prey.mood === 'balling') {
+      const a = c.id * 2.39996;
+      const ax = Math.cos(a), az = Math.sin(a);
+      const rx = c.x - prey.x, rz = c.z - prey.z;
+      const rd = Math.hypot(rx, rz) || 1;
+      if (rd > 7 && (rx * ax + rz * az) / rd < 0.6) {
+        this.toward(c, s, { x: prey.x + ax * 20, z: prey.z + az * 12, h: prey.h }, force);
+        s.max = SPECIES[c.species].burst;
+        s.effort = 1.5;
+        c.mood = 'hunting';
+        return;
+      }
+    }
     const lead = c.species === 'turtle' ? 0 : 6;
     this.toward(c, s, { x: prey.x + prey.vx * lead, z: prey.z + prey.vz * lead, h: prey.h }, force);
     s.max = SPECIES[c.species].burst;
     s.effort = 1.5;
     c.mood = 'hunting';
-    if (Math.hypot(prey.x - (c.x + c.facing * mouth), prey.z - c.z, prey.h - c.h) < reach) this.devour(c, prey);
+    if (Math.hypot(prey.x - (c.x + c.facing * mouth), prey.z - c.z, prey.h - c.h) < reach
+      && (prey.mood !== 'balling' || Math.random() < BALL_CATCH)) this.devour(c, prey);
   }
 
   private devour(c: Creature, prey: Creature, swallow = false) {
     const ps = SPECIES[prey.species];
+    // The snap: a quick stretch forward.
+    c.squashV += 0.45;
     this.kill(prey, 'eaten', c, swallow);
     c.energy = Math.min(1, c.energy + (ps.body + prey.energy * ps.units * 0.5) / SPECIES[c.species].units);
     c.prey = null;
@@ -1603,7 +1771,10 @@ export class PixelOcean {
       const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2 + (o.h - c.h) ** 2;
       if (d < threatD) { threatD = d; threat = o; }
     });
-    if (threat && threatD < 14 * 14) c.timer = 150;
+    if (threat && threatD < 14 * 14) {
+      if (c.timer === 0) c.squashV += 0.6; // Puffing up overshoots, then settles.
+      c.timer = 150;
+    }
     c.puff += ((c.timer > 0 ? 1 : 0) - c.puff) * 0.15;
     if (c.timer > 0) {
       // Puffed up, it can barely swim, but nothing will bite it.
@@ -1656,7 +1827,7 @@ export class PixelOcean {
     }
     c.hidden = d < 3;
     this.near(this.foodGrid, c.x, c.z, SPECIES.seahorse.vision, p => {
-      if (p.alive && p.kind === 'plankton' && dist3(p, c) < SPECIES.seahorse.vision) this.eat(c, p);
+      if (p.alive && p.kind !== 'pellet' && dist3(p, c) < SPECIES.seahorse.vision) this.eat(c, p);
     });
   }
 
@@ -1788,7 +1959,7 @@ export class PixelOcean {
     s.z += Math.sin(c.heading) * 0.008;
     s.h += (c.cruiseH - c.h) * 0.001;
     this.near(this.foodGrid, c.x, c.z, SPECIES.manta.vision, p => {
-      if (p.alive && p.kind === 'plankton' && dist3(p, c) < SPECIES.manta.vision) this.eat(c, p);
+      if (p.alive && p.kind !== 'pellet' && dist3(p, c) < SPECIES.manta.vision) this.eat(c, p);
     });
   }
 
@@ -1884,6 +2055,7 @@ export class PixelOcean {
   private updateAnemones() {
     for (const a of this.anemones) {
       a.retract *= 0.97;
+      this.bend(a, a.x, a.z, 7, 9, true);
       this.near(this.grid, a.x, a.z, 5, o => {
         if (!o.alive || o.species === 'clownfish' || o.h > 7) return;
         if ((o.x - a.x) ** 2 + (o.z - a.z) ** 2 > 16) return;
@@ -1891,6 +2063,75 @@ export class PixelOcean {
         if (STUNG_BY_ANEMONES.includes(o.species) && Math.random() < 0.03) this.kill(o, 'stung', null, false, 'An anemone');
       });
     }
+  }
+
+  /**
+   * Now and then every coral on the reef spawns at once, clouding the water
+   * with eggs that drift up and feed everything; a few sink back, settle
+   * and slowly grow into new corals. Young corals grow a little at a time.
+   */
+  private updateCorals() {
+    if (this.spawning > 0) {
+      this.spawning--;
+      for (const d of this.decor) {
+        if (d.kind !== 'coral' || d.grow || this.spawnCount >= MAX_SPAWN || Math.random() > SPAWN_RATE) continue;
+        // A plume of eggs puffed out together, so it rises as a little cloud.
+        const x = d.x + rand(-d.w / 3, d.w / 3);
+        for (let k = 0; k < PLUME; k++) {
+          this.spawnCount++;
+          this.particles.push({
+            kind: 'spawn',
+            x: x + rand(-1, 1), z: d.z + rand(-1, 1), h: d.ht * 0.8 + rand(-1, 1),
+            vx: rand(-0.04, 0.04), vz: rand(-0.02, 0.02), vh: rand(0.1, 0.2),
+            life: randInt(900, 1500), alive: true,
+          });
+        }
+      }
+      if (this.spawning === 0) this.nextSpawning = this.tick + randInt(9000, 16000);
+    } else if (this.tick >= this.nextSpawning) {
+      this.startSpawning();
+    }
+    if (this.tick % 300 === 0) {
+      let grew = false;
+      for (const d of this.decor) {
+        const g = d.grow;
+        if (!g) continue;
+        if (d.ht < g.ht) d.ht++;
+        if (d.w < g.w && Math.random() < 0.6) { d.w++; grew = true; }
+        if (d.ht >= g.ht && d.w >= g.w) d.grow = undefined;
+      }
+      if (grew) this.indexDecor();
+    }
+  }
+
+  /** How dark the water is for a spawning night: 0 by day, easing to 1 and back. */
+  nightfall() {
+    if (this.spawning <= 0) return 0;
+    return Math.min(1, (SPAWNING_TICKS - this.spawning) / 150, this.spawning / 150);
+  }
+
+  private startSpawning() {
+    this.spawning = SPAWNING_TICKS;
+    this.logEvent('visit', 'The corals are spawning: the water fills with eggs');
+  }
+
+  /** A grain of coral spawn reaching the seabed may take root, away from the page text and other scenery. */
+  private settle(x: number, z: number) {
+    if (Math.random() > SETTLE_CHANCE) return;
+    let corals = 0;
+    for (const d of this.decor) if (d.kind === 'coral') corals++;
+    if (corals >= Math.round((this.w * this.h) / 4400)) return;
+    const i = this.cellAt(x, z);
+    if (this.clearMask[i] || x < 6 || x > this.w - 6) return;
+    const bucket = Math.min(this.gridRows - 1, Math.max(0, (z / BUCKET) | 0)) * this.gridCols
+      + Math.min(this.gridCols - 1, Math.max(0, (x / BUCKET) | 0));
+    for (const d of this.decorGrid[bucket] ?? []) {
+      const r = d.w / 2 + 6;
+      if ((d.x - x) ** 2 + (d.z - z) ** 2 < r * r) return;
+    }
+    for (const k of this.kelp) if ((k.x - x) ** 2 + (k.z - z) ** 2 < 16) return;
+    this.decor.push({ kind: 'coral', x, z, w: 4, ht: 3, seed: randInt(1, 1e9), vent: false, grow: { w: randInt(9, 15), ht: randInt(8, 14) } });
+    this.indexDecor();
   }
 
   /** Clownfish bob about their anemone and dart into its tentacles when anything big comes by. */
@@ -1925,7 +2166,7 @@ export class PixelOcean {
       let food: Particle | null = null;
       let bestD = 16 * 16;
       this.near(this.foodGrid, a.x, a.z, 16, p => {
-        if (p.kind !== 'plankton') return;
+        if (p.kind === 'pellet') return;
         const dd = (p.x - a.x) ** 2 + (p.z - a.z) ** 2;
         if (dd < bestD) { bestD = dd; food = p; }
       });
@@ -2079,6 +2320,33 @@ export class PixelOcean {
   debugScent(x: number, z: number) {
     this.addScent(x, z, 3);
     this.splash('blood', { x, z, h: 10 }, 20);
+  }
+
+  /** Starts a coral spawning now. */
+  debugSpawning() {
+    this.startSpawning();
+  }
+
+  /** Sends a shark and two barracuda at the school nearest this point, so it balls up. */
+  debugBaitBall(x: number, z: number) {
+    const minnows = this.creatures.filter(c => c.species === 'minnow' && c.alive);
+    if (!minnows.length) return;
+    const nearby = minnows.filter(m => (m.x - x) ** 2 + (m.z - z) ** 2 < 150 * 150);
+    const crowd = (m: Creature) => nearby.filter(o => (o.x - m.x) ** 2 + (o.z - m.z) ** 2 < 400).length;
+    const school = nearby.length
+      ? nearby.reduce((a, b) => (crowd(a) >= crowd(b) ? a : b))
+      : minnows.reduce((a, b) => ((a.x - x) ** 2 + (a.z - z) ** 2 < (b.x - x) ** 2 + (b.z - z) ** 2 ? a : b));
+    (['shark', 'barracuda', 'barracuda'] as Species[]).forEach((species, k) => {
+      const c = this.spawn(species, null, 0.3);
+      const a = k * 2.1 + rand(0, 1);
+      c.age = SPECIES[species].mature;
+      c.hungry = true;
+      c.x = Math.max(2, Math.min(this.w - 3, school.x + Math.cos(a) * 30));
+      c.z = Math.max(2, Math.min(this.h - 3, school.z + Math.sin(a) * 18));
+      c.h = school.h;
+      c.homeZ = c.z;
+    });
+    this.logEvent('visit', 'Hunters are closing on a school of minnows');
   }
 
   /** Loads every big fish with parasites, so they all head for the cleaners. */
@@ -2480,6 +2748,7 @@ export class PixelOcean {
       if (--p.life <= 0) {
         p.alive = false;
         if (p.kind === 'plankton') this.plankton--;
+        if (p.kind === 'spawn') this.spawnCount--;
         this.fertilise(p.x, p.z, p.kind === 'pellet' ? PELLET_UNITS : PLANKTON_UNITS, 2);
         continue;
       }
@@ -2487,6 +2756,22 @@ export class PixelOcean {
         if (p.h > 0) {
           p.x += Math.sin(this.tick * 0.05 + p.life) * 0.04;
           p.h = Math.max(0, p.h + p.vh);
+          if (p.h === 0 && Math.random() < 0.3) this.kickSand(p.x, p.z, 1, 0.5);
+        }
+        continue;
+      }
+      if (p.kind === 'spawn') {
+        // Coral spawn floats up off the reef, slows, then sinks back to settle.
+        p.vh = Math.max(-0.06, p.vh - 0.0005);
+        p.vx = Math.max(-0.1, Math.min(0.1, p.vx + Math.cos(this.currentAngle) * 0.001 + rand(-0.006, 0.006)));
+        p.vz = Math.max(-0.06, Math.min(0.06, p.vz + rand(-0.004, 0.004)));
+        p.x = Math.max(0, Math.min(this.w - 1, p.x + p.vx));
+        p.z = Math.max(0, Math.min(this.h - 1, p.z + p.vz));
+        p.h += p.vh;
+        if (p.h <= 0) {
+          p.alive = false;
+          this.spawnCount--;
+          this.settle(p.x, p.z);
         }
         continue;
       }
@@ -2509,6 +2794,11 @@ export class PixelOcean {
         k.x = Math.max(1, Math.min(this.w - 2, k.x + k.vx));
         k.z = Math.max(1, Math.min(this.h - 2, k.z + k.vz));
         k.h = Math.max(0, k.h + k.vh);
+        if (k.h === 0) {
+          // Hitting the seabed: a puff of sand, and a little bounce if it fell fast.
+          this.kickSand(k.x, k.z, k.part === 'whole' ? 5 : 3, 2);
+          if (k.vh < -0.08) { k.h = 0.4; k.vh = -k.vh * 0.35; }
+        }
         if (k.part === 'whole') k.angle += (Math.PI - k.angle) * 0.05;
         else { k.angle += k.spin; k.spin *= 0.985; }
         continue;
@@ -2566,7 +2856,7 @@ export class PixelOcean {
     let plankton = 0, food = 0;
     for (const p of this.particles) {
       if (p.kind === 'plankton') plankton++;
-      else food++;
+      else if (p.kind === 'pellet') food++;
     }
     const caps = {} as Record<Species, number>;
     for (const s of SPECIES_LIST) caps[s] = this.cap(s);
