@@ -4,6 +4,7 @@ My personal portfolio site, built as an interactive aquarium. Schools of fish sw
 
 ## Features
 
+- **Pixel ecosystem (the default):** the page opens as a dive log over a pixel-art reef seen from slightly above, with a depth gauge that tracks your scroll. Every cell of the seabed is simulated (nutrients seep, algae grows and sheds plankton), and thirteen species feed, flee, hunt, breed and die: pufferfish inflate when cornered, octopuses camouflage against rocks and escape in clouds of ink, morays strike from their dens, anglerfish lure minnows in the deep, seahorses cling to the kelp, and reef sharks and manta rays pass through. Kills tear prey in half in a spray of blood, the dead sink and are picked down to bones, and a live census logs it all. Hover any creature to inspect it, click to follow it, and adopt one as yours: it comes back on your next visit, and when it dies the adoption passes down its family line. The button at the bottom right switches to the classic aquarium.
 - **Two themes:** a sunlit underwater reef and a dark deep-sea mode with angler fish, jellyfish and plankton, with an animated dive between them.
 - **Living fish:** fish school, dart, loiter, form conga lines, get curious about food and pair up to breed. Puffers puff up and the fish census tracks who is in the tank.
 - **Interactive tools:** drop fish food (or love food), grab and carry fish, open the fish tank, and follow the built-in tutorial.
@@ -39,4 +40,4 @@ npm run deploy   # build and publish to GitHub Pages
 ### Adding a project
 
 1. Put the thumbnail in `image-originals/` and a 960px-wide `.webp` copy in `public/images/` (`scripts/optimize-images.mjs` converts PNG/JPG files in `public/images` to webp).
-2. Add an entry to the `projects` list in `App.tsx` with a `title`, `description`, `image`, `tags`, `codeUrl` and an optional `linkLabel` (defaults to "View Code").
+2. Add an entry to the `projects` list in `data/portfolio.ts` with a `title`, `description`, `image`, `tags`, `codeUrl` and an optional `linkLabel` (defaults to "View Code").

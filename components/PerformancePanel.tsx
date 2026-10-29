@@ -58,7 +58,7 @@ const PerformancePanel: React.FC<PerformancePanelProps> = ({ isOpen, onClose }) 
       />
       <aside
         aria-hidden={!isOpen}
-        className={`fixed z-[70] right-3 left-3 sm:left-auto sm:right-6 top-20 sm:top-24 w-auto sm:w-96 max-h-[calc(100vh-7rem)] rounded-2xl border shadow-2xl backdrop-blur-lg transition-all duration-300 overflow-hidden ${panelClasses} ${
+        className={`hud-panel fixed z-[70] right-3 left-3 sm:left-auto sm:right-6 top-20 sm:top-24 w-auto sm:w-96 max-h-[calc(100vh-7rem)] rounded-2xl border shadow-2xl backdrop-blur-lg transition-all duration-300 overflow-hidden ${panelClasses} ${
           isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
         }`}
       >

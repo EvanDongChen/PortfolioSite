@@ -102,14 +102,14 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ projects, index, onClose, o
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border shadow-2xl animate-fade-in-up ${colors.panel}`}
+        className={`project-modal relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border shadow-2xl animate-fade-in-up ${colors.panel}`}
       >
         <button
           ref={closeButtonRef}
           type="button"
           onClick={onClose}
           aria-label="Close project details"
-          className="absolute top-3 right-3 z-10 h-10 w-10 flex items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-white transition-colors"
+          className="modal-close absolute top-3 right-3 z-10 h-10 w-10 flex items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-white transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
             <path d="M6 6l12 12M18 6L6 18" />
@@ -127,12 +127,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ projects, index, onClose, o
         </div>
 
         <div className="p-6 sm:p-8">
-          <h3 id={titleId} className={`text-2xl sm:text-3xl font-bold mb-3 ${colors.title}`}>{project.title}</h3>
+          <h3 id={titleId} className={`project-title text-2xl sm:text-3xl font-bold mb-3 ${colors.title}`}>{project.title}</h3>
           <p className={`text-base sm:text-lg leading-relaxed mb-5 ${colors.text}`}>{project.description}</p>
 
           <div className="flex flex-wrap gap-2 mb-6">
             {project.tags.map(tag => (
-              <span key={tag} className={`${colors.tagBg} ${colors.tagText} text-xs font-semibold px-3 py-1 rounded-full`}>
+              <span key={tag} className={`project-tag ${colors.tagBg} ${colors.tagText} text-xs font-semibold px-3 py-1 rounded-full`}>
                 {tag}
               </span>
             ))}
@@ -142,7 +142,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ projects, index, onClose, o
             href={project.codeUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold transition-colors focus:outline-none focus-visible:ring-2 ${colors.cta}`}
+            className={`project-link modal-cta inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold transition-colors focus:outline-none focus-visible:ring-2 ${colors.cta}`}
           >
             <LinkIcon className="w-5 h-5" />
             {linkLabel}
@@ -153,7 +153,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ projects, index, onClose, o
               <button
                 type="button"
                 onClick={goPrev}
-                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full border text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 ${colors.ghost}`}
+                className={`modal-nav inline-flex items-center gap-1.5 px-4 py-2 rounded-full border text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 ${colors.ghost}`}
               >
                 <span aria-hidden="true">←</span> Previous
               </button>
@@ -163,7 +163,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ projects, index, onClose, o
               <button
                 type="button"
                 onClick={goNext}
-                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full border text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 ${colors.ghost}`}
+                className={`modal-nav inline-flex items-center gap-1.5 px-4 py-2 rounded-full border text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 ${colors.ghost}`}
               >
                 Next <span aria-hidden="true">→</span>
               </button>

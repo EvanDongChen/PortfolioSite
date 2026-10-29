@@ -20,7 +20,7 @@ const PerformanceButton: React.FC<PerformanceButtonProps> = ({ isOpen, onToggle 
     <button
       type="button"
       onClick={onToggle}
-      className={`fixed bottom-[5.5rem] right-8 z-[55] h-12 w-12 rounded-full backdrop-blur-sm shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 transition-all duration-300 flex items-center justify-center ${ringClass} ${
+      className={`hud-btn fixed bottom-[5.5rem] right-8 z-[55] h-12 w-12 rounded-full backdrop-blur-sm shadow-lg border hover:scale-110 focus:outline-none focus:ring-2 focus:ring-opacity-75 transition-all duration-300 flex items-center justify-center ${ringClass} ${
         isOpen ? activeClass : inactiveClass
       }`}
       title={isOpen ? 'Close performance settings' : 'Open performance settings'}

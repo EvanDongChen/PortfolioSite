@@ -2,6 +2,7 @@
 import { useTheme } from '../contexts/ThemeContext';
 
 const BASE_URL = import.meta.env.BASE_URL;
+const PHOTO_URL = `${BASE_URL}images/profile.webp`;
 
 const ProfilePhoto: React.FC = () => {
   const { theme } = useTheme();
@@ -80,7 +81,7 @@ const ProfilePhoto: React.FC = () => {
 
   return (
     <div
-      className="w-48 h-48 md:w-64 md:h-64 mb-8 cursor-grab active:cursor-grabbing select-none"
+      className="profile-photo w-48 h-48 md:w-64 md:h-64 mb-8 cursor-grab active:cursor-grabbing select-none"
       style={{ perspective: '800px' }}
       onPointerDown={handlePhotoPointerDown}
       onPointerMove={handlePhotoPointerMove}
@@ -88,7 +89,7 @@ const ProfilePhoto: React.FC = () => {
       onPointerCancel={handlePhotoPointerUp}
     >
       <div
-        className={`w-full h-full rounded-full shadow-2xl border-4 ${theme === 'underwater' ? 'border-cyan-400/50' : 'border-indigo-400/50'} overflow-hidden`}
+        className={`profile-frame w-full h-full rounded-full shadow-2xl border-4 ${theme === 'underwater' ? 'border-cyan-400/50' : 'border-indigo-400/50'} overflow-hidden`}
         style={{
           transform: `rotateY(${photoRotation}deg)`,
           transition: photoSpinRef.current.isDragging ? 'none' : 'transform 0.05s linear',
@@ -96,7 +97,7 @@ const ProfilePhoto: React.FC = () => {
         }}
       >
         <img
-          src={`${BASE_URL}images/profile.webp`}
+          src={PHOTO_URL}
           alt="Evan Chen"
           className="w-full h-full object-cover pointer-events-none"
           fetchPriority="high"

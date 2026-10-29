@@ -18,10 +18,13 @@ interface PortfolioContentProps {
   experiences: Experience[];
   education: Education;
   skills: { languages: string[]; frameworksAndTools: string[] };
+  showSandDune?: boolean;
+  /** Extra hero content shown above the social links. */
+  heroExtra?: React.ReactNode;
 }
 
 const PortfolioContent: React.FC<PortfolioContentProps> = ({
-  theme, colors, searchTerm, setSearchTerm, filteredProjects, experiences, education, skills
+  theme, colors, searchTerm, setSearchTerm, filteredProjects, experiences, education, skills, showSandDune = true, heroExtra
 }) => {
   const featuredProjects = useMemo(() => filteredProjects.filter(p => p.featured), [filteredProjects]);
   const otherProjects = useMemo(() => filteredProjects.filter(p => !p.featured), [filteredProjects]);
@@ -52,10 +55,10 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
       <main className="container mx-auto pl-24 pr-6 md:pl-28 md:pr-10 lg:px-10">
         <Section id="home" className="min-h-screen flex flex-col justify-center items-center text-center">
           <ProfilePhoto />
-          <h1 className={`text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r ${colors.heroGradient} animate-fade-in-down`}>
+          <h1 className={`hero-name text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r ${colors.heroGradient} animate-fade-in-down`}>
             Evan Chen
           </h1>
-          <p className={`mt-4 text-xl md:text-2xl lg:text-3xl ${colors.highlightStrong} max-w-3xl animate-fade-in-up`}>
+          <p className={`hero-tagline mt-4 text-xl md:text-2xl lg:text-3xl ${colors.highlightStrong} max-w-3xl animate-fade-in-up`}>
             Computer Science Student & Developer
           </p>
           <p className={`mt-6 text-lg ${colors.textLighter} max-w-3xl animate-fade-in-up delay-200`}>
@@ -70,7 +73,8 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
             </a>
             .
           </p>
-          <div className={`mt-8 flex flex-wrap justify-center items-center gap-x-6 gap-y-4 ${colors.highlightStrong}`}>
+          {heroExtra}
+          <div className={`hero-links mt-8 flex flex-wrap justify-center items-center gap-x-6 gap-y-4 ${colors.highlightStrong}`}>
             <a href="https://github.com/evandongchen" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-white transition-colors">
               <GitHubIcon className="w-6 h-6" /> GitHub
             </a>
@@ -86,14 +90,14 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
         </Section>
 
         <Section id="experience" className="py-20">
-          <h2 className="text-4xl font-bold text-center mb-12">Experience</h2>
+          <h2 className="section-title text-4xl font-bold text-center mb-12">Experience</h2>
           <div className="relative max-w-3xl mx-auto px-4">
-            <div className={`absolute h-full w-1 ${colors.timeline} left-4 transform -translate-x-1/2`}></div>
+            <div className={`timeline-line absolute h-full w-1 ${colors.timeline} left-4 transform -translate-x-1/2`}></div>
             {experiences.map((exp, index) => (
               <div key={index} className="mb-12 pl-10 relative">
-                <div className={`absolute -left-2 top-1 w-5 h-5 ${colors.timelineDot} rounded-full border-4 ${colors.timelineDotBorder}`}></div>
-                <div className={`${colors.cardBg} backdrop-blur-md rounded-xl shadow-lg border ${colors.border} p-6`}>
-                  <p className={`absolute -top-4 left-12 ${colors.periodBg} px-3 py-1 text-sm font-semibold ${colors.highlightStrong} rounded-full`}>{exp.period}</p>
+                <div className={`timeline-dot absolute -left-2 top-1 w-5 h-5 ${colors.timelineDot} rounded-full border-4 ${colors.timelineDotBorder}`}></div>
+                <div className={`content-card ${colors.cardBg} backdrop-blur-md rounded-xl shadow-lg border ${colors.border} p-6`}>
+                  <p className={`period-badge absolute -top-4 left-12 ${colors.periodBg} px-3 py-1 text-sm font-semibold ${colors.highlightStrong} rounded-full`}>{exp.period}</p>
                   <h3 className={`text-xl font-bold ${colors.highlightStrong} mb-1`}>{exp.role}</h3>
                   <p className={`font-semibold ${colors.highlight} mb-3`}>{exp.company}</p>
                   <ul className={`list-disc list-inside ${colors.textLighter} space-y-1`}>
@@ -108,8 +112,8 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
         </Section>
 
         <Section id="education" className="py-20">
-          <h2 className="text-4xl font-bold text-center mb-12">Education</h2>
-          <div className={`${colors.cardBg} backdrop-blur-md rounded-xl shadow-lg border ${colors.border} p-8 text-center max-w-3xl mx-auto`}>
+          <h2 className="section-title text-4xl font-bold text-center mb-12">Education</h2>
+          <div className={`content-card ${colors.cardBg} backdrop-blur-md rounded-xl shadow-lg border ${colors.border} p-8 text-center max-w-3xl mx-auto`}>
             <h3 className={`text-2xl font-bold ${colors.highlightStrong}`}>{education.degree}</h3>
             <p className={`text-xl ${colors.highlight} mt-1`}>{education.program}</p>
             <p className={`text-lg ${colors.textLighter} mt-4`}>{education.university}</p>
@@ -122,24 +126,24 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
         </Section>
 
         <Section id="skills" className="py-20">
-          <h2 className="text-4xl font-bold text-center mb-12">Technical Skills</h2>
-          <div className={`${colors.cardBg} backdrop-blur-md rounded-xl shadow-lg border ${colors.border} p-8 max-w-4xl mx-auto`}>
+          <h2 className="section-title text-4xl font-bold text-center mb-12">Technical Skills</h2>
+          <div className={`content-card ${colors.cardBg} backdrop-blur-md rounded-xl shadow-lg border ${colors.border} p-8 max-w-4xl mx-auto`}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-10">
               <div>
-                <h3 className={`text-xl font-semibold ${colors.highlightStrong} mb-4 text-center border-b ${colors.border} pb-2`}>Languages</h3>
+                <h3 className={`card-heading text-xl font-semibold ${colors.highlightStrong} mb-4 text-center border-b ${colors.border} pb-2`}>Languages</h3>
                 <div className="flex flex-wrap justify-center gap-3">
                   {skills.languages.map(lang => (
-                    <span key={lang} className={`${colors.tagBg} ${colors.highlightStrong} font-medium px-3 py-1 text-sm rounded-full transition-all duration-300 ${colors.tagHoverBg} hover:scale-105`}>
+                    <span key={lang} className={`skill-tag ${colors.tagBg} ${colors.highlightStrong} font-medium px-3 py-1 text-sm rounded-full transition-all duration-300 ${colors.tagHoverBg} hover:scale-105`}>
                       {lang}
                     </span>
                   ))}
                 </div>
               </div>
               <div>
-                <h3 className={`text-xl font-semibold ${colors.highlightStrong} mb-4 text-center border-b ${colors.border} pb-2`}>Frameworks & Tools</h3>
+                <h3 className={`card-heading text-xl font-semibold ${colors.highlightStrong} mb-4 text-center border-b ${colors.border} pb-2`}>Frameworks & Tools</h3>
                 <div className="flex flex-wrap justify-center gap-3">
                   {skills.frameworksAndTools.map(tool => (
-                    <span key={tool} className={`${colors.toolTagBg} ${colors.highlightStrong} font-medium px-3 py-1 text-sm rounded-full transition-all duration-300 ${colors.toolTagHoverBg} hover:scale-105`}>
+                    <span key={tool} className={`skill-tag ${colors.toolTagBg} ${colors.highlightStrong} font-medium px-3 py-1 text-sm rounded-full transition-all duration-300 ${colors.toolTagHoverBg} hover:scale-105`}>
                       {tool}
                     </span>
                   ))}
@@ -150,7 +154,7 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
         </Section>
 
         <Section id="projects" className="py-20">
-          <h2 className="text-4xl font-bold text-center mb-12">Projects</h2>
+          <h2 className="section-title text-4xl font-bold text-center mb-12">Projects</h2>
           <div className="max-w-xl mx-auto mb-10 px-4">
             <div className="relative">
               <input
@@ -158,7 +162,7 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
                 placeholder="Search projects by title, tag, or technology..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className={`w-full ${colors.searchBg} border ${colors.searchBorder} rounded-full py-3 pl-5 pr-12 text-white ${colors.searchPlaceholder} focus:outline-none focus:ring-2 ${colors.searchRing} transition-all`}
+                className={`search-input w-full ${colors.searchBg} border ${colors.searchBorder} rounded-full py-3 pl-5 pr-12 text-white ${colors.searchPlaceholder} focus:outline-none focus:ring-2 ${colors.searchRing} transition-all`}
                 aria-label="Search projects"
               />
               <div className="absolute inset-y-0 right-0 flex items-center pr-5 pointer-events-none">
@@ -182,7 +186,7 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
               {featuredProjects.length > 0 && (
                 <div className="mb-14">
                   {!isSearching && (
-                    <h3 className={`text-sm font-semibold uppercase tracking-[0.2em] mb-5 ${colors.highlightStrong}`}>
+                    <h3 className={`eyebrow text-sm font-semibold uppercase tracking-[0.2em] mb-5 ${colors.highlightStrong}`}>
                       Featured
                     </h3>
                   )}
@@ -197,7 +201,7 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
               {otherProjects.length > 0 && (
                 <div>
                   <div className="flex flex-wrap items-baseline justify-between gap-2 mb-5">
-                    <h3 className={`text-sm font-semibold uppercase tracking-[0.2em] ${colors.highlightStrong}`}>
+                    <h3 className={`eyebrow text-sm font-semibold uppercase tracking-[0.2em] ${colors.highlightStrong}`}>
                       {isSearching ? 'Results' : 'More Projects'}
                       <span className="ml-2 opacity-60 normal-case tracking-normal">({otherProjects.length})</span>
                     </h3>
@@ -228,18 +232,18 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
         )}
 
         <Section id="contact" className="py-20 text-center">
-          <h2 className="text-4xl font-bold mb-4">Get In Touch</h2>
+          <h2 className="section-title text-4xl font-bold mb-4">Get In Touch</h2>
           <p className={`text-xl ${colors.text} mb-8 max-w-2xl mx-auto`}>
             I'm always open to new opportunities and collaborations. Feel free to reach out!
           </p>
           <div className="flex justify-center items-center space-x-8">
-            <a href="mailto:evanchen0609@gmail.com" className={`${colors.contactIcon} hover:text-white transition-colors duration-300 transform hover:scale-110`}>
+            <a href="mailto:evanchen0609@gmail.com" className={`contact-icon ${colors.contactIcon} hover:text-white transition-colors duration-300 transform hover:scale-110`}>
               <MailIcon className="w-10 h-10" />
             </a>
-            <a href="https://github.com/evandongchen" target="_blank" rel="noopener noreferrer" className={`${colors.contactIcon} hover:text-white transition-colors duration-300 transform hover:scale-110`}>
+            <a href="https://github.com/evandongchen" target="_blank" rel="noopener noreferrer" className={`contact-icon ${colors.contactIcon} hover:text-white transition-colors duration-300 transform hover:scale-110`}>
               <GitHubIcon className="w-10 h-10" />
             </a>
-            <a href="https://www.linkedin.com/in/evandongchen/" target="_blank" rel="noopener noreferrer" className={`${colors.contactIcon} hover:text-white transition-colors duration-300 transform hover:scale-110`}>
+            <a href="https://www.linkedin.com/in/evandongchen/" target="_blank" rel="noopener noreferrer" className={`contact-icon ${colors.contactIcon} hover:text-white transition-colors duration-300 transform hover:scale-110`}>
               <LinkedInIcon className="w-10 h-10" />
             </a>
           </div>
@@ -247,9 +251,9 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
       </main>
 
       <footer className="relative text-center pt-20 pb-6 overflow-hidden">
-        {theme === 'underwater' && <SandDune />}
+        {theme === 'underwater' && showSandDune && <SandDune />}
         <div className="relative z-10">
-          <p className="text-white">&copy; 2026 Evan Chen. All rights reserved.</p>
+          <p className="footer-note text-white">&copy; 2026 Evan Chen. All rights reserved.</p>
         </div>
       </footer>
     </div>

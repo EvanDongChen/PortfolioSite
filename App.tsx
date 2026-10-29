@@ -28,11 +28,13 @@ const WhaleTurtleLayer = lazy(() => import('./components/WhaleTurtleLayer'));
 const JellyfishLayer = lazy(() => import('./components/JellyfishLayer'));
 const AnglerFishLayer = lazy(() => import('./components/AnglerFishLayer'));
 
-const BASE_URL = import.meta.env.BASE_URL;
 import ThemeToggleButton from './components/ThemeToggleButton';
+import PixelModeButton from './components/PixelModeButton';
 import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from './components/Icons';
-import { Project, Bubble as BubbleType, Experience, Fish as FishType, FishFood as FishFoodType, Education, FishBehavior } from './types';
-import { useTheme } from './contexts/ThemeContext';
+import { Bubble as BubbleType, Fish as FishType, FishFood as FishFoodType, FishBehavior } from './types';
+import { useTheme, useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
+import { filterProjects, experiences, education, skills } from './data/portfolio';
+import { UNDERWATER_COLORS, DEEPSEA_COLORS } from './lib/themeColors';
 import { usePerformance, PerformanceTier } from './contexts/PerformanceContext';
 
 const SCROLL_PARALLAX = 1.0;
@@ -74,6 +76,7 @@ interface JellyPopRing {
 }
 
 const App: React.FC = () => {
+  useRestoreScrollAfterSwitch();
   const { theme } = useTheme();
   const [fishes, setFishes] = useState<FishType[]>([]);
   const [bubbles, setBubbles] = useState<BubbleType[]>([]);
@@ -204,178 +207,9 @@ const App: React.FC = () => {
     const id = nextEntityIdRef.current;
     nextEntityIdRef.current += 1;
     return id;
-  }, []);  const projects = useMemo<Project[]>(() => [
-    {
-      title: 'Gogh with the Flow',
-      description: "An endless Starry Night, procedurally painted stroke by stroke. Wander an infinite night through regions borrowed from Van Gogh's paintings, with a live-generated soundtrack and postcards you can send.",
-      image: `${BASE_URL}images/gogh_with_the_flow.webp`,
-      tags: ['TypeScript', 'Vite', 'Canvas 2D', 'Web Audio', 'Procedural Generation', 'Generative Art'],
-      codeUrl: 'https://evandongchen.github.io/GoghWithTheFlow/',
-      linkLabel: 'Play',
-      featured: true,
-    },
-    {
-      title: 'Blade & Brush',
-      description: 'Browser puzzle game set inside a procedurally generated Chinese ink landscape. Slash, burn, pour and push a falling-sand world until the painting matches the poem.',
-      image: `${BASE_URL}images/blade_and_brush.webp`,
-      tags: ['TypeScript', 'Vite', 'Canvas 2D', 'Procedural Generation', 'Game Development', 'Puzzle'],
-      codeUrl: 'https://evandongchen.github.io/BladeAndBrush/',
-      linkLabel: 'Play',
-      featured: true,
-    },
-    {
-      title: 'The Wishing Terminal',
-      description: 'Adventure horror game built in Roblox for the SFU Summer Summit 2026 game jam.',
-      image: `${BASE_URL}images/the_wishing_terminal.webp`,
-      tags: ['Roblox', 'Lua', 'Adventure', 'Horror', 'Game Development', 'Hackathon'],
-      codeUrl: 'https://matchabatcha.itch.io/thewishingterminal',
-    },
-    {
-      title: 'Cramsino',
-      description: 'AI-powered study app that uses computer vision to detect focus and rewards studying with gacha-style card pulls. Won Best UI at JourneyHacks 2026.',
-      image: `${BASE_URL}images/cramsino.webp`,
-      tags: ['Next.js', 'FastAPI', 'OpenCV', 'PostgreSQL', 'Hackathon'],
-      codeUrl: 'https://devpost.com/software/cramsino',
-      featured: true,
-    },
-    {
-      title: 'WitchDog',
-      description: 'Real-time multiplayer trivia game built in Unity with Socket.IO networking and custom multi-phase gameplay.',
-      image: `${BASE_URL}images/witch_dog.webp`,
-      tags: ['Unity', 'C#', 'Multiplayer', 'Hackathon'],
-      codeUrl: 'https://devpost.com/software/witch-dog',
-    },
-    {
-      title: 'Money Mango',
-      description: 'Personal finance Android app prototype built with Android Studio and Kotlin. Features OCR receipt parsing, manual entry, tags, spending goals, reminders, and analytics.',
-      image: `${BASE_URL}images/money_mango.webp`,
-      tags: ['Android', 'Kotlin', 'ML Kit', 'OCR', 'Mobile', 'Finance', 'Notifications', 'Analytics'],
-      codeUrl: 'https://github.com/EvanDongChen/MoneyMango',
-    },
-    {
-      title: 'Chord Breakers',
-      description: '2D action game built in Unity with modular architecture, elemental combat, and AI using finite state machines.',
-      image: `${BASE_URL}images/chord_breakers.webp`,
-      tags: ['Unity', 'C#', 'Game Development', 'Hackathon'],
-      codeUrl: 'https://angrycow05.itch.io/chord-breaker',
-    },
-    {
-      title: 'SAM for Medical Segmentation',
-      description: 'Research project exploring Segment Anything Models for MRI brain tumor segmentation. Implemented fine-tuning and automated bounding box prompts.',
-      image: `${BASE_URL}images/sam.webp`,
-      tags: ['Python', 'AI', 'Research', 'Medical Imaging'],
-      codeUrl: 'https://www.youtube.com/watch?v=DGHAxlcROsQ',
-      featured: true,
-    },
-    {
-      title: 'Library Database Application',
-      description: 'Full-stack library platform with Flask and SQL. Automated 50% of manual tasks with complex database schema.',
-      image: `${BASE_URL}images/library_database.webp`,
-      tags: ['Flask', 'SQL', 'JavaScript', 'HTML/CSS'],
-      codeUrl: 'https://github.com/EvanDongChen/CMPT354-LibraryDataBase',
-    },
-    {
-      title: 'WanderWise',
-      description: 'AI-powered trip planner using React and Google APIs. Generates full-day plans in 5 seconds with real-time recommendations.',
-      image: `${BASE_URL}images/wander_wise.webp`,
-      tags: ['React', 'AWS Amplify', 'Google APIs', 'AI'],
-      codeUrl: 'https://www.youtube.com/watch?v=WI8YdPw-tSo',
-    },
-    {
-      title: 'Krill Krushers',
-      description: 'Unity 2D combat game inspired by vampire survivors. Created 50+ assets and won Best Entertainment Hack.',
-      image: `${BASE_URL}images/krill_krushers.webp`,
-      tags: ['Unity', 'C#', 'Game Development', 'Team Leadership'],
-      codeUrl: 'https://evandongchen.github.io/Krill-Krushers/',
-    },
-    {
-      title: 'Lizard Wizard',
-      description: '2D combat game where you combo elemental spells to defeat enemies. Built in Unity using C#.',
-      image: `${BASE_URL}images/lizard_wizard.webp`,
-      tags: ['Unity', 'C#', 'Game Development', '2D', 'Combat', 'Elemental'],
-      codeUrl: 'https://github.com/cna52/LizardWizard',
-    },
-    {
-      title: 'Bird Game',
-      description: 'Unity 2D roguelike with custom level generation. Designed 30+ original assets and core gameplay mechanics.',
-      image: `${BASE_URL}images/bird_game.webp`,
-      tags: ['Unity', 'C#', 'Game Design', 'Aseprite'],
-      codeUrl: 'https://evandongchen.github.io/Bird-Game/',
-    },
-    {
-      title: 'Raccoon Game',
-      description: '2.5D platformer game developed for Mountain Madness 2024. Won Most Mountainous award.',
-      image: `${BASE_URL}images/racoon_game.webp`,
-      tags: ['Unity', 'Game Development', 'Hackathon', 'Incomplete'],
-      codeUrl: 'https://github.com/emmyfong/racoongame',
-    },
-    {
-      title: 'Dream On, Sing On',
-      description: 'Web app for vocal/instrumental track separation with karaoke features. Displays synchronized lyrics for songs.',
-      image: `${BASE_URL}images/dream_on_sing_on.webp`,
-      tags: ['React', 'Python', 'Spleeter', 'Audio Processing', 'Hackathon', 'Incomplete'],
-      codeUrl: 'https://devpost.com/software/dream-on-sing-on',
-    },
-    {
-      title: 'Pastry Panic',
-      description: 'Stack-based cake game with leaderboard. Built with Unity and integrated into a React website with SQL database.',
-      image: `${BASE_URL}images/pastry_panic.webp`,
-      tags: ['Unity', 'C#', 'React', 'SQL', 'JavaScript', 'Hackathon', 'Incomplete'],
-      codeUrl: 'https://devpost.com/software/pastry-panic',
-    },
-  ], []);
+  }, []);
 
-  const education = useMemo<Education>(() => ({
-    degree: 'Bachelor of Science, Computing Science',
-    program: 'Zhejiang Dual Degree',
-    university: 'Simon Fraser University, Burnaby, BC',
-    period: 'Sep 2023 - Expected Jun 2027',
-    gpa: '3.62 GPA'
-  }), []);
-
-  const experiences = useMemo<Experience[]>(() => [
-    {
-      role: 'Software Engineer Co-op',
-      company: 'OSI Maritime Systems, Burnaby, BC',
-      period: 'Jan 2026 - Present',
-      description: [],
-    },
-    {
-      role: 'Software Developer',
-      company: 'SFU Robot Soccer Club (SFURS), BC',
-      period: 'Feb 2025 - Present',
-      description: [
-        'Designed and implemented QML-based UI components supporting game state visualization.',
-        'Built a real-time C++ backend that models the game and exposes state to a Qt/QML UI.',
-        'Wrote unit tests with Boost.Test to validate core pathfinding and grid logic.',
-        'Refactored C++ logic for system scalability and code readability.',
-      ],
-    },
-    {
-      role: 'Full Stack Engineer',
-      company: 'Whitebox Coworking Inc., Remote',
-      period: 'May 2025 - Aug 2025',
-      description: [
-        'Built a web platform and internal tools using Next.js, FastAPI, and MongoDB to manage content.',
-        'Developed frontend with TypeScript and Tailwind CSS, implementing routing and state-driven logic.',
-        'Implemented RESTful APIs and data models to support content management workflows.',
-      ],
-    },
-  ], []);
-
-  const skills = useMemo(() => ({
-    languages: ['C', 'C#', 'C++', 'HTML/CSS', 'Java', 'JavaScript', 'Kotlin', 'Python', 'QML', 'SQL', 'TypeScript'],
-    frameworksAndTools: ['CMake', 'Node.js', 'PyTorch', 'React.js', 'Unity', 'Android Studio', 'CI/CD', 'Figma', 'GitHub', 'GitLab', 'Linux', 'MongoDB', 'Plastic SCM', 'Visual Studio']
-  }), []);
-
-  const filteredProjects = useMemo(
-    () => projects.filter(project =>
-      project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-    ),
-    [projects, searchTerm]
-  );
+  const filteredProjects = useMemo(() => filterProjects(searchTerm), [searchTerm]);
 
   const createBubble = useCallback(() => {
     if (theme === 'underwater') {
@@ -1601,23 +1435,7 @@ const App: React.FC = () => {
 
   // Keep this reference stable between animation frames so the static portfolio
   // content can remain memoized while the aquarium simulation updates.
-  const colors = useMemo(() => theme === 'underwater' ? {
-    text: 'text-cyan-100', textLighter: 'text-cyan-100/90', highlight: 'text-cyan-300',
-    highlightStrong: 'text-cyan-200', border: 'border-cyan-400/20', timeline: 'bg-cyan-400/30',
-    timelineDot: 'bg-cyan-500', timelineDotBorder: 'border-[#002851]', cardBg: 'bg-black/20',
-    tagBg: 'bg-cyan-900/50', tagHoverBg: 'hover:bg-cyan-800/70', toolTagBg: 'bg-slate-800/50',
-    toolTagHoverBg: 'hover:bg-slate-700/70', searchBg: 'bg-slate-900/50', searchBorder: 'border-cyan-400/30',
-    searchRing: 'focus:ring-cyan-400', searchPlaceholder: 'placeholder-cyan-200/50', periodBg: 'bg-[#004e92]',
-    heroGradient: 'from-cyan-300 to-blue-400', contactIcon: 'text-cyan-300'
-  } : {
-    text: 'text-emerald-100', textLighter: 'text-emerald-100/80', highlight: 'text-emerald-300',
-    highlightStrong: 'text-emerald-200', border: 'border-emerald-400/15', timeline: 'bg-emerald-400/25',
-    timelineDot: 'bg-emerald-400', timelineDotBorder: 'border-black', cardBg: 'bg-black/50',
-    tagBg: 'bg-emerald-900/40', tagHoverBg: 'hover:bg-emerald-800/60', toolTagBg: 'bg-slate-900/60',
-    toolTagHoverBg: 'hover:bg-slate-800/70', searchBg: 'bg-black/60', searchBorder: 'border-emerald-400/25',
-    searchRing: 'focus:ring-emerald-400', searchPlaceholder: 'placeholder-emerald-200/40', periodBg: 'bg-[#001208]',
-    heroGradient: 'from-emerald-300 to-cyan-400', contactIcon: 'text-emerald-300'
-  }, [theme]);
+  const colors = theme === 'underwater' ? UNDERWATER_COLORS : DEEPSEA_COLORS;
 
 
   const worldTransitionClass = isThemeTransitionActive
@@ -1873,6 +1691,7 @@ const App: React.FC = () => {
       />
       <BackToTopButton />
       <ThemeToggleButton />
+      <PixelModeButton />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
       <TutorialButton isOpen={isTutorialOpen} onToggle={toggleTutorial} />
