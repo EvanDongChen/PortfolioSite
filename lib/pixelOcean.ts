@@ -347,6 +347,8 @@ const PREY: Partial<Record<Species, Species[]>> = {
   shark: ['barracuda', 'octopus', 'puffer', 'minnow'],
   turtle: ['jelly', 'urchin'],
 };
+/** What a minnow keeps an eye out for. */
+const MINNOW_WATCHES: Species[] = ['barracuda', 'jelly', 'shark', 'dolphin'];
 /** Big fish that pick up parasites and visit cleaner stations. */
 const CLEANED: Species[] = ['shark', 'barracuda', 'turtle', 'manta', 'cuttlefish'];
 /** Fish that court a partner before they spawn. */
@@ -436,6 +438,16 @@ export class PixelOcean {
   private gridRows = 0;
   private plankton = 0;
   private clearZones: ClearZone[] = [];
+  /** Cells kept clear (behind the page text), worked out when the zones are set. */
+  private clearMask = new Uint8Array(0);
+  /** Sunlight for each row of the seabed. */
+  private sunRow = new Float32Array(0);
+  /** Rocks and corals by bucket, so creatures only check the ones nearby. */
+  private decorGrid: Decor[][] = [];
+  /** Just the hunters minnows watch for, by bucket, so they needn't scan every creature. */
+  private hunterGrid: Creature[][] = [];
+  /** State of the seabed's fast random numbers (it draws thousands a tick). */
+  private seed = (Math.random() * 0xffffffff) >>> 0 || 1;
   private pod: Pod | null = null;
   /** When the next whale falls and the next dolphin pod visits (ticks). */
   private nextWhale = randInt(1350, 2250);
@@ -591,7 +603,27 @@ export class PixelOcean {
     this.h = h;
     this.gridCols = Math.ceil(w / BUCKET);
     this.gridRows = Math.ceil(h / BUCKET);
+    this.clearMask = new Uint8Array(w * h);
+    this.sunRow = Float32Array.from({ length: h }, (_, z) => sunlight(z));
+    this.grid = [];
+    this.foodGrid = [];
+    this.hunterGrid = [];
+    this.indexDecor();
     this.sweep();
+  }
+
+  /** Files each rock and coral under every bucket it might reach. */
+  private indexDecor() {
+    const cols = this.gridCols, rows = this.gridRows;
+    this.decorGrid = Array.from({ length: cols * rows }, () => []);
+    for (const d of this.decor) {
+      const r = d.w * 0.5 + 2;
+      for (let gz = Math.max(0, Math.floor((d.z - r) / BUCKET)); gz <= Math.min(rows - 1, Math.floor((d.z + r) / BUCKET)); gz++) {
+        for (let gx = Math.max(0, Math.floor((d.x - r) / BUCKET)); gx <= Math.min(cols - 1, Math.floor((d.x + r) / BUCKET)); gx++) {
+          this.decorGrid[gz * cols + gx].push(d);
+        }
+      }
+    }
   }
 
   private cap(species: Species) {
@@ -779,12 +811,15 @@ export class PixelOcean {
       for (const c of this.creatures) c.station = null;
       this.pickStations();
     }
+    this.indexDecor();
     const { w, algae, nutrients } = this;
+    this.clearMask.fill(0);
     for (const r of zones) {
       for (let z = Math.max(0, Math.floor(r.z0 - CLEAR_EDGE)); z <= Math.min(this.h - 1, r.z1 + CLEAR_EDGE); z++) {
         for (let x = Math.max(0, Math.floor(r.x0 - CLEAR_EDGE)); x <= Math.min(w - 1, r.x1 + CLEAR_EDGE); x++) {
           const i = z * w + x;
           if (!this.isClear(i, x, z)) continue;
+          this.clearMask[i] = 1;
           nutrients[i] = Math.min(255, nutrients[i] + (algae[i] >> 4));
           algae[i] = 0;
         }
@@ -865,13 +900,16 @@ export class PixelOcean {
 
   /** Samples random cells: nutrients seep, algae grows, spreads and sheds plankton, stains fade. */
   private updateFloor() {
-    const { w, h, algae, nutrients, stain } = this;
+    const { w, h, algae, nutrients, stain, clearMask, sunRow } = this;
     const n = w * h;
     const planktonCap = this.planktonCap();
+    // A local copy of the fast generator (xorshift32), saved back at the end.
+    let seed = this.seed;
+    const rnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
     for (let k = Math.max(200, Math.round(n / 80)); k > 0; k--) {
-      const i = (Math.random() * n) | 0;
+      const i = (rnd() * n) | 0;
       const x = i % w;
-      const r = Math.random();
+      const r = rnd();
       const j = r < 0.25 ? (x > 0 ? i - 1 : i)
         : r < 0.5 ? (x < w - 1 ? i + 1 : i)
           : r < 0.75 ? (i >= w ? i - w : i)
@@ -879,22 +917,24 @@ export class PixelOcean {
       if (nutrients[i] > nutrients[j] + 1) { nutrients[i]--; nutrients[j]++; }
       if (stain[i] > 0) stain[i] = Math.max(0, stain[i] - 6);
       // Nothing takes root behind the page's text.
-      if (this.isClear(i, x, (i / w) | 0)) continue;
+      if (clearMask[i]) continue;
 
+      const sun = sunRow[(i / w) | 0];
       const a = algae[i];
-      if (nutrients[i] > 0 && a <= 255 - ALGAE_PER_UNIT && (a > 0 || algae[j] >= 96 || Math.random() < 0.002)) {
+      if (nutrients[i] > 0 && a <= 255 - ALGAE_PER_UNIT && (a > 0 || algae[j] >= 96 || rnd() < 0.002)) {
         // Algae grows fastest in the sunlit shallows.
-        if (Math.random() < 0.25 + 0.45 * sunlight(i / w)) { algae[i] = a + ALGAE_PER_UNIT; nutrients[i]--; }
-      } else if (a >= ALGAE_PER_UNIT && Math.random() < 0.04) {
+        if (rnd() < 0.25 + 0.45 * sun) { algae[i] = a + ALGAE_PER_UNIT; nutrients[i]--; }
+      } else if (a >= ALGAE_PER_UNIT && rnd() < 0.04) {
         algae[i] = a - ALGAE_PER_UNIT;
         if (nutrients[i] < 255) nutrients[i]++;
       }
       // Sunlit algae sheds plankton fastest, so the shallows feed the most fish.
-      if (algae[i] >= 224 && this.plankton < planktonCap && Math.random() < 0.004 * (1 + 3 * sunlight(i / w))) {
+      if (algae[i] >= 224 && this.plankton < planktonCap && rnd() < 0.004 * (1 + 3 * sun)) {
         algae[i] -= PLANKTON_UNITS * ALGAE_PER_UNIT;
         this.spawnParticle('plankton', x, Math.floor(i / w), 1);
       }
     }
+    this.seed = (seed >>> 0) || 1;
   }
 
   private updateKelp() {
@@ -912,12 +952,20 @@ export class PixelOcean {
 
   private buildGrids() {
     const size = this.gridCols * this.gridRows;
-    this.grid = Array.from({ length: size }, () => []);
-    this.foodGrid = Array.from({ length: size }, () => []);
+    if (this.grid.length !== size) {
+      this.grid = Array.from({ length: size }, () => []);
+      this.foodGrid = Array.from({ length: size }, () => []);
+      this.hunterGrid = Array.from({ length: size }, () => []);
+    }
+    for (let b = 0; b < size; b++) { this.grid[b].length = 0; this.foodGrid[b].length = 0; this.hunterGrid[b].length = 0; }
     const bucket = (x: number, z: number) =>
       Math.min(this.gridRows - 1, Math.max(0, (z / BUCKET) | 0)) * this.gridCols
       + Math.min(this.gridCols - 1, Math.max(0, (x / BUCKET) | 0));
-    for (const c of this.creatures) this.grid[bucket(c.x, c.z)].push(c);
+    for (const c of this.creatures) {
+      const b = bucket(c.x, c.z);
+      this.grid[b].push(c);
+      if (MINNOW_WATCHES.includes(c.species)) this.hunterGrid[b].push(c);
+    }
     this.plankton = 0;
     for (const p of this.particles) {
       this.foodGrid[bucket(p.x, p.z)].push(p);
@@ -1184,7 +1232,9 @@ export class PixelOcean {
       if (c.h < sp.minH && c.grazeCell < 0 && !c.station) s.h += 0.03;
       if (c.h > sp.maxH) s.h -= 0.03;
       // Rocks and corals are never taller than this.
-      for (const d of c.h > 20 ? [] : this.decor) {
+      const bucket = Math.min(this.gridRows - 1, Math.max(0, (c.z / BUCKET) | 0)) * this.gridCols
+        + Math.min(this.gridCols - 1, Math.max(0, (c.x / BUCKET) | 0));
+      for (const d of c.h > 20 ? [] : this.decorGrid[bucket] ?? []) {
         if (c.h > d.ht + 3) continue;
         const r = d.w * 0.5 + 2;
         if ((c.x - d.x) ** 2 + (c.z - d.z) ** 2 < r * r) s.h += 0.06;
@@ -1228,7 +1278,7 @@ export class PixelOcean {
     let threat: { x: number; z: number } | null = null;
     let threatD = 45 * 45;
     let dolphins = false;
-    this.near(this.grid, c.x, c.z, 45, o => {
+    this.near(this.hunterGrid, c.x, c.z, 45, o => {
       if (o.species === 'dolphin') { if ((o.x - c.x) ** 2 + (o.z - c.z) ** 2 < 45 * 45) dolphins = true; return; }
       if (o.species !== 'barracuda' && o.species !== 'jelly' && o.species !== 'shark') return;
       if (o.station) return; // Queueing hunters are at peace.
