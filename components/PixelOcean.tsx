@@ -210,6 +210,8 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       pod: () => { const p = centre(); ocean.debugPod(p.x, p.z); },
       scent: () => { const p = centre(); ocean.debugScent(p.x, p.z); },
       parasites: () => ocean.debugParasites(),
+      spawning: () => ocean.debugSpawning(),
+      baitBall: () => { const p = centre(); ocean.debugBaitBall(p.x, p.z); },
       setSpeed: s => { speed = s; },
     };
 

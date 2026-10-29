@@ -9,6 +9,8 @@ export interface ReefDebugActions {
   pod: () => void;
   scent: () => void;
   parasites: () => void;
+  spawning: () => void;
+  baitBall: () => void;
   setSpeed: (speed: number) => void;
 }
 
@@ -74,6 +76,8 @@ const ReefDebugPanel: React.FC<ReefDebugPanelProps> = ({ actions }) => {
         <button type="button" onClick={() => act?.pod()}>Dolphin pod</button>
         <button type="button" onClick={() => act?.scent()}>Scent of blood</button>
         <button type="button" onClick={() => act?.parasites()}>Parasites on big fish</button>
+        <button type="button" onClick={() => act?.spawning()}>Coral spawning</button>
+        <button type="button" onClick={() => act?.baitBall()}>Bait ball here</button>
       </div>
       <p className="reef-debug-label">Simulation speed</p>
       <div className="reef-debug-speed" role="radiogroup" aria-label="Simulation speed">
