@@ -265,6 +265,33 @@ export const creatureSprite = (kind: SpriteKind, palette: number, frame: number,
   });
 };
 
+/**
+ * A puff of sand kicked off the seabed, seen from slightly above: a lump
+ * bursts up, billows into a low ring and thins away. Tones: light (L),
+ * mid (B), shadow (D). Coral spawn uses the same puff in pinks.
+ */
+const PUFF = [
+  ['...........', '...........', '....LLL....', '...LBBBL...', '....DDD....'],
+  ['...........', '....LLL....', '...LBBBL...', '..LBBDBBL..', '...DDDDD...'],
+  ['....LLL....', '..LLBBBLL..', '.LBB.B.BBL.', '.BDD...DDB.', '..DD...DD..'],
+  ['...L...L...', '.LB.....BL.', 'L.........L', 'BD.......DB', '.D.......D.'],
+  ['...........', 'L.........L', '...........', 'D.........D', '...........'],
+];
+export const PUFF_FRAMES = PUFF.length;
+const PUFF_COLORS = [
+  { L: [210, 196, 154] as Rgb, B: [178, 166, 130] as Rgb, D: [140, 130, 102] as Rgb },
+  { L: [255, 240, 246] as Rgb, B: [255, 150, 190] as Rgb, D: [216, 108, 156] as Rgb },
+];
+
+/** A puff frame: palette 0 is sand, 1 coral spawn. */
+export const puffSprite = (frame: number, palette: number) =>
+  cached(`puff-${frame}-${palette}`, () => fromRows(PUFF[Math.min(PUFF.length - 1, frame)], PUFF_COLORS[palette & 1]));
+
+/** Disturbed water behind a fast swimmer: a bubble that shrinks to a fleck. */
+const FIZZ = [['.f.', 'fFf', '.f.'], ['...', '.ff', '.f.'], ['...', '.f.', '...']];
+export const fizzSprite = (frame: number) =>
+  cached(`fizz-${frame}`, () => fromRows(FIZZ[Math.min(FIZZ.length - 1, frame)], { f: [196, 232, 240], F: [140, 190, 210] }));
+
 /** A sprite filled in one flat colour, for shadows cast from far overhead. */
 export const silhouetteSprite = (key: string, img: HTMLCanvasElement, colour = 'rgb(2,10,18)') =>
   cached(`silhouette-${key}`, () => {

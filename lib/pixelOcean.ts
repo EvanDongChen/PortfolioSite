@@ -146,9 +146,12 @@ export interface Carcass {
   alive: boolean;
 }
 
-/** A drop of blood (or jellyfish goo, or octopus ink) drifting in the water. */
+/**
+ * A drop of blood (or jellyfish goo, or octopus ink) drifting in the water,
+ * or a puff of sand (or coral spawn) that billows and fades where it is.
+ */
 export interface Drop {
-  kind: 'blood' | 'goo' | 'ink' | 'heart' | 'sand' | 'scent' | 'sparkle';
+  kind: 'blood' | 'goo' | 'ink' | 'heart' | 'sand' | 'scent' | 'sparkle' | 'puff';
   x: number; z: number; h: number;
   vx: number; vz: number; vh: number;
   life: number;
@@ -366,9 +369,11 @@ const SPACING: Partial<Record<Species, number>> = {
   puffer: 9, clownfish: 5, cuttlefish: 14, turtle: 18, barracuda: 14, shark: 24, starfish: 10, crab: 9, octopus: 12, jelly: 9,
 };
 /** How hard things swimming through kelp and anemones push them over, and how far (cells). */
-const BEND_FORCE = 0.06;
-const MAX_BEND = 6;
+const BEND_FORCE = 0.25;
+const MAX_BEND = 7;
 /** Ticks between sand puffs for the creatures that stir it up. */
+/** How long a puff of sand or spawn takes to billow out and fade. */
+const PUFF_TICKS = 20;
 const SAND_STIRRERS: Partial<Record<Species, number>> = { crab: 20, octopus: 26, turtle: 10, manta: 10 };
 /**
  * A coral spawning: how long it lasts, each coral's chance a tick of
@@ -1368,15 +1373,21 @@ export class PixelOcean {
     if (!every || (this.tick + c.id) % every) return;
     const speed = Math.hypot(c.vx, c.vz);
     if (c.species === 'crab' || c.species === 'octopus') {
-      if (speed > 0.03 && c.h < 2) this.kickSand(c.x, c.z, 2, 1);
+      if (speed > 0.03 && c.h < 2) this.kickSand(c.x - c.vx * 6, c.z - 0.6, 2, 1);
     } else if (c.h < 7 && speed > 0.08) {
       this.kickSand(c.x - c.vx * 4, c.z, 3, 3);
     }
   }
 
-  /** A little cloud of sand puffed up off the seabed. */
+  /** A puff that billows and fades where it is: sand (shade 0) or coral spawn (shade 1). */
+  private puff(x: number, z: number, h: number, shade: number) {
+    this.drops.push({ kind: 'puff', x, z, h, vx: 0, vz: 0, vh: 0, life: PUFF_TICKS, maxLife: PUFF_TICKS, shade, alive: true });
+  }
+
+  /** A little cloud of sand puffed up off the seabed, with a few grains thrown clear. */
   private kickSand(x: number, z: number, count: number, spread: number) {
-    for (let k = 0; k < count; k++) {
+    this.puff(x, z, 0.5, 0);
+    for (let k = 1; k < count; k++) {
       const life = randInt(26, 55);
       this.drops.push({
         kind: 'sand',
@@ -2077,6 +2088,7 @@ export class PixelOcean {
         if (d.kind !== 'coral' || d.grow || this.spawnCount >= MAX_SPAWN || Math.random() > SPAWN_RATE) continue;
         // A plume of eggs puffed out together, so it rises as a little cloud.
         const x = d.x + rand(-d.w / 3, d.w / 3);
+        this.puff(x, d.z + 0.5, d.ht * 0.8, 1);
         for (let k = 0; k < PLUME; k++) {
           this.spawnCount++;
           this.particles.push({
@@ -2370,7 +2382,11 @@ export class PixelOcean {
       if (wf.h <= 0) {
         wf.landed = true;
         // A great cloud of sand thrown up along its length.
-        for (let k = 0; k < 6; k++) this.splash('sand', { x: wf.x + rand(-22, 22), z: wf.z + rand(-3, 3), h: 1 }, 10, [50, 110], 0.6);
+        for (let k = 0; k < 6; k++) {
+          const x = wf.x + rand(-22, 22), z = wf.z + rand(-3, 3);
+          this.splash('sand', { x, z, h: 1 }, 10, [50, 110], 0.6);
+          this.puff(x, z, 0.5, 0);
+        }
         this.addScent(wf.x, wf.z, 2);
         this.logEvent('visit', 'A whale fall hit the seabed: the feast begins');
       }
@@ -2822,6 +2838,7 @@ export class PixelOcean {
         case 'ink': d.vh *= 0.92; break;
         case 'heart': case 'sparkle': d.vh = d.vh * 0.9 + 0.006; break;
         case 'scent': d.vh = d.vh * 0.95 + 0.002; d.vx += Math.cos(this.currentAngle) * 0.004; break;
+        case 'puff': continue;
         default: d.vh = d.vh * 0.92 - 0.004;
       }
       d.x += d.vx;

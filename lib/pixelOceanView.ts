@@ -9,7 +9,7 @@
 import { Anemone, Carcass, Creature, Drop, Kelp, PixelOcean, SPECIES, SURFACE, Species, Station, WhaleFall } from './pixelOcean';
 import {
   FLOOR, SpriteKind, buildCaustics, creatureSprite, creaturePalette, bonesSprite, bubbleSprite, pelletSprite,
-  shadowSprite, rockSprite, coralSprite, starfishSprite, cuttleSprite, whaleSprite, silhouetteSprite,
+  shadowSprite, rockSprite, coralSprite, starfishSprite, cuttleSprite, whaleSprite, silhouetteSprite, puffSprite, fizzSprite, PUFF_FRAMES,
 } from './pixelOceanArt';
 
 /** How far up the screen one unit of height lifts an object. */
@@ -54,6 +54,7 @@ const DROP_COLORS: Record<Drop['kind'], string[]> = {
   sand: ['rgb(150,140,110)', 'rgb(178,166,130)', 'rgb(120,112,90)'],
   scent: ['rgb(200,70,90)', 'rgb(220,100,110)', 'rgb(180,60,80)'],
   sparkle: ['rgb(255,255,255)', 'rgb(200,250,255)', 'rgb(255,240,200)'],
+  puff: [],
 };
 // Pixel shapes for the particles that aren't plain squares.
 const HEART = ['.X.X.', 'XXXXX', 'XXXXX', '.XXX.', '..X..'];
@@ -602,6 +603,11 @@ export class OceanView {
       items.push({
         depth: d.z + 0.25,
         draw: () => {
+          if (d.kind === 'puff') {
+            const frame = Math.min(PUFF_FRAMES - 1, Math.floor((1 - d.life / d.maxLife) * PUFF_FRAMES));
+            this.sprite(puffSprite(frame, d.shade), d.x, d.z, d.h, { alpha: 0.85 });
+            return;
+          }
           const q = this.project(d.x, d.z, d.h);
           const fade = Math.min(1, (d.life / d.maxLife) * 1.6);
           ctx.fillStyle = DROP_COLORS[d.kind][d.shade];
@@ -658,19 +664,18 @@ export class OceanView {
    * thin out behind it, jostled to either side.
    */
   private drawWake(c: Creature) {
-    const { spriteCtx: ctx, px, ocean } = this;
+    const { ocean } = this;
     const speed = Math.hypot(c.vx, c.vz) || 1;
     const nx = -c.vz / speed, nz = c.vx / speed;
     const back = BODY_WIDTH[c.species] * 0.45;
     const count = c.species === 'minnow' ? 3 : 5;
-    ctx.fillStyle = 'rgb(196,232,240)';
+    // Bubbles shrink to flecks the further back they are, and jostle side to side.
     for (let i = 0; i < count; i++) {
-      const along = back + i * 2.2;
-      const side = (((ocean.tick >> 1) + i + c.id) & 1 ? 1 : -1) * (0.4 + i * 0.35);
-      const q = this.project(c.x - c.vx / speed * along + nx * side, c.z - c.vz / speed * along + nz * side, c.h - c.vh / speed * along);
-      ctx.globalAlpha = 0.42 * (1 - i / count);
-      const size = Math.max(2, Math.round(px * 0.7 * q.s));
-      ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
+      const along = back + i * 2.6;
+      const side = (((ocean.tick >> 2) + i + c.id) & 1 ? 1 : -1) * (0.4 + i * 0.4);
+      const frame = Math.min(2, Math.floor((i * 3) / count + ((ocean.tick >> 2) & 1) * 0.5));
+      this.sprite(fizzSprite(frame), c.x - c.vx / speed * along + nx * side, c.z - c.vz / speed * along + nz * side, c.h - c.vh / speed * along,
+        { alpha: 0.75 * (1 - i / (count + 1)) });
     }
   }
 
@@ -874,8 +879,9 @@ export class OceanView {
       const lean = (k - 4) * 0.6;
       for (let t = 1; t <= reach; t += 0.6) {
         const give = (t / 10) ** 1.3;
-        const sway = Math.sin(ocean.tick * 0.08 + a.phase + k * 0.7) * (t / 8) * 2 + a.bx * give;
-        const p = this.project(a.x + root + lean * t * 0.4 + sway, a.z + a.bz * give, t);
+        // Halved: their own clownfish are always brushing through them.
+        const sway = Math.sin(ocean.tick * 0.08 + a.phase + k * 0.7) * (t / 8) * 2 + a.bx * give * 0.5;
+        const p = this.project(a.x + root + lean * t * 0.4 + sway, a.z + a.bz * give * 0.5, t);
         const size = Math.ceil(px * p.s);
         (t > reach - 1 ? tips : stalk).rect(Math.round(p.x - size / 2), Math.round(p.y), size, size);
       }
