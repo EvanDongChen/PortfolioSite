@@ -117,6 +117,8 @@ export interface Creature {
   anemone: Anemone | null;
   /** A dolphin's place in its pod. */
   podIndex: number;
+  /** Ticks before it may turn around again, so hovering fish don't flicker. */
+  turnHold: number;
   scanIn: number;
   prey: Creature | null;
   alive: boolean;
@@ -346,6 +348,10 @@ const PREY: Partial<Record<Species, Species[]>> = {
   barracuda: ['minnow', 'puffer', 'seahorse'],
   shark: ['barracuda', 'octopus', 'puffer', 'minnow'],
   turtle: ['jelly', 'urchin'],
+};
+/** How much room (in cells) fish that don't school keep from their own kind. */
+const SPACING: Partial<Record<Species, number>> = {
+  puffer: 9, clownfish: 5, cuttlefish: 14, turtle: 18, barracuda: 14, shark: 24, starfish: 10, crab: 9, octopus: 12, jelly: 9,
 };
 /** What a minnow keeps an eye out for. */
 const MINNOW_WATCHES: Species[] = ['barracuda', 'jelly', 'shark', 'dolphin'];
@@ -715,6 +721,7 @@ export class PixelOcean {
       limbs: 5,
       anemone: parent?.anemone ?? null,
       podIndex: 0,
+      turnHold: 0,
       scanIn: randInt(0, 10),
       prey: null,
       alive: true,
@@ -1241,6 +1248,7 @@ export class PixelOcean {
       }
     }
 
+    this.keepApart(c, s);
     c.vx = (c.vx + s.x) * 0.95;
     c.vz = (c.vz + s.z) * 0.95;
     c.vh = (c.vh + s.h) * 0.9;
@@ -1249,8 +1257,34 @@ export class PixelOcean {
     c.x = Math.max(1, Math.min(this.w - 2, c.x + c.vx));
     c.z = Math.max(1, Math.min(this.h - 2, c.z + c.vz));
     c.h = sp.maxH === 0 ? 0 : Math.max(sp.minH === 0 ? 0 : 1, Math.min(SURFACE - 8, c.h + c.vh));
-    if (c.vx > 0.03) c.facing = 1;
-    else if (c.vx < -0.03) c.facing = -1;
+    this.turn(c, c.vx, 0.05);
+  }
+
+  /**
+   * Faces the way it is moving, but only once it is clearly moving that way,
+   * and not again for a moment, so a fish that hovers or nudges back and
+   * forth doesn't flicker left and right.
+   */
+  private turn(c: Creature, vx: number, threshold: number) {
+    if (c.turnHold > 0) { c.turnHold--; return; }
+    const want = vx > threshold ? 1 : vx < -threshold ? -1 : c.facing;
+    if (want !== c.facing) { c.facing = want; c.turnHold = 12; }
+  }
+
+  /** Same-species fish that don't school keep a little personal space. */
+  private keepApart(c: Creature, s: { x: number; z: number; h: number }) {
+    const room = SPACING[c.species];
+    if (!room) return;
+    this.near(this.grid, c.x, c.z, room, o => {
+      if (o === c || o.species !== c.species || !o.alive) return;
+      const dx = c.x - o.x, dz = c.z - o.z, dh = c.h - o.h;
+      const d = Math.hypot(dx, dz, dh * 0.7);
+      if (d >= room || d === 0) return;
+      const push = (1 - d / room) * 0.03;
+      s.x += dx / d * push;
+      s.z += dz / d * push;
+      s.h += dh / d * push * 0.5;
+    });
   }
 
   private wander(c: Creature, s: { x: number; z: number; h: number }, strength = 0.02) {
@@ -1316,7 +1350,8 @@ export class PixelOcean {
     if ((this.tick + c.id) % 15 === 0 || (threat && !c.kelp)) c.kelp = this.nearestKelp(c, 50);
     const k = c.kelp;
     const kd = k ? Math.hypot(k.x - c.x, k.z - c.z) : Infinity;
-    c.hidden = !!k && kd < 5 && c.h < k.length;
+    // A margin either side, so it doesn't flicker in and out of hiding.
+    c.hidden = !!k && c.h < k.length && (c.hidden ? kd < 6.5 : kd < 5);
 
     if (threat) {
       const t = threat as { x: number; z: number };
@@ -1614,7 +1649,7 @@ export class PixelOcean {
       c.x += dx / d * step;
       c.z += dz / d * step;
       c.h += dh / d * step;
-      if (Math.abs(dx) > 0.2) c.facing = dx > 0 ? 1 : -1;
+      this.turn(c, dx, 0.6);
       c.mood = 'cruising';
     } else {
       c.mood = c.carrying > 0 ? 'carrying' : 'clinging';
@@ -1979,7 +2014,7 @@ export class PixelOcean {
           return;
         }
         if (d > 26) { c.timer = 0; c.prey = null; return; }
-        c.facing = prey.x > c.x ? 1 : -1;
+        this.turn(c, prey.x - c.x, 2);
         c.timer++;
         s.max = 0.02;
         prey.dazed = Math.max(prey.dazed, 6);
