@@ -923,6 +923,88 @@ html.pixel-theme {
   mask: var(--px-icon) center / 100% 100% no-repeat;
 }
 
+/* The hidden reef debug panel (Konami code). Plain styles too, so it also
+   reads without the pixel theme. */
+.reef-debug {
+  max-height: calc(100vh - 8rem);
+  overflow-y: auto;
+  padding: 8px 10px 10px;
+  font-family: var(--px-mono, monospace);
+  font-size: 1.15rem;
+  line-height: 1.2;
+  color: var(--px-text, #e6f1f2);
+  background: rgba(5, 13, 20, 0.94);
+  border-style: solid;
+  border-width: 4px;
+  border-image: var(--px-panel) 6 fill / 4px / 0 stretch;
+}
+.reef-debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1.3rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--px-coral, #ff7a63);
+}
+.reef-debug-header button { font-size: 1.5rem; line-height: 1; padding: 0 4px; }
+.reef-debug-label {
+  margin: 8px 0 4px;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--px-mute, #8aa6b4);
+}
+.reef-debug-species {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 8px;
+}
+.reef-debug-species button,
+.reef-debug-events button,
+.reef-debug-speed button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+.reef-debug-species button:hover,
+.reef-debug-events button:hover,
+.reef-debug-speed button:hover { color: var(--px-sand-color, #f0d8a0); background: rgba(29, 66, 86, 0.6); }
+.reef-debug-species img {
+  width: 22px;
+  height: 14px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.reef-debug-events {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.reef-debug-events button {
+  justify-content: center;
+  text-align: center;
+  border-style: solid;
+  border-width: 4px;
+  border-image: var(--px-chip) 6 fill / 4px / 0 stretch;
+}
+.reef-debug-speed { display: flex; gap: 6px; }
+.reef-debug-speed button {
+  justify-content: center;
+  min-width: 3rem;
+  border-style: solid;
+  border-width: 4px;
+  border-image: var(--px-chip) 6 fill / 4px / 0 stretch;
+}
+.reef-debug-speed button[aria-checked='true'] {
+  color: #2a1d08;
+  border-image-source: var(--px-sand);
+}
+
 /* --- motion -------------------------------------------------------------------- */
 
 @keyframes px-blink {

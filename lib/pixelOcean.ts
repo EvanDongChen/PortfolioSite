@@ -2000,21 +2000,64 @@ export class PixelOcean {
     this.wander(c, s, 0.01);
   }
 
+  // --- debug tools (the hidden panel) --------------------------------------
+
+  /**
+   * Spawns a grown creature at a point. Creatures with a home settle into
+   * the nearest one: morays a rock den, octopuses a rock, clownfish an
+   * anemone, seahorses a kelp stalk. Dolphins arrive as a pod.
+   */
+  debugSpawn(species: Species, x: number, z: number) {
+    if (species === 'dolphin') { this.debugPod(x, z); return; }
+    const c = this.spawn(species, null, 0.8);
+    c.age = SPECIES[species].mature;
+    c.x = Math.max(2, Math.min(this.w - 3, x));
+    c.z = Math.max(2, Math.min(this.h - 3, z));
+    c.homeZ = c.z;
+    if (species === 'eel') this.giveDen(c);
+    if (species === 'octopus') this.giveHomeRock(c);
+    if (species === 'clownfish') {
+      c.anemone = this.anemones.reduce<Anemone | null>((best, a) =>
+        !best || (a.x - x) ** 2 + (a.z - z) ** 2 < (best.x - x) ** 2 + (best.z - z) ** 2 ? a : best, null);
+      if (c.anemone) { c.x = c.anemone.x; c.z = c.anemone.z; c.homeZ = c.z; }
+    }
+    if (species === 'seahorse') {
+      c.kelp = this.nearestKelp(c, 400);
+      if (c.kelp) { c.x = c.kelp.x; c.z = c.kelp.z; c.homeZ = c.z; }
+    }
+    this.logEvent('visit', `${c.name} was dropped into the reef`, c);
+  }
+
+  /** Drops a whale fall right here, replacing any that is already down. */
+  debugWhale(x: number, z: number) {
+    this.startWhaleFall(x, z);
+  }
+
+  /** Sends the dolphins in now, after the school nearest this point. */
+  debugPod(x: number, z: number) {
+    for (const c of this.creatures) if (c.species === 'dolphin') c.alive = false;
+    this.pod = null;
+    this.spawnPod({ x, z });
+  }
+
+  /** A strong scent of blood here, to watch the hunters come. */
+  debugScent(x: number, z: number) {
+    this.addScent(x, z, 3);
+    this.splash('blood', { x, z, h: 10 }, 20);
+  }
+
+  /** Loads every big fish with parasites, so they all head for the cleaners. */
+  debugParasites() {
+    for (const c of this.creatures) if (CLEANED.includes(c.species)) c.parasites = 1;
+  }
+
   // --- visitors -------------------------------------------------------------
 
   /** A whale carcass sinks every few minutes, feeds the reef, and leaves its bones. */
   private updateWhale() {
     const wf = this.whale;
     if (!wf) {
-      if (this.tick >= this.nextWhale) {
-        this.whale = {
-          x: rand(30, this.w - 30), z: rand(60, this.h - 40), h: SURFACE - 10, vh: 0,
-          facing: Math.random() < 0.5 ? 1 : -1,
-          mass: WHALE_MASS, fullMass: WHALE_MASS, alive: true, landed: false, bonesUntil: 0,
-          whale: true,
-        };
-        this.logEvent('visit', 'A whale carcass is sinking toward the reef');
-      }
+      if (this.tick >= this.nextWhale) this.startWhaleFall(rand(30, this.w - 30), rand(60, this.h - 40));
       return;
     }
     if (!wf.landed) {
@@ -2097,11 +2140,23 @@ export class PixelOcean {
     if (pod.phase === 'arrive' && this.tick > pod.until) pod.phase = 'leave';
   }
 
-  private spawnPod() {
+  private startWhaleFall(x: number, z: number) {
+    this.whale = {
+      x: Math.max(30, Math.min(this.w - 30, x)), z: Math.max(10, Math.min(this.h - 10, z)), h: SURFACE - 10, vh: 0,
+      facing: Math.random() < 0.5 ? 1 : -1,
+      mass: WHALE_MASS, fullMass: WHALE_MASS, alive: true, landed: false, bonesUntil: 0,
+      whale: true,
+    };
+    this.logEvent('visit', 'A whale carcass is sinking toward the reef');
+  }
+
+  /** Sends a pod after a school: the one nearest `near` if given, else one in the shallows. */
+  private spawnPod(near?: { x: number; z: number }) {
     const minnows = this.creatures.filter(c => c.species === 'minnow' && c.alive);
-    if (minnows.length < 20) { this.nextPod = this.tick + 1800; return; }
+    if (minnows.length < (near ? 1 : 20)) { this.nextPod = this.tick + 1800; return; }
     const shallow = minnows.filter(c => c.z < SHALLOWS * 1.5);
-    const school = (shallow.length ? shallow : minnows)[randInt(0, (shallow.length || minnows.length) - 1)];
+    const nearest = near && minnows.reduce((a, b) => ((a.x - near.x) ** 2 + (a.z - near.z) ** 2 < (b.x - near.x) ** 2 + (b.z - near.z) ** 2 ? a : b));
+    const school = nearest ?? (shallow.length ? shallow : minnows)[randInt(0, (shallow.length || minnows.length) - 1)];
     const side: 1 | -1 = school.x < this.w / 2 ? -1 : 1;
     const size = randInt(3, 5);
     for (let k = 0; k < size; k++) {

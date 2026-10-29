@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Creature, Mood, PixelOcean as Ocean, OceanStats, SPECIES, Species, TICKS_PER_SECOND } from '../lib/pixelOcean';
 import { Adoption, displayName, loadAdoption, saveAdoption } from '../lib/adoption';
 import PixelMeter from './PixelMeter';
+import ReefDebugPanel, { ReefDebugActions } from './ReefDebugPanel';
 import { OceanView } from '../lib/pixelOceanView';
 import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext';
 
@@ -113,6 +114,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
   const tipRef = useRef<HTMLDivElement>(null);
   const oceanRef = useRef<Ocean | null>(null);
   const actionsRef = useRef<ReefActions | null>(null);
+  const debugRef = useRef<ReefDebugActions | null>(null);
   const [inspected, setInspected] = useState<Inspected | null>(null);
   const [adoption, setAdoption] = useState<Adoption | null>(() => loadAdoption());
   const [notice, setNotice] = useState<string | null>(null);
@@ -199,6 +201,18 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       }
     };
 
+    // The hidden debug panel works on the middle of the screen.
+    let speed = 1;
+    const centre = () => view.screenToWorld(window.innerWidth / 2, window.innerHeight / 2, 0);
+    debugRef.current = {
+      spawn: species => { const p = centre(); ocean.debugSpawn(species, p.x, p.z); },
+      whale: () => { const p = centre(); ocean.debugWhale(p.x, p.z); },
+      pod: () => { const p = centre(); ocean.debugPod(p.x, p.z); },
+      scent: () => { const p = centre(); ocean.debugScent(p.x, p.z); },
+      parasites: () => ocean.debugParasites(),
+      setSpeed: s => { speed = s; },
+    };
+
     actionsRef.current = {
       adopt: (name: string) => {
         if (!pinned?.alive) return;
@@ -256,7 +270,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       // After a hidden tab, catch up a few ticks rather than fast-forwarding.
-      pending = Math.min(pending + now - last, TICK_MS * 3);
+      pending = Math.min(pending + (now - last) * speed, TICK_MS * 3 * speed);
       last = now;
       let ticked = false;
       while (pending >= TICK_MS) {
@@ -335,6 +349,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       observer.disconnect();
       oceanRef.current = null;
       actionsRef.current = null;
+      debugRef.current = null;
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('pointermove', handlePointerMove);
       document.documentElement.removeEventListener('pointerleave', handlePointerLeave);
@@ -384,6 +399,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
         )}
       </div>
 
+      <ReefDebugPanel actions={debugRef} />
       {(followedName || adoption || notice) && (
         <div className="adopt-bar" data-reef-ui role="region" aria-label="Your creature">
           {notice && <p className="adopt-notice" role="status">{notice}</p>}
