@@ -9,7 +9,7 @@
 import { Anemone, Carcass, Creature, Drop, PixelOcean, SPECIES, SURFACE, Species, Station, WhaleFall } from './pixelOcean';
 import {
   FLOOR, SpriteKind, buildCaustics, creatureSprite, creaturePalette, bonesSprite, bubbleSprite, pelletSprite,
-  shadowSprite, rockSprite, coralSprite, starfishSprite, cuttleSprite, whaleSprite,
+  shadowSprite, rockSprite, coralSprite, starfishSprite, cuttleSprite, whaleSprite, silhouetteSprite,
 } from './pixelOceanArt';
 
 /** How far up the screen one unit of height lifts an object. */
@@ -84,6 +84,38 @@ interface SpriteOptions {
   anchor?: 'bottom' | 'center';
 }
 
+/**
+ * Animals far above the reef that never come down: now and then one passes
+ * overhead and only its shadow slides across the screen. Sizes are in sprite
+ * cells times this scale, speeds in screen pixels per tick.
+ */
+const PASSERS: { kind: SpriteKind | 'whale'; scale: number; speed: number; count: number; spread: number }[] = [
+  { kind: 'whale', scale: 3.2, speed: 2, count: 1, spread: 0 },
+  { kind: 'manta', scale: 5, speed: 2.6, count: 1, spread: 0 },
+  { kind: 'manta', scale: 4, speed: 2.8, count: 2, spread: 130 },
+  { kind: 'shark', scale: 4.5, speed: 3.4, count: 1, spread: 0 },
+  { kind: 'turtle', scale: 5, speed: 1.8, count: 1, spread: 0 },
+  { kind: 'dolphin', scale: 4, speed: 5.5, count: 3, spread: 120 },
+  { kind: 'minnow', scale: 2.5, speed: 4.5, count: 16, spread: 260 },
+];
+/** Ticks between passing shadows. */
+const PASSER_GAP: [number, number] = [600, 1300];
+const PASSER_ALPHA = 0.28;
+
+interface Passer {
+  kind: SpriteKind | 'whale';
+  scale: number;
+  speed: number;
+  dir: 1 | -1;
+  /** Screen height of the group's centre. */
+  y: number;
+  start: number;
+  /** Each member's offset from the group's centre, and its own beat. */
+  members: { dx: number; dy: number; phase: number }[];
+  /** How far the group reaches either side of its centre. */
+  reach: number;
+}
+
 export class OceanView {
   /** Top of the drawn region, in page pixels. */
   regionTop = 0;
@@ -115,6 +147,8 @@ export class OceanView {
    */
   private sandCache = new Uint32Array(0);
   private sandCacheSize = '';
+  private passer: Passer | null = null;
+  private nextPasser = 450;
 
   constructor(
     private ocean: PixelOcean,
@@ -400,6 +434,7 @@ export class OceanView {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, this.viewW, this.regionHeight);
+    this.drawPasser();
 
     // Anything whose floor point is near the viewport (tall or high things
     // reach further up the screen than their footprint).
@@ -426,7 +461,10 @@ export class OceanView {
     for (const p of ocean.particles) if (p.kind === 'pellet' && p.h > 0 && visible(p.z)) shadow(p.x, p.z, p.h, 3);
     for (const d of ocean.decor) if (visible(d.z)) shadow(d.x + 2, d.z, 0, d.w + 2);
     const wf = ocean.whale;
-    if (wf && visible(wf.z)) shadow(wf.x, wf.z, wf.h * 0.5, 50);
+    if (wf && visible(wf.z)) {
+      shadow(wf.x, wf.z, wf.h * 0.5, 60);
+      if (wf.landed) this.drawMat(wf);
+    }
 
     const items: Drawable[] = [];
     for (const d of ocean.decor) {
@@ -765,8 +803,83 @@ export class OceanView {
   private drawWhale(wf: WhaleFall) {
     const left = wf.mass / wf.fullMass;
     const stage = wf.mass <= 0 ? 3 : left > 0.66 ? 0 : left > 0.33 ? 1 : 2;
-    const fadeOut = wf.mass <= 0 ? Math.min(1, (wf.bonesUntil - this.ocean.tick) / 600) : 1;
-    this.sprite(whaleSprite(stage), wf.x, wf.z, wf.h + 3, { flipX: wf.facing < 0, alpha: Math.max(0, fadeOut) });
+    this.sprite(whaleSprite(stage), wf.x, wf.z, wf.h + 4, { flipX: wf.facing < 0, alpha: this.whaleFade(wf) });
+  }
+
+  private whaleFade(wf: WhaleFall) {
+    return wf.mass <= 0 ? Math.max(0, Math.min(1, (wf.bonesUntil - this.ocean.tick) / 600)) : 1;
+  }
+
+  /**
+   * The pale bacterial mat that spreads over the seabed round a whale fall,
+   * fixed specks in a ring that widens as the carcass is eaten.
+   */
+  private drawMat(wf: WhaleFall) {
+    const { spriteCtx: ctx, px } = this;
+    const grown = Math.min(1, 0.35 + (1 - Math.max(0, wf.mass) / wf.fullMass));
+    ctx.globalAlpha = 0.5 * this.whaleFade(wf);
+    for (let i = 0; i < 70; i++) {
+      // A fixed scatter per whale, so the specks stay put.
+      const a = i * 2.39996 + wf.x;
+      const r = Math.sqrt((i + 0.5) / 70) * grown;
+      const p = this.project(wf.x + Math.cos(a) * r * 32, wf.z + 1 + Math.sin(a) * r * 9, 0);
+      ctx.fillStyle = i % 3 ? 'rgb(214,222,200)' : 'rgb(236,226,170)';
+      const size = px * (i % 5 === 0 ? 2 : 1);
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), size, size);
+    }
+  }
+
+  /** The shadow of something passing far overhead, if one is due. */
+  private drawPasser() {
+    const { ocean, spriteCtx: ctx, viewW, viewH } = this;
+    let p = this.passer;
+    if (!p) {
+      if (ocean.tick < this.nextPasser) return;
+      const pick = PASSERS[Math.floor(Math.random() * PASSERS.length)];
+      const img = this.passerImage(pick.kind, 0);
+      const w = img.width * this.px * pick.scale;
+      const h = img.height * this.px * pick.scale;
+      // A school mills about at random; bigger animals keep station in an
+      // echelon, each one behind and to the side of the last.
+      const members = Array.from({ length: pick.count }, (_, i) => pick.kind === 'minnow'
+        ? { dx: (Math.random() - 0.5) * pick.spread * 2, dy: (Math.random() - 0.5) * pick.spread, phase: Math.random() * 8 }
+        : { dx: -i * w * 0.7, dy: (i % 2 ? 1 : -1) * Math.ceil(i / 2) * (h * 1.3 + pick.spread * 0.3), phase: i * 3 });
+      p = this.passer = {
+        ...pick,
+        dir: Math.random() < 0.5 ? 1 : -1,
+        y: viewH * (0.2 + Math.random() * 0.6),
+        start: ocean.tick,
+        members,
+        reach: pick.spread + w * (pick.kind === 'minnow' ? 1 : pick.count * 0.7 + 0.5),
+      };
+    }
+    const t = ocean.tick - p.start;
+    const cx = p.dir > 0 ? -p.reach + t * p.speed : viewW + p.reach - t * p.speed;
+    if (cx > viewW + p.reach || cx < -p.reach) {
+      this.passer = null;
+      this.nextPasser = ocean.tick + PASSER_GAP[0] + Math.random() * (PASSER_GAP[1] - PASSER_GAP[0]);
+      return;
+    }
+    // From the screen to the sprite canvas, which starts at the region's top.
+    const top = this.scrollY - this.regionTop;
+    ctx.globalAlpha = PASSER_ALPHA;
+    for (const m of p.members) {
+      const img = this.passerImage(p.kind, ((t >> 3) + Math.round(m.phase)) & 1);
+      const k = this.px * p.scale;
+      const w = Math.round(img.width * k);
+      const hh = Math.round(img.height * k);
+      const sway = Math.sin(t * 0.05 + m.phase) * k * 2;
+      ctx.save();
+      ctx.translate(Math.round(cx + m.dx * p.dir), Math.round(top + p.y + m.dy + sway));
+      ctx.scale(p.dir, 1);
+      ctx.drawImage(img, -w / 2, -hh / 2, w, hh);
+      ctx.restore();
+    }
+  }
+
+  private passerImage(kind: SpriteKind | 'whale', frame: number) {
+    if (kind === 'whale') return silhouetteSprite('whale', whaleSprite(0));
+    return silhouetteSprite(`${kind}-${frame}`, creatureSprite(kind, 0, frame));
   }
 
   /** An anglerfish's lure: a thin stalk ending in a pulsing glow. */

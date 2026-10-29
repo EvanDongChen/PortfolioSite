@@ -265,6 +265,18 @@ export const creatureSprite = (kind: SpriteKind, palette: number, frame: number,
   });
 };
 
+/** A sprite filled in one flat colour, for shadows cast from far overhead. */
+export const silhouetteSprite = (key: string, img: HTMLCanvasElement, colour = 'rgb(2,10,18)') =>
+  cached(`silhouette-${key}`, () => {
+    const c = makeCanvas(img.width, img.height);
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = colour;
+    ctx.fillRect(0, 0, c.width, c.height);
+    return c;
+  });
+
 // --- hand-made sprites with variants -----------------------------------------
 
 /**
@@ -325,60 +337,90 @@ export const cuttleSprite = (frame: number, display: boolean, washed = false) =>
 const shadeOfRgb = ([r, g, b]: Rgb, k: number): Rgb => [Math.round(r * k), Math.round(g * k), Math.round(b * k)];
 
 /**
- * A whale carcass on its side, in four hand-drawn stages: whole, with two
- * bites taken out of its back, picked to the ribs, and a bare skeleton.
- * Tones as the other sprites: back (D), body (B), belly (L), fins (T), eye
- * (E), plus raw meat (R) and bone (W).
+ * A whale carcass on its side, head to the right, in four hand-drawn stages:
+ * whole, with bites torn from its back, picked to the ribs, and a bare
+ * skeleton. Tones as the other sprites: back (D), body (B), belly (L), throat
+ * pleats (P), flukes (T), the long pale flipper (F), eye (E), plus raw meat
+ * (R), bone (W) and shaded bone (K).
  */
 const WHALE = [
   [
-    '...........DDDDDDDDDDDDDDDDD..........',
-    '.........DDDDDDDDDDDDDDDDDDDDDD.......',
-    'T.......DBBBBBBBBBBBBBBBBBBBBBBDD.....',
-    'TT....BBBBBBBBBBBBBBBBBBBBBBBBBBBBD...',
-    'TTTBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBEBB..',
-    'TT....BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB.',
-    'T.......LLLLLLLLLLLLLLLLLLLLLLLLLLDDDD',
-    '.........LLLLLLLLLLLLLLLLLLLLLLLL.....',
-    '................TTT..........TTT.....',
+    '..................................................',
+    'TT.....................DD.........................',
+    'TTT.................DDDDDDDDDDDDDDDDDD............',
+    '.TTT.............DDDDDDDDDDDDDDDDDDDDDDDDDD.......',
+    '..TTT.......DDDDDBBBBBBBBBBBBBBBBBBBBBBBBBDDDD....',
+    '...TTT..DDDDBBBBBBBBBBBBBBBBBBBBBBBBBBBBLBBBLBDD..',
+    '....TTDDBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBLD.',
+    '....TTBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBEBBBBBBBB',
+    '....TTBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBDDDDDDDDDDDD',
+    '...TTT..LLLLLLBBBBBBBBBBBBBBBBBBLLLLLLLLLLLLLLLLL.',
+    '..TTT.......LLLLLLLLLLPPPPPPPPPPPPPPPPPPPPPPPPPP..',
+    '.TTT..............LLLLLLLLLLLLLLLLLLLLLLLLLLLLL...',
+    'TTT...................PPPPPPPPPPPPPPPPPPPPPPPP....',
+    'TT...........FLFFLFFLFFFFFFFLLLLLLLLLLLLLLLLL.....',
+    '..........FLFFFFFFFFF.............................',
+    '.......FFFFFF.....................................',
   ],
   [
-    '...........DDDD.......DDDDDDDD........',
-    '.........DDDDDR.......RDDDDDDDDDD.....',
-    'T.......DBBBBBRR.....RRBBBBBBBBBDD....',
-    'TT....BBBBBBBBBRRRRRRRBBBB....RRBBBD..',
-    'TTTBBBBBBBBBBBBBBBBBBBBBBRRRRBBBBEBB..',
-    'TT....BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB.',
-    'T.......LLLLLLLLLLLLLLLLLLLLLLLLLLDDDD',
-    '.........LLLLLLLLLLLLLLLLLLLLLLLL.....',
-    '................TTT..........TTT.....',
+    '..................................................',
+    'TT......................R.........................',
+    'TTT.....................RRDDR.......RD............',
+    '.TTT....................RDDDRR.....RRDDDDDD.......',
+    '..TTT.......DDDDDRR...RRBBBBBRRRRRRRBBBBBBDDDD....',
+    '...TTT..DDDDBBBBBBBRRRBBBBBBBBBBBBBBBBBBLBBBLBDD..',
+    '....TTDDBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBLD.',
+    '....TTBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBEBBBBBBBB',
+    '....TTBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBDDDDDDDDDDDD',
+    '...TTT..LLLLLLBBBBBBBBBBBBBBBBBBLLLLLLLLLLLLLLLLL.',
+    '..TTT.......R.RRRLLLLLPPPPPPPPPPPPPPPPPPPPPPPPPP..',
+    '.TTT..............LLLLLLLLLLLLLLLLLLLLLLLLLLLLL...',
+    'TTT...................PPPPPPPPPPPPPPPPPPPPPPPP....',
+    'TT...........FRFFLFFLFFFFFFFLLLLLLLLLLLLLLLLL.....',
+    '..........FLFFFFFFFFF.............................',
+    '.......FFFFFF.....................................',
   ],
   [
-    '...........DD........................',
-    '.........DDDR..W...W...W...W..RDDD....',
-    'T.......DBBBR..W...W...W...W..RBBDD...',
-    'TT....BBBBBBR..W...W...W...W..RBBBBD..',
-    'TTTBBBBBBBBBRWWWWWWWWWWWWWWWWWRBBBEBB.',
-    'TT....BBBBBBR..W...W...W...W..RBBBBBB.',
-    'T.......LLLLR..W...W...W...W..RLLLDDDD',
-    '.........LLLR.................RLL.....',
-    '................TTT..........TTT.....',
+    '..................................................',
+    'TT................................................',
+    'TTT.................................DD............',
+    '.TTT......................R.........RDDDDDD.......',
+    '..TTT.........R.....................RBBBBBDDDD....',
+    '...TTT..DDDR.................R......RBBBLBBBLBDD..',
+    '....TTDDBBBR.K.K.K.K.K.K.K.K.K.K.K.KRBBBBBBBBBBLD.',
+    '....TTBBBBBRWWWWWWWWWWWWWWWWWWWWWWWWRBBBBEBBBBBBBB',
+    '....TTBBBBBR...W..W..W..W..W..W..W..RBDDDDDDDDDDDD',
+    '...TTT..LLLR...W..W..W..W..W..W..W..RLLLLLLLLLLLL.',
+    '..TTT..........K..W..W..W..W..W..R..RPPPPPPPPPPP..',
+    '.TTT.............KR.W..W..W..K..K...RLLLLLLLLLL...',
+    'TTT.................K..R..K.........RPPPPPPPPP....',
+    'TT...........FLFFLFFLFFFFFFF........LLLLLLLLL.....',
+    '..........FLFFFFFFFFF.............................',
+    '.......FFFFFF.....................................',
   ],
   [
-    '.....................................',
-    '...............W...W...W...W...WWW....',
-    '...............W...W...W...W..W...W...',
-    'W..............W...W...W...W..W....W..',
-    'WWW.WWWWWWWWWWWWWWWWWWWWWWWWWWW.....W.',
-    'W..............W...W...W...W..W....W..',
-    '...............W...W...W...W..W..WWW..',
-    '...............................WWW....',
-    '.....................................',
+    '..................................................',
+    '..................................................',
+    '..................................................',
+    '..................................................',
+    'W....................................WWWW.........',
+    'WW..................................WKKKKWWW......',
+    '.WW.K.K.K.K.K.K.K.K.K.K.K.K.K.K.K.KWKK.KKKKKWWW...',
+    '...WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWKKKKKKKKKKKKWWW',
+    '.WW............W..W..W..W..W..W..W.WWWWWWWWWWWWWWW',
+    'WW.............W..W..W..W..W..W..W.............WW.',
+    'W..............K..W..W..W..W..KKKWWWWWWWWWWWWWW...',
+    '.................K..W..W..W..K..K.................',
+    '....................K..K..K.......................',
+    '......................KWKWKWK.....................',
+    '...............WKWKWKW............................',
+    '.........WKWKWK...................................',
   ],
 ];
 const WHALE_COLORS = {
-  D: [52, 64, 86] as Rgb, B: [84, 100, 124] as Rgb, L: [170, 180, 196] as Rgb, T: [62, 76, 100] as Rgb,
-  E: EYE, R: [176, 64, 74] as Rgb, W: [228, 224, 206] as Rgb,
+  D: [52, 64, 86] as Rgb, B: [84, 100, 124] as Rgb, L: [170, 180, 196] as Rgb, P: [118, 132, 154] as Rgb,
+  T: [62, 76, 100] as Rgb, F: [196, 204, 214] as Rgb, E: EYE, R: [176, 64, 74] as Rgb,
+  W: [228, 224, 206] as Rgb, K: [170, 162, 140] as Rgb,
 };
 
 export const whaleSprite = (stage: number) =>
