@@ -40,7 +40,7 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
     <div
       className={`project-card flex flex-col h-full bg-black/20 backdrop-blur-md rounded-xl overflow-hidden shadow-lg border ${colors.border} group`}
     >
-      <div className="relative overflow-hidden" style={{ zIndex: 1 }}>
+      <div className="project-card-media relative overflow-hidden" style={{ zIndex: 1 }}>
         <img
           src={image}
           alt={title}
@@ -50,7 +50,7 @@ const ProjectCard: React.FC<ProjectCardProps> = React.memo(({ project }) => {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
       </div>
-      <div className="p-6 relative flex flex-col flex-1" style={{ zIndex: 2 }}>
+      <div className="project-card-body p-6 relative flex flex-col flex-1" style={{ zIndex: 2 }}>
         <h3 className={`project-title text-2xl font-bold ${colors.title} mb-2`}>{title}</h3>
         <p className={`${colors.description} mb-4`}>{description}</p>
         <div className="flex flex-wrap gap-2 mb-4">

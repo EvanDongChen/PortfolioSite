@@ -462,6 +462,47 @@ html.pixel-theme {
 }
 .pixel-theme .project-card img,
 .pixel-theme .project-tile img { transition: none; }
+
+/* Featured projects are wide log entries, one per row: the screenshot on
+   one side and the write-up on the other, swapping sides down the page.
+   Narrower screens keep the screenshot on top, at its own shape. */
+.pixel-theme .featured-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.75rem;
+}
+.pixel-theme .featured-grid .project-card-media img {
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+@media (min-width: 1024px) {
+  .pixel-theme .featured-grid .project-card {
+    flex-direction: row;
+    min-height: 19rem;
+  }
+  .pixel-theme .featured-grid .project-card:nth-child(even) {
+    flex-direction: row-reverse;
+  }
+  .pixel-theme .featured-grid .project-card-media {
+    flex: 0 0 52%;
+  }
+  .pixel-theme .featured-grid .project-card-media img {
+    height: 100%;
+    min-height: 19rem;
+    aspect-ratio: auto;
+  }
+  .pixel-theme .featured-grid .project-card-body {
+    padding: 1.75rem 2rem;
+  }
+  .pixel-theme .featured-grid .project-card-body p {
+    font-size: 1.05rem;
+    line-height: 1.6;
+  }
+  /* The specimen number stays on the screenshot, whichever side it's on. */
+  .pixel-theme .featured-grid .project-card:nth-child(even)::before {
+    left: auto;
+    right: 8px;
+  }
+}
 .pixel-theme .project-tile:hover img { transform: none; }
 .pixel-theme .project-title {
   font-family: var(--px-mono);
