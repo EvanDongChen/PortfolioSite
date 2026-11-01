@@ -124,7 +124,7 @@ interface Passer {
   scale: number;
   speed: number;
   dir: 1 | -1;
-  /** Screen height of the group's centre. */
+  /** Where on the page the group's centre crosses (page pixels), so it scrolls with the seabed. */
   y: number;
   start: number;
   /** Each member's offset from the group's centre, and its own beat. */
@@ -967,7 +967,7 @@ export class OceanView {
       p = this.passer = {
         ...pick,
         dir: Math.random() < 0.5 ? 1 : -1,
-        y: viewH * (0.2 + Math.random() * 0.6),
+        y: this.scrollY + viewH * (0.2 + Math.random() * 0.6),
         start: ocean.tick,
         members,
         reach: pick.spread + w * (pick.kind === 'minnow' ? 1 : pick.count * 0.7 + 0.5),
@@ -975,13 +975,14 @@ export class OceanView {
     }
     const t = ocean.tick - p.start;
     const cx = p.dir > 0 ? -p.reach + t * p.speed : viewW + p.reach - t * p.speed;
-    if (cx > viewW + p.reach || cx < -p.reach) {
+    // Done once it has crossed, or once the visitor has scrolled well away from it.
+    if (cx > viewW + p.reach || cx < -p.reach || Math.abs(p.y - (this.scrollY + viewH / 2)) > viewH * 1.5) {
       this.passer = null;
       this.nextPasser = ocean.tick + PASSER_GAP[0] + Math.random() * (PASSER_GAP[1] - PASSER_GAP[0]);
       return;
     }
-    // From the screen to the sprite canvas, which starts at the region's top.
-    const top = this.scrollY - this.regionTop;
+    // From the page to the sprite canvas, which starts at the region's top.
+    const top = -this.regionTop;
     ctx.globalAlpha = PASSER_ALPHA;
     for (const m of p.members) {
       const img = this.passerImage(p.kind, ((t >> 3) + Math.round(m.phase)) & 1);
