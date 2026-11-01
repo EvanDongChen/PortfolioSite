@@ -3,13 +3,20 @@
 // The seabed scrolls one-to-one with the page. Anything off the floor is
 // lifted up the screen by its height and drawn a little bigger (it is closer
 // to the camera), with a shadow left on the floor beneath it.
-// Both canvases cover the viewport plus a margin and sit in the page, so the
-// browser scrolls them natively between frames.
+//
+// Every canvas sits in the page, so the browser scrolls them natively
+// between frames. The seabed and its light cover the whole page at one canvas
+// pixel per cell and never move; only the rows around the view are repainted.
+// The sprites are drawn at screen resolution into a window around the view;
+// when that window moves, the next one is drawn into a second canvas and the
+// page swaps them once it is ready, so the reef can be drawn off the main
+// thread without the sprites ever jumping. Nothing here touches the DOM: the
+// page is told where to put the canvases through `onLayout`.
 
-import { Carcass, Creature, PixelOcean, SPECIES, SURFACE, Species } from './pixelOcean';
+import { Anemone, Carcass, Creature, Drop, Kelp, PixelOcean, SPECIES, SURFACE, Species, Station, WhaleFall } from './pixelOcean';
 import {
-  FLOOR, SpriteKind, buildCaustics, creatureSprite, creaturePalette, bonesSprite, bubbleSprite, pelletSprite,
-  shadowSprite, rockSprite, coralSprite,
+  FLOOR, SpriteKind, buildCaustics, makeCanvas, creatureSprite, creaturePalette, bonesSprite, bubbleSprite, pelletSprite,
+  shadowSprite, rockSprite, coralSprite, starfishSprite, cuttleSprite, whaleSprite, silhouetteSprite, puffSprite, fizzSprite, PUFF_FRAMES,
 } from './pixelOceanArt';
 
 /** How far up the screen one unit of height lifts an object. */
@@ -18,6 +25,8 @@ const ELEVATION = 0.55;
 const PERSPECTIVE = 0.0035;
 const CAUSTIC_SIZE = 64;
 const CAUSTIC_FRAMES = 32;
+/** Rows of seabed painted a frame, away from the view, until the whole page has been. */
+const BACKLOG_ROWS = 160;
 /** Sand, moss and blood change slowly: repaint them every this many ticks. */
 const SEABED_EVERY = 8;
 /** The caustic light is darkened with depth in bands this many cells tall. */
@@ -35,22 +44,58 @@ const SPRITE_MARGIN = 60;
 const BODY_WIDTH: Record<Species, number> = {
   minnow: 10, barracuda: 18, crab: 11, jelly: 9, turtle: 16, puffer: 9, seahorse: 6, urchin: 7,
   octopus: 12, eel: 10, shark: 26, manta: 20, angler: 13,
+  clownfish: 12, starfish: 15, cuttlefish: 16, dolphin: 26,
 };
 
 /** Which bones a picked-clean fish leaves, and at what size. */
 const BONES_OF: Partial<Record<Species, ['minnow' | 'barracuda', number]>> = {
   minnow: ['minnow', 1], puffer: ['minnow', 0.9], angler: ['minnow', 1.3],
   barracuda: ['barracuda', 1], eel: ['barracuda', 0.9], shark: ['barracuda', 1.5],
+  clownfish: ['minnow', 1], dolphin: ['barracuda', 1.5],
 };
 
 const BLOOD = ['rgb(110,10,24)', 'rgb(176,18,40)', 'rgb(226,44,64)'];
 const GOO = ['rgb(200,120,200)', 'rgb(240,170,230)', 'rgb(255,214,246)'];
 const INK = ['rgb(14,10,24)', 'rgb(24,18,38)', 'rgb(36,28,52)'];
-const DROP_COLORS = { blood: BLOOD, goo: GOO, ink: INK };
+const DROP_COLORS: Record<Drop['kind'], string[]> = {
+  blood: BLOOD, goo: GOO, ink: INK,
+  heart: ['rgb(255,110,150)', 'rgb(255,150,180)', 'rgb(255,190,210)'],
+  sand: ['rgb(150,140,110)', 'rgb(178,166,130)', 'rgb(120,112,90)'],
+  scent: ['rgb(200,70,90)', 'rgb(220,100,110)', 'rgb(180,60,80)'],
+  sparkle: ['rgb(255,255,255)', 'rgb(200,250,255)', 'rgb(255,240,200)'],
+  puff: [],
+};
+// Pixel shapes for the particles that aren't plain squares.
+const HEART = ['.X.X.', 'XXXXX', 'XXXXX', '.XXX.', '..X..'];
+const SPARKLE = ['.X.', 'XXX', '.X.'];
+/** Anemone colours: [base, stalk, tip]. */
+const ANEMONE = [
+  ['rgb(150,40,90)', 'rgb(232,96,150)', 'rgb(255,190,220)'],
+  ['rgb(90,50,140)', 'rgb(160,110,220)', 'rgb(230,200,255)'],
+  ['rgb(40,110,80)', 'rgb(80,190,130)', 'rgb(190,255,210)'],
+];
+/** How fast each swimmer must go to leave a wake of disturbed water behind it. */
+const WAKE_SPEED: Partial<Record<Species, number>> = {
+  minnow: 0.55, barracuda: 0.6, shark: 0.55, dolphin: 0.7, cuttlefish: 0.35, puffer: 0.4, clownfish: 0.4, turtle: 0.35,
+};
+/** Coral spawn: pink eggs and white sperm bundles. */
+const SPAWN_COLORS = ['rgb(255,150,190)', 'rgb(255,240,246)'];
+/**
+ * God rays: shafts of sunlight slanting down through the water, swaying
+ * slowly and fading out with depth (in cells, the fade's scale).
+ */
+const RAYS = 5;
+const RAY_SLANT = 0.45;
+const RAY_DEPTH = 380;
+const RAY_COLOR: [number, number, number] = [44, 70, 62];
+/** How dark the water gets on a coral spawning night. */
+const NIGHT_SHADE = 0.42;
 const KELP_BASE = 'rgb(34,104,70)';
 const KELP_STALK = 'rgb(48,140,84)';
 const KELP_LEAF = 'rgb(64,160,90)';
 const KELP_TIP = 'rgb(120,200,110)';
+/** Kelp colours by run: base, stalk, leaves, tip. */
+const KELP_COLORS = [KELP_BASE, KELP_STALK, KELP_LEAF, KELP_TIP];
 
 interface Drawable { depth: number; draw: () => void }
 
@@ -67,23 +112,77 @@ interface SpriteOptions {
   anchor?: 'bottom' | 'center';
 }
 
+/**
+ * Animals far above the reef that never come down: now and then one passes
+ * overhead and only its shadow slides across the screen. Sizes are in sprite
+ * cells times this scale, speeds in screen pixels per tick.
+ */
+const PASSERS: { kind: SpriteKind | 'whale'; scale: number; speed: number; count: number; spread: number }[] = [
+  { kind: 'whale', scale: 3.2, speed: 2, count: 1, spread: 0 },
+  { kind: 'manta', scale: 5, speed: 2.6, count: 1, spread: 0 },
+  { kind: 'manta', scale: 4, speed: 2.8, count: 2, spread: 130 },
+  { kind: 'shark', scale: 4.5, speed: 3.4, count: 1, spread: 0 },
+  { kind: 'turtle', scale: 5, speed: 1.8, count: 1, spread: 0 },
+  { kind: 'dolphin', scale: 4, speed: 5.5, count: 3, spread: 120 },
+  { kind: 'minnow', scale: 2.5, speed: 4.5, count: 16, spread: 260 },
+];
+/** Ticks between passing shadows. */
+const PASSER_GAP: [number, number] = [600, 1300];
+const PASSER_ALPHA = 0.28;
+
+/** Where the page should put the reef's canvases, in CSS pixels. */
+export type ReefLayout =
+  /** The seabed and light canvases: the whole world, from the top of the page. */
+  | { kind: 'floor'; width: number; height: number }
+  /** Show this sprite canvas (and hide the other) at this place on the page. */
+  | { kind: 'sprites'; buffer: number; top: number; width: number; height: number };
+
+interface Passer {
+  kind: SpriteKind | 'whale';
+  scale: number;
+  speed: number;
+  dir: 1 | -1;
+  /** Where on the page the group's centre crosses (page pixels), so it scrolls with the seabed. */
+  y: number;
+  start: number;
+  /** Each member's offset from the group's centre, and its own beat. */
+  members: { dx: number; dy: number; phase: number }[];
+  /** How far the group reaches either side of its centre. */
+  reach: number;
+}
+
 export class OceanView {
   /** Top of the drawn region, in page pixels. */
   regionTop = 0;
   regionHeight = 0;
+  /** Set while a courting creature is redrawn as a glow over itself. */
+  private glow = false;
+  /** Kelp squares by colour (left, top, size each), reused from stalk to stalk. */
+  private kelpRuns: number[][] = [[], [], [], []];
+  /**
+   * Set by the page when frames are slow to draw: the finishing touches
+   * (wakes, sun rays, shadows passing overhead, the whale's bacterial mat)
+   * are left out until it catches up.
+   */
+  lean = false;
+  /** The creature being drawn's squash and stretch (positive stretches it along its length). */
+  private stretch = 0;
   /** The creature under inspection, drawn with a reticle. */
   highlighted: Creature | null = null;
 
   private floorCtx: CanvasRenderingContext2D;
   private spriteCtx: CanvasRenderingContext2D;
   private lightCtx: CanvasRenderingContext2D;
+  private spriteCtxs: CanvasRenderingContext2D[];
+  /** The sprite canvas being drawn into, and frames left before the page may show it. */
+  private buffer = 1;
+  private pendingShow = 0;
   private floorImage: ImageData | null = null;
   private floorPixels = new Uint32Array(0);
   private caustics = buildCaustics(CAUSTIC_SIZE, CAUSTIC_FRAMES);
   private scrollY = 0;
   private viewW = 0;
   private viewH = 0;
-  private dpr = 1;
   /** What the floor canvas last showed; it is only repainted when this changes. */
   private floorKey = '';
   private seabedKey = '';
@@ -96,18 +195,35 @@ export class OceanView {
    */
   private sandCache = new Uint32Array(0);
   private sandCacheSize = '';
+  private sandRowsDone = new Uint8Array(0);
+  /** The first seabed row not yet painted since the floor was placed, and the band it is painted through. */
+  private backlogRow = 0;
+  private backlogImage: ImageData | null = null;
+  private backlogWait = 0;
+  private passer: Passer | null = null;
+  private nextPasser = 450;
 
   constructor(
     private ocean: PixelOcean,
     private floorCanvas: HTMLCanvasElement,
     /** The moving caustic light, on its own canvas blended over the floor. */
     private lightCanvas: HTMLCanvasElement,
-    private spriteCanvas: HTMLCanvasElement,
+    /** Two sprite canvases, taking turns as the window around the view moves. */
+    private spriteCanvases: [HTMLCanvasElement, HTMLCanvasElement],
     private px: number,
+    /** Tells the page where to put the canvases. */
+    private onLayout: (layout: ReefLayout) => void,
+    /**
+     * Frames to keep drawing a new sprite window before the page shows it:
+     * 1 on the main thread, 2 from a worker, whose frames reach the screen
+     * only after the message saying they're ready might.
+     */
+    private showDelay = 1,
   ) {
-    this.floorCtx = floorCanvas.getContext('2d', { alpha: false })!;
-    this.lightCtx = lightCanvas.getContext('2d', { alpha: false })!;
-    this.spriteCtx = spriteCanvas.getContext('2d')!;
+    this.floorCtx = floorCanvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D;
+    this.lightCtx = lightCanvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D;
+    this.spriteCtxs = spriteCanvases.map(c => c.getContext('2d') as CanvasRenderingContext2D);
+    this.spriteCtx = this.spriteCtxs[0];
   }
 
   // --- camera -------------------------------------------------------------
@@ -126,27 +242,23 @@ export class OceanView {
     };
   }
 
-  /** The world point under a viewport position at a given height. */
-  screenToWorld(clientX: number, clientY: number, h: number) {
-    return {
-      x: clientX / this.px,
-      z: (this.scrollY + clientY) / this.px + h * ELEVATION,
-    };
+  /** The world point under a point on the page at a given height. */
+  pageToWorld(x: number, pageY: number, h: number) {
+    return { x: x / this.px, z: pageY / this.px + h * ELEVATION };
   }
 
-  /** Where a creature is drawn, in viewport pixels. */
-  clientPosition(c: Creature) {
-    const p = this.project(c.x, c.z, c.h);
-    return { x: p.x, y: p.y + this.regionTop - this.scrollY };
+  /** Where a creature is drawn, in page pixels. */
+  pagePosition(c: Creature) {
+    return { x: c.x * this.px, y: (c.z - c.h * ELEVATION) * this.px };
   }
 
-  /** The creature drawn nearest a viewport point, if one is within reach. */
-  pick(clientX: number, clientY: number, reach = 24): Creature | null {
+  /** The creature drawn nearest a point on the page, if one is within reach. */
+  pick(x: number, pageY: number, reach = 24): Creature | null {
     let best: Creature | null = null;
     let bestD = reach * reach;
     for (const c of this.ocean.creatures) {
-      const p = this.clientPosition(c);
-      const d = (p.x - clientX) ** 2 + (p.y - clientY) ** 2;
+      const p = this.pagePosition(c);
+      const d = (p.x - x) ** 2 + (p.y - pageY) ** 2;
       if (d < bestD) { bestD = d; best = c; }
     }
     return best;
@@ -154,11 +266,18 @@ export class OceanView {
 
   // --- frame --------------------------------------------------------------
 
-  render(scrollY: number, viewW: number, viewH: number, dpr: number) {
+  /**
+   * Whether scrolling alone calls for a redraw. Nothing is drawn relative to
+   * the screen (the canvases scroll with the page), so only once the view has
+   * moved far enough that sprites just past the drawn margin could show.
+   */
+  scrolledFar(scrollY: number) {
+    return Math.abs(scrollY - this.scrollY) >= (SPRITE_MARGIN * this.px) / 2;
+  }
+
+  render(scrollY: number, viewW: number, viewH: number) {
     const { px, ocean } = this;
     this.scrollY = scrollY;
-    this.viewW = viewW;
-    this.viewH = viewH;
 
     // Viewport plus half a screen either side, clamped to the world.
     // The region moves in quarter-screen steps, so scrolling only repaints
@@ -166,15 +285,17 @@ export class OceanView {
     const step = Math.max(1, Math.ceil(viewH / 4 / px));
     const rows = Math.min(ocean.h, Math.ceil((viewH * 2) / px) + step);
     const top = Math.max(0, Math.min(ocean.h - rows, Math.floor((scrollY - viewH / 2) / px / step) * step));
+    if (this.floorCanvas.width !== ocean.w || this.floorCanvas.height !== ocean.h) this.placeFloor();
+    if (!this.floorImage || this.floorImage.height !== rows) this.makeFloorImage(rows);
     const regionTop = top * px;
     const regionHeight = rows * px;
-    if (regionTop !== this.regionTop || regionHeight !== this.regionHeight || dpr !== this.dpr
-      || this.floorCanvas.width !== ocean.w) {
+    if (regionTop !== this.regionTop || regionHeight !== this.regionHeight || viewW !== this.viewW) {
       this.regionTop = regionTop;
       this.regionHeight = regionHeight;
-      this.dpr = dpr;
-      this.place(rows);
+      this.viewW = viewW;
+      this.placeSprites();
     }
+    this.viewH = viewH;
 
     // Sand, moss and blood change slowly, so their pixels are worked out on a
     // slow clock. The caustic light moves every other tick, but it is just a
@@ -183,7 +304,7 @@ export class OceanView {
     if (seabedKey !== this.seabedKey) {
       this.seabedKey = seabedKey;
       this.renderSeabed(top, rows);
-      if (this.floorImage) this.floorCtx.putImageData(this.floorImage, 0, 0);
+      if (this.floorImage) this.floorCtx.putImageData(this.floorImage, 0, top);
     }
     const floorKey = `${top},${rows},${ocean.tick >> 1}`;
     if (floorKey !== this.floorKey) {
@@ -191,51 +312,88 @@ export class OceanView {
       this.renderFloor(top, rows);
     }
     this.renderSprites();
+    this.paintBacklog();
+    // A new sprite window goes up once its frames have had time to land.
+    if (this.pendingShow > 0 && --this.pendingShow === 0) {
+      this.onLayout({ kind: 'sprites', buffer: this.buffer, top: this.regionTop, width: this.viewW, height: this.regionHeight });
+    }
   }
 
-  private place(rows: number) {
-    this.floorKey = '';
+  /**
+   * Sizes the seabed and light canvases to the whole world. The rows around
+   * the view are painted straight away; the rest of the page follows a band
+   * a frame (see paintBacklog), rather than holding up the first frame.
+   */
+  private placeFloor() {
+    const { floorCanvas, lightCanvas, ocean, px } = this;
+    floorCanvas.width = lightCanvas.width = ocean.w;
+    floorCanvas.height = lightCanvas.height = ocean.h;
+    this.onLayout({ kind: 'floor', width: ocean.w * px, height: ocean.h * px });
+    this.backlogRow = 0;
+    this.backlogWait = 1;
     this.seabedKey = '';
-    const { floorCanvas, lightCanvas, spriteCanvas, ocean, px } = this;
-    // A canvas can outlive the view that sized it (React remounts the reef
-    // onto the same element), so check for a buffer of our own as well.
-    if (!this.floorImage || floorCanvas.width !== ocean.w || floorCanvas.height !== rows) {
-      floorCanvas.width = ocean.w;
-      floorCanvas.height = rows;
-      this.floorImage = this.floorCtx.createImageData(ocean.w, rows);
-      this.floorPixels = new Uint32Array(this.floorImage.data.buffer);
-    }
-    floorCanvas.style.width = `${ocean.w * px}px`;
-    floorCanvas.style.height = `${rows * px}px`;
-    floorCanvas.style.transform = `translateY(${this.regionTop}px)`;
-    if (lightCanvas.width !== ocean.w || lightCanvas.height !== rows) {
-      lightCanvas.width = ocean.w;
-      lightCanvas.height = rows;
-    }
-    lightCanvas.style.width = floorCanvas.style.width;
-    lightCanvas.style.height = floorCanvas.style.height;
-    lightCanvas.style.transform = floorCanvas.style.transform;
-
-    const w = Math.ceil(this.viewW * this.dpr);
-    const h = Math.ceil(this.regionHeight * this.dpr);
-    if (spriteCanvas.width !== w || spriteCanvas.height !== h) {
-      spriteCanvas.width = w;
-      spriteCanvas.height = h;
-    }
-    spriteCanvas.style.width = `${this.viewW}px`;
-    spriteCanvas.style.height = `${this.regionHeight}px`;
-    spriteCanvas.style.transform = `translateY(${this.regionTop}px)`;
+    this.floorKey = '';
   }
 
-  /** The plain-sand colour of every cell (see sandCache). */
-  private plainSand() {
+  /** Paints the next band of seabed not yet painted since the floor was placed. */
+  private paintBacklog() {
     const { ocean } = this;
-    const size = `${ocean.w}x${ocean.h}`;
-    if (size === this.sandCacheSize) return this.sandCache;
+    if (this.backlogRow >= ocean.h) return;
+    // Not on the first frame after placing the floor: that one comes first.
+    if (this.backlogWait > 0) { this.backlogWait--; return; }
+    if (!this.backlogImage || this.backlogImage.width !== ocean.w) {
+      this.backlogImage = this.floorCtx.createImageData(ocean.w, BACKLOG_ROWS);
+    }
+    const n = Math.min(BACKLOG_ROWS, ocean.h - this.backlogRow);
+    // renderSeabed paints into the floor image; borrow it for the band.
+    const [image, pixels] = [this.floorImage, this.floorPixels];
+    this.floorImage = this.backlogImage;
+    this.floorPixels = new Uint32Array(this.backlogImage.data.buffer);
+    this.renderSeabed(this.backlogRow, n);
+    this.floorCtx.putImageData(this.backlogImage, 0, this.backlogRow, 0, 0, ocean.w, n);
+    [this.floorImage, this.floorPixels] = [image, pixels];
+    this.backlogRow += n;
+  }
+
+  /** The pixels for a band of seabed this many rows tall. */
+  private makeFloorImage(rows: number) {
+    this.floorImage = this.floorCtx.createImageData(this.ocean.w, rows);
+    this.floorPixels = new Uint32Array(this.floorImage.data.buffer);
+    this.seabedKey = '';
+  }
+
+  /** Moves the sprites to the other canvas, sized for the new window. */
+  private placeSprites() {
+    this.buffer ^= 1;
+    const canvas = this.spriteCanvases[this.buffer];
+    const w = Math.ceil(this.viewW);
+    const h = Math.ceil(this.regionHeight);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    this.spriteCtx = this.spriteCtxs[this.buffer];
+    this.pendingShow = this.showDelay;
+  }
+
+  /**
+   * The plain-sand colour of every cell (see sandCache), worked out a row at
+   * a time as rows are first painted rather than all at once up front.
+   */
+  private plainSand(top: number, rows: number) {
+    const { ocean } = this;
     const { w, h, terrain, grain } = ocean;
+    const size = `${w}x${h}`;
+    if (size !== this.sandCacheSize) {
+      this.sandCache = new Uint32Array(w * h);
+      this.sandRowsDone = new Uint8Array(h);
+      this.sandCacheSize = size;
+    }
+    const cache = this.sandCache;
     const { sandLight: sl, sandDark: sd } = FLOOR;
-    const cache = new Uint32Array(w * h);
-    for (let z = 0; z < h; z++) {
+    for (let z = top; z < top + rows; z++) {
+      if (this.sandRowsDone[z]) continue;
+      this.sandRowsDone[z] = 1;
       const dim = 256 - Math.round((z / h) * DEPTH_DARKENING * 256);
       const dimBlue = Math.min(256, dim + 24);
       for (let x = 0; x < w; x++) {
@@ -247,8 +405,6 @@ export class OceanView {
         cache[i] = (255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r);
       }
     }
-    this.sandCache = cache;
-    this.sandCacheSize = size;
     return cache;
   }
 
@@ -258,7 +414,7 @@ export class OceanView {
     if (!this.floorImage) return;
     const { w, terrain, grain, algae, stain } = ocean;
     const { sandLight: sl, sandDark: sd, algae: ag, algaeDense: ad, blood: bl } = FLOOR;
-    const sand = this.plainSand();
+    const sand = this.plainSand(top, rows);
 
     for (let row = 0; row < rows; row++) {
       const z = top + row;
@@ -312,31 +468,80 @@ export class OceanView {
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, ocean.w, rows);
+    ctx.fillRect(0, top, ocean.w, rows);
     const tile = this.causticTile((ocean.tick >> 1) % CAUSTIC_FRAMES);
     const pattern = ctx.createPattern(tile, 'repeat');
     if (!pattern) return;
-    // Tile from the top of the world, so the light stays put as the region moves.
-    pattern.setTransform(new DOMMatrix([1, 0, 0, 1, 0, -(top % CAUSTIC_SIZE)]));
+    // The canvas is the whole world, so the tiles start at its top and stay put.
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = pattern;
     for (let row = 0; row < rows; row += CAUSTIC_BAND) {
       // Light fades with depth, like the seabed under it.
       const z = top + row + CAUSTIC_BAND / 2;
-      ctx.globalAlpha = 1 - (z / ocean.h) * DEPTH_DARKENING;
-      ctx.fillRect(0, row, ocean.w, Math.min(CAUSTIC_BAND, rows - row));
+      ctx.globalAlpha = (1 - (z / ocean.h) * DEPTH_DARKENING) * (1 - ocean.nightfall() * 0.7);
+      ctx.fillRect(0, top + row, ocean.w, Math.min(CAUSTIC_BAND, rows - row));
+    }
+    if (!this.lean) {
+      // The rays are worked out from the region's top.
+      ctx.save();
+      ctx.translate(0, top);
+      this.drawRays(top, rows);
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+  }
+
+  /**
+   * Shafts of sunlight slanting down across the shallows. Each is a slanted
+   * band filled with one vertical gradient (by depth in the world, so it
+   * stays put as the region moves), swaying and shimmering slowly. The light
+   * canvas is a cell per pixel, so the edges come out as pixel steps.
+   */
+  private drawRays(top: number, rows: number) {
+    const { ocean, lightCtx: ctx } = this;
+    if (Math.exp(-top / RAY_DEPTH) < 0.03) return;
+    const bottom = Math.min(rows, RAY_DEPTH * 3.5 - top);
+    if (bottom <= 0) return;
+    const [r, g, b] = RAY_COLOR;
+    const grad = ctx.createLinearGradient(0, -top, 0, RAY_DEPTH * 3.5 - top);
+    for (const at of [0, 0.1, 0.25, 0.45, 0.7, 1]) {
+      const fade = Math.exp(-at * 3.5);
+      grad.addColorStop(at, `rgba(${r},${g},${b},${(fade * (at === 1 ? 0 : 1)).toFixed(3)})`);
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = grad;
+    const t = ocean.tick * 0.004;
+    const night = ocean.nightfall();
+    const span = ocean.w + bottom * RAY_SLANT + 80;
+    for (let k = 0; k < RAYS; k++) {
+      const width = 7 + ((k * 7) % 11);
+      const sway = Math.sin(t + k * 1.7) * 14 + Math.sin(t * 0.37 + k * 2.3) * 8;
+      // Where the shaft crosses the top of the world, wrapped so shafts slide on as others slide off.
+      const x0 = ((((k + 0.5) / RAYS) * span + sway) % span + span) % span - bottom * RAY_SLANT - 40;
+      const shimmer = (0.45 + 0.55 * Math.sin(t * 3.1 + k * 2.1) ** 2) * (1 - night * 0.85);
+      const xa = x0 + top * RAY_SLANT;
+      const xb = x0 + (top + bottom) * RAY_SLANT;
+      // A wide faint glow, then the brighter core of the shaft inside it.
+      for (const [grow, alpha] of [[2.2, 0.45], [1, 0.8]]) {
+        const pad = (width * (grow - 1)) / 2;
+        ctx.globalAlpha = shimmer * alpha;
+        ctx.beginPath();
+        ctx.moveTo(xa - pad, 0);
+        ctx.lineTo(xa + width + pad, 0);
+        ctx.lineTo(xb + (width + pad) * 1.6, bottom);
+        ctx.lineTo(xb - pad * 1.6, bottom);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
   }
 
   /** A frame of the caustic light as a tileable canvas: black where there is none. */
   private causticTile(frame: number) {
     let tile = this.causticTiles[frame];
     if (tile) return tile;
-    tile = document.createElement('canvas');
-    tile.width = CAUSTIC_SIZE;
-    tile.height = CAUSTIC_SIZE;
+    tile = makeCanvas(CAUSTIC_SIZE, CAUSTIC_SIZE);
     const tctx = tile.getContext('2d')!;
     const img = tctx.createImageData(CAUSTIC_SIZE, CAUSTIC_SIZE);
     const cl = FLOOR.caustic;
@@ -362,25 +567,34 @@ export class OceanView {
     const k = px * p.s * (o.scale ?? 1);
     const w = Math.round(sw * k);
     const hh = Math.round(img.height * k);
-    ctx.globalAlpha = o.alpha ?? 1;
-    if (!o.flipX && !o.angle && (o.scaleY ?? 1) === 1) {
+    ctx.globalAlpha = (o.alpha ?? 1) * (this.glow ? 0.45 : 1);
+    const st = this.stretch;
+    if (!o.flipX && !o.angle && (o.scaleY ?? 1) === 1 && !st) {
       const top = o.anchor === 'bottom' ? p.y - hh : p.y - hh / 2;
       ctx.drawImage(img, sx, 0, sw, img.height, Math.round(p.x - w / 2), Math.round(top), w, hh);
       return;
     }
+    // Stretching keeps the volume about the same: longer and thinner, or squat and wide.
     ctx.save();
     ctx.translate(Math.round(p.x), Math.round(p.y));
     if (o.angle) ctx.rotate(o.angle);
-    ctx.scale(o.flipX ? -1 : 1, o.scaleY ?? 1);
-    ctx.drawImage(img, sx, 0, sw, img.height, -w / 2, -hh / 2, w, hh);
+    ctx.scale((o.flipX ? -1 : 1) * (1 + st * 0.35), (o.scaleY ?? 1) * (1 - st * 0.3));
+    ctx.drawImage(img, sx, 0, sw, img.height, -w / 2, o.anchor === 'bottom' ? -hh : -hh / 2, w, hh);
     ctx.restore();
   }
 
   private renderSprites() {
-    const { spriteCtx: ctx, ocean, px, dpr } = this;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const { spriteCtx: ctx, ocean, px } = this;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, this.viewW, this.regionHeight);
+    const night = ocean.nightfall();
+    if (night > 0) {
+      ctx.globalAlpha = night * NIGHT_SHADE;
+      ctx.fillStyle = 'rgb(2,6,18)';
+      ctx.fillRect(0, 0, this.viewW, this.regionHeight);
+    }
+    if (!this.lean) this.drawPasser();
 
     // Anything whose floor point is near the viewport (tall or high things
     // reach further up the screen than their footprint).
@@ -406,6 +620,11 @@ export class OceanView {
     for (const k of ocean.carcasses) if (k.h > 0 && visible(k.z)) shadow(k.x, k.z, k.h, BODY_WIDTH[k.species] * (k.part === 'whole' ? 0.7 : 0.4));
     for (const p of ocean.particles) if (p.kind === 'pellet' && p.h > 0 && visible(p.z)) shadow(p.x, p.z, p.h, 3);
     for (const d of ocean.decor) if (visible(d.z)) shadow(d.x + 2, d.z, 0, d.w + 2);
+    const wf = ocean.whale;
+    if (wf && visible(wf.z)) {
+      shadow(wf.x, wf.z, wf.h * 0.5, 60);
+      if (wf.landed && !this.lean) this.drawMat(wf);
+    }
 
     const items: Drawable[] = [];
     for (const d of ocean.decor) {
@@ -424,8 +643,15 @@ export class OceanView {
       });
     }
     for (const k of ocean.kelp) {
-      if (visible(k.z)) items.push({ depth: k.z, draw: () => this.drawKelp(k.x, k.z, k.length, k.phase) });
+      if (visible(k.z)) items.push({ depth: k.z, draw: () => this.drawKelp(k) });
     }
+    for (const a of ocean.anemones) {
+      if (visible(a.z)) items.push({ depth: a.z, draw: () => this.drawAnemone(a) });
+    }
+    for (const st of ocean.stations) {
+      if (visible(st.z)) items.push({ depth: st.z + 0.15, draw: () => this.drawShrimp(st) });
+    }
+    if (wf && visible(wf.z)) items.push({ depth: wf.z, draw: () => this.drawWhale(wf) });
     for (const k of ocean.carcasses) {
       if (visible(k.z)) items.push({ depth: k.z + 0.1, draw: () => this.drawCarcass(k) });
     }
@@ -441,6 +667,19 @@ export class OceanView {
         ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
       }
     }
+    // Coral spawn twinkles between pink and white as it drifts.
+    if (ocean.spawnCount > 0) {
+      ctx.globalAlpha = 0.95;
+      for (let shade = 0; shade < 2; shade++) {
+        ctx.fillStyle = SPAWN_COLORS[shade];
+        for (const p of ocean.particles) {
+          if (p.kind !== 'spawn' || ((p.life >> 4) & 1) !== shade || !visible(p.z)) continue;
+          const q = this.project(p.x, p.z, p.h);
+          const size = Math.max(2, Math.round(px * q.s));
+          ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
+        }
+      }
+    }
     for (const p of ocean.particles) {
       if (p.kind === 'pellet' && visible(p.z)) {
         items.push({ depth: p.z + 0.2, draw: () => this.sprite(pelletSprite(), p.x, p.z, p.h) });
@@ -451,10 +690,22 @@ export class OceanView {
       items.push({
         depth: d.z + 0.25,
         draw: () => {
+          if (d.kind === 'puff') {
+            const frame = Math.min(PUFF_FRAMES - 1, Math.floor((1 - d.life / d.maxLife) * PUFF_FRAMES));
+            this.sprite(puffSprite(frame, d.shade), d.x, d.z, d.h, { alpha: 0.85 });
+            return;
+          }
           const q = this.project(d.x, d.z, d.h);
-          const size = Math.max(2, Math.round(px * (d.kind === 'ink' ? 2.2 : 0.8) * q.s));
-          ctx.globalAlpha = Math.min(d.kind === 'ink' ? 0.75 : 1, (d.life / d.maxLife) * 1.6);
+          const fade = Math.min(1, (d.life / d.maxLife) * 1.6);
           ctx.fillStyle = DROP_COLORS[d.kind][d.shade];
+          if (d.kind === 'heart' || d.kind === 'sparkle') {
+            // Twinkle as they rise.
+            ctx.globalAlpha = fade * (d.kind === 'sparkle' && (d.life >> 2) & 1 ? 0.5 : 1);
+            this.pixelShape(d.kind === 'heart' ? HEART : SPARKLE, q.x, q.y, Math.max(1, Math.round(px * 0.5)));
+            return;
+          }
+          const size = Math.max(2, Math.round(px * (d.kind === 'ink' ? 2.2 : d.kind === 'sand' ? 1.2 : 0.8) * q.s));
+          ctx.globalAlpha = fade * (d.kind === 'ink' ? 0.75 : d.kind === 'scent' ? 0.35 : 1);
           ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
         },
       });
@@ -463,7 +714,25 @@ export class OceanView {
       // Hiding minnows sit behind the kelp fronds around them.
       if (!visible(c.z)) continue;
       const depth = c.species === 'eel' ? c.anchorZ + 0.2 : c.hidden ? c.z - 6 : c.z + 0.3;
-      items.push({ depth, draw: () => this.drawCreature(c) });
+      items.push({
+        depth,
+        draw: () => {
+          const wake = this.lean ? 0 : WAKE_SPEED[c.species];
+          if (wake && !c.hidden && c.vx * c.vx + c.vz * c.vz > wake * wake) this.drawWake(c);
+          this.stretch = c.squash;
+          this.drawCreature(c);
+          this.stretch = 0;
+          // Courting fish flash their colours.
+          if (c.courting > 0 && (ocean.tick >> 3) & 1) {
+            this.glow = true;
+            ctx.globalCompositeOperation = 'lighter';
+            this.drawCreature(c);
+            ctx.globalCompositeOperation = 'source-over';
+            this.glow = false;
+          }
+          if (c.parasites > 0.45 && c.species !== 'eel') this.drawParasites(c);
+        },
+      });
     }
     for (const b of ocean.bubbles) {
       if (visible(b.z)) items.push({ depth: b.z + 0.4, draw: () => this.sprite(bubbleSprite(), b.x, b.z, b.h, { alpha: 0.8 }) });
@@ -475,6 +744,26 @@ export class OceanView {
     for (const c of ocean.creatures) if (c.adopted && visible(c.z)) this.drawAdoptedMarker(c);
     const target = this.highlighted;
     if (target?.alive && visible(target.z)) this.drawReticle(target);
+  }
+
+  /**
+   * A short trail of disturbed water behind a fast swimmer: pale specks that
+   * thin out behind it, jostled to either side.
+   */
+  private drawWake(c: Creature) {
+    const { ocean } = this;
+    const speed = Math.hypot(c.vx, c.vz) || 1;
+    const nx = -c.vz / speed, nz = c.vx / speed;
+    const back = BODY_WIDTH[c.species] * 0.45;
+    const count = c.species === 'minnow' ? 3 : 5;
+    // Bubbles shrink to flecks the further back they are, and jostle side to side.
+    for (let i = 0; i < count; i++) {
+      const along = back + i * 2.6;
+      const side = (((ocean.tick >> 2) + i + c.id) & 1 ? 1 : -1) * (0.4 + i * 0.4);
+      const frame = Math.min(2, Math.floor((i * 3) / count + ((ocean.tick >> 2) & 1) * 0.5));
+      this.sprite(fizzSprite(frame), c.x - c.vx / speed * along + nx * side, c.z - c.vz / speed * along + nz * side, c.h - c.vh / speed * along,
+        { alpha: 0.75 * (1 - i / (count + 1)) });
+    }
   }
 
   private drawCreature(c: Creature) {
@@ -496,10 +785,13 @@ export class OceanView {
         this.sprite(creatureSprite('urchin', c.palette, ((tick + c.id * 7) >> 4) & 1, washed), c.x, c.z, c.h, { anchor: 'bottom' });
         return;
       case 'puffer': {
+        // A puffer's squash is a swell all round, not a stretch.
+        const swell = 1 + this.stretch * 0.35;
+        this.stretch = 0;
         if (c.puff > 0.08) {
           // Swelling up (and back down) into a ball whose spines wobble.
           const img = creatureSprite('pufferPuffed', c.palette, (tick >> 3) & 1, washed);
-          this.sprite(img, c.x, c.z, c.h, { flipX: c.facing < 0, scale: 0.55 + 0.45 * c.puff });
+          this.sprite(img, c.x, c.z, c.h, { flipX: c.facing < 0, scale: (0.55 + 0.45 * c.puff) * swell });
         } else {
           this.sprite(creatureSprite('puffer', c.palette, ((tick + c.id * 5) >> 2) & 1, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
         }
@@ -541,6 +833,31 @@ export class OceanView {
         this.sprite(creatureSprite('angler', c.palette, c.lunge > 0.5 ? 1 : 0, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
         this.drawLure(c);
         return;
+      case 'dolphin': {
+        // Fluke strokes, faster when diving; a slight rise and fall as it swims.
+        const period = c.mood === 'diving' ? 3 : 6;
+        const beat = Math.floor((tick + c.id * 5) / period) % 4;
+        const frame = [0, 1, 2, 1][beat];
+        this.sprite(creatureSprite('dolphin', 0, frame, washed), c.x, c.z, c.h + [1, 0, -1, 0][beat] * 0.5, { flipX: c.facing < 0 });
+        return;
+      }
+      case 'starfish': {
+        // Turned to face where it is heading; the arms curl as it creeps or eats.
+        const turn = ((c.heading % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        const step = Math.round(turn / (Math.PI / 8)) % 16;
+        const busy = c.mood === 'eating' || Math.hypot(c.vx, c.vz) > 0.004;
+        const curl = busy ? (tick >> 4) & 1 : 0;
+        this.sprite(starfishSprite(c.palette, c.limbs, step, curl, washed), c.x, c.z, c.h + 1);
+        return;
+      }
+      case 'cuttlefish': {
+        // The fin ripples; hypnotising (or courting), bands of colour roll across it.
+        const display = c.mood === 'hypnotising' || c.mood === 'striking' || c.courting > 0;
+        const frame = Math.floor((tick + c.id * 3) / (display ? 2 : 5)) % 4;
+        this.sprite(cuttleSprite(frame, display, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
+        if (c.lunge > 0 && c.prey?.alive) this.drawTentacles(c, c.prey);
+        return;
+      }
       default: {
         const kind: SpriteKind = c.species === 'minnow' && c.age < SPECIES.minnow.mature ? 'fry' : c.species;
         const speed = Math.hypot(c.vx, c.vz);
@@ -583,6 +900,194 @@ export class OceanView {
     }
     const open = c.mood === 'striking' && c.lunge > 0.4;
     this.sprite(creatureSprite('eelHead', c.palette, open ? 1 : 0, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
+  }
+
+  /** Draws a small character-map shape at a screen point, `unit` pixels per cell. */
+  private pixelShape(rows: string[], x: number, y: number, unit: number) {
+    const { spriteCtx: ctx } = this;
+    const ox = Math.round(x - (rows[0].length * unit) / 2);
+    const oy = Math.round(y - (rows.length * unit) / 2);
+    rows.forEach((row, r) => [...row].forEach((ch, k) => {
+      if (ch === 'X') ctx.fillRect(ox + k * unit, oy + r * unit, unit, unit);
+    }));
+  }
+
+  /** A few dark specks on a fish that is due a visit to the cleaners. */
+  private drawParasites(c: Creature) {
+    const { spriteCtx: ctx, px } = this;
+    const width = BODY_WIDTH[c.species];
+    const count = Math.round(c.parasites * 5);
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = 'rgb(40,36,30)';
+    for (let k = 0; k < count; k++) {
+      const along = (((c.id * 7 + k * 13) % 11) / 11 - 0.5) * width * 0.6;
+      const up = ((c.id + k * 5) % 3) - 1;
+      const p = this.project(c.x + along, c.z, c.h + up);
+      const size = Math.max(2, Math.round(px * 0.6));
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), size, size);
+    }
+  }
+
+  /** A cuttlefish's two long tentacles shooting out to its prey. */
+  private drawTentacles(c: Creature, prey: Creature) {
+    const { spriteCtx: ctx, px } = this;
+    const from = { x: c.x + c.facing * 8, z: c.z, h: c.h };
+    const steps = 14;
+    ctx.globalAlpha = 1;
+    for (let k = 0; k <= steps * c.lunge; k++) {
+      const t = k / steps;
+      for (const side of [-0.6, 0.6]) {
+        const p = this.project(from.x + (prey.x - from.x) * t, from.z + (prey.z - from.z) * t, from.h + (prey.h - from.h) * t + side * (1 - t));
+        const size = Math.max(2, Math.round(px * 0.7 * p.s));
+        // Clubbed tips, darker suckers along the way.
+        ctx.fillStyle = k >= steps * c.lunge - 1 ? 'rgb(255,214,196)' : k % 3 ? 'rgb(226,176,154)' : 'rgb(186,128,112)';
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), size, size);
+      }
+    }
+  }
+
+  /** An anemone: a fan of tentacles that sway, and pull in when touched. */
+  private drawAnemone(a: Anemone) {
+    const { spriteCtx: ctx, px, ocean } = this;
+    const [baseCol, stalkCol, tipCol] = ANEMONE[a.palette % ANEMONE.length];
+    const base = new Path2D();
+    const stalk = new Path2D();
+    const tips = new Path2D();
+    // A fleshy foot on the seabed...
+    for (let x = -5; x <= 5; x++) for (let y = 0; y < 2; y++) {
+      const p = this.project(a.x + x, a.z + y * 0.5, y ? 0 : 1);
+      base.rect(Math.round(p.x - px / 2), Math.round(p.y - px), px, px);
+    }
+    // ...and a crown of fat tentacles, fanned out, that pull in when touched.
+    const reach = 10 - a.retract * 7;
+    // Separate strands, so it reads as tentacles rather than a fan.
+    for (let k = 0; k < 9; k++) {
+      const root = (k - 4) * 1.3;
+      const lean = (k - 4) * 0.6;
+      for (let t = 1; t <= reach; t += 0.6) {
+        const give = (t / 10) ** 1.3;
+        // Halved: their own clownfish are always brushing through them.
+        const sway = Math.sin(ocean.tick * 0.08 + a.phase + k * 0.7) * (t / 8) * 2 + a.bx * give * 0.5;
+        const p = this.project(a.x + root + lean * t * 0.4 + sway, a.z + a.bz * give * 0.5, t);
+        const size = Math.ceil(px * p.s);
+        (t > reach - 1 ? tips : stalk).rect(Math.round(p.x - size / 2), Math.round(p.y), size, size);
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = baseCol;
+    ctx.fill(base);
+    ctx.fillStyle = stalkCol;
+    ctx.fill(stalk);
+    ctx.fillStyle = tipCol;
+    ctx.fill(tips);
+  }
+
+  /**
+   * Cleaner shrimp: they wait on top of their rock, and while a fish is
+   * being cleaned they hop about all over it.
+   */
+  private drawShrimp(st: Station) {
+    const tick = this.ocean.tick;
+    const client = st.queue[0];
+    const working = client?.alive && client.mood === 'cleaning';
+    for (let k = 0; k < 3; k++) {
+      const frame = (tick + k * 5) >> 3 & 1;
+      const img = creatureSprite('shrimp', 0, frame);
+      if (working) {
+        const width = BODY_WIDTH[client.species];
+        // Spread along the fish, each pottering about its own patch.
+        const along = (k - 1) * width * 0.32 + Math.sin(tick * 0.05 + k * 2.1) * 2;
+        const hop = Math.abs(Math.sin(tick * 0.2 + k * 1.3)) * 2;
+        this.sprite(img, client.x + along, client.z + 0.2, client.h + 3 + hop + (k === 1 ? 1.5 : 0), { flipX: (k % 2 ? 1 : -1) * st.side < 0 });
+      } else {
+        const bob = (tick + k * 20) % 90 < 10 ? 1 : 0;
+        this.sprite(img, st.x + (k - 1) * 6, st.z, st.ht + 1 + bob, { flipX: k === 2 });
+      }
+    }
+  }
+
+  /** A whale carcass: fresh, then bitten, then picked to the ribs, then bones. */
+  private drawWhale(wf: WhaleFall) {
+    const left = wf.mass / wf.fullMass;
+    const stage = wf.mass <= 0 ? 3 : left > 0.66 ? 0 : left > 0.33 ? 1 : 2;
+    this.sprite(whaleSprite(stage), wf.x, wf.z, wf.h + 4, { flipX: wf.facing < 0, alpha: this.whaleFade(wf) });
+  }
+
+  private whaleFade(wf: WhaleFall) {
+    return wf.mass <= 0 ? Math.max(0, Math.min(1, (wf.bonesUntil - this.ocean.tick) / 600)) : 1;
+  }
+
+  /**
+   * The pale bacterial mat that spreads over the seabed round a whale fall,
+   * fixed specks in a ring that widens as the carcass is eaten.
+   */
+  private drawMat(wf: WhaleFall) {
+    const { spriteCtx: ctx, px } = this;
+    const grown = Math.min(1, 0.35 + (1 - Math.max(0, wf.mass) / wf.fullMass));
+    ctx.globalAlpha = 0.5 * this.whaleFade(wf);
+    for (let i = 0; i < 70; i++) {
+      // A fixed scatter per whale, so the specks stay put.
+      const a = i * 2.39996 + wf.x;
+      const r = Math.sqrt((i + 0.5) / 70) * grown;
+      const p = this.project(wf.x + Math.cos(a) * r * 32, wf.z + 1 + Math.sin(a) * r * 9, 0);
+      ctx.fillStyle = i % 3 ? 'rgb(214,222,200)' : 'rgb(236,226,170)';
+      const size = px * (i % 5 === 0 ? 2 : 1);
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), size, size);
+    }
+  }
+
+  /** The shadow of something passing far overhead, if one is due. */
+  private drawPasser() {
+    const { ocean, spriteCtx: ctx, viewW, viewH } = this;
+    let p = this.passer;
+    if (!p) {
+      if (ocean.tick < this.nextPasser) return;
+      const pick = PASSERS[Math.floor(Math.random() * PASSERS.length)];
+      const img = this.passerImage(pick.kind, 0);
+      const w = img.width * this.px * pick.scale;
+      const h = img.height * this.px * pick.scale;
+      // A school mills about at random; bigger animals keep station in an
+      // echelon, each one behind and to the side of the last.
+      const members = Array.from({ length: pick.count }, (_, i) => pick.kind === 'minnow'
+        ? { dx: (Math.random() - 0.5) * pick.spread * 2, dy: (Math.random() - 0.5) * pick.spread, phase: Math.random() * 8 }
+        : { dx: -i * w * 0.7, dy: (i % 2 ? 1 : -1) * Math.ceil(i / 2) * (h * 1.3 + pick.spread * 0.3), phase: i * 3 });
+      p = this.passer = {
+        ...pick,
+        dir: Math.random() < 0.5 ? 1 : -1,
+        y: this.scrollY + viewH * (0.2 + Math.random() * 0.6),
+        start: ocean.tick,
+        members,
+        reach: pick.spread + w * (pick.kind === 'minnow' ? 1 : pick.count * 0.7 + 0.5),
+      };
+    }
+    const t = ocean.tick - p.start;
+    const cx = p.dir > 0 ? -p.reach + t * p.speed : viewW + p.reach - t * p.speed;
+    // Done once it has crossed, or once the visitor has scrolled well away from it.
+    if (cx > viewW + p.reach || cx < -p.reach || Math.abs(p.y - (this.scrollY + viewH / 2)) > viewH * 1.5) {
+      this.passer = null;
+      this.nextPasser = ocean.tick + PASSER_GAP[0] + Math.random() * (PASSER_GAP[1] - PASSER_GAP[0]);
+      return;
+    }
+    // From the page to the sprite canvas, which starts at the region's top.
+    const top = -this.regionTop;
+    ctx.globalAlpha = PASSER_ALPHA;
+    for (const m of p.members) {
+      const img = this.passerImage(p.kind, ((t >> 3) + Math.round(m.phase)) & 1);
+      const k = this.px * p.scale;
+      const w = Math.round(img.width * k);
+      const hh = Math.round(img.height * k);
+      const sway = Math.sin(t * 0.05 + m.phase) * k * 2;
+      ctx.save();
+      ctx.translate(Math.round(cx + m.dx * p.dir), Math.round(top + p.y + m.dy + sway));
+      ctx.scale(p.dir, 1);
+      ctx.drawImage(img, -w / 2, -hh / 2, w, hh);
+      ctx.restore();
+    }
+  }
+
+  private passerImage(kind: SpriteKind | 'whale', frame: number) {
+    if (kind === 'whale') return silhouetteSprite('whale', whaleSprite(0));
+    return silhouetteSprite(`${kind}-${frame}`, creatureSprite(kind, 0, frame));
   }
 
   /** An anglerfish's lure: a thin stalk ending in a pulsing glow. */
@@ -691,36 +1196,36 @@ export class OceanView {
   }
 
   /** A kelp stalk rising toward the camera, swaying more toward its tip. */
-  private drawKelp(x: number, z: number, length: number, phase: number) {
-    const { spriteCtx: ctx, px, ocean } = this;
-    const t = ocean.tick * 0.04 + phase;
-    // One path per colour, filled once each, rather than a fillRect per square.
-    const base = new Path2D();
-    const stalk = new Path2D();
-    const leaves = new Path2D();
-    const tip = new Path2D();
+  private drawKelp(k: Kelp) {
+    const { spriteCtx: ctx, px, ocean, regionTop } = this;
+    const { x, z, length } = k;
+    const t = ocean.tick * 0.04 + k.phase;
+    // Squares are gathered by colour and filled in four runs, with the
+    // projection worked out inline: a screenful of kelp is thousands of them.
+    const runs = this.kelpRuns;
+    for (const run of runs) run.length = 0;
     for (let i = 0; i <= length; i += 1.4) {
-      const sway = Math.sin(t + i * 0.12) * (i / 14);
-      const p = this.project(x + sway, z, i);
-      const size = Math.ceil(px * p.s);
-      const left = Math.round(p.x - size / 2);
-      const top = Math.round(p.y);
-      (i > length - 3 ? tip : i < length * 0.3 ? base : stalk).rect(left, top, size, size);
+      // Pushed over by whatever swims through: the tip moves furthest.
+      const give = (i / length) ** 1.5;
+      const sway = Math.sin(t + i * 0.12) * (i / 14) + k.bx * give;
+      const sx = (x + sway) * px;
+      const sy = (z + k.bz * give - i * ELEVATION) * px - regionTop;
+      const size = Math.ceil(px * (1 + i * PERSPECTIVE));
+      const left = Math.round(sx - size / 2);
+      const top = Math.round(sy);
+      runs[i > length - 3 ? 3 : i < length * 0.3 ? 0 : 1].push(left, top, size);
       // Leaves on alternating sides.
       if (Math.floor(i / 1.4) % 4 === 0 && i > 3) {
         const side = Math.floor(i / 5.6) % 2 ? 1 : -1;
-        leaves.rect(Math.round(p.x - size / 2 + side * size), top, size, size);
-        leaves.rect(Math.round(p.x - size / 2 + side * size * 2), Math.round(p.y + size), size, size);
+        runs[2].push(Math.round(sx - size / 2 + side * size), top, size, Math.round(sx - size / 2 + side * size * 2), Math.round(sy + size), size);
       }
     }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = KELP_BASE;
-    ctx.fill(base);
-    ctx.fillStyle = KELP_STALK;
-    ctx.fill(stalk);
-    ctx.fillStyle = KELP_LEAF;
-    ctx.fill(leaves);
-    ctx.fillStyle = KELP_TIP;
-    ctx.fill(tip);
+    for (let c = 0; c < 4; c++) {
+      const run = runs[c];
+      if (!run.length) continue;
+      ctx.fillStyle = KELP_COLORS[c];
+      for (let n = 0; n < run.length; n += 3) ctx.fillRect(run[n], run[n + 1], run[n + 2], run[n + 2]);
+    }
   }
 }

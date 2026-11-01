@@ -7,7 +7,13 @@ export type Rgb = [number, number, number];
 const css = ([r, g, b]: Rgb, a = 1) => (a === 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${a})`);
 const shadeOf = ([r, g, b]: Rgb, k: number): Rgb => [Math.min(255, r * k) | 0, Math.min(255, g * k) | 0, Math.min(255, b * k) | 0];
 
-const makeCanvas = (w: number, h: number) => {
+/**
+ * A blank canvas. In a worker (where the reef usually runs) there is no
+ * document, so it is an OffscreenCanvas: the same drawing API, typed here as
+ * a canvas element so the rest of the code needn't care which it got.
+ */
+export const makeCanvas = (w: number, h: number): HTMLCanvasElement => {
+  if (typeof document === 'undefined') return new OffscreenCanvas(w, h) as unknown as HTMLCanvasElement;
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
@@ -35,7 +41,24 @@ const fromRows = (rows: string[], colors: Record<string, Rgb>) => {
 export type SpriteKind =
   | 'minnow' | 'fry' | 'barracuda' | 'crab' | 'jelly' | 'turtle'
   | 'puffer' | 'pufferPuffed' | 'seahorse' | 'urchin' | 'octopus'
-  | 'eel' | 'eelHead' | 'shark' | 'manta' | 'angler';
+  | 'eel' | 'eelHead' | 'shark' | 'manta' | 'angler'
+  | 'clownfish' | 'dolphin' | 'shrimp' | 'starfish' | 'cuttlefish';
+
+// A dolphin seen side on, without its tail; the flukes beat up and down.
+const DOLPHIN_BODY = [
+  '............DD............',
+  '...........DDD............',
+  '.......DDDDDDDDDDDD.......',
+  '....DDBBBBBBBBBBBBBBBD....',
+  '...BBBBBBBBBBBBBBBBBBBEBB.',
+  '....LLLLLLLLLLLLLLLLLLBBBB',
+  '.........LL........L......',
+];
+const dolphinFrame = (tail: [number, string][]) => {
+  const rows = DOLPHIN_BODY.map(r => r.split(''));
+  for (const [r, t] of tail) [...t].forEach((ch, i) => { if (ch !== '.') rows[r][i] = ch; });
+  return rows.map(r => r.join(''));
+};
 
 const ROWS: Record<SpriteKind, string[][]> = {
   // Lit back (D), body (B), belly (L), fins and tail (T), eye (E).
@@ -112,6 +135,25 @@ const ROWS: Record<SpriteKind, string[][]> = {
     ['..........D.........', '..........DB........', '.........DBB........', '........DBBBB.......', '.......DBBBBBB......', '......DBBBBBBBBB....', 'TT...DBBBBBBBBBBBBD.', 'TTTTTBBBBBBBBBBBBBBE', 'TT...LBBBBBBBBBBBBD.', '......LBBBBBBBBB....', '.......LBBBBBB......', '........LBBBB.......', '.........LBB........', '..........LB........', '..........L.........'],
     ['....................', '....................', '.........DBB........', '........DBBBB.......', '.......DBBBBBB......', '......DBBBBBBBBB....', 'TT...DBBBBBBBBBBBBD.', 'TTTTTBBBBBBBBBBBBBBE', 'TT...LBBBBBBBBBBBBD.', '......LBBBBBBBBB....', '.......LBBBBBB......', '........LBBBB.......', '.........LBB........', '....................', '....................'],
   ],
+  // White bands edged in black; the tail flicks.
+  clownfish: [
+    ['....DD......', 'T..BWBBWB...', 'TTBBWBBWBBEB', 'TTBBWBBWBBBB', 'T..LWLLWL...', '....T.......'],
+    ['....DD......', '.T.BWBBWB...', '.TBBWBBWBBEB', '.TBBWBBWBBBB', '.T.LWLLWL...', '....T.......'],
+  ],
+  // Flukes up, level and down.
+  dolphin: [
+    dolphinFrame([[2, 'T'], [3, 'TTT'], [4, '.TT']]),
+    dolphinFrame([[3, 'T'], [4, 'TTT'], [5, 'T']]),
+    dolphinFrame([[4, '.TT'], [5, 'TTT'], [6, 'T']]),
+  ],
+  // Cleaner shrimp: striped, with long feelers; the legs patter.
+  shrimp: [
+    ['D.......', '.DBWBBW.', '..BWBBWT', '..L.L.L.'],
+    ['.D......', '.DBWBBW.', '..BWBBWT', '...L.L.L'],
+  ],
+  // Drawn by code (see starfishSprite and cuttleSprite); kept here for the types.
+  starfish: [['.']],
+  cuttlefish: [['.']],
   // Jaw shut, then hanging open full of teeth. The lure is drawn separately.
   angler: [
     ['...DDDDD.....', '..DBBBBBDD...', '.DBBBBBBBBEB.', 'TBBBBBBBBBBBB', 'TBBBBBBBWBWBW', '.LLLLLLLLLLL.', '..LLLLLLLL...'],
@@ -178,6 +220,24 @@ const PALETTES: Record<SpriteKind, Rgb[][]> = {
   angler: [
     [[80, 70, 96], [56, 48, 70], [96, 86, 110], [44, 38, 56]],
   ],
+  clownfish: [
+    [[34, 24, 24], [255, 122, 30], [255, 170, 80], [236, 104, 28]],
+  ],
+  dolphin: [
+    [[72, 88, 108], [124, 144, 164], [214, 224, 232], [92, 110, 130]],
+  ],
+  shrimp: [
+    [[255, 235, 225], [235, 70, 60], [255, 190, 180], [210, 50, 50]],
+  ],
+  // [outline, body, arm tips, speckles]
+  starfish: [
+    [[110, 36, 18], [240, 120, 60], [255, 190, 120], [255, 230, 170]],
+    [[60, 22, 72], [172, 82, 204], [232, 162, 242], [250, 222, 255]],
+    [[96, 20, 32], [222, 62, 72], [255, 150, 140], [255, 212, 202]],
+  ],
+  cuttlefish: [
+    [[150, 100, 80], [200, 150, 120], [235, 210, 190], [215, 175, 150]],
+  ],
 };
 PALETTES.pufferPuffed = PALETTES.puffer;
 PALETTES.eelHead = PALETTES.eel;
@@ -201,12 +261,203 @@ const pale = ([r, g, b]: Rgb): Rgb => {
 export const creaturePalette = (kind: SpriteKind, palette: number, washed = false) =>
   PALETTES[kind][palette % PALETTES[kind].length].map(c => (washed ? pale(c) : c));
 
-export const creatureSprite = (kind: SpriteKind, palette: number, frame: number, washed = false) =>
-  cached(`${kind}-${palette}-${frame}-${washed}`, () => {
+export const creatureSprite = (kind: SpriteKind, palette: number, frame: number, washed = false): HTMLCanvasElement => {
+  if (kind === 'starfish') return starfishSprite(palette, 5, 0, frame & 1, washed);
+  if (kind === 'cuttlefish') return cuttleSprite(frame, false, washed);
+  return cached(`${kind}-${palette}-${frame}-${washed}`, () => {
     const set = PALETTES[kind][palette % PALETTES[kind].length].map(c => (washed ? pale(c) : c));
     const frames = ROWS[kind];
     return fromRows(frames[frame % frames.length], { D: set[0], B: set[1], L: set[2], T: set[3], E: EYE, W: TEETH });
   });
+};
+
+/**
+ * A puff of sand kicked off the seabed, seen from slightly above: a lump
+ * bursts up, billows into a low ring and thins away. Tones: light (L),
+ * mid (B), shadow (D). Coral spawn uses the same puff in pinks.
+ */
+const PUFF = [
+  ['...........', '...........', '....LLL....', '...LBBBL...', '....DDD....'],
+  ['...........', '....LLL....', '...LBBBL...', '..LBBDBBL..', '...DDDDD...'],
+  ['....LLL....', '..LLBBBLL..', '.LBB.B.BBL.', '.BDD...DDB.', '..DD...DD..'],
+  ['...L...L...', '.LB.....BL.', 'L.........L', 'BD.......DB', '.D.......D.'],
+  ['...........', 'L.........L', '...........', 'D.........D', '...........'],
+];
+export const PUFF_FRAMES = PUFF.length;
+const PUFF_COLORS = [
+  { L: [210, 196, 154] as Rgb, B: [178, 166, 130] as Rgb, D: [140, 130, 102] as Rgb },
+  { L: [255, 240, 246] as Rgb, B: [255, 150, 190] as Rgb, D: [216, 108, 156] as Rgb },
+];
+
+/** A puff frame: palette 0 is sand, 1 coral spawn. */
+export const puffSprite = (frame: number, palette: number) =>
+  cached(`puff-${frame}-${palette}`, () => fromRows(PUFF[Math.min(PUFF.length - 1, frame)], PUFF_COLORS[palette & 1]));
+
+/** Disturbed water behind a fast swimmer: a bubble that shrinks to a fleck. */
+const FIZZ = [['.f.', 'fFf', '.f.'], ['...', '.ff', '.f.'], ['...', '.f.', '...']];
+export const fizzSprite = (frame: number) =>
+  cached(`fizz-${frame}`, () => fromRows(FIZZ[Math.min(FIZZ.length - 1, frame)], { f: [196, 232, 240], F: [140, 190, 210] }));
+
+/** A sprite filled in one flat colour, for shadows cast from far overhead. */
+export const silhouetteSprite = (key: string, img: HTMLCanvasElement, colour = 'rgb(2,10,18)') =>
+  cached(`silhouette-${key}`, () => {
+    const c = makeCanvas(img.width, img.height);
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = colour;
+    ctx.fillRect(0, 0, c.width, c.height);
+    return c;
+  });
+
+// --- hand-made sprites with variants -----------------------------------------
+
+/**
+ * A starfish from above, like the other sprites a hand-placed map: lit centre
+ * (D), body (B), pale arm tips (L) and speckles (T). Digits mark each arm's
+ * cells, so arms a crab has nipped off can be left as stubs.
+ */
+const STARFISH = [
+  ['......L......', '......1......', '.....111.....', '.....1D1.....', 'L555DDDDD222L', '.55BBBTBBB22.', '..5BTBBBTB2..', '...BBBTBBB...', '...4BBBBB3...', '..44.....33..', '.44.......33.', '.L.........L.'],
+  ['......L......', '......1......', '.....111.....', 'L....1D1....L', '.555DDDDD222.', '.55BBBTBBB22.', '..5BTBBBTB2..', '...BBBTBBB...', '...4BBBBB3...', '..44.....33..', '.44.......33.', '..L.......L..'],
+];
+const STAR_MID = { x: 6, y: 6 };
+
+export const starfishSprite = (palette: number, limbs: number, _step: number, curl: number, washed = false) =>
+  cached(`star-${palette}-${limbs}-${curl}-${washed}`, () => {
+    const [lit, body, tip, speck] = creaturePalette('starfish', palette, washed);
+    const rows = STARFISH[curl & 1].map((row, y) => [...row].map((ch, x) => {
+      // A missing arm keeps only the stub nearest the body.
+      const arm = Number(ch);
+      if (arm && arm > limbs && Math.hypot(x - STAR_MID.x, y - STAR_MID.y) > 3.2) return '.';
+      if (ch === 'L' && armOfTip(x, y) > limbs) return '.';
+      return arm ? 'B' : ch;
+    }).join(''));
+    return fromRows(rows, { D: lit, B: body, L: tip, T: speck });
+  });
+
+/** Which arm a tip cell belongs to: 1 top, then clockwise. */
+const armOfTip = (x: number, y: number) => {
+  const a = Math.atan2(y - STAR_MID.y, x - STAR_MID.x);
+  const turns = ((a + Math.PI / 2) / (Math.PI * 2) + 1) % 1;
+  return (Math.round(turns * 5) % 5) + 1;
+};
+
+/**
+ * A cuttlefish facing right: lit mantle (D), body (B), pale belly (L), fin
+ * fringe and arms (T), eye (E). The fringe ripples between two frames.
+ */
+const CUTTLE = [
+  ['..T.T.T.T.T....', '.DDDDDDDDDDD...', 'TBBBBBBBBBBEBTT', 'TBBBBBBBBBBBBT.', '.LLLLLLLLLLL..T', '..T.T.T.T.T....'],
+  ['...T.T.T.T.....', '.DDDDDDDDDDD...', 'TBBBBBBBBBBEBT.', 'TBBBBBBBBBBBBTT', '.LLLLLLLLLLL.T.', '...T.T.T.T.....'],
+];
+
+/**
+ * Cuttlefish frames. Displaying, diagonal bands of its own dark and pale
+ * tones roll back along the mantle over four frames.
+ */
+export const cuttleSprite = (frame: number, display: boolean, washed = false) =>
+  cached(`cuttle-${frame % 4}-${display}-${washed}`, () => {
+    const [lit, body, belly, fin] = creaturePalette('cuttlefish', 0, washed);
+    const band = shadeOfRgb(lit, 0.62);
+    const rows = CUTTLE[frame & 1].map((row, y) => [...row].map((ch, x) => {
+      if (!display || !'DBL'.includes(ch)) return ch;
+      return Math.floor((x + y - (frame % 4) * 2) / 2) % 2 === 0 ? 'S' : 'L';
+    }).join(''));
+    return fromRows(rows, { D: lit, B: body, L: belly, T: fin, E: EYE, S: band });
+  });
+
+const shadeOfRgb = ([r, g, b]: Rgb, k: number): Rgb => [Math.round(r * k), Math.round(g * k), Math.round(b * k)];
+
+/**
+ * A whale carcass on its side, head to the right, in four hand-drawn stages:
+ * whole, with bites torn from its back, picked to the ribs, and a bare
+ * skeleton. Tones as the other sprites: back (D), body (B), belly (L), throat
+ * pleats (P), flukes (T), the long pale flipper (F), eye (E), plus raw meat
+ * (R), bone (W) and shaded bone (K).
+ */
+const WHALE = [
+  [
+    '..................................................',
+    'TT.....................DD.........................',
+    'TTT.................DDDDDDDDDDDDDDDDDD............',
+    '.TTT.............DDDDDDDDDDDDDDDDDDDDDDDDDD.......',
+    '..TTT.......DDDDDBBBBBBBBBBBBBBBBBBBBBBBBBDDDD....',
+    '...TTT..DDDDBBBBBBBBBBBBBBBBBBBBBBBBBBBBLBBBLBDD..',
+    '....TTDDBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBLD.',
+    '....TTBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBEBBBBBBBB',
+    '....TTBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBDDDDDDDDDDDD',
+    '...TTT..LLLLLLBBBBBBBBBBBBBBBBBBLLLLLLLLLLLLLLLLL.',
+    '..TTT.......LLLLLLLLLLPPPPPPPPPPPPPPPPPPPPPPPPPP..',
+    '.TTT..............LLLLLLLLLLLLLLLLLLLLLLLLLLLLL...',
+    'TTT...................PPPPPPPPPPPPPPPPPPPPPPPP....',
+    'TT...........FLFFLFFLFFFFFFFLLLLLLLLLLLLLLLLL.....',
+    '..........FLFFFFFFFFF.............................',
+    '.......FFFFFF.....................................',
+  ],
+  [
+    '..................................................',
+    'TT......................R.........................',
+    'TTT.....................RRDDR.......RD............',
+    '.TTT....................RDDDRR.....RRDDDDDD.......',
+    '..TTT.......DDDDDRR...RRBBBBBRRRRRRRBBBBBBDDDD....',
+    '...TTT..DDDDBBBBBBBRRRBBBBBBBBBBBBBBBBBBLBBBLBDD..',
+    '....TTDDBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBLD.',
+    '....TTBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBEBBBBBBBB',
+    '....TTBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBDDDDDDDDDDDD',
+    '...TTT..LLLLLLBBBBBBBBBBBBBBBBBBLLLLLLLLLLLLLLLLL.',
+    '..TTT.......R.RRRLLLLLPPPPPPPPPPPPPPPPPPPPPPPPPP..',
+    '.TTT..............LLLLLLLLLLLLLLLLLLLLLLLLLLLLL...',
+    'TTT...................PPPPPPPPPPPPPPPPPPPPPPPP....',
+    'TT...........FRFFLFFLFFFFFFFLLLLLLLLLLLLLLLLL.....',
+    '..........FLFFFFFFFFF.............................',
+    '.......FFFFFF.....................................',
+  ],
+  [
+    '..................................................',
+    'TT................................................',
+    'TTT.................................DD............',
+    '.TTT......................R.........RDDDDDD.......',
+    '..TTT.........R.....................RBBBBBDDDD....',
+    '...TTT..DDDR.................R......RBBBLBBBLBDD..',
+    '....TTDDBBBR.K.K.K.K.K.K.K.K.K.K.K.KRBBBBBBBBBBLD.',
+    '....TTBBBBBRWWWWWWWWWWWWWWWWWWWWWWWWRBBBBEBBBBBBBB',
+    '....TTBBBBBR...W..W..W..W..W..W..W..RBDDDDDDDDDDDD',
+    '...TTT..LLLR...W..W..W..W..W..W..W..RLLLLLLLLLLLL.',
+    '..TTT..........K..W..W..W..W..W..R..RPPPPPPPPPPP..',
+    '.TTT.............KR.W..W..W..K..K...RLLLLLLLLLL...',
+    'TTT.................K..R..K.........RPPPPPPPPP....',
+    'TT...........FLFFLFFLFFFFFFF........LLLLLLLLL.....',
+    '..........FLFFFFFFFFF.............................',
+    '.......FFFFFF.....................................',
+  ],
+  [
+    '..................................................',
+    '..................................................',
+    '..................................................',
+    '..................................................',
+    'W....................................WWWW.........',
+    'WW..................................WKKKKWWW......',
+    '.WW.K.K.K.K.K.K.K.K.K.K.K.K.K.K.K.KWKK.KKKKKWWW...',
+    '...WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWKKKKKKKKKKKKWWW',
+    '.WW............W..W..W..W..W..W..W.WWWWWWWWWWWWWWW',
+    'WW.............W..W..W..W..W..W..W.............WW.',
+    'W..............K..W..W..W..W..KKKWWWWWWWWWWWWWW...',
+    '.................K..W..W..W..K..K.................',
+    '....................K..K..K.......................',
+    '......................KWKWKWK.....................',
+    '...............WKWKWKW............................',
+    '.........WKWKWK...................................',
+  ],
+];
+const WHALE_COLORS = {
+  D: [52, 64, 86] as Rgb, B: [84, 100, 124] as Rgb, L: [170, 180, 196] as Rgb, P: [118, 132, 154] as Rgb,
+  T: [62, 76, 100] as Rgb, F: [196, 204, 214] as Rgb, E: EYE, R: [176, 64, 74] as Rgb,
+  W: [228, 224, 206] as Rgb, K: [170, 162, 140] as Rgb,
+};
+
+export const whaleSprite = (stage: number) =>
+  cached(`whale-${stage}`, () => fromRows(WHALE[Math.max(0, Math.min(3, stage))], WHALE_COLORS));
 
 // What a picked-clean fish leaves behind, facing right.
 const BONES: Record<'minnow' | 'barracuda', string[]> = {
@@ -296,7 +547,7 @@ const CORAL_SETS: Rgb[][] = [
 
 /** Either a branching coral or a round brain coral. */
 export const coralSprite = (seed: number, w: number, h: number) =>
-  cached(`coral-${seed}`, () => {
+  cached(`coral-${seed}-${w}-${h}`, () => {
     const rnd = seeded(seed);
     const set = CORAL_SETS[Math.floor(rnd() * CORAL_SETS.length)];
     const c = makeCanvas(w, h);

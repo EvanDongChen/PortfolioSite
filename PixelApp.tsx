@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import PortfolioContent from './components/PortfolioContent';
 import PixelOcean from './components/PixelOcean';
 import EcosystemPanel from './components/EcosystemPanel';
@@ -16,6 +16,9 @@ import { filterProjects, experiences, education, skills } from './data/portfolio
 import { isSwitchingPages, useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
 import './pixel-theme.css';
 
+// How long the dive log's cursor and live dot stay on, then off.
+const BLINK_MS = 600;
+
 // Created once so the memoised page content never re-renders for it.
 const HERO_EXTRA = <DiveCard />;
 
@@ -28,6 +31,15 @@ const PixelApp: React.FC = () => {
   useLayoutEffect(() => {
     document.documentElement.classList.add('pixel-theme');
     return () => document.documentElement.classList.remove('pixel-theme');
+  }, []);
+  // The cursor and live dot blink on one slow timer (see pixel-theme.css).
+  useEffect(() => {
+    const root = document.documentElement;
+    const timer = window.setInterval(() => root.toggleAttribute('data-blink-off'), BLINK_MS);
+    return () => {
+      window.clearInterval(timer);
+      root.removeAttribute('data-blink-off');
+    };
   }, []);
   // The block dissolve only plays when switching over from the aquarium; on
   // a first visit the reef simply appears. Read during render, before the

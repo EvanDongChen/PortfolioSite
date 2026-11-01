@@ -17,6 +17,8 @@ const EVENT_COLOR: Record<OceanEvent['kind'], string> = {
   eaten: '#ff7a63',
   stung: '#e88ad8',
   inked: '#8aa6b4',
+  visit: '#8fe3dc',
+  cleaned: '#f0d8a0',
   starved: '#f0d8a0',
   oldAge: '#8aa6b4',
 };
@@ -25,16 +27,20 @@ const PLURAL: Record<Species, string> = {
   minnow: 'Minnows',
   puffer: 'Puffers',
   seahorse: 'Seahorses',
+  clownfish: 'Clownfish',
   barracuda: 'Barracuda',
   eel: 'Morays',
   angler: 'Anglers',
   shark: 'Sharks',
   crab: 'Crabs',
   urchin: 'Urchins',
+  starfish: 'Starfish',
   octopus: 'Octopuses',
+  cuttlefish: 'Cuttlefish',
   jelly: 'Jellies',
   turtle: 'Turtles',
   manta: 'Mantas',
+  dolphin: 'Dolphins',
 };
 
 // Each species' own sprite as a tiny icon, drawn once.

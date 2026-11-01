@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 // The bottom of the page sits at this depth.
 const MAX_DEPTH_M = 120;
@@ -19,7 +19,10 @@ const formatDepth = (m: number) => String(Math.round(m)).padStart(3, '0');
  */
 const DiveGauge: React.FC = () => {
   const [marks, setMarks] = useState<Mark[]>([]);
-  const [progress, setProgress] = useState(0);
+  // Whole metres: the gauge only re-renders when the readout changes. The
+  // diver marker moves every frame, but by transform, outside React.
+  const [depth, setDepth] = useState(0);
+  const railRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const sections = () => Array.from(document.querySelectorAll<HTMLElement>('main > section[id]'))
@@ -41,7 +44,9 @@ const DiveGauge: React.FC = () => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
-        setProgress(Math.min(1, window.scrollY / maxScroll()));
+        const progress = Math.min(1, window.scrollY / maxScroll());
+        if (railRef.current) railRef.current.style.transform = `translateY(${progress * 100}%)`;
+        setDepth(Math.round(progress * MAX_DEPTH_M));
       });
     };
 
@@ -59,13 +64,13 @@ const DiveGauge: React.FC = () => {
   }, []);
 
   // The current section is the deepest one the diver has passed.
-  const current = [...marks].reverse().find(mark => progress >= mark.at - 0.02)?.id;
+  const current = [...marks].reverse().find(mark => depth / MAX_DEPTH_M >= mark.at - 0.02)?.id;
 
   return (
     <nav className="dive-gauge hidden xl:flex" aria-label="Dive depth">
       <div className="dive-gauge-label">Depth</div>
       <div className="dive-gauge-readout" aria-live="off">
-        {formatDepth(progress * MAX_DEPTH_M)}<small>m</small>
+        {formatDepth(depth)}<small>m</small>
       </div>
       <div className="dive-gauge-label">Surface</div>
       <div className="dive-gauge-track">
@@ -81,7 +86,10 @@ const DiveGauge: React.FC = () => {
             <span>{mark.label}</span>
           </button>
         ))}
-        <div className="dive-gauge-diver" style={{ top: `${progress * 100}%` }} aria-hidden="true" />
+        {/* A rail as tall as the track, slid down it: a transform, so no layout. */}
+        <div ref={railRef} className="dive-gauge-rail" aria-hidden="true">
+          <div className="dive-gauge-diver" />
+        </div>
       </div>
       <div className="dive-gauge-label">Seabed</div>
     </nav>
