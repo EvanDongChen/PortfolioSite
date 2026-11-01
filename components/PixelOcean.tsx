@@ -160,7 +160,10 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     document.fonts?.ready.then(remeasure);
     const settleTimer = window.setTimeout(remeasure, HERO_SETTLE_MS);
     const view = new OceanView(ocean, floor, light, sprites, px);
-    const draw = () => view.render(window.scrollY, window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
+    // The sprites are drawn one canvas pixel per CSS pixel and scaled up
+    // crisply: every square already sits on whole CSS pixels, so a sharper
+    // canvas would only multiply the pixels to fill on high-DPI screens.
+    const draw = () => view.render(window.scrollY, window.innerWidth, window.innerHeight, 1);
 
     // A returning visitor's creature swims back in.
     const saved = loadAdoption();
@@ -280,8 +283,9 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
         pending -= TICK_MS;
         ticked = true;
       }
-      // Redraw for new ticks, and while scrolling so the perspective follows.
-      const scrolled = window.scrollY !== lastScroll;
+      // Redraw for new ticks, and for scrolling far enough to bring new
+      // sprites into view (the canvases scroll with the page by themselves).
+      const scrolled = window.scrollY !== lastScroll && view.scrolledFar(window.scrollY);
       // On a device that can't keep up, draw less often rather than stutter;
       // the simulation itself keeps its pace either way.
       const gap = drawCost > SLOW_DRAW_MS ? SLOW_FRAME_MS : frameMsRef.current;
@@ -379,7 +383,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
         <canvas ref={floorRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated' }} />
         {/* Caustic light, added onto the seabed by the browser. */}
         <canvas ref={lightRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated', mixBlendMode: 'plus-lighter' }} />
-        <canvas ref={spriteRef} className="absolute left-0 top-0 block" />
+        <canvas ref={spriteRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated' }} />
         {/* The top of the screen is further from the camera: fade it into the deep. */}
         <div className="fixed inset-0 bg-gradient-to-b from-[#050d14]/60 via-[#050d14]/15 to-transparent" />
       </div>

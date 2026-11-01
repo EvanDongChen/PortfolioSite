@@ -85,6 +85,8 @@ const KELP_BASE = 'rgb(34,104,70)';
 const KELP_STALK = 'rgb(48,140,84)';
 const KELP_LEAF = 'rgb(64,160,90)';
 const KELP_TIP = 'rgb(120,200,110)';
+/** Kelp colours by run: base, stalk, leaves, tip. */
+const KELP_COLORS = [KELP_BASE, KELP_STALK, KELP_LEAF, KELP_TIP];
 
 interface Drawable { depth: number; draw: () => void }
 
@@ -139,6 +141,8 @@ export class OceanView {
   regionHeight = 0;
   /** Set while a courting creature is redrawn as a glow over itself. */
   private glow = false;
+  /** Kelp squares by colour (left, top, size each), reused from stalk to stalk. */
+  private kelpRuns: number[][] = [[], [], [], []];
   /** The creature being drawn's squash and stretch (positive stretches it along its length). */
   private stretch = 0;
   /** The creature under inspection, drawn with a reticle. */
@@ -225,6 +229,15 @@ export class OceanView {
   }
 
   // --- frame --------------------------------------------------------------
+
+  /**
+   * Whether scrolling alone calls for a redraw. Nothing is drawn relative to
+   * the screen (the canvases scroll with the page), so only once the view has
+   * moved far enough that sprites just past the drawn margin could show.
+   */
+  scrolledFar(scrollY: number) {
+    return Math.abs(scrollY - this.scrollY) >= (SPRITE_MARGIN * this.px) / 2;
+  }
 
   render(scrollY: number, viewW: number, viewH: number, dpr: number) {
     const { px, ocean } = this;
@@ -505,7 +518,7 @@ export class OceanView {
     if (night > 0) {
       ctx.globalAlpha = night * NIGHT_SHADE;
       ctx.fillStyle = 'rgb(2,6,18)';
-      ctx.fillRect(0, this.scrollY - this.regionTop, this.viewW, this.viewH);
+      ctx.fillRect(0, 0, this.viewW, this.regionHeight);
     }
     this.drawPasser();
 
@@ -1110,38 +1123,35 @@ export class OceanView {
 
   /** A kelp stalk rising toward the camera, swaying more toward its tip. */
   private drawKelp(k: Kelp) {
-    const { spriteCtx: ctx, px, ocean } = this;
+    const { spriteCtx: ctx, px, ocean, regionTop } = this;
     const { x, z, length } = k;
     const t = ocean.tick * 0.04 + k.phase;
-    // One path per colour, filled once each, rather than a fillRect per square.
-    const base = new Path2D();
-    const stalk = new Path2D();
-    const leaves = new Path2D();
-    const tip = new Path2D();
+    // Squares are gathered by colour and filled in four runs, with the
+    // projection worked out inline: a screenful of kelp is thousands of them.
+    const runs = this.kelpRuns;
+    for (const run of runs) run.length = 0;
     for (let i = 0; i <= length; i += 1.4) {
       // Pushed over by whatever swims through: the tip moves furthest.
       const give = (i / length) ** 1.5;
       const sway = Math.sin(t + i * 0.12) * (i / 14) + k.bx * give;
-      const p = this.project(x + sway, z + k.bz * give, i);
-      const size = Math.ceil(px * p.s);
-      const left = Math.round(p.x - size / 2);
-      const top = Math.round(p.y);
-      (i > length - 3 ? tip : i < length * 0.3 ? base : stalk).rect(left, top, size, size);
+      const sx = (x + sway) * px;
+      const sy = (z + k.bz * give - i * ELEVATION) * px - regionTop;
+      const size = Math.ceil(px * (1 + i * PERSPECTIVE));
+      const left = Math.round(sx - size / 2);
+      const top = Math.round(sy);
+      runs[i > length - 3 ? 3 : i < length * 0.3 ? 0 : 1].push(left, top, size);
       // Leaves on alternating sides.
       if (Math.floor(i / 1.4) % 4 === 0 && i > 3) {
         const side = Math.floor(i / 5.6) % 2 ? 1 : -1;
-        leaves.rect(Math.round(p.x - size / 2 + side * size), top, size, size);
-        leaves.rect(Math.round(p.x - size / 2 + side * size * 2), Math.round(p.y + size), size, size);
+        runs[2].push(Math.round(sx - size / 2 + side * size), top, size, Math.round(sx - size / 2 + side * size * 2), Math.round(sy + size), size);
       }
     }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = KELP_BASE;
-    ctx.fill(base);
-    ctx.fillStyle = KELP_STALK;
-    ctx.fill(stalk);
-    ctx.fillStyle = KELP_LEAF;
-    ctx.fill(leaves);
-    ctx.fillStyle = KELP_TIP;
-    ctx.fill(tip);
+    for (let c = 0; c < 4; c++) {
+      const run = runs[c];
+      if (!run.length) continue;
+      ctx.fillStyle = KELP_COLORS[c];
+      for (let n = 0; n < run.length; n += 3) ctx.fillRect(run[n], run[n + 1], run[n + 2], run[n + 2]);
+    }
   }
 }
