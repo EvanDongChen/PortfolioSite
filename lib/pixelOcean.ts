@@ -167,6 +167,13 @@ export interface Anemone extends Bend { x: number; z: number; palette: number; p
 export interface Bend { bx: number; bz: number; bvx: number; bvz: number }
 const upright = (): Bend => ({ bx: 0, bz: 0, bvx: 0, bvz: 0 });
 
+/** Drops the dead from a list, keeping its order, without making a new array. */
+const compact = <T extends { alive: boolean }>(list: T[]) => {
+  let kept = 0;
+  for (let i = 0; i < list.length; i++) if (list[i].alive) list[kept++] = list[i];
+  list.length = kept;
+};
+
 /** A rock where cleaner shrimp pick parasites off the big fish that queue there. */
 export interface Station { rock: Decor; x: number; z: number; ht: number; side: 1 | -1; queue: Creature[] }
 
@@ -372,6 +379,8 @@ const SPACING: Partial<Record<Species, number>> = {
 const BEND_FORCE = 0.25;
 const MAX_BEND = 7;
 /** Ticks between sand puffs for the creatures that stir it up. */
+/** Ticks between recounts of the algae for the census. */
+const ALGAE_RECOUNT = 90;
 /** How long a puff of sand or spawn takes to billow out and fade. */
 const PUFF_TICKS = 20;
 const SAND_STIRRERS: Partial<Record<Species, number>> = { crab: 20, octopus: 26, turtle: 10, manta: 10 };
@@ -393,6 +402,7 @@ const BALL_ALARM = 120;
 const BALL_CATCH = 0.05;
 /** What a minnow keeps an eye out for. */
 const MINNOW_WATCHES: Species[] = ['barracuda', 'jelly', 'shark', 'dolphin'];
+const WATCHED = Object.fromEntries(MINNOW_WATCHES.map(s => [s, true])) as Partial<Record<Species, boolean>>;
 /** Big fish that pick up parasites and visit cleaner stations. */
 const CLEANED: Species[] = ['shark', 'barracuda', 'turtle', 'manta', 'cuttlefish'];
 /** Fish that court a partner before they spawn. */
@@ -498,6 +508,9 @@ export class PixelOcean {
   /** When the next whale falls and the next dolphin pod visits (ticks). */
   private nextWhale = randInt(1350, 2250);
   private nextPod = randInt(750, 1350);
+  /** The census's algae total, and the tick it was last counted. */
+  private algaeTotal = 0;
+  private algaeCountedAt = -1;
   /** Ticks left of a coral spawning, and when the next one starts. */
   spawning = 0;
   private nextSpawning = randInt(5400, 9000);
@@ -947,12 +960,13 @@ export class PixelOcean {
   }
 
   private sweep() {
-    this.creatures = this.creatures.filter(c => c.alive);
-    this.particles = this.particles.filter(p => p.alive);
-    this.carcasses = this.carcasses.filter(c => c.alive);
-    this.drops = this.drops.filter(d => d.alive);
-    this.bubbles = this.bubbles.filter(b => b.alive);
-    this.scents = this.scents.filter(sc => sc.alive);
+    // In place, so the lists aren't copied (and thrown away) thirty times a second.
+    compact(this.creatures);
+    compact(this.particles);
+    compact(this.carcasses);
+    compact(this.drops);
+    compact(this.bubbles);
+    compact(this.scents);
     for (const st of this.stations) st.queue = st.queue.filter(c => c.alive && c.station === st);
   }
 
@@ -964,7 +978,9 @@ export class PixelOcean {
     // A local copy of the fast generator (xorshift32), saved back at the end.
     let seed = this.seed;
     const rnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
-    for (let k = Math.max(200, Math.round(n / 80)); k > 0; k--) {
+    // Half as many cells as there used to be each tick, each doing two
+    // ticks' worth of change: the same rates for half the work.
+    for (let k = Math.max(100, Math.round(n / 160)); k > 0; k--) {
       const i = (rnd() * n) | 0;
       const x = i % w;
       const r = rnd();
@@ -972,22 +988,28 @@ export class PixelOcean {
         : r < 0.5 ? (x < w - 1 ? i + 1 : i)
           : r < 0.75 ? (i >= w ? i - w : i)
             : (i + w < n ? i + w : i);
-      if (nutrients[i] > nutrients[j] + 1) { nutrients[i]--; nutrients[j]++; }
-      if (stain[i] > 0) stain[i] = Math.max(0, stain[i] - 6);
+      const diff = nutrients[i] - nutrients[j];
+      if (diff > 1) { const m = diff > 3 ? 2 : 1; nutrients[i] -= m; nutrients[j] += m; }
+      if (stain[i] > 0) stain[i] = stain[i] > 12 ? stain[i] - 12 : 0;
       // Nothing takes root behind the page's text.
       if (clearMask[i]) continue;
 
       const sun = sunRow[(i / w) | 0];
       const a = algae[i];
-      if (nutrients[i] > 0 && a <= 255 - ALGAE_PER_UNIT && (a > 0 || algae[j] >= 96 || rnd() < 0.002)) {
-        // Algae grows fastest in the sunlit shallows.
-        if (rnd() < 0.25 + 0.45 * sun) { algae[i] = a + ALGAE_PER_UNIT; nutrients[i]--; }
-      } else if (a >= ALGAE_PER_UNIT && rnd() < 0.04) {
+      if (nutrients[i] > 0 && a <= 255 - ALGAE_PER_UNIT && (a > 0 || algae[j] >= 96 || rnd() < 0.004)) {
+        // Algae grows fastest in the sunlit shallows: up to two units at once.
+        const grow = 0.25 + 0.45 * sun;
+        let units = (rnd() < grow ? 1 : 0) + (rnd() < grow ? 1 : 0);
+        if (units > nutrients[i]) units = nutrients[i];
+        if (a + units * ALGAE_PER_UNIT > 255) units = 1;
+        algae[i] = a + units * ALGAE_PER_UNIT;
+        nutrients[i] -= units;
+      } else if (a >= ALGAE_PER_UNIT && rnd() < 0.08) {
         algae[i] = a - ALGAE_PER_UNIT;
         if (nutrients[i] < 255) nutrients[i]++;
       }
       // Sunlit algae sheds plankton fastest, so the shallows feed the most fish.
-      if (algae[i] >= 224 && this.plankton < planktonCap && rnd() < 0.004 * (1 + 3 * sun)) {
+      if (algae[i] >= 224 && this.plankton < planktonCap && rnd() < 0.008 * (1 + 3 * sun)) {
         algae[i] -= PLANKTON_UNITS * ALGAE_PER_UNIT;
         this.spawnParticle('plankton', x, Math.floor(i / w), 1);
       }
@@ -1049,24 +1071,30 @@ export class PixelOcean {
       this.hunterGrid = Array.from({ length: size }, () => []);
     }
     for (let b = 0; b < size; b++) { this.grid[b].length = 0; this.foodGrid[b].length = 0; this.hunterGrid[b].length = 0; }
-    const bucket = (x: number, z: number) =>
-      Math.min(this.gridRows - 1, Math.max(0, (z / BUCKET) | 0)) * this.gridCols
-      + Math.min(this.gridCols - 1, Math.max(0, (x / BUCKET) | 0));
+    const cols = this.gridCols, lastCol = cols - 1, lastRow = this.gridRows - 1;
+    const bucket = (x: number, z: number) => {
+      const gx = (x / BUCKET) | 0, gz = (z / BUCKET) | 0;
+      return (gz < 0 ? 0 : gz > lastRow ? lastRow : gz) * cols + (gx < 0 ? 0 : gx > lastCol ? lastCol : gx);
+    };
+    const { grid, hunterGrid, foodGrid, creatures, particles } = this;
     this.balls.length = 0;
-    for (const c of this.creatures) {
+    for (let n = 0; n < creatures.length; n++) {
+      const c = creatures[n];
       const b = bucket(c.x, c.z);
-      this.grid[b].push(c);
-      if (MINNOW_WATCHES.includes(c.species)) this.hunterGrid[b].push(c);
+      grid[b].push(c);
+      if (WATCHED[c.species]) hunterGrid[b].push(c);
       if (c.mood === 'balling' && c.alive) this.addToBall(c);
     }
     for (const ball of this.balls) { ball.x /= ball.n; ball.z /= ball.n; ball.h /= ball.n; }
-    this.plankton = 0;
-    this.spawnCount = 0;
-    for (const p of this.particles) {
-      this.foodGrid[bucket(p.x, p.z)].push(p);
-      if (p.kind === 'plankton') this.plankton++;
-      else if (p.kind === 'spawn') this.spawnCount++;
+    let plankton = 0, spawn = 0;
+    for (let n = 0; n < particles.length; n++) {
+      const p = particles[n];
+      foodGrid[bucket(p.x, p.z)].push(p);
+      if (p.kind === 'plankton') plankton++;
+      else if (p.kind === 'spawn') spawn++;
     }
+    this.plankton = plankton;
+    this.spawnCount = spawn;
   }
 
   /** Files a balling minnow under the bait ball it belongs to (summed; averaged once all are in). */
@@ -2868,8 +2896,14 @@ export class PixelOcean {
   }
 
   stats(): OceanStats {
-    let algae = 0;
-    for (let i = 0; i < this.algae.length; i++) algae += this.algae[i];
+    // Summing every seabed cell is the dear part, and the total changes slowly.
+    if (this.tick - this.algaeCountedAt >= ALGAE_RECOUNT || this.algaeCountedAt < 0) {
+      let sum = 0;
+      for (let i = 0; i < this.algae.length; i++) sum += this.algae[i];
+      this.algaeTotal = sum;
+      this.algaeCountedAt = this.tick;
+    }
+    const algae = this.algaeTotal;
     let plankton = 0, food = 0;
     for (const p of this.particles) {
       if (p.kind === 'plankton') plankton++;
