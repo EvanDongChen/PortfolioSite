@@ -379,6 +379,8 @@ const SPACING: Partial<Record<Species, number>> = {
 const BEND_FORCE = 0.25;
 const MAX_BEND = 7;
 /** Ticks between sand puffs for the creatures that stir it up. */
+/** Cells in each run the seabed is updated in (see updateFloor). */
+const FLOOR_RUN = 16;
 /** Ticks between recounts of the algae for the census. */
 const ALGAE_RECOUNT = 90;
 /** How long a puff of sand or spawn takes to billow out and fade. */
@@ -994,39 +996,46 @@ export class PixelOcean {
     let seed = this.seed;
     const rnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
     // Half as many cells as there used to be each tick, each doing two
-    // ticks' worth of change: the same rates for half the work.
-    for (let k = Math.max(100, Math.round(n / 160)); k > 0; k--) {
-      const i = (rnd() * n) | 0;
-      const x = i % w;
-      const r = rnd();
-      const j = r < 0.25 ? (x > 0 ? i - 1 : i)
-        : r < 0.5 ? (x < w - 1 ? i + 1 : i)
-          : r < 0.75 ? (i >= w ? i - w : i)
-            : (i + w < n ? i + w : i);
-      const diff = nutrients[i] - nutrients[j];
-      if (diff > 1) { const m = diff > 3 ? 2 : 1; nutrients[i] -= m; nutrients[j] += m; }
-      if (stain[i] > 0) stain[i] = stain[i] > 12 ? stain[i] - 12 : 0;
-      // Nothing takes root behind the page's text.
-      if (clearMask[i]) continue;
+    // ticks' worth of change: the same rates for half the work. The cells
+    // come in short runs from random places rather than one at a time: every
+    // cell is still as likely to be picked, but each run shares the memory
+    // fetched for it, which is most of the cost of reaching all over a big
+    // seabed. Every other cell along the run, so no cell's neighbour changes
+    // in the same tick (that would let growth spread along the runs).
+    for (let k = Math.max(100, Math.round(n / 160)); k > 0; k -= FLOOR_RUN) {
+      const first = (rnd() * (n - FLOOR_RUN * 2)) | 0;
+      for (let i = first; i < first + FLOOR_RUN * 2; i += 2) {
+        const x = i % w;
+        const r = rnd();
+        const j = r < 0.25 ? (x > 0 ? i - 1 : i)
+          : r < 0.5 ? (x < w - 1 ? i + 1 : i)
+            : r < 0.75 ? (i >= w ? i - w : i)
+              : (i + w < n ? i + w : i);
+        const diff = nutrients[i] - nutrients[j];
+        if (diff > 1) { const m = diff > 3 ? 2 : 1; nutrients[i] -= m; nutrients[j] += m; }
+        if (stain[i] > 0) stain[i] = stain[i] > 12 ? stain[i] - 12 : 0;
+        // Nothing takes root behind the page's text.
+        if (clearMask[i]) continue;
 
-      const sun = sunRow[(i / w) | 0];
-      const a = algae[i];
-      if (nutrients[i] > 0 && a <= 255 - ALGAE_PER_UNIT && (a > 0 || algae[j] >= 96 || rnd() < 0.004)) {
-        // Algae grows fastest in the sunlit shallows: up to two units at once.
-        const grow = 0.25 + 0.45 * sun;
-        let units = (rnd() < grow ? 1 : 0) + (rnd() < grow ? 1 : 0);
-        if (units > nutrients[i]) units = nutrients[i];
-        if (a + units * ALGAE_PER_UNIT > 255) units = 1;
-        algae[i] = a + units * ALGAE_PER_UNIT;
-        nutrients[i] -= units;
-      } else if (a >= ALGAE_PER_UNIT && rnd() < 0.08) {
-        algae[i] = a - ALGAE_PER_UNIT;
-        if (nutrients[i] < 255) nutrients[i]++;
-      }
-      // Sunlit algae sheds plankton fastest, so the shallows feed the most fish.
-      if (algae[i] >= 224 && this.plankton < planktonCap && rnd() < 0.008 * (1 + 3 * sun)) {
-        algae[i] -= PLANKTON_UNITS * ALGAE_PER_UNIT;
-        this.spawnParticle('plankton', x, Math.floor(i / w), 1);
+        const sun = sunRow[(i / w) | 0];
+        const a = algae[i];
+        if (nutrients[i] > 0 && a <= 255 - ALGAE_PER_UNIT && (a > 0 || algae[j] >= 96 || rnd() < 0.004)) {
+          // Algae grows fastest in the sunlit shallows: up to two units at once.
+          const grow = 0.25 + 0.45 * sun;
+          let units = (rnd() < grow ? 1 : 0) + (rnd() < grow ? 1 : 0);
+          if (units > nutrients[i]) units = nutrients[i];
+          if (a + units * ALGAE_PER_UNIT > 255) units = 1;
+          algae[i] = a + units * ALGAE_PER_UNIT;
+          nutrients[i] -= units;
+        } else if (a >= ALGAE_PER_UNIT && rnd() < 0.08) {
+          algae[i] = a - ALGAE_PER_UNIT;
+          if (nutrients[i] < 255) nutrients[i]++;
+        }
+        // Sunlit algae sheds plankton fastest, so the shallows feed the most fish.
+        if (algae[i] >= 224 && this.plankton < planktonCap && rnd() < 0.008 * (1 + 3 * sun)) {
+          algae[i] -= PLANKTON_UNITS * ALGAE_PER_UNIT;
+          this.spawnParticle('plankton', x, Math.floor(i / w), 1);
+        }
       }
     }
     this.seed = (seed >>> 0) || 1;
