@@ -13,6 +13,10 @@ const STATS_INTERVAL_MS = 500;
 // When drawing a frame takes longer than this on average, animate at a lower
 // frame rate (SLOW_FRAME_MS apart) instead of stuttering.
 const SLOW_DRAW_MS = 20;
+// Past this (and until it drops back under LEAN_RECOVER_MS), leave out the
+// reef's finishing touches before resorting to a lower frame rate.
+const LEAN_DRAW_MS = 9;
+const LEAN_RECOVER_MS = 5;
 const SLOW_FRAME_MS = 1000 / 20;
 // Food is dropped near the surface so it visibly sinks to the floor.
 const DROP_HEIGHT = 90;
@@ -296,6 +300,8 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
         const started = performance.now();
         draw();
         drawCost += (performance.now() - started - drawCost) * 0.1;
+        if (!view.lean && drawCost > LEAN_DRAW_MS) view.lean = true;
+        else if (view.lean && drawCost < LEAN_RECOVER_MS) view.lean = false;
       }
       if (now - lastStats > STATS_INTERVAL_MS) {
         lastStats = now;

@@ -143,6 +143,12 @@ export class OceanView {
   private glow = false;
   /** Kelp squares by colour (left, top, size each), reused from stalk to stalk. */
   private kelpRuns: number[][] = [[], [], [], []];
+  /**
+   * Set by the page when frames are slow to draw: the finishing touches
+   * (wakes, sun rays, shadows passing overhead, the whale's bacterial mat)
+   * are left out until it catches up.
+   */
+  lean = false;
   /** The creature being drawn's squash and stretch (positive stretches it along its length). */
   private stretch = 0;
   /** The creature under inspection, drawn with a reticle. */
@@ -411,7 +417,7 @@ export class OceanView {
       ctx.globalAlpha = (1 - (z / ocean.h) * DEPTH_DARKENING) * (1 - ocean.nightfall() * 0.7);
       ctx.fillRect(0, row, ocean.w, Math.min(CAUSTIC_BAND, rows - row));
     }
-    this.drawRays(top, rows);
+    if (!this.lean) this.drawRays(top, rows);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
   }
@@ -520,7 +526,7 @@ export class OceanView {
       ctx.fillStyle = 'rgb(2,6,18)';
       ctx.fillRect(0, 0, this.viewW, this.regionHeight);
     }
-    this.drawPasser();
+    if (!this.lean) this.drawPasser();
 
     // Anything whose floor point is near the viewport (tall or high things
     // reach further up the screen than their footprint).
@@ -549,7 +555,7 @@ export class OceanView {
     const wf = ocean.whale;
     if (wf && visible(wf.z)) {
       shadow(wf.x, wf.z, wf.h * 0.5, 60);
-      if (wf.landed) this.drawMat(wf);
+      if (wf.landed && !this.lean) this.drawMat(wf);
     }
 
     const items: Drawable[] = [];
@@ -643,7 +649,7 @@ export class OceanView {
       items.push({
         depth,
         draw: () => {
-          const wake = WAKE_SPEED[c.species];
+          const wake = this.lean ? 0 : WAKE_SPEED[c.species];
           if (wake && !c.hidden && c.vx * c.vx + c.vz * c.vz > wake * wake) this.drawWake(c);
           this.stretch = c.squash;
           this.drawCreature(c);
