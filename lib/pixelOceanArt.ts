@@ -7,7 +7,13 @@ export type Rgb = [number, number, number];
 const css = ([r, g, b]: Rgb, a = 1) => (a === 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${a})`);
 const shadeOf = ([r, g, b]: Rgb, k: number): Rgb => [Math.min(255, r * k) | 0, Math.min(255, g * k) | 0, Math.min(255, b * k) | 0];
 
-const makeCanvas = (w: number, h: number) => {
+/**
+ * A blank canvas. In a worker (where the reef usually runs) there is no
+ * document, so it is an OffscreenCanvas: the same drawing API, typed here as
+ * a canvas element so the rest of the code needn't care which it got.
+ */
+export const makeCanvas = (w: number, h: number): HTMLCanvasElement => {
+  if (typeof document === 'undefined') return new OffscreenCanvas(w, h) as unknown as HTMLCanvasElement;
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;

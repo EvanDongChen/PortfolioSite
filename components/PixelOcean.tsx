@@ -1,37 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Creature, Mood, PixelOcean as Ocean, OceanStats, SPECIES, Species, TICKS_PER_SECOND } from '../lib/pixelOcean';
+import { Mood, OceanStats, SPECIES, TICKS_PER_SECOND } from '../lib/pixelOcean';
 import { Adoption, displayName, loadAdoption, saveAdoption } from '../lib/adoption';
 import PixelMeter from './PixelMeter';
 import ReefDebugPanel, { ReefDebugActions } from './ReefDebugPanel';
-import { OceanView } from '../lib/pixelOceanView';
+import { ReefLayout } from '../lib/pixelOceanView';
+import { EngineInit, FromEngine, Inspected, ReefEngine, ToEngine } from '../lib/reefEngine';
 import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext';
 
 // Screen pixels per art pixel. Bigger pixels mean a smaller world to simulate.
 const PIXEL_SIZE: Record<PerformanceTier, number> = { high: 4, medium: 5, low: 6 };
-const TICK_MS = 1000 / TICKS_PER_SECOND;
-const STATS_INTERVAL_MS = 500;
-// When drawing a frame takes longer than this on average, animate at a lower
-// frame rate (SLOW_FRAME_MS apart) instead of stuttering.
-const SLOW_DRAW_MS = 20;
-// Past this (and until it drops back under LEAN_RECOVER_MS), leave out the
-// reef's finishing touches before resorting to a lower frame rate.
-const LEAN_DRAW_MS = 9;
-const LEAN_RECOVER_MS = 5;
-const SLOW_FRAME_MS = 1000 / 20;
-// Food is dropped near the surface so it visibly sinks to the floor.
-const DROP_HEIGHT = 90;
-// Fish shy away from the cursor at roughly their own swimming height.
-const POINTER_HEIGHT = 25;
-const INSPECT_INTERVAL_MS = 100;
-// Only a cursor moving at least this far between events startles fish, so a
-// gentle hover can inspect one without chasing it off.
-const STARTLE_DISTANCE = 10;
 const NOTICE_MS = 7000;
 const MAX_NAME_LENGTH = 16;
 // Breathing room kept clear around the hero text, in page pixels.
 const HERO_CLEARANCE = 24;
 // Longer than the sections' 0.8s fade-and-slide-in.
 const HERO_SETTLE_MS = 1200;
+const RESIZE_SETTLE_MS = 150;
 
 /** The area behind the hero's text (not the photo), in world units. */
 const heroZones = (px: number) => {
@@ -45,6 +29,17 @@ const heroZones = (px: number) => {
   const left = Math.min(...items.map(r => r.left)) - HERO_CLEARANCE;
   const right = Math.max(...items.map(r => r.right)) + HERO_CLEARANCE;
   return [{ x0: left / px, z0: top / px, x1: right / px, z1: bottom / px }];
+};
+
+/** Whether this browser can hand canvases to a worker and draw on them there. */
+const canDrawInWorker = () => {
+  try {
+    return typeof Worker !== 'undefined' && typeof OffscreenCanvas !== 'undefined'
+      && 'transferControlToOffscreen' in HTMLCanvasElement.prototype
+      && !!new OffscreenCanvas(1, 1).getContext('2d');
+  } catch {
+    return false;
+  }
 };
 
 const MOOD_LABEL: Record<Mood, string> = {
@@ -79,17 +74,6 @@ const MOOD_LABEL: Record<Mood, string> = {
   nestled: 'Nestled in its anemone',
 };
 
-interface Inspected {
-  name: string;
-  species: Species;
-  mood: Mood;
-  energy: number;
-  hungry: boolean;
-  age: number;
-  pinned: boolean;
-  adopted: boolean;
-}
-
 /** What the adopt bar can ask the running reef to do. */
 interface ReefActions {
   adopt: (name: string) => void;
@@ -110,13 +94,17 @@ interface PixelOceanProps {
   onStats: (stats: OceanStats) => void;
 }
 
-/** The reef behind the content: as tall as the page and scrolled with it. */
+/**
+ * The reef behind the content: as tall as the page and scrolled with it.
+ * The reef itself runs in a worker (see lib/reefEngine.ts) wherever the
+ * browser can draw from one, so it never holds up scrolling; this component
+ * places its canvases, passes on the scroll, the pointer and the visitor's
+ * actions, and shows what comes back.
+ */
 const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
-  const floorRef = useRef<HTMLCanvasElement>(null);
-  const spriteRef = useRef<HTMLCanvasElement>(null);
-  const lightRef = useRef<HTMLCanvasElement>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
-  const oceanRef = useRef<Ocean | null>(null);
+  const sendRef = useRef<((m: ToEngine) => void) | null>(null);
   const actionsRef = useRef<ReefActions | null>(null);
   const debugRef = useRef<ReefDebugActions | null>(null);
   const [inspected, setInspected] = useState<Inspected | null>(null);
@@ -137,6 +125,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
   const px = override ? PIXEL_SIZE[override] : startingPx;
   const frameMsRef = useRef(1000 / frameRate);
   frameMsRef.current = 1000 / frameRate;
+  useEffect(() => { sendRef.current?.({ type: 'frameMs', ms: 1000 / frameRate }); }, [frameRate]);
 
   useEffect(() => {
     if (!notice) return;
@@ -145,227 +134,186 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
   }, [notice]);
 
   useEffect(() => {
-    const floor = floorRef.current;
-    const sprites = spriteRef.current;
-    const light = lightRef.current;
-    if (!floor || !sprites || !light) return;
+    const layer = layerRef.current;
+    if (!layer) return;
 
     const worldSize = () => ({
       w: Math.ceil(window.innerWidth / px),
       h: Math.max(Math.ceil(window.innerHeight / px), Math.ceil(document.documentElement.scrollHeight / px)),
     });
-    const size = worldSize();
-    const ocean = new Ocean(size.w, size.h);
-    oceanRef.current = ocean;
-    ocean.setClearZones(heroZones(px));
-    // The hero can still move after this: its web fonts load and it slides in
-    // as it fades up. Measure it again once both have settled.
-    const remeasure = () => { if (oceanRef.current === ocean) ocean.setClearZones(heroZones(px)); };
-    document.fonts?.ready.then(remeasure);
-    const settleTimer = window.setTimeout(remeasure, HERO_SETTLE_MS);
-    const view = new OceanView(ocean, floor, light, sprites, px);
-    // The sprites are drawn one canvas pixel per CSS pixel and scaled up
-    // crisply: every square already sits on whole CSS pixels, so a sharper
-    // canvas would only multiply the pixels to fill on high-DPI screens.
-    const draw = () => view.render(window.scrollY, window.innerWidth, window.innerHeight, 1);
 
-    // A returning visitor's creature swims back in.
-    const saved = loadAdoption();
-    let adopted: Creature | null = saved ? ocean.release(saved.species, displayName(saved), saved.palette) : null;
-    draw();
-
-    let raf = 0;
-    let last = performance.now();
-    let pending = 0;
-    let lastDraw = 0;
-    // A running average of how long a frame takes to draw, in ms.
-    let drawCost = 0;
-    let lastScroll = window.scrollY;
-    let lastStats = 0;
-    let lastInspect = 0;
-    let hovered: Creature | null = null;
-    let pinned: Creature | null = null;
-    let shown = false;
-
-    // When the adopted creature dies, a child (if any) carries on the line.
-    const checkLine = () => {
-      if (!adopted || adopted.alive) return;
-      const line = loadAdoption();
-      const heir = ocean.heirOf(adopted);
-      if (line && heir) {
-        const next: Adoption = { ...line, generation: line.generation + 1, palette: heir.palette };
-        ocean.adopt(heir, displayName(next));
-        saveAdoption(next);
-        setAdoption(next);
-        setNotice(`${adopted.name} died. ${displayName(next)} carries on the line.`);
-        if (pinned === adopted) pinned = heir;
-        adopted = heir;
-      } else {
-        setNotice(`${adopted.name} died, and the line has ended. Click any creature to adopt another.`);
-        saveAdoption(null);
-        setAdoption(null);
-        adopted = null;
-      }
-    };
-
-    // The hidden debug panel works on the middle of the screen.
-    let speed = 1;
-    const centre = () => view.screenToWorld(window.innerWidth / 2, window.innerHeight / 2, 0);
-    debugRef.current = {
-      spawn: species => { const p = centre(); ocean.debugSpawn(species, p.x, p.z); },
-      whale: () => { const p = centre(); ocean.debugWhale(p.x, p.z); },
-      pod: () => { const p = centre(); ocean.debugPod(p.x, p.z); },
-      scent: () => { const p = centre(); ocean.debugScent(p.x, p.z); },
-      parasites: () => ocean.debugParasites(),
-      spawning: () => ocean.debugSpawning(),
-      baitBall: () => { const p = centre(); ocean.debugBaitBall(p.x, p.z); },
-      setSpeed: s => { speed = s; },
-    };
-
-    actionsRef.current = {
-      adopt: (name: string) => {
-        if (!pinned?.alive) return;
-        if (adopted && adopted !== pinned) adopted.adopted = false;
-        const line: Adoption = { name, species: pinned.species, palette: pinned.palette, generation: 1, since: Date.now() };
-        ocean.adopt(pinned, name);
-        adopted = pinned;
-        saveAdoption(line);
-        setAdoption(line);
-        lastInspect = 0;
-      },
-      find: () => {
-        if (!adopted?.alive) return;
-        pinned = adopted;
-        window.scrollTo({ top: adopted.z * px - window.innerHeight / 2, behavior: 'smooth' });
-      },
-      letGo: () => {
-        if (adopted) adopted.adopted = false;
-        adopted = null;
-        saveAdoption(null);
-        setAdoption(null);
-        lastInspect = 0;
-      },
-    };
-
-    // Follows the inspected creature every frame; refreshes its details less often.
-    const inspect = (now: number) => {
-      if (pinned && !pinned.alive) pinned = null;
-      const target = pinned ?? (hovered?.alive ? hovered : null);
-      view.highlighted = target;
+    // Where the inspected creature is on the page, kept up with the scroll here.
+    let tipAt: { x: number; y: number } | null = null;
+    const placeTip = () => {
       const tip = tipRef.current;
-      if (target && tip) {
-        const p = view.clientPosition(target);
-        tip.style.transform = `translate(${Math.round(p.x + 24)}px, ${Math.round(p.y - 20)}px)`;
-      }
-      if (!target) {
-        if (shown) { shown = false; setInspected(null); }
+      if (tip && tipAt) tip.style.transform = `translate(${Math.round(tipAt.x + 24)}px, ${Math.round(tipAt.y - window.scrollY - 20)}px)`;
+    };
+
+    // Fresh canvases each time: one handed to a worker can't be taken back.
+    let canvases: HTMLCanvasElement[] = [];
+    const makeCanvases = () => {
+      const fade = layer.lastElementChild;
+      canvases = ['floor', 'light', 'sprites', 'sprites'].map(kind => {
+        const c = document.createElement('canvas');
+        c.className = 'absolute left-0 top-0 block';
+        c.style.imageRendering = 'pixelated';
+        // Caustic light, added onto the seabed by the browser.
+        if (kind === 'light') c.style.mixBlendMode = 'plus-lighter';
+        // Each sprite canvas waits to be shown until the reef has drawn on it.
+        if (kind === 'sprites') c.style.visibility = 'hidden';
+        layer.insertBefore(c, fade);
+        return c;
+      });
+      return canvases;
+    };
+
+    const applyLayout = (layout: ReefLayout) => {
+      const [floor, light, ...sprites] = canvases;
+      if (layout.kind === 'floor') {
+        for (const c of [floor, light]) {
+          c.style.width = `${layout.width}px`;
+          c.style.height = `${layout.height}px`;
+        }
         return;
       }
-      if (now - lastInspect < INSPECT_INTERVAL_MS && shown) return;
-      lastInspect = now;
-      shown = true;
-      setInspected({
-        name: target.name,
-        species: target.species,
-        mood: target.mood,
-        energy: target.energy,
-        hungry: target.hungry,
-        age: target.age,
-        pinned: target === pinned,
-        adopted: target.adopted,
-      });
+      const shown = sprites[layout.buffer];
+      shown.style.width = `${layout.width}px`;
+      shown.style.height = `${layout.height}px`;
+      shown.style.transform = `translateY(${layout.top}px)`;
+      shown.style.visibility = 'visible';
+      sprites[layout.buffer ^ 1].style.visibility = 'hidden';
     };
 
-    const frame = (now: number) => {
-      raf = requestAnimationFrame(frame);
-      // After a hidden tab, catch up a few ticks rather than fast-forwarding.
-      pending = Math.min(pending + (now - last) * speed, TICK_MS * 3 * speed);
-      last = now;
-      let ticked = false;
-      while (pending >= TICK_MS) {
-        ocean.step();
-        pending -= TICK_MS;
-        ticked = true;
-      }
-      // Redraw for new ticks, and for scrolling far enough to bring new
-      // sprites into view (the canvases scroll with the page by themselves).
-      const scrolled = window.scrollY !== lastScroll && view.scrolledFar(window.scrollY);
-      // On a device that can't keep up, draw less often rather than stutter;
-      // the simulation itself keeps its pace either way.
-      const gap = drawCost > SLOW_DRAW_MS ? SLOW_FRAME_MS : frameMsRef.current;
-      if ((ticked || scrolled) && now - lastDraw >= gap - 2) {
-        lastDraw = now;
-        lastScroll = window.scrollY;
-        inspect(now);
-        const started = performance.now();
-        draw();
-        drawCost += (performance.now() - started - drawCost) * 0.1;
-        if (!view.lean && drawCost > LEAN_DRAW_MS) view.lean = true;
-        else if (view.lean && drawCost < LEAN_RECOVER_MS) view.lean = false;
-      }
-      if (now - lastStats > STATS_INTERVAL_MS) {
-        lastStats = now;
-        checkLine();
-        onStatsRef.current(ocean.stats());
+    const receive = (m: FromEngine) => {
+      switch (m.type) {
+        case 'layout': applyLayout(m.layout); break;
+        case 'tip': tipAt = m.at; placeTip(); break;
+        case 'inspected': setInspected(m.inspected); break;
+        case 'stats': onStatsRef.current(m.stats); break;
+        case 'adoption':
+          saveAdoption(m.adoption);
+          setAdoption(m.adoption);
+          if (m.notice) setNotice(m.notice);
+          break;
+        case 'scrollTo': window.scrollTo({ top: m.y - window.innerHeight / 2, behavior: 'smooth' }); break;
       }
     };
-    raf = requestAnimationFrame(frame);
+
+    const size = worldSize();
+    const init = (): Omit<EngineInit, 'floor' | 'light' | 'sprites' | 'worker'> => ({
+      px, w: size.w, h: size.h,
+      scrollY: window.scrollY, viewW: window.innerWidth, viewH: window.innerHeight,
+      frameMs: frameMsRef.current, zones: heroZones(px), adoption: loadAdoption(),
+    });
+
+    let stop = () => {};
+    // Runs the reef on the main thread: for browsers that can't draw from a worker.
+    const runHere = () => {
+      const [floor, light, a, b] = makeCanvases();
+      const engine = new ReefEngine({ ...init(), floor, light, sprites: [a, b], worker: false }, receive);
+      sendRef.current = m => engine.handleMessage(m);
+      stop = () => engine.stop();
+    };
+    if (canDrawInWorker()) {
+      const offscreen = makeCanvases().map(c => c.transferControlToOffscreen());
+      const worker = new Worker(new URL('../lib/reefWorker.ts', import.meta.url), { type: 'module' });
+      let heard = false;
+      worker.onmessage = (e: MessageEvent<FromEngine>) => { heard = true; receive(e.data); };
+      // If the worker can't start at all, fall back to running the reef here.
+      worker.onerror = () => {
+        if (heard) return;
+        worker.terminate();
+        for (const c of canvases) c.remove();
+        runHere();
+      };
+      worker.postMessage(
+        { type: 'init', ...init(), floor: offscreen[0], light: offscreen[1], sprites: [offscreen[2], offscreen[3]], worker: true },
+        offscreen,
+      );
+      sendRef.current = m => worker.postMessage(m);
+      stop = () => worker.terminate();
+    } else {
+      runHere();
+    }
+    const send = (m: ToEngine) => sendRef.current?.(m);
+
+    // The hero can still move after this: its web fonts load and it slides in
+    // as it fades up. Measure it again once both have settled.
+    let live = true;
+    const remeasure = () => { if (live) send({ type: 'zones', zones: heroZones(px) }); };
+    document.fonts?.ready.then(remeasure);
+    const settleTimer = window.setTimeout(remeasure, HERO_SETTLE_MS);
+
+    actionsRef.current = {
+      adopt: name => send({ type: 'adopt', name }),
+      find: () => send({ type: 'find' }),
+      letGo: () => send({ type: 'letGo' }),
+    };
+    debugRef.current = {
+      spawn: species => send({ type: 'debug', action: 'spawn', species }),
+      whale: () => send({ type: 'debug', action: 'whale' }),
+      pod: () => send({ type: 'debug', action: 'pod' }),
+      scent: () => send({ type: 'debug', action: 'scent' }),
+      parasites: () => send({ type: 'debug', action: 'parasites' }),
+      spawning: () => send({ type: 'debug', action: 'spawning' }),
+      baitBall: () => send({ type: 'debug', action: 'baitBall' }),
+      setSpeed: speed => send({ type: 'debug', action: 'speed', speed }),
+    };
+
+    // The scroll position goes over once a frame at most.
+    let viewQueued = 0;
+    const sendView = () => {
+      viewQueued = 0;
+      send({ type: 'view', scrollY: window.scrollY, viewW: window.innerWidth, viewH: window.innerHeight });
+      placeTip();
+    };
+    const handleScroll = () => { if (!viewQueued) viewQueued = requestAnimationFrame(sendView); };
 
     // The world is as tall as the page, so follow the content's height too.
     let resizeTimer = 0;
     const handleResize = () => {
+      handleScroll();
       window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(() => {
         const next = worldSize();
-        ocean.resize(next.w, next.h);
-        ocean.setClearZones(heroZones(px));
-        draw();
-      }, 150);
+        send({ type: 'world', w: next.w, h: next.h, zones: heroZones(px) });
+      }, RESIZE_SETTLE_MS);
     };
     const observer = new ResizeObserver(handleResize);
     observer.observe(document.body);
 
-    let lastPointer = { x: 0, y: 0 };
-    const handlePointerMove = (e: PointerEvent) => {
-      const moved = Math.hypot(e.clientX - lastPointer.x, e.clientY - lastPointer.y);
-      lastPointer = { x: e.clientX, y: e.clientY };
-      if (moved >= STARTLE_DISTANCE) {
-        const p = view.screenToWorld(e.clientX, e.clientY, POINTER_HEIGHT);
-        ocean.setPointer(p.x, p.z);
-      } else {
-        ocean.clearPointer();
-      }
-      hovered = e.pointerType === 'mouse' ? view.pick(e.clientX, e.clientY) : null;
-    };
-    const handlePointerLeave = () => ocean.clearPointer();
+    const handlePointerMove = (e: PointerEvent) =>
+      send({ type: 'pointer', x: e.clientX, y: e.clientY + window.scrollY, mouse: e.pointerType === 'mouse' });
+    const handlePointerLeave = () => send({ type: 'pointerLeave' });
     const handlePointerDown = (e: PointerEvent) => {
       if ((e.target as Element | null)?.closest('button, a, input, textarea, select, [role="dialog"], [data-reef-ui]')) return;
-      if (isFoodModeRef.current) {
-        const p = view.screenToWorld(e.clientX, e.clientY, DROP_HEIGHT);
-        ocean.dropFood(p.x, p.z, DROP_HEIGHT);
-        return;
-      }
-      // Clicking (or tapping) a creature keeps it under inspection; elsewhere lets go.
-      pinned = view.pick(e.clientX, e.clientY, 32);
-      lastInspect = 0;
+      send({ type: 'click', x: e.clientX, y: e.clientY + window.scrollY, food: isFoodModeRef.current });
     };
+    const handleVisibility = () => send({ type: 'visible', visible: document.visibilityState === 'visible' });
 
+    window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', handleResize);
     window.addEventListener('pointermove', handlePointerMove);
     document.documentElement.addEventListener('pointerleave', handlePointerLeave);
     window.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
-      cancelAnimationFrame(raf);
+      live = false;
+      stop();
+      for (const c of canvases) c.remove();
+      cancelAnimationFrame(viewQueued);
       window.clearTimeout(resizeTimer);
       window.clearTimeout(settleTimer);
       observer.disconnect();
-      oceanRef.current = null;
+      sendRef.current = null;
       actionsRef.current = null;
       debugRef.current = null;
+      window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('pointermove', handlePointerMove);
       document.documentElement.removeEventListener('pointerleave', handlePointerLeave);
       window.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [px]);
 
@@ -381,15 +329,12 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     if (name) actionsRef.current?.adopt(name);
   };
 
-  // Both canvases sit in the page (not fixed) so native scrolling moves them
-  // between frames; the clip keeps them from ever stretching the page.
+  // The canvases (added by the effect) sit in the page, not fixed, so native
+  // scrolling moves them between frames; the clip keeps them from ever
+  // stretching the page.
   return (
     <>
-      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
-        <canvas ref={floorRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated' }} />
-        {/* Caustic light, added onto the seabed by the browser. */}
-        <canvas ref={lightRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated', mixBlendMode: 'plus-lighter' }} />
-        <canvas ref={spriteRef} className="absolute left-0 top-0 block" style={{ imageRendering: 'pixelated' }} />
+      <div ref={layerRef} className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
         {/* The top of the screen is further from the camera: fade it into the deep. */}
         <div className="fixed inset-0 bg-gradient-to-b from-[#050d14]/60 via-[#050d14]/15 to-transparent" />
       </div>
