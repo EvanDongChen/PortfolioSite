@@ -25,6 +25,8 @@ const ELEVATION = 0.55;
 const PERSPECTIVE = 0.0035;
 const CAUSTIC_SIZE = 64;
 const CAUSTIC_FRAMES = 32;
+/** Rows of seabed painted a frame, away from the view, until the whole page has been. */
+const BACKLOG_ROWS = 160;
 /** Sand, moss and blood change slowly: repaint them every this many ticks. */
 const SEABED_EVERY = 8;
 /** The caustic light is darkened with depth in bands this many cells tall. */
@@ -193,6 +195,11 @@ export class OceanView {
    */
   private sandCache = new Uint32Array(0);
   private sandCacheSize = '';
+  private sandRowsDone = new Uint8Array(0);
+  /** The first seabed row not yet painted since the floor was placed, and the band it is painted through. */
+  private backlogRow = 0;
+  private backlogImage: ImageData | null = null;
+  private backlogWait = 0;
   private passer: Passer | null = null;
   private nextPasser = 450;
 
@@ -305,29 +312,47 @@ export class OceanView {
       this.renderFloor(top, rows);
     }
     this.renderSprites();
+    this.paintBacklog();
     // A new sprite window goes up once its frames have had time to land.
     if (this.pendingShow > 0 && --this.pendingShow === 0) {
       this.onLayout({ kind: 'sprites', buffer: this.buffer, top: this.regionTop, width: this.viewW, height: this.regionHeight });
     }
   }
 
-  /** Sizes the seabed and light canvases to the whole world, and paints all of the seabed once. */
+  /**
+   * Sizes the seabed and light canvases to the whole world. The rows around
+   * the view are painted straight away; the rest of the page follows a band
+   * a frame (see paintBacklog), rather than holding up the first frame.
+   */
   private placeFloor() {
     const { floorCanvas, lightCanvas, ocean, px } = this;
     floorCanvas.width = lightCanvas.width = ocean.w;
     floorCanvas.height = lightCanvas.height = ocean.h;
     this.onLayout({ kind: 'floor', width: ocean.w * px, height: ocean.h * px });
-    // Rows away from the view are only repainted once they're near it, so
-    // start with all of it, rather than leaving the rest black.
-    const rows = Math.min(ocean.h, 256);
-    this.makeFloorImage(rows);
-    for (let top = 0; top < ocean.h; top += rows) {
-      const n = Math.min(rows, ocean.h - top);
-      this.renderSeabed(top, n);
-      this.floorCtx.putImageData(this.floorImage!, 0, top, 0, 0, ocean.w, n);
-    }
+    this.backlogRow = 0;
+    this.backlogWait = 1;
     this.seabedKey = '';
     this.floorKey = '';
+  }
+
+  /** Paints the next band of seabed not yet painted since the floor was placed. */
+  private paintBacklog() {
+    const { ocean } = this;
+    if (this.backlogRow >= ocean.h) return;
+    // Not on the first frame after placing the floor: that one comes first.
+    if (this.backlogWait > 0) { this.backlogWait--; return; }
+    if (!this.backlogImage || this.backlogImage.width !== ocean.w) {
+      this.backlogImage = this.floorCtx.createImageData(ocean.w, BACKLOG_ROWS);
+    }
+    const n = Math.min(BACKLOG_ROWS, ocean.h - this.backlogRow);
+    // renderSeabed paints into the floor image; borrow it for the band.
+    const [image, pixels] = [this.floorImage, this.floorPixels];
+    this.floorImage = this.backlogImage;
+    this.floorPixels = new Uint32Array(this.backlogImage.data.buffer);
+    this.renderSeabed(this.backlogRow, n);
+    this.floorCtx.putImageData(this.backlogImage, 0, this.backlogRow, 0, 0, ocean.w, n);
+    [this.floorImage, this.floorPixels] = [image, pixels];
+    this.backlogRow += n;
   }
 
   /** The pixels for a band of seabed this many rows tall. */
@@ -351,15 +376,24 @@ export class OceanView {
     this.pendingShow = this.showDelay;
   }
 
-  /** The plain-sand colour of every cell (see sandCache). */
-  private plainSand() {
+  /**
+   * The plain-sand colour of every cell (see sandCache), worked out a row at
+   * a time as rows are first painted rather than all at once up front.
+   */
+  private plainSand(top: number, rows: number) {
     const { ocean } = this;
-    const size = `${ocean.w}x${ocean.h}`;
-    if (size === this.sandCacheSize) return this.sandCache;
     const { w, h, terrain, grain } = ocean;
+    const size = `${w}x${h}`;
+    if (size !== this.sandCacheSize) {
+      this.sandCache = new Uint32Array(w * h);
+      this.sandRowsDone = new Uint8Array(h);
+      this.sandCacheSize = size;
+    }
+    const cache = this.sandCache;
     const { sandLight: sl, sandDark: sd } = FLOOR;
-    const cache = new Uint32Array(w * h);
-    for (let z = 0; z < h; z++) {
+    for (let z = top; z < top + rows; z++) {
+      if (this.sandRowsDone[z]) continue;
+      this.sandRowsDone[z] = 1;
       const dim = 256 - Math.round((z / h) * DEPTH_DARKENING * 256);
       const dimBlue = Math.min(256, dim + 24);
       for (let x = 0; x < w; x++) {
@@ -371,8 +405,6 @@ export class OceanView {
         cache[i] = (255 << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r);
       }
     }
-    this.sandCache = cache;
-    this.sandCacheSize = size;
     return cache;
   }
 
@@ -382,7 +414,7 @@ export class OceanView {
     if (!this.floorImage) return;
     const { w, terrain, grain, algae, stain } = ocean;
     const { sandLight: sl, sandDark: sd, algae: ag, algaeDense: ad, blood: bl } = FLOOR;
-    const sand = this.plainSand();
+    const sand = this.plainSand(top, rows);
 
     for (let row = 0; row < rows; row++) {
       const z = top + row;

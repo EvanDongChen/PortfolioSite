@@ -449,6 +449,9 @@ const MAX_SCENTS = 60;
 
 /** 1 at the top of the page, falling toward 0 in the depths. */
 const sunlight = (z: number) => Math.exp(-z / SHALLOWS);
+/** The world's smooth noise at a cell, from its precomputed waves (see noiseWaves). */
+const noiseAt = (t: { x: Float64Array; z: Float64Array; sum: Float64Array; diff: Float64Array; h: number }, x: number, z: number) =>
+  (t.x[x] + t.z[z] + t.sum[x + z] + t.diff[x - z + t.h - 1]) / 4;
 /** A depth biased toward the shallows. */
 const shallowZ = (h: number) => Math.min(h - 4, 4 + h * Math.random() ** 2.2);
 
@@ -594,13 +597,24 @@ export class PixelOcean {
     }
   }
 
-  /** Smooth value in [-1, 1]; the same everywhere for the life of the world. */
-  private noise(x: number, z: number, octave: number) {
+  /**
+   * The waves behind a smooth noise in [-1, 1], the same everywhere for the
+   * life of the world: four sine waves, along x, along z and along each
+   * diagonal. Each varies in one direction only, so it is worked out once per
+   * column, row or diagonal, not for every cell; `noiseAt` adds them up.
+   */
+  private noiseWaves(octave: number, w: number, h: number) {
     const p = this.noisePhase;
     const o = octave * 4;
     const f = 0.02 / (octave + 1);
-    return (Math.sin(x * f * 1.3 + p[o]) + Math.sin(z * f * 1.1 + p[o + 1])
-      + Math.sin((x + z) * f * 0.9 + p[o + 2]) + Math.sin((x - z) * f * 1.7 + p[o + 3])) / 4;
+    const x = new Float64Array(w), z = new Float64Array(h);
+    const sum = new Float64Array(w + h), diff = new Float64Array(w + h);
+    for (let k = 0; k < w; k++) x[k] = Math.sin(k * f * 1.3 + p[o]);
+    for (let k = 0; k < h; k++) z[k] = Math.sin(k * f * 1.1 + p[o + 1]);
+    for (let k = 0; k < w + h; k++) sum[k] = Math.sin(k * f * 0.9 + p[o + 2]);
+    // x - z runs from -(h - 1) to w - 1, stored from 0.
+    for (let k = 0; k < w + h; k++) diff[k] = Math.sin((k - (h - 1)) * f * 1.7 + p[o + 3]);
+    return { x, z, sum, diff, h };
   }
 
   /** Grows or shrinks the world, keeping everything that still fits. */
@@ -613,7 +627,9 @@ export class PixelOcean {
     this.algae = new Uint8Array(n);
     this.nutrients = new Uint8Array(n);
     this.stain = new Uint8Array(n);
+    const [w0, w1, w2] = [0, 1, 2].map(octave => this.noiseWaves(octave, w, h));
     for (let z = 0; z < h; z++) {
+      const sun = sunlight(z);
       for (let x = 0; x < w; x++) {
         const i = z * w + x;
         if (x < old.w && z < old.h) {
@@ -625,10 +641,9 @@ export class PixelOcean {
           this.stain[i] = old.stain[o];
           continue;
         }
-        this.terrain[i] = Math.round((this.noise(x, z, 0) * 0.7 + this.noise(x, z, 2) * 0.3 + 1) * 127);
+        this.terrain[i] = Math.round((noiseAt(w0, x, z) * 0.7 + noiseAt(w2, x, z) * 0.3 + 1) * 127);
         this.grain[i] = (Math.random() * 256) | 0;
-        const fertile = this.noise(x, z, 1);
-        const sun = sunlight(z);
+        const fertile = noiseAt(w1, x, z);
         this.nutrients[i] = Math.max(0, Math.round(2 + fertile * 4 + sun * 4 + Math.random() * 2));
         if (fertile > 0.35 - sun * 0.3) this.algae[i] = Math.min(255, Math.round((fertile - 0.35 + sun * 0.3) * 500 + Math.random() * 40));
       }
