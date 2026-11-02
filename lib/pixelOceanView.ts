@@ -19,6 +19,7 @@ import {
 import {
   FLOOR, SpriteKind, buildCaustics, makeCanvas, creatureSprite, creaturePalette, bonesSprite, bubbleSprite, pelletSprite,
   shadowSprite, rockSprite, coralSprite, starfishSprite, cuttleSprite, whaleSprite, silhouetteSprite, puffSprite, fizzSprite, PUFF_FRAMES,
+  gardenEelSprite, GARDEN_EEL_FRAMES,
 } from './pixelOceanArt';
 
 /** How much bigger things get per unit of height. */
@@ -948,49 +949,21 @@ export class OceanView {
   }
 
   /**
-   * A garden eel: a slender body standing up out of its burrow, swaying,
-   * bent back by the current with its head turned into it.
+   * A garden eel: a sprite standing up out of its burrow, swaying, bent back
+   * by the current with its head turned into it; sinking into the sand as it
+   * ducks. Each eel is its own height.
    */
   private drawGardenEel(c: Creature, washed: boolean) {
     const { spriteCtx: ctx, px, ocean } = this;
     const hole = this.project(c.anchorX, c.anchorZ, 0);
-    ctx.globalAlpha = 0.75;
-    ctx.fillStyle = 'rgb(8,20,30)';
-    ctx.fillRect(Math.round(hole.x - px), Math.round(hole.y - px * 0.5), px * 2, px);
-    if (c.h < 0.6) return;
-    const [spot, body, band, mark] = creaturePalette('gardenEel', c.palette, washed);
-    const t = ocean.tick * 0.05 + c.id * 1.7;
-    // Half again as thick as a cell, so the colony reads against the sand.
-    const thick = Math.ceil(px * 1.5);
-    const points: number[] = [];
-    for (let i = 0; i <= c.h; i += 0.9) {
-      const k = i / c.cruiseH;
-      // Swaying more toward the head, leaning downstream.
-      const sway = Math.sin(t + i * 0.25) * k * 1.2 - c.facing * k * k * 1.8;
-      const p = this.project(c.anchorX + sway, c.anchorZ, i);
-      points.push(Math.round(p.x - thick / 2), Math.round(p.y - thick / 2));
-    }
-    // A dark edge first, then the body over it.
-    ctx.globalAlpha = 0.7;
-    ctx.fillStyle = 'rgb(6,14,22)';
-    for (let n = 0; n < points.length; n += 2) ctx.fillRect(points[n] - 1, points[n + 1] - 1, thick + 2, thick + 2);
-    ctx.globalAlpha = 1;
-    for (let n = 0; n < points.length; n += 2) {
-      const seg = n / 2;
-      const col = seg % 3 === 1 ? band : seg % 5 === 3 ? spot : body;
-      ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
-      ctx.fillRect(points[n], points[n + 1], thick, thick);
-    }
-    // The head, turned into the current, with its big eye.
-    const hx = points[points.length - 2] + c.facing * Math.round(thick * 0.6);
-    const hy = points[points.length - 1] - Math.round(thick * 0.3);
-    ctx.fillStyle = `rgb(${body[0]},${body[1]},${body[2]})`;
-    ctx.fillRect(hx, hy, thick, thick);
-    ctx.fillStyle = `rgb(${mark[0]},${mark[1]},${mark[2]})`;
-    ctx.fillRect(hx + c.facing * Math.round(thick * 0.7), hy + Math.round(thick / 2), thick, Math.ceil(thick / 2));
-    ctx.fillStyle = 'rgb(12,14,26)';
-    const eye = Math.max(2, Math.round(thick / 3));
-    ctx.fillRect(hx + (c.facing > 0 ? thick - eye : 0), hy + 1, eye, eye);
+    const pit = shadowSprite(4);
+    ctx.globalAlpha = 0.8;
+    ctx.drawImage(pit, Math.round(hole.x - 2 * px), Math.round(hole.y - pit.height * px * 0.5), 4 * px, pit.height * px);
+    const full = Math.round(c.cruiseH * ELEVATION) + 2;
+    const rows = Math.round(c.lunge * full);
+    if (rows < 2) return;
+    const frame = ((ocean.tick + c.id * 7) >> 4) % GARDEN_EEL_FRAMES;
+    this.sprite(gardenEelSprite(c.palette, frame, rows, washed, full), c.anchorX, c.anchorZ, 0, { anchor: 'bottom', flipX: c.facing < 0 });
   }
 
   /**

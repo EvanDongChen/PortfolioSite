@@ -166,8 +166,8 @@ const ROWS: Record<SpriteKind, string[][]> = {
   ],
   // Just the eyes on their stalks, watching from the burrow.
   mantisPeek: [['E.E', 'T.T', 'DBD']],
-  // For icons: a garden eel standing up out of its hole.
-  gardenEel: [['..DB.', '..BE.', '..B..', '..L..', '..B..', '.B...', '.L...', '.B...', '.B...', 'DDDD.']],
+  // Drawn by code (see gardenEelSprite); kept here for the types.
+  gardenEel: [['.']],
   // Lionfish: striped body (B, D) and long venomous spines (T, D), folded
   // back, then fanned out wide to herd or to warn.
   lionfish: [
@@ -330,6 +330,7 @@ export const creaturePalette = (kind: SpriteKind, palette: number, washed = fals
 
 export const creatureSprite = (kind: SpriteKind, palette: number, frame: number, washed = false): HTMLCanvasElement => {
   if (kind === 'starfish') return starfishSprite(palette, 5, 0, frame & 1, washed);
+  if (kind === 'gardenEel') return gardenEelSprite(palette, frame, GARDEN_EEL_ROWS, washed);
   if (kind === 'cuttlefish') return cuttleSprite(frame, false, washed);
   return cached(`${kind}-${palette}-${frame}-${washed}`, () => {
     const set = PALETTES[kind][palette % PALETTES[kind].length].map(c => (washed ? pale(c) : c));
@@ -337,6 +338,51 @@ export const creatureSprite = (kind: SpriteKind, palette: number, frame: number,
     return fromRows(frames[frame % frames.length], { D: set[0], B: set[1], L: set[2], T: set[3], E: EYE, W: TEETH });
   });
 };
+
+/** A garden eel's height when it is all the way out, in art pixels (for icons). */
+export const GARDEN_EEL_ROWS = 14;
+export const GARDEN_EEL_FRAMES = 4;
+
+/**
+ * A garden eel standing out of its burrow, facing right: a body two pixels
+ * thick (lit side B, shaded side L, dark spots D, or white bands W on the
+ * orange kind), bent back by the current and curling into a head with an
+ * eye (E) and a pale chin (T). `full` is its height all the way out; the
+ * frames sway it side to side, and fewer rows is it partway down its
+ * burrow, the bottom of the body hidden in the sand.
+ */
+export const gardenEelSprite = (palette: number, frame: number, rows: number, washed = false, full = GARDEN_EEL_ROWS) =>
+  cached(`geel-${palette}-${frame % GARDEN_EEL_FRAMES}-${rows}-${full}-${washed}`, () => {
+    rows = Math.min(rows, full);
+    const mark = palette % 2 ? 'W' : 'D';
+    const sway = Math.sin(((frame % GARDEN_EEL_FRAMES) / GARDEN_EEL_FRAMES) * Math.PI * 2);
+    // Column of the body's lit side at a height up the eel (0 at the sand).
+    const column = (up: number) => {
+      const k = up / full;
+      return 3 + Math.round(sway * 1.6 * k * Math.sqrt(k) - 1.6 * k * k);
+    };
+    const w = 8;
+    const grid = Array.from({ length: rows }, () => Array<string>(w).fill('.'));
+    for (let y = 0; y < rows; y++) {
+      const up = full - 1 - y;
+      const c = Math.max(0, Math.min(w - 3, column(up)));
+      if (y === 0) {
+        // The head: a bump over the eye, the chin below.
+        grid[y][c + 1] = 'B';
+        grid[y][c + 2] = 'E';
+      } else if (y === 1) {
+        grid[y][c] = 'B';
+        grid[y][c + 1] = 'B';
+        grid[y][c + 2] = 'T';
+      } else {
+        const spot = up % 3 === 1;
+        grid[y][c] = spot ? mark : 'B';
+        grid[y][c + 1] = spot && (mark === 'W' || up % 2) ? mark : 'L';
+      }
+    }
+    const [spot, body, band, chin] = creaturePalette('gardenEel', palette, washed);
+    return fromRows(grid.map(r => r.join('')), { D: spot, B: body, L: shadeOf(body, 0.78), T: chin, E: EYE, W: band });
+  });
 
 /**
  * A puff of sand kicked off the seabed, seen from slightly above: a lump
