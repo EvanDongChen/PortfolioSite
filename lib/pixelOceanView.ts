@@ -960,31 +960,37 @@ export class OceanView {
     if (c.h < 0.6) return;
     const [spot, body, band, mark] = creaturePalette('gardenEel', c.palette, washed);
     const t = ocean.tick * 0.05 + c.id * 1.7;
-    ctx.globalAlpha = 1;
-    let n = 0;
-    let top = { x: hole.x, y: hole.y, s: 1 };
-    for (let i = 0; i <= c.h; i += 0.9, n++) {
+    // Half again as thick as a cell, so the colony reads against the sand.
+    const thick = Math.ceil(px * 1.5);
+    const points: number[] = [];
+    for (let i = 0; i <= c.h; i += 0.9) {
       const k = i / c.cruiseH;
       // Swaying more toward the head, leaning downstream.
       const sway = Math.sin(t + i * 0.25) * k * 1.2 - c.facing * k * k * 1.8;
       const p = this.project(c.anchorX + sway, c.anchorZ, i);
-      const col = n % 3 === 1 ? band : n % 5 === 3 ? spot : body;
+      points.push(Math.round(p.x - thick / 2), Math.round(p.y - thick / 2));
+    }
+    // A dark edge first, then the body over it.
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = 'rgb(6,14,22)';
+    for (let n = 0; n < points.length; n += 2) ctx.fillRect(points[n] - 1, points[n + 1] - 1, thick + 2, thick + 2);
+    ctx.globalAlpha = 1;
+    for (let n = 0; n < points.length; n += 2) {
+      const seg = n / 2;
+      const col = seg % 3 === 1 ? band : seg % 5 === 3 ? spot : body;
       ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
-      const size = Math.ceil(px * p.s);
-      ctx.fillRect(Math.round(p.x - size / 2), Math.round(p.y - size / 2), size, size);
-      top = p;
+      ctx.fillRect(points[n], points[n + 1], thick, thick);
     }
     // The head, turned into the current, with its big eye.
-    const size = Math.ceil(px * top.s);
-    const hx = Math.round(top.x - size / 2 + c.facing * size);
-    const hy = Math.round(top.y - size / 2);
+    const hx = points[points.length - 2] + c.facing * Math.round(thick * 0.6);
+    const hy = points[points.length - 1] - Math.round(thick * 0.3);
     ctx.fillStyle = `rgb(${body[0]},${body[1]},${body[2]})`;
-    ctx.fillRect(hx, hy, size, size);
+    ctx.fillRect(hx, hy, thick, thick);
     ctx.fillStyle = `rgb(${mark[0]},${mark[1]},${mark[2]})`;
-    ctx.fillRect(hx + c.facing * size, hy + Math.round(size / 2), size, Math.ceil(size / 2));
+    ctx.fillRect(hx + c.facing * Math.round(thick * 0.7), hy + Math.round(thick / 2), thick, Math.ceil(thick / 2));
     ctx.fillStyle = 'rgb(12,14,26)';
-    const eye = Math.max(1, Math.round(size / 2));
-    ctx.fillRect(hx + (c.facing > 0 ? size - eye : 0), hy, eye, eye);
+    const eye = Math.max(2, Math.round(thick / 3));
+    ctx.fillRect(hx + (c.facing > 0 ? thick - eye : 0), hy + 1, eye, eye);
   }
 
   /**

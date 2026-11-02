@@ -686,17 +686,19 @@ export class PixelOcean {
       this.decor = this.decor.filter(off);
       this.kelp = this.kelp.filter(off);
     };
-    // Somewhere in a band of depth, clear of the other colonies.
-    const site = (z0: number, z1: number, halfW: number, r: number) => {
+    // Somewhere in a band of depth, clear of the other colonies, out in the
+    // open sand down the left of the page: the content covers the middle,
+    // and the dive gauge the right.
+    const site = (z0: number, z1: number, r: number) => {
+      const x = Math.max(18, Math.min(w - 18, w * 0.08));
       for (let tries = 0; tries < 30; tries++) {
-        const x = rand(halfW + 4, w - halfW - 4);
         const z = rand(z0, z1);
         if (taken.every(t => Math.hypot(t.x - x, t.z - z) > t.r + r)) { taken.push({ x, z, r }); return { x, z }; }
       }
       return null;
     };
     for (let k = Math.max(1, Math.min(3, Math.round(h / 700))); k > 0; k--) {
-      const at = site(SHALLOWS, Math.max(SHALLOWS + 20, h * 0.6), 20, 40);
+      const at = site(SHALLOWS, Math.max(SHALLOWS + 20, h * 0.6), 40);
       if (!at) continue;
       clearGround(at.x, at.z, 24, 11);
       this.colonies.push(at);
@@ -1029,11 +1031,11 @@ export class PixelOcean {
    */
   private giveBurrow(c: Creature, parent: Creature | null) {
     const site = parent ? { x: parent.anchorX, z: parent.anchorZ } : this.colonies[randInt(0, this.colonies.length - 1)] ?? { x: c.x, z: c.z };
-    const reach = parent ? 7 : 16;
+    const reach = parent ? 7 : 12;
     let x = site.x, z = site.z;
     for (let tries = 0; tries < 16; tries++) {
       x = Math.max(4, Math.min(this.w - 5, site.x + rand(-reach, reach)));
-      z = Math.max(4, Math.min(this.h - 5, site.z + rand(-reach, reach) * 0.45));
+      z = Math.max(4, Math.min(this.h - 5, site.z + rand(-reach, reach) * 0.7));
       if (this.creatures.every(o => o.species !== 'gardenEel' || o === c || (o.anchorX - x) ** 2 + (o.anchorZ - z) ** 2 > 3.5 * 3.5)) break;
     }
     c.anchorX = c.x = x;
