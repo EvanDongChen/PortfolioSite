@@ -1167,9 +1167,10 @@ export class OceanView {
   }
 
   /**
-   * Small anemones: a foot on the sand and four short tentacles, each a
-   * stalk and a pale tip. Open, they stand up and sway together; shut, only
-   * a little knob is left.
+   * Small anemones, like little copies of the big ones: a fleshy foot on the
+   * sand and five separate tentacles fanning out from it, each ending in a
+   * pale tip. Open, they stand up and sway together; shut, only the foot and
+   * a nub are left.
    */
   private drawPolyps(f: AnemoneField, from: number, to: number) {
     const { spriteCtx: ctx, px, ocean, regionTop } = this;
@@ -1178,17 +1179,19 @@ export class OceanView {
     for (let n = from; n < to; n++) {
       const p = f.polyps[n];
       const set = p.palette * 3;
-      const bx = Math.round(p.x * px);
+      const bx = p.x * px;
       const by = Math.round(p.z * px - regionTop);
-      runs[set].push(bx - px, by - px, px * 2, px);
-      const tall = Math.round(p.open * 3);
-      if (tall < 1) { runs[set + 1].push(bx - Math.round(px / 2), by - px * 2, px, px); continue; }
-      const sway = Math.round(Math.sin(t + p.phase * 0.4 + p.x * 0.2) * p.open * px * 0.8);
-      for (let k = -1.5; k <= 1.5; k++) {
-        const spread = Math.round(k * px * (0.3 + p.open * 0.3));
-        const x = bx + spread - Math.round(px / 2);
-        if (tall > 1) runs[set + 1].push(x, by - px * tall, px, px * (tall - 1));
-        runs[set + 2].push(x + sway + Math.round(spread * 0.4), by - px * (tall + 1), px, px);
+      runs[set].push(Math.round(bx - px * 1.5), by - px, px * 3, px);
+      const reach = 1 + p.open * 3.5;
+      if (reach < 1.6) { runs[set + 1].push(Math.round(bx - px / 2), by - px * 2, px, px); continue; }
+      const sway = Math.sin(t + p.phase * 0.4 + p.x * 0.2) * p.open;
+      for (let k = -2; k <= 2; k++) {
+        const root = k * 0.55;
+        const lean = k * 0.45 * p.open;
+        for (let j = 1; j <= reach; j++) {
+          const x = Math.round(bx + (root + lean * j * 0.6 + sway * (j / reach)) * px - px / 2);
+          runs[set + (j > reach - 1 ? 2 : 1)].push(x, by - px * (j + 1), px, px);
+        }
       }
     }
     ctx.globalAlpha = 1;

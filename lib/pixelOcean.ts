@@ -828,15 +828,15 @@ export class PixelOcean {
         this.lettuce.push({ x: r.x + rand(-r.w / 2, r.w / 2), z: r.z + rand(0.3, 1.5), leaves: maxLeaves, maxLeaves, palette: randInt(0, 1), phase: rand(0, Math.PI * 2) });
       }
     }
-    // Anemone fields: some a riot of colours, some just two or three.
+    // Anemone fields: one colour, or two that sit well together.
     for (let k = Math.max(2, Math.min(5, Math.round(h / 500))); k > 0; k--) {
       const rx = randInt(16, 26), rz = randInt(6, 10);
       const { x, z } = spot(SHALLOWS * 0.6, h * 0.8, rx + 4);
-      const mixed = Math.random() < 0.5;
-      const colours = mixed ? [0, 1, 2, 3, 4, 5] : Array.from({ length: randInt(1, 2) }, () => randInt(0, 5));
+      const COLOURWAYS = [[0], [1], [2], [4], [3], [0, 1], [2, 4], [3, 5], [0, 3]];
+      const colours = COLOURWAYS[randInt(0, COLOURWAYS.length - 1)];
       const polyps: Polyp[] = [];
-      for (let pz = -rz; pz <= rz; pz += 2.4) {
-        for (let px = -rx; px <= rx; px += 2.6) {
+      for (let pz = -rz; pz <= rz; pz += 3) {
+        for (let px = -rx; px <= rx; px += 3.6) {
           const d = (px / rx) ** 2 + (pz / rz) ** 2;
           if (d > 1 || Math.random() > 0.8 * (1 - d * 0.4)) continue;
           polyps.push({
