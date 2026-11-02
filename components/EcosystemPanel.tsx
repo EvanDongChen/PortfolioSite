@@ -41,7 +41,6 @@ const PLURAL: Record<Species, string> = {
   manta: 'Mantas',
   dolphin: 'Dolphins',
   shrimp: 'Shrimp',
-  parrotfish: 'Parrotfish',
   mantis: 'Mantises',
   gardenEel: 'Garden eels',
   lionfish: 'Lionfish',

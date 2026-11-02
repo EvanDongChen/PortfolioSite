@@ -72,8 +72,6 @@ const MOOD_LABEL: Record<Mood, string> = {
   mesmerised: 'Mesmerised',
   eating: 'Eating',
   nestled: 'Nestled in its anemone',
-  crunching: 'Crunching coral',
-  sleeping: 'Asleep in its mucus bubble',
   swaying: 'Swaying in the current',
   ducking: 'Ducked into its burrow',
   flaring: 'Fanning out its fins',

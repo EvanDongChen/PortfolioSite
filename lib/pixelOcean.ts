@@ -20,15 +20,12 @@
 // big fish queue at cleaner stations, and courting fish pair up before they
 // spawn.
 //
-// Parrotfish crunch coral and turn it into sand, then sleep in a bubble of
-// mucus. Shrimp pick at plankton and feed the minnows; mantis shrimp punch
-// crabs from their burrows; garden eels sway out of the sand and duck in a
+// Shrimp pick at plankton and feed the minnows; mantis shrimp punch crabs
+// from their burrows; garden eels sway out of the sand and duck in a
 // wave when something big swims over; lionfish fan their fins to herd
 // minnows, and the hunters give them a wide berth; and hermit crabs line up
-// by size to swap shells when a bigger one turns up. Landmarks: a shipwreck
-// with fish in its portholes and morays in its hull, coral bommies (each with
-// a cleaner station), and seagrass meadows where turtles graze and seahorses
-// hide.
+// by size to swap shells when a bigger one turns up. Seagrass meadows are
+// grazed by turtles and hide seahorses.
 //
 // World units are art pixels: x across, z down the page, h up off the floor.
 
@@ -41,9 +38,9 @@ export type Species =
   | 'minnow' | 'puffer' | 'seahorse' | 'barracuda' | 'eel' | 'angler' | 'shark'
   | 'crab' | 'urchin' | 'octopus' | 'jelly' | 'turtle' | 'manta'
   | 'clownfish' | 'starfish' | 'cuttlefish' | 'dolphin'
-  | 'shrimp' | 'parrotfish' | 'mantis' | 'gardenEel' | 'lionfish' | 'hermit';
+  | 'shrimp' | 'mantis' | 'gardenEel' | 'lionfish' | 'hermit';
 export const SPECIES_LIST: Species[] = [
-  'minnow', 'shrimp', 'puffer', 'seahorse', 'clownfish', 'parrotfish', 'lionfish', 'barracuda', 'eel', 'gardenEel',
+  'minnow', 'shrimp', 'puffer', 'seahorse', 'clownfish', 'lionfish', 'barracuda', 'eel', 'gardenEel',
   'angler', 'shark', 'crab', 'hermit', 'mantis', 'urchin', 'starfish', 'octopus', 'cuttlefish', 'jelly', 'turtle',
   'manta', 'dolphin',
 ];
@@ -53,7 +50,7 @@ export type Mood = 'cruising' | 'schooling' | 'foraging' | 'grazing' | 'fleeing'
   | 'clinging' | 'carrying' | 'camouflaged' | 'inking' | 'lurking' | 'striking' | 'puffed' | 'gliding'
   | 'tracking' | 'balling' | 'herding' | 'diving' | 'leaving' | 'courting' | 'queueing' | 'cleaning'
   | 'hypnotising' | 'mesmerised' | 'eating' | 'nestled'
-  | 'crunching' | 'sleeping' | 'swaying' | 'ducking' | 'flaring' | 'swapping';
+  | 'swaying' | 'ducking' | 'flaring' | 'swapping';
 
 export interface OceanEvent {
   tick: number;
@@ -145,10 +142,6 @@ export interface Creature {
   /** The seagrass meadow (and blade) a seahorse clings to or a turtle grazes. */
   meadow: Meadow | null;
   blade: number;
-  /** The shipwreck porthole a minnow is hiding in, or -1. */
-  hole: number;
-  /** The coral a parrotfish is biting, or the rock it sleeps by. */
-  perch: Decor | null;
   scanIn: number;
   prey: Creature | null;
   alive: boolean;
@@ -177,8 +170,8 @@ export interface Carcass {
  * or a puff of sand (or coral spawn) that billows and fades where it is.
  */
 export interface Drop {
-  /** Also: 'chip', a crumb of coral bitten off; 'flash', a mantis shrimp's punch. */
-  kind: 'blood' | 'goo' | 'ink' | 'heart' | 'sand' | 'scent' | 'sparkle' | 'puff' | 'chip' | 'flash';
+  /** Also: 'flash', a mantis shrimp's punch. */
+  kind: 'blood' | 'goo' | 'ink' | 'heart' | 'sand' | 'scent' | 'sparkle' | 'puff' | 'flash';
   x: number; z: number; h: number;
   vx: number; vz: number; vh: number;
   life: number;
@@ -239,25 +232,10 @@ export interface Kelp extends Bend { x: number; z: number; length: number; maxLe
 export interface ClearZone { x0: number; z0: number; x1: number; z1: number }
 
 export interface Decor {
-  /** Rocks and corals, plus the landmarks: a shipwreck and coral bommies. */
-  kind: 'rock' | 'coral' | 'wreck' | 'bommie'; x: number; z: number; w: number; ht: number; seed: number; vent: boolean;
+  kind: 'rock' | 'coral'; x: number; z: number; w: number; ht: number; seed: number; vent: boolean;
   /** A young coral's full size, while it is still growing toward it. */
   grow?: { w: number; ht: number };
-  /** The shipwreck's portholes: who is hiding in each. */
-  holes?: (Creature | null)[];
 }
-
-/**
- * The shipwreck's sprite size, its portholes (centres) and the breaches in
- * its hull where morays den, in sprite pixels from its top left; the sprite
- * stands on its base point.
- */
-export const WRECK = {
-  w: 78, ht: 32,
-  portholes: [{ x: 22, y: 17 }, { x: 31, y: 18 }, { x: 40, y: 18 }, { x: 49, y: 18 }, { x: 58, y: 17 }],
-  breaches: [16, 66],
-};
-export const BOMMIE = { w: 40, ht: 36 };
 
 /** A blade of seagrass: where it grows, how long it is (grazed down and regrown), its sway. */
 export interface Blade { x: number; z: number; len: number; maxLen: number; phase: number; shade: number }
@@ -438,12 +416,6 @@ export const SPECIES: Record<Species, SpeciesDef> = {
     breedAt: 0.8, breedCost: 0.45, breedCooldown: 700, litter: [2, 3], units: 24, body: 5, minH: 1, maxH: 12,
     cap: [9000, 10, 70], palettes: 2,
   },
-  parrotfish: {
-    label: 'Parrotfish', names: ['Crunch', 'Polly', 'Beaky', 'Mango', 'Rio', 'Kiwi', 'Coco', 'Pico'],
-    cruise: 0.22, burst: 0.6, vision: 40, metabolism: 0.0005, maxAge: [9000, 13000], mature: 1200, hungerLine: 0.7,
-    breedAt: 0.88, breedCost: 0.5, breedCooldown: 2400, litter: [1, 2], units: 90, body: 22, minH: 3, maxH: 26,
-    cap: [40000, 2, 12], palettes: 3,
-  },
   mantis: {
     label: 'Mantis shrimp', names: ['Punch', 'Jab', 'Rocky', 'Rainbow', 'Smash', 'Bruiser'],
     cruise: 0.15, burst: 1.4, vision: 14, metabolism: 0.00015, maxAge: [12000, 16000], mature: 1800, hungerLine: 0.8,
@@ -473,7 +445,7 @@ export const SPECIES: Record<Species, SpeciesDef> = {
 /** Who hunts whom (besides the special hunters: morays, octopuses, anglerfish). */
 const PREY: Partial<Record<Species, Species[]>> = {
   barracuda: ['minnow', 'puffer', 'seahorse'],
-  shark: ['barracuda', 'octopus', 'puffer', 'minnow', 'parrotfish'],
+  shark: ['barracuda', 'octopus', 'puffer', 'minnow'],
   turtle: ['jelly', 'urchin'],
   lionfish: ['minnow', 'shrimp'],
   mantis: ['crab', 'hermit', 'shrimp'],
@@ -481,7 +453,7 @@ const PREY: Partial<Record<Species, Species[]>> = {
 /** How much room (in cells) fish that don't school keep from their own kind. */
 const SPACING: Partial<Record<Species, number>> = {
   puffer: 9, clownfish: 5, cuttlefish: 14, turtle: 18, barracuda: 14, shark: 24, starfish: 10, crab: 9, octopus: 12, jelly: 9,
-  shrimp: 3, parrotfish: 12, lionfish: 18, hermit: 4,
+  shrimp: 3, lionfish: 18, hermit: 4,
 };
 /** How hard things swimming through kelp and anemones push them over, and how far (cells). */
 const BEND_FORCE = 0.25;
@@ -514,21 +486,21 @@ const BALL_CATCH = 0.05;
 const MINNOW_WATCHES: Species[] = ['barracuda', 'jelly', 'shark', 'dolphin', 'lionfish'];
 const WATCHED = Object.fromEntries(MINNOW_WATCHES.map(s => [s, true])) as Partial<Record<Species, boolean>>;
 /** Big fish that pick up parasites and visit cleaner stations. */
-const CLEANED: Species[] = ['shark', 'barracuda', 'turtle', 'manta', 'cuttlefish', 'parrotfish'];
+const CLEANED: Species[] = ['shark', 'barracuda', 'turtle', 'manta', 'cuttlefish'];
 /** Fish that court a partner before they spawn. */
-const COURTERS: Species[] = ['minnow', 'puffer', 'clownfish', 'barracuda', 'shark', 'cuttlefish', 'turtle', 'parrotfish'];
+const COURTERS: Species[] = ['minnow', 'puffer', 'clownfish', 'barracuda', 'shark', 'cuttlefish', 'turtle'];
 /** What a clownfish darts home from. */
 const CLOWNFISH_THREATS: Species[] = ['barracuda', 'shark', 'cuttlefish', 'eel', 'dolphin', 'lionfish'];
 /** Small fish an anemone stings if they brush against it. */
 const STUNG_BY_ANEMONES: Species[] = ['minnow', 'puffer', 'seahorse', 'shrimp'];
 /** Creatures that position themselves rather than swim through move(). */
 const SELF_PLACED: Species[] = ['eel', 'seahorse', 'gardenEel', 'mantis'];
-const BUBBLERS: Species[] = ['minnow', 'barracuda', 'turtle', 'puffer', 'shark', 'angler', 'manta', 'parrotfish', 'lionfish'];
+const BUBBLERS: Species[] = ['minnow', 'barracuda', 'turtle', 'puffer', 'shark', 'angler', 'manta', 'lionfish'];
 /** Hunters that steer clear of a lionfish's venomous spines. */
 const LIONFISH_SHY: Partial<Record<Species, boolean>> = { barracuda: true, shark: true, cuttlefish: true, octopus: true, dolphin: true };
 /** Big swimmers that make garden eels duck as they pass over. */
 const LOOMING: Partial<Record<Species, boolean>> = {
-  shark: true, barracuda: true, turtle: true, manta: true, dolphin: true, octopus: true, cuttlefish: true, lionfish: true, parrotfish: true,
+  shark: true, barracuda: true, turtle: true, manta: true, dolphin: true, octopus: true, cuttlefish: true, lionfish: true,
 };
 /** How far a moray can reach out of its den. */
 const EEL_REACH = 22;
@@ -540,8 +512,6 @@ const EEL_ALARM = 22;
 const DUCK_TICKS = 110;
 /** Ticks per cell for a duck to spread from one garden eel to the next. */
 const DUCK_WAVE = 1.6;
-/** Bites of coral a parrotfish turns into a cloud of sand. */
-const SAND_BITES = 5;
 /** The biggest hermit crab shell, and how long an unused one lies about. */
 const MAX_SHELL = 5;
 const SHELL_TICKS = 6000;
@@ -615,8 +585,6 @@ export class PixelOcean {
   whale: WhaleFall | null = null;
   tick = 0;
   pointer: { x: number; z: number } | null = null;
-  /** Seabed rows whose sand a parrotfish has added to since the renderer last looked. */
-  freshSand: number[] = [];
 
   private nextId = 1;
   private births = 0;
@@ -652,9 +620,6 @@ export class PixelOcean {
   private nextSpawning = randInt(5400, 9000);
   /** Grains of coral spawn in the water. */
   spawnCount = 0;
-  /** The shipwreck and the bommies, which fish gather round, and the wreck alone. */
-  private landmarks: Decor[] = [];
-  private wreck: Decor | null = null;
   /** Patches of open sand where garden eels live. */
   private colonies: { x: number; z: number }[] = [];
   private swap: ShellSwap | null = null;
@@ -666,7 +631,7 @@ export class PixelOcean {
 
   constructor(w: number, h: number) {
     this.resize(w, h);
-    this.placeLandmarks();
+    this.placeColonies();
     this.plantMeadows();
     this.plantSeagrass();
     this.plantAnemones();
@@ -682,32 +647,38 @@ export class PixelOcean {
 
   // --- world --------------------------------------------------------------
 
-  /** Anemones in the sunlit shallows, each with a pair of clownfish to come, and one at the foot of each bommie. */
+  /** Anemones in the sunlit shallows, each with a pair of clownfish to come. */
   private plantAnemones() {
     const count = Math.max(3, Math.round(this.w / 70));
-    const spots = Array.from({ length: count }, () => ({ x: rand(10, this.w - 10), z: rand(10, Math.min(this.h - 10, SHALLOWS * 1.4)) }));
-    for (const d of this.decor) if (d.kind === 'bommie') spots.push({ x: d.x + (Math.random() < 0.5 ? -1 : 1) * (d.w / 2 + 4), z: d.z + 3 });
-    for (const { x, z } of spots) {
-      this.anemones.push({ x, z, palette: randInt(0, 2), phase: rand(0, Math.PI * 2), retract: 0, alive: true, ...upright() });
+    for (let k = 0; k < count; k++) {
+      this.anemones.push({
+        x: rand(10, this.w - 10),
+        z: rand(10, Math.min(this.h - 10, SHALLOWS * 1.4)),
+        palette: randInt(0, 2),
+        phase: rand(0, Math.PI * 2),
+        retract: 0,
+        alive: true,
+        ...upright(),
+      });
     }
   }
 
-  /** Each coral bommie has a cleaner station on top, and a few of the bigger rocks have one too. */
+  /** A few of the bigger rocks become cleaner stations. */
   private pickStations() {
     const big = this.rocks().filter(r => r.ht >= 9);
     const count = Math.max(1, Math.min(3, Math.round((this.w * this.h) / 180000)));
     this.stations = [];
-    const station = (rock: Decor) => this.stations.push({ rock, x: rock.x, z: rock.z, ht: rock.ht, side: Math.random() < 0.5 ? 1 : -1, queue: [] });
-    for (const d of this.decor) if (d.kind === 'bommie') station(d);
-    while (this.stations.length < count && big.length) station(big.splice(randInt(0, big.length - 1), 1)[0]);
+    while (this.stations.length < count && big.length) {
+      const rock = big.splice(randInt(0, big.length - 1), 1)[0];
+      this.stations.push({ rock, x: rock.x, z: rock.z, ht: rock.ht, side: Math.random() < 0.5 ? 1 : -1, queue: [] });
+    }
   }
 
   /**
-   * The landmarks: a shipwreck partway down the page, a coral bommie or two
-   * below the shallows, and patches of open sand where garden eels live.
-   * Each clears the rocks, corals and kelp from its own ground.
+   * Patches of open sand below the shallows where garden eels live, apart
+   * from each other and cleared of rocks, corals and kelp.
    */
-  private placeLandmarks() {
+  private placeColonies() {
     const { w, h } = this;
     const taken: { x: number; z: number; r: number }[] = [];
     const clearGround = (x: number, z: number, rx: number, rz: number) => {
@@ -715,7 +686,7 @@ export class PixelOcean {
       this.decor = this.decor.filter(off);
       this.kelp = this.kelp.filter(off);
     };
-    // Somewhere in a band of depth, clear of the other landmarks.
+    // Somewhere in a band of depth, clear of the other colonies.
     const site = (z0: number, z1: number, halfW: number, r: number) => {
       for (let tries = 0; tries < 30; tries++) {
         const x = rand(halfW + 4, w - halfW - 4);
@@ -724,19 +695,6 @@ export class PixelOcean {
       }
       return null;
     };
-    if (w > WRECK.w + 20 && h > 700) {
-      const at = site(Math.max(SHALLOWS * 1.3, h * 0.35), h * 0.7, WRECK.w / 2, 60);
-      if (at) {
-        clearGround(at.x, at.z, WRECK.w / 2 + 8, 14);
-        this.decor.push({ kind: 'wreck', x: at.x, z: at.z, w: WRECK.w, ht: WRECK.ht, seed: randInt(1, 1e9), vent: false, holes: WRECK.portholes.map(() => null) });
-      }
-    }
-    for (let k = Math.max(1, Math.min(2, Math.round(h / 1200))); k > 0; k--) {
-      const at = site(SHALLOWS * 0.9, Math.min(h - 40, SHALLOWS * 2.4), BOMMIE.w / 2, 50);
-      if (!at) continue;
-      clearGround(at.x, at.z, BOMMIE.w / 2 + 6, 10);
-      this.decor.push({ kind: 'bommie', x: at.x, z: at.z, w: BOMMIE.w, ht: BOMMIE.ht, seed: randInt(1, 1e9), vent: false });
-    }
     for (let k = Math.max(1, Math.min(3, Math.round(h / 700))); k > 0; k--) {
       const at = site(SHALLOWS, Math.max(SHALLOWS + 20, h * 0.6), 20, 40);
       if (!at) continue;
@@ -755,13 +713,11 @@ export class PixelOcean {
     for (let m = Math.max(2, Math.min(4, Math.round(h / 600))); m > 0; m--) {
       const rx = randInt(22, 34), rz = randInt(9, 14);
       let x = 0, z = 0;
-      // Clear of the landmarks and the garden eels' sand.
+      // Clear of the garden eels' sand.
       for (let tries = 0; tries < 20; tries++) {
         x = rand(rx + 4, w - rx - 4);
         z = rand(SHALLOWS * 0.75, Math.min(h - rz - 4, SHALLOWS * 1.7));
-        const clear = this.decor.every(d => (d.kind !== 'wreck' && d.kind !== 'bommie') || Math.abs(d.x - x) > d.w / 2 + rx + 4 || Math.abs(d.z - z) > rz + 12)
-          && this.colonies.every(c => Math.hypot(c.x - x, c.z - z) > rx + 26);
-        if (clear) break;
+        if (this.colonies.every(c => Math.hypot(c.x - x, c.z - z) > rx + 26)) break;
       }
       const blades: Blade[] = [];
       for (let bz = -rz; bz <= rz; bz += 1) {
@@ -919,10 +875,8 @@ export class PixelOcean {
     this.sweep();
   }
 
-  /** Files each rock and coral under every bucket it might reach, and notes the landmarks. */
+  /** Files each rock and coral under every bucket it might reach. */
   private indexDecor() {
-    this.landmarks = this.decor.filter(d => d.kind === 'wreck' || d.kind === 'bommie');
-    this.wreck = this.landmarks.find(d => d.kind === 'wreck') ?? null;
     const cols = this.gridCols, rows = this.gridRows;
     this.decorGrid = Array.from({ length: cols * rows }, () => []);
     for (const d of this.decor) {
@@ -1031,8 +985,6 @@ export class PixelOcean {
       cue: 0,
       meadow: null,
       blade: -1,
-      hole: -1,
-      perch: null,
       scanIn: randInt(0, 10),
       prey: null,
       alive: true,
@@ -1124,22 +1076,14 @@ export class PixelOcean {
     return this.decor.filter(d => d.kind === 'rock');
   }
 
-  /**
-   * A moray takes the nearest free rock as its den (or a hole in the sand).
-   * The breaches in the shipwreck's hull are the best dens of all: a moray
-   * will come a long way for one.
-   */
+  /** A moray takes the nearest free rock as its den (or a hole in the sand). */
   private giveDen(c: Creature) {
     const taken = new Set(this.creatures.filter(o => o.species === 'eel' && o !== c && o.alive).map(o => `${o.anchorX},${o.anchorZ}`));
-    const dens: { x: number; z: number; pull: number }[] = this.rocks().filter(r => r.ht >= 6).map(r => ({ x: r.x, z: r.z, pull: 1 }));
-    for (const d of this.decor) {
-      if (d.kind === 'wreck') for (const bx of WRECK.breaches) dens.push({ x: d.x - d.w / 2 + bx, z: d.z + 0.5, pull: 0.05 });
-    }
-    let den: { x: number; z: number } | null = null;
+    let den: Decor | null = null;
     let bestD = Infinity;
-    for (const r of dens) {
-      if (taken.has(`${r.x},${r.z}`)) continue;
-      const d = ((r.x - c.x) ** 2 + (r.z - c.z) ** 2) * r.pull;
+    for (const r of this.rocks()) {
+      if (r.ht < 6 || taken.has(`${r.x},${r.z}`)) continue;
+      const d = (r.x - c.x) ** 2 + (r.z - c.z) ** 2;
       if (d < bestD) { bestD = d; den = r; }
     }
     c.anchorX = den ? den.x : c.x;
@@ -1187,9 +1131,6 @@ export class PixelOcean {
       if (kept.length === m.blades.length) continue;
       m.blades = kept;
       for (const c of this.creatures) if (c.meadow === m) { c.meadow = null; c.blade = -1; }
-    }
-    for (const c of this.creatures) {
-      if (c.hole >= 0 && !this.decor.some(d => d.holes?.[c.hole] === c)) c.hole = -1;
     }
     for (const a of this.anemones) if (blocks(a.x, a.z, 4, 10)) a.alive = false;
     this.anemones = this.anemones.filter(a => a.alive);
@@ -1474,7 +1415,7 @@ export class PixelOcean {
       }
       // Every other species drifts back in now and then if it's down to its last few.
       for (const sp of ['puffer', 'seahorse', 'urchin', 'octopus', 'eel', 'shark', 'manta', 'angler', 'clownfish', 'starfish', 'cuttlefish',
-        'parrotfish', 'mantis', 'gardenEel', 'lionfish', 'hermit'] as Species[]) {
+        'mantis', 'gardenEel', 'lionfish', 'hermit'] as Species[]) {
         if (counts[sp] < SPECIES[sp].cap[1] && Math.random() < 0.25) this.spawn(sp, null);
       }
     }
@@ -1522,7 +1463,6 @@ export class PixelOcean {
       case 'cuttlefish': this.thinkCuttlefish(c, steer); break;
       case 'dolphin': this.thinkDolphin(c, steer); break;
       case 'shrimp': this.thinkShrimp(c, steer); break;
-      case 'parrotfish': this.thinkParrotfish(c, steer); break;
       case 'mantis': this.thinkMantis(c); break;
       case 'gardenEel': this.thinkGardenEel(c); break;
       case 'lionfish': this.thinkLionfish(c, steer); break;
@@ -1709,17 +1649,15 @@ export class PixelOcean {
     const stray = Math.abs(fromHome) - HOME_RANGE;
     if (stray > 0) s.z += Math.sign(fromHome) * Math.min(0.05, 0.012 + stray * 0.0004);
     if (sp.maxH > 0) {
-      if (c.h < sp.minH && c.grazeCell < 0 && !c.station && c.mood !== 'sleeping') s.h += 0.03;
+      if (c.h < sp.minH && c.grazeCell < 0 && !c.station) s.h += 0.03;
       if (c.h > sp.maxH) s.h -= 0.03;
-      // Up and over rocks, corals and landmarks (none is taller than a bommie);
-      // a fish tucked into a porthole is already inside the wreck.
+      // Rocks and corals are never taller than this.
       const bucket = Math.min(this.gridRows - 1, Math.max(0, (c.z / BUCKET) | 0)) * this.gridCols
         + Math.min(this.gridCols - 1, Math.max(0, (c.x / BUCKET) | 0));
-      for (const d of c.h > BOMMIE.ht + 3 || c.hole >= 0 ? [] : this.decorGrid[bucket] ?? []) {
+      for (const d of c.h > 20 ? [] : this.decorGrid[bucket] ?? []) {
         if (c.h > d.ht + 3) continue;
-        // The wreck is long and narrow; everything else is about round.
-        const rx = d.w * 0.5 + 2, rz = d.kind === 'wreck' ? 8 : rx;
-        if (((c.x - d.x) / rx) ** 2 + ((c.z - d.z) / rz) ** 2 < 1) s.h += 0.06;
+        const r = d.w * 0.5 + 2;
+        if ((c.x - d.x) ** 2 + (c.z - d.z) ** 2 < r * r) s.h += 0.06;
       }
     }
     if (LIONFISH_SHY[c.species]) this.avoidLionfish(c, s);
@@ -1851,23 +1789,6 @@ export class PixelOcean {
       const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2 + ((o.h - c.h) * 0.5) ** 2;
       if (d < reach * reach && d < threatD) { threatD = d; threat = o; hunted = o.species !== 'jelly'; }
     });
-    // Tucked into one of the shipwreck's portholes: stay put until the coast is clear.
-    if (c.hole >= 0) {
-      const wreck = this.wreck;
-      const leave = !wreck || (!threat && Math.random() < (c.hungry ? 0.01 : 0.0015));
-      if (!leave && wreck) {
-        const p = this.porthole(wreck, c.hole);
-        s.x += (p.x - c.x) * 0.05;
-        s.z += (p.z - c.z) * 0.05;
-        s.h += (p.h - c.h) * 0.05;
-        s.max = 0.1;
-        c.hidden = true;
-        c.mood = 'hiding';
-        return;
-      }
-      if (wreck?.holes) wreck.holes[c.hole] = null;
-      c.hole = -1;
-    }
     // Herded by dolphins, or chased with a big school around it: pack into a
     // spinning bait ball. The alarm spreads to nearby schools, which rush in
     // and join, so the ball grows. Each fish holds its own height as the ball
@@ -1928,8 +1849,6 @@ export class PixelOcean {
       c.grazeCell = -1;
       s.max = sp.burst;
       s.effort = 1.8;
-      // A free porthole nearby beats the kelp.
-      if (this.seekPorthole(c, s, Math.min(40, kd))) return;
       // Bolt for nearby kelp unless the hunter is in the way; otherwise just run.
       const hunterInTheWay = (k ? (k.x - c.x) * (t.x - c.x) + (k.z - c.z) * (t.z - c.z) : 0) > kd * d * 0.5;
       if (k && kd < 50 && !hunterInTheWay) {
@@ -1974,53 +1893,12 @@ export class PixelOcean {
     }
     if (c.hungry && this.forage(c, s)) return;
     c.mood = this.school(c, s) ? 'schooling' : 'cruising';
-    // Idle schools loiter around the kelp, or a landmark: the wreck, a bommie.
-    let hub: { x: number; z: number } | null = k && kd < 50 ? k : null;
-    let hubD = hub ? kd : 70;
-    for (const d of this.landmarks) {
-      const dd = Math.hypot(d.x - c.x, d.z - c.z);
-      if (dd < hubD) { hubD = dd; hub = d; }
+    // Idle schools loiter around the kelp.
+    if (k && kd > 12 && kd < 50) {
+      s.x += (k.x - c.x) / kd * 0.008;
+      s.z += (k.z - c.z) / kd * 0.008;
     }
-    if (hub && hubD > 12) {
-      s.x += (hub.x - c.x) / hubD * 0.008;
-      s.z += (hub.z - c.z) / hubD * 0.008;
-    }
-    // Now and then one ducks into a porthole for a rest.
-    if (hub === this.wreck && hubD < 40 && Math.random() < 0.002 && this.seekPorthole(c, s, 40)) return;
     this.wander(c, s);
-  }
-
-  /** Where a fish hides in one of the wreck's portholes: just inside the hull, level with the hole. */
-  private porthole(wreck: Decor, i: number) {
-    const p = WRECK.portholes[i];
-    return { x: wreck.x - wreck.w / 2 + p.x, z: wreck.z - 0.5, h: (wreck.ht - p.y - 0.5) / ELEVATION };
-  }
-
-  /** Heads for the nearest free porthole within range, and tucks in once there. */
-  private seekPorthole(c: Creature, s: { x: number; z: number; h: number; max: number }, range: number) {
-    const wreck = this.wreck;
-    if (!wreck?.holes || Math.abs(wreck.x - c.x) > wreck.w / 2 + range || Math.abs(wreck.z - c.z) > range) return false;
-    let best = -1;
-    let bestD = range;
-    for (let i = 0; i < wreck.holes.length; i++) {
-      if (wreck.holes[i]) continue;
-      const d = dist3(this.porthole(wreck, i), c);
-      if (d < bestD) { bestD = d; best = i; }
-    }
-    if (best < 0) return false;
-    const p = this.porthole(wreck, best);
-    // Close enough to slip in (from here it glides the rest of the way inside).
-    if (bestD < 8) {
-      wreck.holes[best] = c;
-      c.hole = best;
-      c.hidden = true;
-      c.mood = 'hiding';
-      return true;
-    }
-    // Round the front of the hull, then in.
-    this.toward(c, s, { x: p.x, z: bestD > 8 ? wreck.z + 4 : p.z, h: p.h }, 0.14);
-    c.mood = 'fleeing';
-    return true;
   }
 
   private nearestKelp(c: Creature, radius: number, except: Kelp | null = null) {
@@ -2632,12 +2510,10 @@ export class PixelOcean {
     if (this.spawning > 0) {
       this.spawning--;
       for (const d of this.decor) {
-        // A bommie is many corals at once.
-        const rate = d.kind === 'bommie' ? SPAWN_RATE * 5 : d.kind === 'coral' ? SPAWN_RATE : 0;
-        if (d.grow || this.spawnCount >= MAX_SPAWN || Math.random() > rate) continue;
+        if (d.kind !== 'coral' || d.grow || this.spawnCount >= MAX_SPAWN || Math.random() > SPAWN_RATE) continue;
         // A plume of eggs puffed out together, so it rises as a little cloud.
         const x = d.x + rand(-d.w / 3, d.w / 3);
-        const h = d.ht * (d.kind === 'bommie' ? rand(0.6, 1.4) : 0.8);
+        const h = d.ht * 0.8;
         this.puff(x, d.z + 0.5, h, 1);
         for (let k = 0; k < PLUME; k++) {
           this.spawnCount++;
@@ -2903,107 +2779,6 @@ export class PixelOcean {
     }
     c.mood = 'cruising';
     this.wander(c, s, 0.01);
-  }
-
-  /**
-   * Parrotfish bite chunks off the corals with their beaks, grind them up
-   * and let out clouds of fine sand, which settle and pale the seabed. At
-   * night (and for a nap when full) they tuck in beside a rock and sleep
-   * inside a bubble of mucus that hides their scent.
-   */
-  private thinkParrotfish(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
-    const sp = SPECIES.parrotfish;
-    if (c.timer > 0) c.timer--;
-    else if (!c.hungry && c.energy > 0.85 && Math.random() < 1 / 5000) c.timer = randInt(600, 1100);
-    const sleepy = this.nightfall() > 0.3 || c.timer > 0;
-    // The bubble swells while it sleeps, and bursts when it wakes.
-    if (sleepy && c.mood === 'sleeping') c.puff = Math.min(1, c.puff + 0.012);
-    else if (c.puff > 0) {
-      if (c.puff > 0.5) this.splash('sparkle', { x: c.x, z: c.z, h: c.h + 2 }, 6, [20, 40], 0.15);
-      c.puff = 0;
-    }
-    c.hidden = c.puff > 0.8;
-    if (!c.hidden && this.fleeFrom(c, s, 'shark', 30)) { c.timer = 0; return; }
-    if (sleepy) {
-      if (!c.perch || !this.decor.includes(c.perch)) c.perch = this.nearestDecor(c, 90, d => d.kind !== 'coral' || !d.grow);
-      const bed = c.perch;
-      const side = c.id & 1 ? 1 : -1;
-      const spot = bed ? { x: bed.x + side * (bed.w / 2 + 5), z: bed.z + 2, h: 2 } : { x: c.x, z: c.z, h: 2 };
-      const d = this.toward(c, s, spot, 0.04);
-      s.max = d < 4 ? 0.01 : sp.cruise;
-      s.effort = 0.3;
-      c.mood = d < 4 ? 'sleeping' : 'cruising';
-      return;
-    }
-    // A gutful of coral comes out as sand.
-    if (c.carrying >= SAND_BITES) { this.makeSand(c); c.carrying = 0; }
-    if (c.hungry) {
-      if (!c.perch || !this.decor.includes(c.perch) || (c.perch.kind !== 'coral' && c.perch.kind !== 'bommie')) {
-        c.perch = this.nearestDecor(c, sp.vision * 3, d => (d.kind === 'coral' && !d.grow) || d.kind === 'bommie');
-      }
-      const coral = c.perch;
-      if (coral) {
-        // Beak to the coral's side, about halfway up.
-        const side = c.x < coral.x ? -1 : 1;
-        const spot = { x: coral.x + side * (coral.w / 2 + 4), z: coral.z + 1.5, h: Math.min(sp.maxH, Math.max(3, coral.ht * 0.7)) };
-        const d = this.toward(c, s, spot, 0.05);
-        if (d < 3) {
-          c.mood = 'crunching';
-          s.max = 0.02;
-          c.facing = side > 0 ? -1 : 1;
-          c.turnHold = 10;
-          if ((this.tick + c.id) % 24 === 0) {
-            c.squashV += 0.35;
-            c.energy = Math.min(1, c.energy + 5 / sp.units);
-            c.carrying++;
-            this.splash('chip', { x: c.x + c.facing * 6, z: c.z, h: c.h + 1 }, 3, [40, 70], 0.15);
-          }
-        } else {
-          c.mood = 'foraging';
-        }
-        return;
-      }
-      if (this.graze(c, s, 6, 0.03)) return;
-    }
-    c.mood = 'cruising';
-    this.wander(c, s, 0.012);
-  }
-
-  /** The nearest bit of scenery within range that passes a test. */
-  private nearestDecor(c: Creature, range: number, ok: (d: Decor) => boolean) {
-    let best: Decor | null = null;
-    let bestD = range * range;
-    for (const d of this.decor) {
-      const dd = (d.x - c.x) ** 2 + (d.z - c.z) ** 2;
-      if (dd < bestD && ok(d)) { bestD = dd; best = d; }
-    }
-    return best;
-  }
-
-  /**
-   * A parrotfish lets out a cloud of ground-up coral: fine sand that drifts
-   * down and pales the seabed beneath, a little at a time.
-   */
-  private makeSand(c: Creature) {
-    const x = c.x - c.facing * 7;
-    this.puff(x, c.z, c.h, 0);
-    for (let k = 0; k < 8; k++) {
-      const life = randInt(70, 120);
-      this.drops.push({
-        kind: 'sand', x: x + rand(-2, 2), z: c.z + rand(-1, 1), h: c.h + rand(-1, 1),
-        vx: rand(-0.05, 0.05), vz: rand(-0.02, 0.02), vh: rand(-0.04, 0.02), life, maxLife: life, shade: randInt(0, 2), alive: true,
-      });
-    }
-    const cx = Math.round(x), cz = Math.round(c.z);
-    for (let dz = -2; dz <= 2; dz++) {
-      for (let dx = -3; dx <= 3; dx++) {
-        if ((dx * dx) / 9 + (dz * dz) / 4 > 1) continue;
-        const i = this.cellAt(cx + dx, cz + dz);
-        this.terrain[i] = Math.min(255, this.terrain[i] + 8);
-      }
-      const z = cz + dz;
-      if (z >= 0 && z < this.h && this.freshSand.length < 256) this.freshSand.push(z);
-    }
   }
 
   /**
@@ -3767,7 +3542,6 @@ export class PixelOcean {
     const sp = SPECIES[c.species];
     const mass = Math.round(sp.body + Math.max(0, c.energy) * sp.units * 0.3);
     const base = { species: c.species, palette: c.palette, x: c.x, z: c.z, h: c.h, facing: c.facing, alive: true };
-    if (c.hole >= 0 && this.wreck?.holes) { this.wreck.holes[c.hole] = null; c.hole = -1; }
     // A hermit crab's shell outlives it (unless a mantis shrimp smashed it).
     if (c.species === 'hermit' && c.shell > 0 && killer?.species !== 'mantis') {
       this.shells.push({ x: c.x, z: c.z, size: c.shell, palette: c.palette, alive: true, until: this.tick + SHELL_TICKS });

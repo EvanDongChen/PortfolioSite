@@ -43,7 +43,7 @@ export type SpriteKind =
   | 'puffer' | 'pufferPuffed' | 'seahorse' | 'urchin' | 'octopus'
   | 'eel' | 'eelHead' | 'shark' | 'manta' | 'angler'
   | 'clownfish' | 'dolphin' | 'cleaner' | 'starfish' | 'cuttlefish'
-  | 'shrimp' | 'parrotfish' | 'mantis' | 'mantisPeek' | 'gardenEel' | 'lionfish' | 'lionfishFlared'
+  | 'shrimp' | 'mantis' | 'mantisPeek' | 'gardenEel' | 'lionfish' | 'lionfishFlared'
   | 'hermit' | 'hermitShell' | 'hermitNaked';
 
 // A dolphin seen side on, without its tail; the flukes beat up and down.
@@ -158,13 +158,6 @@ const ROWS: Record<SpriteKind, string[][]> = {
     ['......DD', '.BBBBBE.', 'TBLBLBB.', '.T.L.L..'],
     ['.....D.D', '.BBBBBE.', 'TBLBLBB.', '.T..L.L.'],
   ],
-  // Chunky, scaled (L), with a fused beak (W) for biting coral; the tail beats,
-  // and the third frame has the beak open mid-crunch.
-  parrotfish: [
-    ['......DDDD.....', '....DDBBBBDD...', 'T..DBLBBLBBBD..', 'TTDBBBLBBLBBBE.', 'TTBBLBBLBBLBBBW', 'TTBBBBBBBBBBBWW', 'T..LLLLLLLLLL..', '.....TT..TT....'],
-    ['......DDDD.....', '....DDBBBBDD...', '.T.DBLBBLBBBD..', '.TDBBBLBBLBBBE.', '..TBLBBLBBLBBBW', '.TTBBBBBBBBBBWW', '.T.LLLLLLLLLL..', '.....TT..TT....'],
-    ['......DDDD.....', '....DDBBBBDD...', 'T..DBLBBLBBBD..', 'TTDBBBLBBLBBBEW', 'TTBBLBBLBBLBBB.', 'TTBBBBBBBBBBBB.', 'T..LLLLLLLLLLWW', '.....TT..TT....'],
-  ],
   // Mantis shrimp: carapace (D), body (B), bright bands (L), legs, tail and
   // eyestalks (T); the folded club (W) snaps out on the second frame.
   mantis: [
@@ -276,11 +269,6 @@ const PALETTES: Record<SpriteKind, Rgb[][]> = {
   shrimp: [
     [[255, 214, 200], [236, 150, 132], [255, 204, 188], [214, 104, 100]],
     [[214, 238, 250], [160, 196, 214], [226, 240, 248], [120, 160, 190]],
-  ],
-  parrotfish: [
-    [[124, 232, 214], [40, 168, 158], [150, 242, 224], [232, 116, 164]],
-    [[255, 178, 196], [228, 98, 140], [120, 222, 202], [90, 200, 190]],
-    [[196, 166, 255], [120, 90, 212], [252, 204, 124], [255, 196, 96]],
   ],
   mantis: [
     [[130, 226, 124], [40, 160, 92], [232, 92, 70], [250, 146, 60]],
@@ -667,228 +655,6 @@ export const coralSprite = (seed: number, w: number, h: number) =>
     branch(w / 2, h, h - 2, 0, 0);
     branch(w / 2, h, h * 0.7, -0.35, 1);
     branch(w / 2, h, h * 0.7, 0.35, 1);
-    return c;
-  });
-
-/**
- * A parrotfish's night bubble: a pale, glassy cocoon of mucus with a glint
- * of light on it, drawn around the sleeping fish.
- */
-export const mucusSprite = () =>
-  cached('mucus', () => {
-    const w = 22, h = 13;
-    const c = makeCanvas(w, h);
-    const ctx = c.getContext('2d')!;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const nx = (x + 0.5 - w / 2) / (w / 2), ny = (y + 0.5 - h / 2) / (h / 2);
-        const d = nx * nx + ny * ny;
-        if (d > 1) continue;
-        ctx.fillStyle = d > 0.72 ? 'rgba(214,236,250,0.55)' : 'rgba(190,226,246,0.16)';
-        ctx.fillRect(x, y, 1, 1);
-      }
-    }
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.fillRect(5, 2, 2, 1);
-    ctx.fillRect(4, 3, 1, 1);
-    return c;
-  });
-
-/** Draws one pixel of a generated sprite, skipping anything off the canvas. */
-const plotter = (ctx: CanvasRenderingContext2D, w: number, h: number) => (x: number, y: number, col: Rgb | string) => {
-  x = Math.floor(x); y = Math.floor(y);
-  if (x < 0 || y < 0 || x >= w || y >= h) return;
-  ctx.fillStyle = typeof col === 'string' ? col : css(col);
-  ctx.fillRect(x, y, 1, 1);
-};
-
-/**
- * A little coral growing on a landmark: a branching tuft, a round knob, a
- * flat table, a purple sea fan or a clump of sponge tubes, standing on its
- * base point.
- */
-const coralTuft = (put: (x: number, y: number, col: Rgb) => void, rnd: () => number, x: number, y: number, size: number) => {
-  const kind = Math.floor(rnd() * 5);
-  const set = CORAL_SETS[Math.floor(rnd() * CORAL_SETS.length)];
-  if (kind === 0) {
-    // Branching: a few forked twigs.
-    const twig = (tx: number, ty: number, len: number, dx: number) => {
-      for (let k = 0; k < len; k++) { tx += dx + (rnd() - 0.5) * 0.5; ty -= 1; put(tx, ty, set[1]); put(tx + 1, ty, set[2]); }
-      put(tx, ty - 1, set[0]);
-    };
-    twig(x, y, size, 0);
-    twig(x, y, size * 0.7, -0.4);
-    twig(x, y, size * 0.7, 0.4);
-  } else if (kind === 1) {
-    // A knob of brain coral.
-    const r = Math.max(2, size * 0.5);
-    for (let yy = -r; yy <= 0; yy++) for (let xx = -r; xx <= r; xx++) {
-      const d = (xx / r) ** 2 + (yy / r) ** 2;
-      if (d > 1) continue;
-      put(x + xx, y + yy, d > 0.7 ? set[2] : (xx + yy) & 1 ? set[1] : set[0]);
-    }
-  } else if (kind === 2) {
-    // A table coral: a flat plate on a short stalk.
-    const half = Math.round(size * 0.8);
-    for (let k = 0; k < 2; k++) put(x, y - k, set[2]);
-    for (let xx = -half; xx <= half; xx++) { put(x + xx, y - 2, set[1]); put(x + xx, y - 3, Math.abs(xx) < half ? set[0] : set[1]); }
-  } else if (kind === 3) {
-    // A sea fan: a lattice of fine purple branches.
-    const fan: Rgb[] = [[214, 120, 230], [170, 80, 200], [120, 50, 160]];
-    for (let yy = 0; yy < size + 2; yy++) {
-      const half = Math.round(Math.sin((yy / (size + 2)) * Math.PI) * size * 0.6);
-      for (let xx = -half; xx <= half; xx++) if (((xx + yy) & 1) === 0 || Math.abs(xx) === half) put(x + xx, y - yy, fan[(Math.abs(xx) + yy) % 3]);
-    }
-  } else {
-    // Sponge tubes.
-    const tube: Rgb[] = [[255, 214, 90], [236, 160, 50], [180, 110, 40]];
-    for (let t = -1; t <= 1; t++) {
-      const tall = Math.round(size * (0.6 + rnd() * 0.5));
-      for (let yy = 0; yy < tall; yy++) { put(x + t * 2, y - yy, tube[1]); put(x + t * 2 + 1, y - yy, tube[2]); }
-      put(x + t * 2, y - tall, tube[0]);
-      put(x + t * 2 + 1, y - tall, tube[2]);
-    }
-  }
-};
-
-/**
- * A wooden ship lying on the seabed: high stern castle on the left, the bow
- * rising on the right, a broken mast, five portholes (open, so whatever
- * hides inside shows through) and two breaches low in the hull where morays
- * den. Weathered planks, algae and barnacles, rust streaks, and corals
- * growing all over it. The layout matches WRECK in the simulation.
- */
-export const wreckSprite = (seed: number, portholes: { x: number; y: number }[], breaches: number[], w: number, h: number) =>
-  cached(`wreck-${seed}`, () => {
-    const rnd = seeded(seed);
-    const c = makeCanvas(w, h);
-    const ctx = c.getContext('2d')!;
-    const put = plotter(ctx, w, h);
-    const OUTLINE: Rgb = [24, 28, 36];
-    const WOOD: Rgb[] = [[118, 108, 88], [96, 86, 72], [76, 68, 60], [58, 54, 52]];
-    const SEAM: Rgb = [40, 38, 42];
-    const ALGAE: Rgb[] = [[74, 118, 76], [60, 98, 66]];
-    const RUST: Rgb = [128, 74, 52];
-    const BRASS: Rgb[] = [[176, 156, 92], [132, 114, 68], [92, 80, 52]];
-    // The deck sags in the middle; the stern castle stands above it.
-    const deck = (x: number) => (x < 20 ? 6 : Math.round(13 - 5 * ((x - 42) / 34) ** 2));
-    const buried = (x: number) => h - 3 - Math.round(1.2 * Math.sin(x * 0.31) + Math.sin(x * 0.13 + 1));
-    const stern = (y: number) => 3 + ((y - 6) / (h - 6)) * 3;
-    const bow = (y: number) => w - 2 - Math.max(0, (y - 9) / (h - 9)) ** 1.5 * 13;
-    const inHull = (x: number, y: number) => y >= deck(x) && y < buried(x) && x >= stern(y) && x <= bow(y);
-    // A porthole: an open hole in a brass ring, lit on top.
-    const portAt = (x: number, y: number) => {
-      for (const p of portholes) {
-        const r = Math.hypot(x + 0.5 - p.x, y + 0.5 - p.y);
-        if (r <= 1.6) return 'hole';
-        if (r <= 2.95) return y + 0.5 < p.y ? 'lit' : r > 2.6 ? 'dark' : 'ring';
-      }
-      return null;
-    };
-    const breachAt = (x: number, y: number) => breaches.some(bx => Math.abs(x - bx) <= 2 + ((y * 7 + x) % 3 === 0 ? 1 : 0) && y >= buried(x) - 7);
-
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (!inHull(x, y)) continue;
-        const edge = !inHull(x - 1, y) || !inHull(x + 1, y) || !inHull(x, y - 1);
-        const port = portAt(x, y);
-        if (port === 'hole') continue;
-        if (port) { put(x, y, BRASS[port === 'lit' ? 0 : port === 'ring' ? 1 : 2]); continue; }
-        if (breachAt(x, y)) { put(x, y, (x + y) & 1 ? [14, 16, 24] : [20, 22, 30]); continue; }
-        if (edge) { put(x, y, OUTLINE); continue; }
-        const down = y - deck(x);
-        if (down === 1) { put(x, y, WOOD[0]); continue; } // The gunwale catches the light.
-        if (down % 3 === 1) { put(x, y, SEAM); continue; }
-        // Lit from above, darker toward the sand, roughened by weather.
-        const depth = down / Math.max(1, buried(x) - deck(x));
-        let tone = Math.floor(depth * 3.2 + (rnd() - 0.5) * 0.9);
-        if (((x * 3 + Math.floor(down / 3) * 11) % 17) === 0) tone++; // Plank ends.
-        put(x, y, WOOD[Math.max(0, Math.min(3, tone))]);
-        if (down < 6 && rnd() < 0.14) put(x, y, ALGAE[(rnd() * 2) | 0]);
-        if (rnd() < 0.025) put(x, y, [196, 196, 176]); // Barnacles.
-      }
-    }
-    // Rust weeping from under each porthole, and the bottom edge sunk in shadow.
-    for (const p of portholes) {
-      for (let k = 3; k < 3 + 2 + Math.floor(rnd() * 4); k++) if (inHull(p.x, p.y + k)) put(p.x - 1 + (k & 1), p.y + k, RUST);
-    }
-    for (let x = 0; x < w; x++) {
-      const b = buried(x);
-      if (inHull(x, b - 1) && !breachAt(x, b - 1)) put(x, b - 1, [34, 36, 42]);
-    }
-    // Railing posts along the deck and round the stern castle, some broken away.
-    for (let x = 4; x < w - 3; x += 3) {
-      if (rnd() < 0.25) continue;
-      const top = deck(x);
-      if (!inHull(x, top)) continue;
-      const tall = rnd() < 0.3 ? 1 : 2;
-      for (let k = 1; k <= tall; k++) put(x, top - k, WOOD[1]);
-    }
-    // The mast, snapped off, leaning back, with a yard still across it and a trailing rope.
-    const mastX = (y: number) => 46 - (13 - y) * 0.3;
-    for (let y = 1; y < deck(46); y++) { put(mastX(y), y, WOOD[2]); put(mastX(y) + 1, y, WOOD[3]); }
-    put(mastX(0) + 1, 0, WOOD[2]);
-    for (let x = 37; x <= 52; x++) put(x, Math.round(4 + (x - 44) * 0.18), WOOD[1]);
-    for (let k = 0; k < 26; k += 2) put(mastX(2) + 2 + k, 2 + k * 0.27 + Math.sin(k * 0.5), [150, 140, 110]);
-    // Corals settled all over it.
-    for (let k = 0; k < 9; k++) {
-      const x = 6 + Math.floor(rnd() * (w - 14));
-      coralTuft(put, rnd, x, deck(x) - (rnd() < 0.5 ? 0 : 1), 3 + Math.floor(rnd() * 3));
-    }
-    for (let k = 0; k < 3; k++) {
-      const x = 10 + Math.floor(rnd() * (w - 22));
-      const y = deck(x) + 6 + Math.floor(rnd() * 8);
-      if (inHull(x, y) && !portAt(x, y)) coralTuft(put, rnd, x, y, 2 + Math.floor(rnd() * 2));
-    }
-    return c;
-  });
-
-/**
- * A coral bommie: a great knoll of old reef, a rocky mound crowded with
- * corals of every kind, sea fans and sponges.
- */
-export const bommieSprite = (seed: number, w: number, h: number) =>
-  cached(`bommie-${seed}`, () => {
-    const rnd = seeded(seed);
-    const c = makeCanvas(w, h);
-    const ctx = c.getContext('2d')!;
-    const put = plotter(ctx, w, h);
-    // The rocky mound: a lumpy dome, wider than tall, lit from the top left.
-    const top = h * 0.22;
-    const lumps = Array.from({ length: 8 }, () => rnd() * 0.18);
-    const inside = (x: number, y: number) => {
-      const nx = (x + 0.5 - w / 2) / (w / 2 - 1);
-      const ny = (y + 0.5 - h) / (h - top);
-      const a = Math.atan2(ny, nx);
-      return y < h && nx * nx + ny * ny <= 1 - lumps[Math.floor(((a + Math.PI) / (Math.PI * 2)) * 8) % 8];
-    };
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (!inside(x, y)) continue;
-        const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1);
-        if (edge) { put(x, y, ROCK_OUTLINE); continue; }
-        const light = ((y - top) / (h - top)) * 0.8 + (x / w) * 0.3 + (rnd() - 0.5) * 0.3;
-        put(x, y, ROCK_COLORS[Math.max(0, Math.min(3, Math.floor(light * 3.2)))]);
-        // Crusted over with patches of living coral, thickest toward the light.
-        const patch = ((((x >> 2) * 73856093) ^ ((y / 3 | 0) * 19349663) ^ seed) >>> 0) % 1000 / 1000;
-        const crust = 0.6 - ((y - top) / (h - top)) * 0.45;
-        if (patch < crust) {
-          const set = CORAL_SETS[Math.floor(patch * 97) % CORAL_SETS.length];
-          put(x, y, set[light < 0.5 ? 0 : light < 0.8 ? 1 : 2]);
-        } else if (rnd() < 0.1) put(x, y, MOSS[(rnd() * 2) | 0]);
-      }
-    }
-    // Corals crowd its top and flanks: the back ones first, so the front ones overlap them.
-    const spots: { x: number; y: number }[] = [];
-    for (let k = 0; k < 30; k++) {
-      const x = 2 + Math.floor(rnd() * (w - 4));
-      let y = 0;
-      while (y < h && !inside(x, y)) y++;
-      if (y >= h - 3) continue;
-      spots.push({ x, y: y + Math.floor(rnd() * Math.min(16, (h - y) * 0.6)) });
-    }
-    spots.sort((a, b) => a.y - b.y);
-    for (const s of spots) coralTuft(put, rnd, s.x, s.y + 1, 3 + Math.floor(rnd() * 6));
     return c;
   });
 
