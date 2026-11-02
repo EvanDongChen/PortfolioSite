@@ -47,6 +47,17 @@ const BODY_WIDTH: Record<Species, number> = {
   clownfish: 12, starfish: 15, cuttlefish: 16, dolphin: 26,
   shrimp: 8, mantis: 14, gardenEel: 4, lionfish: 15, hermit: 10,
 };
+/**
+ * How much bigger (or smaller) than its sprite each animal is drawn, so they
+ * sit at roughly the right sizes next to each other: true scale would leave
+ * a minnow a pixel long beside a shark, so big animals grow less than they
+ * should. 1.5 and 2 stay on whole screen pixels at the default pixel size.
+ */
+const SIZE: Partial<Record<Species, number>> = {
+  manta: 2, shark: 1.5, dolphin: 1.5, turtle: 1.5, barracuda: 1.5, eel: 1.3,
+  cuttlefish: 1.2, puffer: 1.2, clownfish: 0.85, shrimp: 0.85, mantis: 0.8, starfish: 0.75,
+};
+for (const s of Object.keys(SIZE) as Species[]) BODY_WIDTH[s] *= SIZE[s]!;
 
 /** Which bones a picked-clean fish leaves, and at what size. */
 const BONES_OF: Partial<Record<Species, ['minnow' | 'barracuda', number]>> = {
@@ -184,6 +195,8 @@ export class OceanView {
   lean = false;
   /** The creature being drawn's squash and stretch (positive stretches it along its length). */
   private stretch = 0;
+  /** The creature (or carcass) being drawn's size relative to its sprite (see SIZE). */
+  private size = 1;
   /** The creature under inspection, drawn with a reticle. */
   highlighted: Creature | null = null;
 
@@ -581,7 +594,7 @@ export class OceanView {
     const p = this.project(x, z, h);
     const sx = o.sx ?? 0;
     const sw = o.sw ?? img.width;
-    const k = px * p.s * (o.scale ?? 1);
+    const k = px * p.s * (o.scale ?? 1) * this.size;
     const w = Math.round(sw * k);
     const hh = Math.round(img.height * k);
     ctx.globalAlpha = (o.alpha ?? 1) * (this.glow ? 0.45 : 1);
@@ -669,7 +682,7 @@ export class OceanView {
       if (!visible(sh.z)) continue;
       // Old shells fade as they crumble away.
       const fade = Math.min(1, (sh.until - ocean.tick) / 600);
-      items.push({ depth: sh.z, draw: () => this.sprite(creatureSprite('hermitShell', sh.palette, 0), sh.x, sh.z, 0, { anchor: 'bottom', scale: 0.55 + sh.size * 0.15, alpha: Math.max(0.2, fade) }) });
+      items.push({ depth: sh.z, draw: () => this.sprite(creatureSprite('hermitShell', sh.palette, 0), sh.x, sh.z, 0, { anchor: 'bottom', scale: 0.6 + sh.size * 0.1, alpha: Math.max(0.2, fade) }) });
     }
     for (const a of ocean.anemones) {
       if (visible(a.z)) items.push({ depth: a.z, draw: () => this.drawAnemone(a) });
@@ -679,7 +692,7 @@ export class OceanView {
     }
     if (wf && visible(wf.z)) items.push({ depth: wf.z, draw: () => this.drawWhale(wf) });
     for (const k of ocean.carcasses) {
-      if (visible(k.z)) items.push({ depth: k.z + 0.1, draw: () => this.drawCarcass(k) });
+      if (visible(k.z)) items.push({ depth: k.z + 0.1, draw: () => { this.size = SIZE[k.species] ?? 1; this.drawCarcass(k); this.size = 1; } });
     }
     // Plankton are tiny specks that don't need depth sorting: draw them all in
     // one pass, by colour, before everything else.
@@ -747,6 +760,7 @@ export class OceanView {
           const wake = this.lean ? 0 : WAKE_SPEED[c.species];
           if (wake && !c.hidden && c.vx * c.vx + c.vz * c.vz > wake * wake) this.drawWake(c);
           this.stretch = c.squash;
+          this.size = SIZE[c.species] ?? 1;
           this.drawCreature(c);
           this.stretch = 0;
           // Courting fish flash their colours.
@@ -757,6 +771,7 @@ export class OceanView {
             ctx.globalCompositeOperation = 'source-over';
             this.glow = false;
           }
+          this.size = 1;
           if (c.parasites > 0.45 && c.species !== 'eel') this.drawParasites(c);
         },
       });
@@ -911,7 +926,7 @@ export class OceanView {
         this.drawGardenEel(c, washed);
         return;
       case 'hermit': {
-        const scale = 0.55 + Math.max(1, c.shell) * 0.15;
+        const scale = 0.6 + Math.max(1, c.shell) * 0.1;
         if (c.shell === 0) {
           // Soft and exposed, hurrying to its next shell.
           this.sprite(creatureSprite('hermitNaked', 0, 0, washed), c.x, c.z, 0, { anchor: 'bottom', flipX: c.facing < 0 });
@@ -1096,7 +1111,7 @@ export class OceanView {
       const t = i / n;
       const wiggle = Math.sin(ocean.tick * 0.22 - t * 6 + c.id) * 2.2 * Math.sin(t * Math.PI);
       const p = this.project(c.anchorX + dx * t + nx * wiggle, c.anchorZ + dz * t + nz * wiggle, 1 + dh * t);
-      const size = Math.ceil(px * p.s * 2);
+      const size = Math.ceil(px * p.s * 2 * this.size);
       const col = i % 3 === 0 ? spot : main;
       ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
       ctx.fillRect(Math.round(p.x - size / 2), Math.round(p.y - size / 2), size, size);

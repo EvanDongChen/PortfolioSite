@@ -452,7 +452,7 @@ const PREY: Partial<Record<Species, Species[]>> = {
 };
 /** How much room (in cells) fish that don't school keep from their own kind. */
 const SPACING: Partial<Record<Species, number>> = {
-  puffer: 9, clownfish: 5, cuttlefish: 14, turtle: 18, barracuda: 14, shark: 24, starfish: 10, crab: 9, octopus: 12, jelly: 9,
+  puffer: 9, clownfish: 5, cuttlefish: 14, turtle: 24, barracuda: 18, shark: 32, starfish: 10, crab: 9, octopus: 12, jelly: 9,
   shrimp: 3, lionfish: 18, hermit: 4,
 };
 /** How hard things swimming through kelp and anemones push them over, and how far (cells). */
@@ -503,7 +503,7 @@ const LOOMING: Partial<Record<Species, boolean>> = {
   shark: true, barracuda: true, turtle: true, manta: true, dolphin: true, octopus: true, cuttlefish: true, lionfish: true,
 };
 /** How far a moray can reach out of its den. */
-const EEL_REACH = 22;
+const EEL_REACH = 28;
 /** How far a mantis shrimp strikes from its burrow, and how long it rests after a punch. */
 const MANTIS_REACH = 12;
 const MANTIS_REST = 120;
@@ -1612,7 +1612,7 @@ export class PixelOcean {
       }
     } else {
       // Waiting in line beside the rock.
-      const spot = { x: st.x + st.side * (14 + place * 12), z: st.z + 3, h: st.ht + 8 };
+      const spot = { x: st.x + st.side * (18 + place * 18), z: st.z + 3, h: st.ht + 8 };
       const d = this.toward(c, s, spot, 0.04);
       s.max = d < 6 ? 0.03 : SPECIES[c.species].cruise;
       c.mood = 'queueing';
@@ -1919,7 +1919,7 @@ export class PixelOcean {
       if (this.feedOnWhale(c, s, 200)) return;
       const prey = this.findPrey(c, PREY.barracuda!);
       if (prey) {
-        this.chase(c, s, prey, 5, 6);
+        this.chase(c, s, prey, 8, 7);
         return;
       }
       if (this.followScent(c, s, 160)) return;
@@ -2031,7 +2031,7 @@ export class PixelOcean {
     if (c.hungry) {
       const prey = this.findPrey(c, PREY.turtle!);
       if (prey) {
-        this.chase(c, s, prey, 6, 6, 0.05);
+        this.chase(c, s, prey, 9, 7, 0.05);
         return;
       }
       if (this.grazeSeagrass(c, s)) return;
@@ -2378,7 +2378,7 @@ export class PixelOcean {
       if (this.feedOnWhale(c, s, 320)) return;
       const prey = this.findPrey(c, PREY.shark!);
       if (prey) {
-        this.chase(c, s, prey, 10, 7, 0.07);
+        this.chase(c, s, prey, 15, 9, 0.07);
         return;
       }
       if (this.followScent(c, s, 260)) return;
@@ -3358,7 +3358,7 @@ export class PixelOcean {
       s.effort = 2;
       c.mood = 'diving';
       if (this.tick % 3 === 0) this.bubbles.push({ x: c.x - c.facing * 6, z: c.z, h: c.h + 1, phase: rand(0, 6), alive: true });
-      const mouth = { x: c.x + c.facing * 10, z: c.z, h: c.h };
+      const mouth = { x: c.x + c.facing * 15, z: c.z, h: c.h };
       this.near(this.grid, mouth.x, mouth.z, 6, o => {
         if (o.species === 'minnow' && o.alive && pod.diveCatch < 2 && dist3(o, mouth) < 5) {
           this.devour(c, o, true);
@@ -3369,7 +3369,7 @@ export class PixelOcean {
       return;
     }
     const angle = this.tick * 0.035 + (c.podIndex * Math.PI * 2) / n;
-    this.toward(c, s, { x: pod.cx + Math.cos(angle) * 26, z: pod.cz + Math.sin(angle) * 18, h: pod.ch + Math.sin(angle * 2) * 4 }, 0.12);
+    this.toward(c, s, { x: pod.cx + Math.cos(angle) * 32, z: pod.cz + Math.sin(angle) * 22, h: pod.ch + Math.sin(angle * 2) * 4 }, 0.12);
     s.max = SPECIES.dolphin.cruise * 1.4;
     c.mood = 'herding';
   }
