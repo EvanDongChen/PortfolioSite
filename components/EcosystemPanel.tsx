@@ -40,6 +40,12 @@ const PLURAL: Record<Species, string> = {
   turtle: 'Turtles',
   manta: 'Mantas',
   dolphin: 'Dolphins',
+  shrimp: 'Shrimp',
+  parrotfish: 'Parrotfish',
+  mantis: 'Mantises',
+  gardenEel: 'Garden eels',
+  lionfish: 'Lionfish',
+  hermit: 'Hermits',
 };
 
 // Each species' own sprite as a tiny icon, drawn once.

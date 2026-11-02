@@ -44,7 +44,7 @@ export interface Inspected {
 
 export type DebugAction =
   | { action: 'spawn'; species: Species }
-  | { action: 'whale' | 'pod' | 'scent' | 'parasites' | 'spawning' | 'baitBall' }
+  | { action: 'whale' | 'pod' | 'scent' | 'parasites' | 'spawning' | 'baitBall' | 'shell' }
   | { action: 'speed'; speed: number };
 
 export interface EngineInit {
@@ -234,6 +234,7 @@ export class ReefEngine {
       case 'parasites': ocean.debugParasites(); break;
       case 'spawning': ocean.debugSpawning(); break;
       case 'baitBall': ocean.debugBaitBall(p.x, p.z); break;
+      case 'shell': ocean.debugShell(p.x, p.z); break;
       case 'speed': this.speed = m.speed; break;
     }
   }
