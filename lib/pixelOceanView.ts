@@ -14,12 +14,13 @@
 // page is told where to put the canvases through `onLayout`.
 
 import {
-  Anemone, Carcass, Creature, Drop, ELEVATION, Kelp, Meadow, PixelOcean, SPECIES, SURFACE, Species, Station, WhaleFall,
+  Anemone, AnemoneField, Carcass, Creature, Drop, ELEVATION, Kelp, Lettuce, Meadow, PixelOcean, SPECIES, SURFACE, SeaFan, SeaWhip, Species,
+  Station, WeedKind, WhaleFall,
 } from './pixelOcean';
 import {
   FLOOR, SpriteKind, buildCaustics, makeCanvas, creatureSprite, creaturePalette, bonesSprite, bubbleSprite, pelletSprite,
   shadowSprite, rockSprite, coralSprite, starfishSprite, cuttleSprite, whaleSprite, silhouetteSprite, puffSprite, fizzSprite, PUFF_FRAMES,
-  gardenEelSprite, GARDEN_EEL_FRAMES,
+  gardenEelSprite, GARDEN_EEL_FRAMES, fanSprite, lettuceSprite, LETTUCE_FRAMES,
 } from './pixelOceanArt';
 
 /** How much bigger things get per unit of height. */
@@ -93,12 +94,42 @@ const WAKE_SPEED: Partial<Record<Species, number>> = {
   minnow: 0.55, barracuda: 0.6, shark: 0.55, dolphin: 0.7, cuttlefish: 0.35, puffer: 0.4, clownfish: 0.4, turtle: 0.35,
   shrimp: 0.7, lionfish: 0.5,
 };
-/** Seagrass colours by blade shade: [base, middle, tip]. */
-const SEAGRASS = [
-  ['rgb(40,112,70)', 'rgb(58,146,82)', 'rgb(98,182,96)'],
-  ['rgb(52,112,58)', 'rgb(82,148,70)', 'rgb(136,188,92)'],
-  ['rgb(34,98,72)', 'rgb(50,128,86)', 'rgb(84,166,106)'],
+/** Meadow colours by blade kind and shade: [base, middle, tip]. */
+const WEEDS: Record<WeedKind, string[][]> = {
+  seagrass: [
+    ['rgb(40,112,70)', 'rgb(58,146,82)', 'rgb(98,182,96)'],
+    ['rgb(52,112,58)', 'rgb(82,148,70)', 'rgb(136,188,92)'],
+    ['rgb(34,98,72)', 'rgb(50,128,86)', 'rgb(84,166,106)'],
+  ],
+  red: [
+    ['rgb(124,32,54)', 'rgb(178,52,72)', 'rgb(232,104,116)'],
+    ['rgb(140,44,40)', 'rgb(196,76,62)', 'rgb(240,132,104)'],
+  ],
+  purple: [
+    ['rgb(72,42,112)', 'rgb(116,64,166)', 'rgb(170,118,218)'],
+    ['rgb(96,40,118)', 'rgb(146,70,180)', 'rgb(206,142,232)'],
+  ],
+};
+/** Sea whip colours: [base, stalk, tip]: red, orange, yellow, purple, white. */
+const WHIPS = [
+  ['rgb(150,30,42)', 'rgb(214,56,64)', 'rgb(255,146,134)'],
+  ['rgb(170,80,30)', 'rgb(236,132,50)', 'rgb(255,204,124)'],
+  ['rgb(160,130,30)', 'rgb(226,196,60)', 'rgb(255,242,152)'],
+  ['rgb(92,40,132)', 'rgb(152,82,202)', 'rgb(222,174,250)'],
+  ['rgb(140,144,156)', 'rgb(210,212,220)', 'rgb(255,255,255)'],
 ];
+/** Small anemone colours: [foot, stalk, tip]: pink, purple, green, orange, teal, yellow. */
+const POLYPS = [
+  ['rgb(120,40,80)', 'rgb(230,92,152)', 'rgb(255,194,222)'],
+  ['rgb(70,46,120)', 'rgb(152,102,222)', 'rgb(228,204,255)'],
+  ['rgb(30,92,62)', 'rgb(72,182,122)', 'rgb(192,255,204)'],
+  ['rgb(130,62,30)', 'rgb(240,132,62)', 'rgb(255,212,152)'],
+  ['rgb(24,88,96)', 'rgb(52,172,182)', 'rgb(176,250,250)'],
+  ['rgb(120,100,30)', 'rgb(230,202,62)', 'rgb(255,246,172)'],
+];
+/** Where each kind's colour sets start in the one list the runs are kept by. */
+const WEED_FIRST: Record<WeedKind, number> = { seagrass: 0, red: 3, purple: 5 };
+const WEED_SETS = [...WEEDS.seagrass, ...WEEDS.red, ...WEEDS.purple];
 /** Seagrass is drawn in bands this deep, each sorted with whatever swims among it. */
 const GRASS_BAND = 3;
 /** How far (cells) a swimmer parts the seagrass around it. */
@@ -185,7 +216,10 @@ export class OceanView {
   /** Kelp squares by colour (left, top, size each), reused from stalk to stalk. */
   private kelpRuns: number[][] = [[], [], [], []];
   /** The same for seagrass: three shades of blade, three colours each. */
-  private grassRuns: number[][] = Array.from({ length: 9 }, () => []);
+  private grassRuns: number[][] = Array.from({ length: WEED_SETS.length * 3 }, () => []);
+  /** Sea whip and small anemone rectangles by colour (left, top, width, height each). */
+  private whipRuns: number[][] = Array.from({ length: WHIPS.length * 3 }, () => []);
+  private polypRuns: number[][] = Array.from({ length: POLYPS.length * 3 }, () => []);
   /** Swimmers among the seagrass of the meadow being drawn (x, z each). */
   private movers: number[] = [];
   /**
@@ -679,6 +713,14 @@ export class OceanView {
     for (const m of ocean.meadows) {
       if (m.blades.length && m.z + m.rz >= z0 && m.z - m.rz <= z1) this.addSeagrass(m, items);
     }
+    for (const fan of ocean.fans) if (visible(fan.z)) items.push({ depth: fan.z, draw: () => this.drawFan(fan) });
+    for (const w of ocean.whips) if (visible(w.z)) items.push({ depth: w.z, draw: () => this.drawWhip(w) });
+    for (const l of ocean.lettuce) {
+      if (l.leaves >= 1 && visible(l.z)) items.push({ depth: l.z, draw: () => this.drawLettuce(l) });
+    }
+    for (const fd of ocean.fields) {
+      if (fd.polyps.length && fd.z + fd.rz >= z0 && fd.z - fd.rz <= z1) this.addPolyps(fd, items);
+    }
     for (const sh of ocean.shells) {
       if (!visible(sh.z)) continue;
       // Old shells fade as they crumble away.
@@ -1012,7 +1054,8 @@ export class OceanView {
         leanX += (dx / d) * f;
         leanZ += (dz / d) * f * 0.5;
       }
-      const shade = b.shade * 3;
+      const shade = (WEED_FIRST[b.kind] + b.shade) * 3;
+      const red = b.kind === 'red', purple = b.kind === 'purple';
       const wave = Math.sin(t + b.phase * 0.3 + b.x * 0.12);
       const flutter = Math.sin(t * 1.7 + b.phase) * 0.4;
       // Squares stacked in the same column and colour go in as one tall
@@ -1027,6 +1070,14 @@ export class OceanView {
         const s = Math.ceil(px * (1 + i * PERSPECTIVE));
         const l = Math.round(sx - s / 2);
         const c = shade + (i > b.len - 2 ? 2 : i < b.len * 0.35 ? 0 : 1);
+        // Red seaweed is frilly, a little leaf off alternate sides; purple
+        // forks near the top into two tips.
+        if (red && i > 2 && (Math.round(i * ELEVATION) & 1)) runs[shade + 2].push(l + (Math.round(i * ELEVATION) & 2 ? s : -s), sy, s, s);
+        if (purple && i > b.len * 0.55) {
+          const spread = Math.round((i - b.len * 0.55) * 0.7 * px);
+          runs[c].push(l - spread, sy, s, s, l + spread, sy, s, s);
+          continue;
+        }
         if (c === col && l === left && s === size) { top = sy; continue; }
         if (col >= 0) runs[col].push(left, top, size, bottom - top + size);
         col = c; left = l; top = sy; bottom = sy; size = s;
@@ -1037,8 +1088,116 @@ export class OceanView {
     for (let c = 0; c < runs.length; c++) {
       const run = runs[c];
       if (!run.length) continue;
-      ctx.fillStyle = SEAGRASS[(c / 3) | 0][c % 3];
+      ctx.fillStyle = WEED_SETS[(c / 3) | 0][c % 3];
       for (let n = 0; n < run.length; n += 4) ctx.fillRect(run[n], run[n + 1], run[n + 2], run[n + 3]);
+    }
+  }
+
+  /**
+   * A sea fan, drawn a couple of rows at a time so it can flex as one piece:
+   * the higher the row, the further it is pushed over, swayed, or shaken
+   * when something has just brushed it.
+   */
+  private drawFan(f: SeaFan) {
+    const { spriteCtx: ctx, px, ocean } = this;
+    const img = fanSprite(f.seed, f.palette, f.w, f.ht);
+    const base = this.project(f.x, f.z, 0);
+    const left = base.x - (f.w * px) / 2;
+    const top = base.y - f.ht * px;
+    const t = ocean.tick;
+    const sway = Math.sin(t * 0.03 + f.phase) * 1.1;
+    const shake = f.shudder * Math.sin(t * 1.1 + f.phase) * 1.6;
+    ctx.globalAlpha = 1;
+    for (let y = 0; y < f.ht; y += 2) {
+      const up = (f.ht - y) / f.ht;
+      const give = up * Math.sqrt(up);
+      const dx = Math.round((f.bx * 0.8 + sway + shake) * give * px);
+      const dy = Math.round(f.bz * 0.4 * give * px);
+      const rows = Math.min(2, f.ht - y);
+      ctx.drawImage(img, 0, y, f.w, rows, Math.round(left + dx), Math.round(top + y * px + dy), f.w * px, rows * px);
+    }
+  }
+
+  /** A sea whip: a thin stalk, stiff at the root and springy toward its pale tip. */
+  private drawWhip(b: SeaWhip) {
+    const { spriteCtx: ctx, px, ocean, regionTop } = this;
+    const runs = this.whipRuns;
+    const set = b.palette * 3;
+    const t = ocean.tick * 0.05 + b.phase;
+    let col = -1, left = 0, top = 0, bottom = 0, size = 0;
+    for (let i = 0; i <= b.len; i += 1 / ELEVATION) {
+      const k = i / b.len;
+      const give = k * k;
+      const sx = (b.x + (b.bx + Math.sin(t + i * 0.08) * 0.9) * give) * px;
+      const sy = Math.round((b.z + b.bz * give * 0.5 - i * ELEVATION) * px - regionTop);
+      const s = Math.ceil(px * (1 + i * PERSPECTIVE));
+      const l = Math.round(sx - s / 2);
+      const c = set + (i > b.len - 2.5 ? 2 : i < b.len * 0.25 ? 0 : 1);
+      if (c === col && l === left && s === size) { top = sy; continue; }
+      if (col >= 0) runs[col].push(left, top, size, bottom - top + size);
+      col = c; left = l; top = sy; bottom = sy; size = s;
+    }
+    if (col >= 0) runs[col].push(left, top, size, bottom - top + size);
+    ctx.globalAlpha = 1;
+    for (let c = set; c < set + 3; c++) {
+      const run = runs[c];
+      ctx.fillStyle = WHIPS[b.palette][c - set];
+      for (let n = 0; n < run.length; n += 4) ctx.fillRect(run[n], run[n + 1], run[n + 2], run[n + 3]);
+      run.length = 0;
+    }
+  }
+
+  /** A clump of sea lettuce at the foot of a rock, its frilly edges rippling. */
+  private drawLettuce(l: Lettuce) {
+    const frame = Math.floor(this.ocean.tick / 14 + l.phase * 3) % LETTUCE_FRAMES;
+    this.sprite(lettuceSprite(Math.ceil(l.leaves), frame, l.palette), l.x, l.z, 0, { anchor: 'bottom' });
+  }
+
+  /** A field of small anemones, in bands of depth like the meadows. */
+  private addPolyps(f: AnemoneField, items: Drawable[]) {
+    const { polyps } = f;
+    for (let first = 0; first < polyps.length;) {
+      const band = Math.floor(polyps[first].z / GRASS_BAND);
+      let last = first;
+      while (last < polyps.length && Math.floor(polyps[last].z / GRASS_BAND) === band) last++;
+      const from = first, to = last;
+      items.push({ depth: (band + 0.5) * GRASS_BAND, draw: () => this.drawPolyps(f, from, to) });
+      first = last;
+    }
+  }
+
+  /**
+   * Small anemones: a foot on the sand and four short tentacles, each a
+   * stalk and a pale tip. Open, they stand up and sway together; shut, only
+   * a little knob is left.
+   */
+  private drawPolyps(f: AnemoneField, from: number, to: number) {
+    const { spriteCtx: ctx, px, ocean, regionTop } = this;
+    const runs = this.polypRuns;
+    const t = ocean.tick * 0.06;
+    for (let n = from; n < to; n++) {
+      const p = f.polyps[n];
+      const set = p.palette * 3;
+      const bx = Math.round(p.x * px);
+      const by = Math.round(p.z * px - regionTop);
+      runs[set].push(bx - px, by - px, px * 2, px);
+      const tall = Math.round(p.open * 3);
+      if (tall < 1) { runs[set + 1].push(bx - Math.round(px / 2), by - px * 2, px, px); continue; }
+      const sway = Math.round(Math.sin(t + p.phase * 0.4 + p.x * 0.2) * p.open * px * 0.8);
+      for (let k = -1.5; k <= 1.5; k++) {
+        const spread = Math.round(k * px * (0.3 + p.open * 0.3));
+        const x = bx + spread - Math.round(px / 2);
+        if (tall > 1) runs[set + 1].push(x, by - px * tall, px, px * (tall - 1));
+        runs[set + 2].push(x + sway + Math.round(spread * 0.4), by - px * (tall + 1), px, px);
+      }
+    }
+    ctx.globalAlpha = 1;
+    for (let c = 0; c < runs.length; c++) {
+      const run = runs[c];
+      if (!run.length) continue;
+      ctx.fillStyle = POLYPS[(c / 3) | 0][c % 3];
+      for (let k = 0; k < run.length; k += 4) ctx.fillRect(run[k], run[k + 1], run[k + 2], run[k + 3]);
+      run.length = 0;
     }
   }
 

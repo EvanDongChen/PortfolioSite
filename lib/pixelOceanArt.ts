@@ -339,6 +339,87 @@ export const creatureSprite = (kind: SpriteKind, palette: number, frame: number,
   });
 };
 
+/** Sea fan colours: [rim and tips, branches, trunk and shade]: purple, red, orange, yellow. */
+const FAN_SETS: Rgb[][] = [
+  [[226, 160, 244], [172, 96, 214], [112, 54, 154]],
+  [[255, 146, 136], [222, 72, 74], [150, 40, 52]],
+  [[255, 196, 116], [240, 134, 54], [170, 82, 32]],
+  [[255, 240, 146], [228, 198, 70], [160, 130, 42]],
+];
+
+/**
+ * A sea fan seen broadside: a short trunk forking into a half-disc lattice
+ * of branches (radiating ribs joined by arcs), with pale tips round the rim
+ * and a few gaps where it has worn through.
+ */
+export const fanSprite = (seed: number, palette: number, w: number, h: number) =>
+  cached(`fan-${seed}-${palette}-${w}-${h}`, () => {
+    const rnd = seeded(seed);
+    const [rim, branch, trunk] = FAN_SETS[palette % FAN_SETS.length];
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const ribs = 4 + Math.floor(rnd() * 3);
+    const cx = (w - 1) / 2;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const up = h - 1 - y;
+        if (up < 2) {
+          if (Math.abs(x - cx) < 1) { ctx.fillStyle = css(trunk); ctx.fillRect(x, y, 1, 1); }
+          continue;
+        }
+        const dx = (x - cx) / (w / 2), dy = (up - 1) / (h - 2);
+        const r = Math.hypot(dx, dy);
+        if (r > 1) continue;
+        const a = Math.atan2(dx, dy); // 0 straight up
+        const rib = Math.abs(((a / Math.PI) * ribs + 0.5 * ribs) % 1 - 0.5) < 0.12 / Math.max(0.25, r);
+        const arc = Math.round(r * (h - 2)) % 3 === 0;
+        if (!(rib || arc) || rnd() < 0.08) continue;
+        ctx.fillStyle = css(r > 0.86 ? rim : r < 0.3 ? trunk : branch);
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    return c;
+  });
+
+/** Sea lettuce colours: [light, leaf, shade]: bright green, and a yellower green. */
+const LETTUCE_SETS: Rgb[][] = [
+  [[170, 240, 120], [104, 204, 84], [58, 146, 62]],
+  [[210, 246, 130], [150, 214, 80], [92, 160, 58]],
+];
+export const LETTUCE_FRAMES = 3;
+
+/**
+ * A clump of sea lettuce: up to seven ruffled leaves, back ones first, their
+ * frilly edges rippling over three frames. Fewer leaves once it is grazed.
+ */
+export const lettuceSprite = (leaves: number, frame: number, palette: number) =>
+  cached(`lettuce-${leaves}-${frame % LETTUCE_FRAMES}-${palette}`, () => {
+    const [light, leaf, shade] = LETTUCE_SETS[palette % LETTUCE_SETS.length];
+    const w = 14, h = 8;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    // Leaf centres, back to front: the clump fills in from the middle.
+    const spots = [[7, 3], [4, 4], [10, 4], [6, 5], [9, 5], [3, 6], [11, 6]];
+    for (let k = 0; k < Math.min(leaves, spots.length); k++) {
+      const [lx, ly] = spots[k];
+      for (let y = ly - 3; y <= ly + 2; y++) {
+        for (let x = lx - 3; x <= lx + 3; x++) {
+          const nx = (x - lx) / 3.2, ny = (y - ly) / 2.4;
+          if (nx * nx + ny * ny > 1 || y < 0 || y >= h) continue;
+          // The rim ruffles: edge pixels come and go with the frame.
+          const edge = nx * nx + ny * ny > 0.6;
+          if (edge && y < ly && ((x + y + frame + k) % 3 === 0)) continue;
+          ctx.fillStyle = css(edge && y < ly ? light : y > ly ? shade : leaf);
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+      // A pale midrib.
+      ctx.fillStyle = css(light);
+      ctx.fillRect(lx, ly - 1, 1, 2);
+    }
+    return c;
+  });
+
 /** A garden eel's height when it is all the way out, in art pixels (for icons). */
 export const GARDEN_EEL_ROWS = 14;
 export const GARDEN_EEL_FRAMES = 4;

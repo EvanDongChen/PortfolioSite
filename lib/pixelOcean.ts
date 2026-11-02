@@ -238,7 +238,31 @@ export interface Decor {
 }
 
 /** A blade of seagrass: where it grows, how long it is (grazed down and regrown), its sway. */
-export interface Blade { x: number; z: number; len: number; maxLen: number; phase: number; shade: number }
+export interface Blade {
+  x: number; z: number; len: number; maxLen: number; phase: number;
+  /** Seagrass, frilly red seaweed or forked purple seaweed. */
+  kind: WeedKind;
+  /** Which of its kind's colour sets. */
+  shade: number;
+}
+export type WeedKind = 'seagrass' | 'red' | 'purple';
+
+/** A sea fan: a flat lattice that flexes as one piece and shudders when brushed. */
+export interface SeaFan extends Bend { x: number; z: number; w: number; ht: number; seed: number; palette: number; phase: number; shudder: number }
+
+/** A sea whip: one tall, springy stalk of a cluster; it bends far over and whips back. */
+export interface SeaWhip extends Bend { x: number; z: number; len: number; palette: number; phase: number }
+
+/** A clump of sea lettuce low against a rock: leaves are grazed off and regrow. */
+export interface Lettuce { x: number; z: number; leaves: number; maxLeaves: number; palette: number; phase: number }
+
+/**
+ * A field of small anemones. Each polyp opens and closes (open, 0 to 1);
+ * touched, it shuts and cues its neighbours to follow (cue: ticks until it
+ * does), so the field closes in a wave.
+ */
+export interface Polyp { x: number; z: number; palette: number; phase: number; open: number; shut: number; cue: number }
+export interface AnemoneField { x: number; z: number; rx: number; rz: number; polyps: Polyp[] }
 /** A seagrass meadow on the sand: grazed by turtles, a hiding place for seahorses. */
 export interface Meadow { x: number; z: number; rx: number; rz: number; blades: Blade[] }
 
@@ -581,6 +605,10 @@ export class PixelOcean {
   stations: Station[] = [];
   scents: Scent[] = [];
   meadows: Meadow[] = [];
+  fans: SeaFan[] = [];
+  whips: SeaWhip[] = [];
+  lettuce: Lettuce[] = [];
+  fields: AnemoneField[] = [];
   shells: Shell[] = [];
   whale: WhaleFall | null = null;
   tick = 0;
@@ -634,6 +662,7 @@ export class PixelOcean {
     this.placeColonies();
     this.plantMeadows();
     this.plantSeagrass();
+    this.plantGardens();
     this.plantAnemones();
     this.pickStations();
     for (const species of SPECIES_LIST) {
@@ -707,19 +736,27 @@ export class PixelOcean {
   }
 
   /**
-   * Seagrass meadows on the sand below the hero: fields of short blades that
-   * sway, part around anything swimming through, and regrow where grazed.
+   * Meadows on the sand below the hero: fields of short blades that sway,
+   * part around anything swimming through, and regrow where grazed. Most
+   * are seagrass; some are all red seaweed or all purple, and some a mix.
    */
   private plantSeagrass() {
     const { w, h } = this;
-    for (let m = Math.max(2, Math.min(4, Math.round(h / 600))); m > 0; m--) {
-      const rx = randInt(22, 34), rz = randInt(9, 14);
+    const SHADES: Record<WeedKind, number> = { seagrass: 3, red: 2, purple: 2 };
+    for (let m = Math.max(3, Math.min(5, Math.round(h / 500))); m > 0; m--) {
+      const rx = randInt(18, 32), rz = randInt(8, 13);
+      const roll = Math.random();
+      const kinds: WeedKind[] = roll < 0.4 ? ['seagrass'] : roll < 0.6 ? ['red'] : roll < 0.75 ? ['purple']
+        : roll < 0.9 ? ['seagrass', 'red', 'purple'] : ['red', 'purple'];
+      // A single-kind meadow keeps to one colour set; a mixed one uses them all.
+      const fixedShade = kinds.length === 1 && Math.random() < 0.5 ? randInt(0, SHADES[kinds[0]] - 1) : -1;
       let x = 0, z = 0;
-      // Clear of the garden eels' sand.
+      // Clear of the garden eels' sand and the other meadows.
       for (let tries = 0; tries < 20; tries++) {
         x = rand(rx + 4, w - rx - 4);
-        z = rand(SHALLOWS * 0.75, Math.min(h - rz - 4, SHALLOWS * 1.7));
-        if (this.colonies.every(c => Math.hypot(c.x - x, c.z - z) > rx + 26)) break;
+        z = rand(SHALLOWS * 0.75, Math.min(h - rz - 4, Math.max(SHALLOWS * 1.7, h * 0.7)));
+        if (this.colonies.every(c => Math.hypot(c.x - x, c.z - z) > rx + 26)
+          && this.meadows.every(o => Math.abs(o.x - x) > o.rx + rx || Math.abs(o.z - z) > o.rz + rz + 6)) break;
       }
       const blades: Blade[] = [];
       for (let bz = -rz; bz <= rz; bz += 1) {
@@ -727,8 +764,13 @@ export class PixelOcean {
           const d = (bx / rx) ** 2 + (bz / rz) ** 2;
           // Thinning out toward the edge.
           if (d > 1 || Math.random() > 0.25 * (1 - d * 0.6)) continue;
-          const maxLen = rand(9, 16) * (1 - d * 0.35);
-          blades.push({ x: x + bx + rand(-0.4, 0.4), z: z + bz + rand(-0.4, 0.4), len: maxLen * rand(0.7, 1), maxLen, phase: rand(0, Math.PI * 2), shade: randInt(0, 2) });
+          // Mixed meadows grow in drifts of one kind, not salt and pepper.
+          const kind = kinds.length === 1 ? kinds[0] : kinds[Math.floor((Math.sin(bx * 0.25 + m * 3) + Math.sin(bz * 0.4 - bx * 0.1 + m) + 2) / 4 * kinds.length * 0.999)];
+          const maxLen = (kind === 'seagrass' ? rand(9, 16) : kind === 'red' ? rand(6, 11) : rand(8, 13)) * (1 - d * 0.35);
+          blades.push({
+            x: x + bx + rand(-0.4, 0.4), z: z + bz + rand(-0.4, 0.4), len: maxLen * rand(0.7, 1), maxLen, phase: rand(0, Math.PI * 2),
+            kind, shade: fixedShade >= 0 ? fixedShade : randInt(0, SHADES[kind] - 1),
+          });
         }
       }
       // Meadows are rich ground: a carpet of algae among the roots sheds plankton for the seahorses.
@@ -749,6 +791,145 @@ export class PixelOcean {
       this.meadows.push({ x, z, rx, rz, blades });
     }
     this.indexDecor();
+  }
+
+  /**
+   * The rest of the reef's garden: sea fans standing alone on the sand,
+   * clusters of sea whips, sea lettuce growing low against the rocks, and
+   * fields of small anemones.
+   */
+  private plantGardens() {
+    const { w, h } = this;
+    const area = w * h;
+    const spot = (z0: number, z1: number, edge: number) => ({ x: rand(edge, w - edge), z: rand(Math.max(edge, z0), Math.min(h - edge, z1)) });
+    // Fans: mostly purple; now and then red, orange or yellow.
+    for (let k = Math.max(3, Math.round(area / 50000)); k > 0; k--) {
+      const { x, z } = spot(SHALLOWS * 0.5, h * 0.85, 12);
+      const roll = Math.random();
+      this.fans.push({
+        x, z, w: randInt(16, 24), ht: randInt(12, 18), seed: randInt(1, 1e9),
+        palette: roll < 0.55 ? 0 : roll < 0.7 ? 1 : roll < 0.85 ? 2 : 3,
+        phase: rand(0, Math.PI * 2), shudder: 0, ...upright(),
+      });
+    }
+    // Whips grow in clusters of one colour.
+    for (let k = Math.max(3, Math.round(area / 60000)); k > 0; k--) {
+      const { x, z } = spot(SHALLOWS * 0.4, h * 0.85, 10);
+      const palette = randInt(0, 4);
+      for (let n = randInt(3, 7); n > 0; n--) {
+        this.whips.push({ x: x + rand(-5, 5), z: z + rand(-2.5, 2.5), len: rand(18, 34), palette, phase: rand(0, Math.PI * 2), ...upright() });
+      }
+    }
+    // Lettuce at the foot of about a third of the rocks.
+    for (const r of this.rocks()) {
+      if (Math.random() > 0.35) continue;
+      for (let n = randInt(1, 3); n > 0; n--) {
+        const maxLeaves = randInt(3, 7);
+        this.lettuce.push({ x: r.x + rand(-r.w / 2, r.w / 2), z: r.z + rand(0.3, 1.5), leaves: maxLeaves, maxLeaves, palette: randInt(0, 1), phase: rand(0, Math.PI * 2) });
+      }
+    }
+    // Anemone fields: some a riot of colours, some just two or three.
+    for (let k = Math.max(2, Math.min(5, Math.round(h / 500))); k > 0; k--) {
+      const rx = randInt(16, 26), rz = randInt(6, 10);
+      const { x, z } = spot(SHALLOWS * 0.6, h * 0.8, rx + 4);
+      const mixed = Math.random() < 0.5;
+      const colours = mixed ? [0, 1, 2, 3, 4, 5] : Array.from({ length: randInt(1, 2) }, () => randInt(0, 5));
+      const polyps: Polyp[] = [];
+      for (let pz = -rz; pz <= rz; pz += 2.4) {
+        for (let px = -rx; px <= rx; px += 2.6) {
+          const d = (px / rx) ** 2 + (pz / rz) ** 2;
+          if (d > 1 || Math.random() > 0.8 * (1 - d * 0.4)) continue;
+          polyps.push({
+            x: x + px + rand(-0.5, 0.5), z: z + pz + rand(-0.5, 0.5),
+            palette: colours[randInt(0, colours.length - 1)], phase: rand(0, Math.PI * 2), open: 1, shut: 0, cue: 0,
+          });
+        }
+      }
+      polyps.sort((a, b) => a.z - b.z);
+      this.fields.push({ x, z, rx, rz, polyps });
+    }
+  }
+
+  /**
+   * Fans flex with whatever swims through them, as one piece, and shudder
+   * when something brushes past.
+   */
+  private updateFans() {
+    const parity = this.tick & 1;
+    for (let n = 0; n < this.fans.length; n++) {
+      const f = this.fans[n];
+      const before = Math.abs(f.bvx) + Math.abs(f.bvz);
+      this.bend(f, f.x, f.z, f.w / 2 + 3, f.ht * 1.8, (n & 1) === parity);
+      if (Math.abs(f.bvx) + Math.abs(f.bvz) - before > 0.05) f.shudder = 1;
+      f.shudder *= 0.94;
+      if (f.shudder < 0.01) f.shudder = 0;
+    }
+  }
+
+  /**
+   * Sea whips are loose springs: anything swimming through pushes them over
+   * (a big fish a long way), and they whip back past upright and wobble.
+   */
+  private updateWhips() {
+    const parity = this.tick & 1;
+    for (let n = 0; n < this.whips.length; n++) {
+      const b = this.whips[n];
+      if ((n & 1) === parity && this.grid.length) {
+        this.near(this.grid, b.x, b.z, 14, o => {
+          if (o.h > b.len + 2) return;
+          // A big fish's body sweeps a wide path; a small one only brushes past.
+          const big = !!LOOMING[o.species];
+          const reach = big ? 14 : 5;
+          const dx = b.x - o.x, dz = b.z - o.z;
+          const d = Math.hypot(dx, dz);
+          const speed = Math.hypot(o.vx, o.vz);
+          if (d >= reach || speed < 0.05) return;
+          const f = (1 - d / reach) * Math.min(1, speed * 4) * (big ? 0.5 : 0.2);
+          b.bvx += ((d ? dx / d : 0) * 0.6 + Math.sign(o.vx)) * f;
+          b.bvz += ((d ? dz / d : 0) * 0.6 + Math.sign(o.vz) * 0.5) * f * 0.5;
+        });
+      }
+      if (b.bx === 0 && b.bvx === 0 && b.bz === 0 && b.bvz === 0) continue;
+      // Stiffer and less damped than kelp, so it overshoots.
+      b.bvx = (b.bvx - b.bx * 0.06) * 0.94;
+      b.bvz = (b.bvz - b.bz * 0.06) * 0.94;
+      const max = b.len * 0.5;
+      b.bx = Math.max(-max, Math.min(max, b.bx + b.bvx));
+      b.bz = Math.max(-max, Math.min(max, b.bz + b.bvz));
+      if (Math.abs(b.bx) + Math.abs(b.bz) + Math.abs(b.bvx) + Math.abs(b.bvz) < 0.02) b.bx = b.bz = b.bvx = b.bvz = 0;
+    }
+    // Lettuce regrows a leaf at a time.
+    if (this.tick % 30 === 0) for (const l of this.lettuce) if (l.leaves < l.maxLeaves && Math.random() < 0.06) l.leaves++;
+  }
+
+  /**
+   * Anemone fields: a polyp something swims through shuts, and its
+   * neighbours follow a moment later, nearest first, so the field closes in
+   * a ripple; they open again slowly.
+   */
+  private updateFields() {
+    for (const f of this.fields) {
+      if ((this.tick + f.polyps.length) % 3 === 0 && this.grid.length) {
+        this.near(this.grid, f.x, f.z, Math.max(f.rx, f.rz) + 3, o => {
+          if (o.h > 8 || Math.hypot(o.vx, o.vz) < 0.05) return;
+          if (((o.x - f.x) / (f.rx + 2)) ** 2 + ((o.z - f.z) / (f.rz + 2)) ** 2 > 1) return;
+          for (const p of f.polyps) {
+            if (p.shut > 0 || p.cue > 0 || (p.x - o.x) ** 2 + (p.z - o.z) ** 2 > 9) continue;
+            // This one is touched: it and everything round it closes, outward.
+            for (const q of f.polyps) {
+              if (q.shut > 0 || q.cue > 0) continue;
+              const d = Math.hypot(q.x - p.x, q.z - p.z);
+              if (d < 12) q.cue = 1 + Math.round(d * 1.4);
+            }
+            break;
+          }
+        });
+      }
+      for (const p of f.polyps) {
+        if (p.cue > 0 && --p.cue === 0) p.shut = randInt(70, 110);
+        if (p.shut > 0) { p.shut--; p.open = Math.max(0, p.open - 0.25); } else if (p.open < 1) p.open = Math.min(1, p.open + 0.012);
+      }
+    }
   }
 
   /**
@@ -837,6 +1018,10 @@ export class PixelOcean {
     const inside = (o: { x: number; z: number }) => o.x < w && o.z < h;
     this.decor = this.decor.filter(inside);
     this.kelp = this.kelp.filter(inside);
+    this.fans = this.fans.filter(inside);
+    this.whips = this.whips.filter(inside);
+    this.lettuce = this.lettuce.filter(inside);
+    this.fields = this.fields.filter(inside);
     // New ground (on the right or below) gets its own rocks, corals and kelp.
     const fresh = (x: number, z: number) => x >= old.w || z >= old.h;
     const area = n - Math.min(w, old.w) * Math.min(h, old.h);
@@ -1128,6 +1313,10 @@ export class PixelOcean {
     this.decor = this.decor.filter(d => !blocks(d.x, d.z, d.w / 2, d.ht));
     this.kelp = this.kelp.filter(k => !blocks(k.x, k.z, 2, k.maxLength * 0.6));
     for (const c of this.creatures) if (c.kelp && !this.kelp.includes(c.kelp)) c.kelp = null;
+    this.fans = this.fans.filter(f => !blocks(f.x, f.z, f.w / 2, f.ht));
+    this.whips = this.whips.filter(b => !blocks(b.x, b.z, 2, b.len * ELEVATION));
+    this.lettuce = this.lettuce.filter(l => !blocks(l.x, l.z, 3, 4));
+    for (const f of this.fields) f.polyps = f.polyps.filter(p => !blocks(p.x, p.z, 1, 3));
     for (const m of this.meadows) {
       const kept = m.blades.filter(b => !blocks(b.x, b.z, 1, b.maxLen * ELEVATION));
       if (kept.length === m.blades.length) continue;
@@ -1209,6 +1398,9 @@ export class PixelOcean {
     this.updateAnemones();
     this.updateCorals();
     this.updateSeagrass();
+    this.updateFans();
+    this.updateWhips();
+    this.updateFields();
     this.updateShells();
     this.updateWhale();
     this.updatePod();
@@ -1895,10 +2087,20 @@ export class PixelOcean {
     }
     if (c.hungry && this.forage(c, s)) return;
     c.mood = this.school(c, s) ? 'schooling' : 'cruising';
-    // Idle schools loiter around the kelp.
-    if (k && kd > 12 && kd < 50) {
-      s.x += (k.x - c.x) / kd * 0.008;
-      s.z += (k.z - c.z) / kd * 0.008;
+    // Idle schools loiter around the kelp, or in the lee of a sea fan,
+    // out of the current.
+    let hub: { x: number; z: number } | null = k && kd < 50 ? k : null;
+    let hubD = hub ? kd : 40;
+    for (const f of this.fans) {
+      const d = Math.abs(f.x - c.x) + Math.abs(f.z - c.z);
+      if (d < hubD) { hubD = d; hub = { x: f.x + Math.cos(this.currentAngle) * 6, z: f.z + Math.sin(this.currentAngle) * 4 }; }
+    }
+    if (hub) {
+      const d = Math.hypot(hub.x - c.x, hub.z - c.z) || 1;
+      if (d > (hub === k ? 12 : 4)) {
+        s.x += (hub.x - c.x) / d * 0.008;
+        s.z += (hub.z - c.z) / d * 0.008;
+      }
     }
     this.wander(c, s);
   }
@@ -1943,6 +2145,7 @@ export class PixelOcean {
         this.splash('goo', { x: o.x, z: o.z, h: 1 }, 3);
       });
       if (this.scavenge(c, s, 0.04)) return;
+      if (this.grazeLettuce(c, s, 0.03)) return;
       if (this.graze(c, s, 0, 0.03)) return;
     }
     c.mood = 'cruising';
@@ -2066,21 +2269,22 @@ export class PixelOcean {
   /** A turtle crops the seagrass blade by blade, moving on as each is cut short. */
   private grazeSeagrass(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
     const m = c.meadow;
-    if (!m || c.blade < 0 || (m.blades[c.blade]?.len ?? 0) < 4) {
+    if (!m || c.blade < 0 || (m.blades[c.blade]?.len ?? 0) < 4 || m.blades[c.blade].kind !== 'seagrass') {
       c.meadow = null;
       c.blade = -1;
       let best: Meadow | null = null;
       let bestD = (SPECIES.turtle.vision * 3) ** 2;
       for (const o of this.meadows) {
         const d = (o.x - c.x) ** 2 + (o.z - c.z) ** 2;
-        if (d < bestD && o.blades.length) { bestD = d; best = o; }
+        if (d < bestD && o.blades.some(b => b.kind === 'seagrass')) { bestD = d; best = o; }
       }
       if (!best) return false;
       // The longest of a few blades, starting near where the turtle already is.
       let tallest = -1;
       for (let k = 0; k < 10; k++) {
         const i = randInt(0, best.blades.length - 1);
-        if (best.blades[i].len >= 6 && (tallest < 0 || best.blades[i].len > best.blades[tallest].len)) tallest = i;
+        const b = best.blades[i];
+        if (b.kind === 'seagrass' && b.len >= 6 && (tallest < 0 || b.len > best.blades[tallest].len)) tallest = i;
       }
       if (tallest < 0) return false;
       c.meadow = best;
@@ -2093,6 +2297,26 @@ export class PixelOcean {
     if (d < 6 && this.tick % 15 === 0) {
       b.len = Math.max(1, b.len - 1.5);
       c.energy = Math.min(1, c.energy + 3 / SPECIES.turtle.units);
+    }
+    return true;
+  }
+
+  /** Urchins and crabs crop the sea lettuce at the foot of the rocks, a leaf at a time. */
+  private grazeLettuce(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }, force: number) {
+    let best: Lettuce | null = null;
+    let bestD = 50 * 50;
+    for (const l of this.lettuce) {
+      if (l.leaves < 1) continue;
+      const d = (l.x - c.x) ** 2 + (l.z - c.z) ** 2;
+      if (d < bestD) { bestD = d; best = l; }
+    }
+    if (!best) return false;
+    const d = this.toward(c, s, { x: best.x, z: best.z + 0.5, h: 0 }, force);
+    c.mood = d < 3 ? 'grazing' : 'foraging';
+    if (d < 3 && (this.tick + c.id) % 30 === 0) {
+      best.leaves--;
+      c.squashV -= 0.2;
+      c.energy = Math.min(1, c.energy + 6 / SPECIES[c.species].units);
     }
     return true;
   }
@@ -2271,6 +2495,7 @@ export class PixelOcean {
 
   /** Urchins creep over the seabed grazing algae. */
   private thinkUrchin(c: Creature, s: { x: number; z: number; h: number; max: number; effort: number }) {
+    if (c.hungry && this.grazeLettuce(c, s, 0.01)) return;
     if (this.graze(c, s, 0, 0.01)) return;
     c.mood = 'cruising';
     this.wander(c, s, 0.004);
