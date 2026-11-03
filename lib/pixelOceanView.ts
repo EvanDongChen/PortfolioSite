@@ -13,14 +13,16 @@
 // thread without the sprites ever jumping. Nothing here touches the DOM: the
 // page is told where to put the canvases through `onLayout`.
 
-import { Anemone, Carcass, Creature, Drop, Kelp, PixelOcean, SPECIES, SURFACE, Species, Station, WhaleFall } from './pixelOcean';
+import {
+  Anemone, AnemoneField, Carcass, Creature, Drop, ELEVATION, Kelp, Lettuce, Meadow, PixelOcean, SPECIES, SURFACE, SeaFan, SeaWhip, Species,
+  Station, WeedKind, WhaleFall,
+} from './pixelOcean';
 import {
   FLOOR, SpriteKind, buildCaustics, makeCanvas, creatureSprite, creaturePalette, bonesSprite, bubbleSprite, pelletSprite,
   shadowSprite, rockSprite, coralSprite, starfishSprite, cuttleSprite, whaleSprite, silhouetteSprite, puffSprite, fizzSprite, PUFF_FRAMES,
+  gardenEelSprite, GARDEN_EEL_FRAMES, fanSprite, lettuceSprite, LETTUCE_FRAMES,
 } from './pixelOceanArt';
 
-/** How far up the screen one unit of height lifts an object. */
-const ELEVATION = 0.55;
 /** How much bigger things get per unit of height. */
 const PERSPECTIVE = 0.0035;
 const CAUSTIC_SIZE = 64;
@@ -45,13 +47,25 @@ const BODY_WIDTH: Record<Species, number> = {
   minnow: 10, barracuda: 18, crab: 11, jelly: 9, turtle: 16, puffer: 9, seahorse: 6, urchin: 7,
   octopus: 12, eel: 10, shark: 26, manta: 20, angler: 13,
   clownfish: 12, starfish: 15, cuttlefish: 16, dolphin: 26,
+  shrimp: 8, mantis: 14, gardenEel: 4, lionfish: 15, hermit: 10,
 };
+/**
+ * How much bigger (or smaller) than its sprite each animal is drawn, so they
+ * sit at roughly the right sizes next to each other: true scale would leave
+ * a minnow a pixel long beside a shark, so big animals grow less than they
+ * should. 1.5 and 2 stay on whole screen pixels at the default pixel size.
+ */
+const SIZE: Partial<Record<Species, number>> = {
+  manta: 2, shark: 1.5, dolphin: 1.5, turtle: 1.5, barracuda: 1.5, eel: 1.3,
+  cuttlefish: 1.2, puffer: 1.2, clownfish: 0.85, shrimp: 0.85, mantis: 0.8, starfish: 0.75,
+};
+for (const s of Object.keys(SIZE) as Species[]) BODY_WIDTH[s] *= SIZE[s]!;
 
 /** Which bones a picked-clean fish leaves, and at what size. */
 const BONES_OF: Partial<Record<Species, ['minnow' | 'barracuda', number]>> = {
   minnow: ['minnow', 1], puffer: ['minnow', 0.9], angler: ['minnow', 1.3],
   barracuda: ['barracuda', 1], eel: ['barracuda', 0.9], shark: ['barracuda', 1.5],
-  clownfish: ['minnow', 1], dolphin: ['barracuda', 1.5],
+  clownfish: ['minnow', 1], dolphin: ['barracuda', 1.5], lionfish: ['minnow', 1.2],
 };
 
 const BLOOD = ['rgb(110,10,24)', 'rgb(176,18,40)', 'rgb(226,44,64)'];
@@ -64,6 +78,7 @@ const DROP_COLORS: Record<Drop['kind'], string[]> = {
   scent: ['rgb(200,70,90)', 'rgb(220,100,110)', 'rgb(180,60,80)'],
   sparkle: ['rgb(255,255,255)', 'rgb(200,250,255)', 'rgb(255,240,200)'],
   puff: [],
+  flash: ['rgb(255,255,255)', 'rgb(255,246,190)', 'rgb(190,240,255)'],
 };
 // Pixel shapes for the particles that aren't plain squares.
 const HEART = ['.X.X.', 'XXXXX', 'XXXXX', '.XXX.', '..X..'];
@@ -77,7 +92,48 @@ const ANEMONE = [
 /** How fast each swimmer must go to leave a wake of disturbed water behind it. */
 const WAKE_SPEED: Partial<Record<Species, number>> = {
   minnow: 0.55, barracuda: 0.6, shark: 0.55, dolphin: 0.7, cuttlefish: 0.35, puffer: 0.4, clownfish: 0.4, turtle: 0.35,
+  shrimp: 0.7, lionfish: 0.5,
 };
+/** Meadow colours by blade kind and shade: [base, middle, tip]. */
+const WEEDS: Record<WeedKind, string[][]> = {
+  seagrass: [
+    ['rgb(40,112,70)', 'rgb(58,146,82)', 'rgb(98,182,96)'],
+    ['rgb(52,112,58)', 'rgb(82,148,70)', 'rgb(136,188,92)'],
+    ['rgb(34,98,72)', 'rgb(50,128,86)', 'rgb(84,166,106)'],
+  ],
+  red: [
+    ['rgb(124,32,54)', 'rgb(178,52,72)', 'rgb(232,104,116)'],
+    ['rgb(140,44,40)', 'rgb(196,76,62)', 'rgb(240,132,104)'],
+  ],
+  purple: [
+    ['rgb(72,42,112)', 'rgb(116,64,166)', 'rgb(170,118,218)'],
+    ['rgb(96,40,118)', 'rgb(146,70,180)', 'rgb(206,142,232)'],
+  ],
+};
+/** Sea whip colours: [base, stalk, tip]: red, orange, yellow, purple, white. */
+const WHIPS = [
+  ['rgb(150,30,42)', 'rgb(214,56,64)', 'rgb(255,146,134)'],
+  ['rgb(170,80,30)', 'rgb(236,132,50)', 'rgb(255,204,124)'],
+  ['rgb(160,130,30)', 'rgb(226,196,60)', 'rgb(255,242,152)'],
+  ['rgb(92,40,132)', 'rgb(152,82,202)', 'rgb(222,174,250)'],
+  ['rgb(140,144,156)', 'rgb(210,212,220)', 'rgb(255,255,255)'],
+];
+/** Small anemone colours: [foot, stalk, tip]: pink, purple, green, orange, teal, yellow. */
+const POLYPS = [
+  ['rgb(120,40,80)', 'rgb(230,92,152)', 'rgb(255,194,222)'],
+  ['rgb(70,46,120)', 'rgb(152,102,222)', 'rgb(228,204,255)'],
+  ['rgb(30,92,62)', 'rgb(72,182,122)', 'rgb(192,255,204)'],
+  ['rgb(130,62,30)', 'rgb(240,132,62)', 'rgb(255,212,152)'],
+  ['rgb(24,88,96)', 'rgb(52,172,182)', 'rgb(176,250,250)'],
+  ['rgb(120,100,30)', 'rgb(230,202,62)', 'rgb(255,246,172)'],
+];
+/** Where each kind's colour sets start in the one list the runs are kept by. */
+const WEED_FIRST: Record<WeedKind, number> = { seagrass: 0, red: 3, purple: 5 };
+const WEED_SETS = [...WEEDS.seagrass, ...WEEDS.red, ...WEEDS.purple];
+/** Seagrass is drawn in bands this deep, each sorted with whatever swims among it. */
+const GRASS_BAND = 3;
+/** How far (cells) a swimmer parts the seagrass around it. */
+const GRASS_PART = 6;
 /** Coral spawn: pink eggs and white sperm bundles. */
 const SPAWN_COLORS = ['rgb(255,150,190)', 'rgb(255,240,246)'];
 /**
@@ -159,6 +215,13 @@ export class OceanView {
   private glow = false;
   /** Kelp squares by colour (left, top, size each), reused from stalk to stalk. */
   private kelpRuns: number[][] = [[], [], [], []];
+  /** The same for seagrass: three shades of blade, three colours each. */
+  private grassRuns: number[][] = Array.from({ length: WEED_SETS.length * 3 }, () => []);
+  /** Sea whip and small anemone rectangles by colour (left, top, width, height each). */
+  private whipRuns: number[][] = Array.from({ length: WHIPS.length * 3 }, () => []);
+  private polypRuns: number[][] = Array.from({ length: POLYPS.length * 3 }, () => []);
+  /** Swimmers among the seagrass of the meadow being drawn (x, z each). */
+  private movers: number[] = [];
   /**
    * Set by the page when frames are slow to draw: the finishing touches
    * (wakes, sun rays, shadows passing overhead, the whale's bacterial mat)
@@ -167,6 +230,8 @@ export class OceanView {
   lean = false;
   /** The creature being drawn's squash and stretch (positive stretches it along its length). */
   private stretch = 0;
+  /** The creature (or carcass) being drawn's size relative to its sprite (see SIZE). */
+  private size = 1;
   /** The creature under inspection, drawn with a reticle. */
   highlighted: Creature | null = null;
 
@@ -564,7 +629,7 @@ export class OceanView {
     const p = this.project(x, z, h);
     const sx = o.sx ?? 0;
     const sw = o.sw ?? img.width;
-    const k = px * p.s * (o.scale ?? 1);
+    const k = px * p.s * (o.scale ?? 1) * this.size;
     const w = Math.round(sw * k);
     const hh = Math.round(img.height * k);
     ctx.globalAlpha = (o.alpha ?? 1) * (this.glow ? 0.45 : 1);
@@ -612,9 +677,9 @@ export class OceanView {
       ctx.drawImage(img, Math.round(p.x - (sw * px) / 2), Math.round(p.y - (img.height * px) / 2), sw * px, img.height * px);
     };
 
-    // Shadows lie on the floor under everything.
+    // Shadows lie on the floor under everything (not under things in burrows).
     for (const c of ocean.creatures) {
-      if (!visible(c.z) || c.species === 'eel') continue;
+      if (!visible(c.z) || c.species === 'eel' || c.species === 'gardenEel' || (c.species === 'mantis' && c.lunge < 0.3)) continue;
       shadow(c.x, c.z, c.species === 'manta' ? c.h * 0.4 : c.h, BODY_WIDTH[c.species] * 0.75);
     }
     for (const k of ocean.carcasses) if (k.h > 0 && visible(k.z)) shadow(k.x, k.z, k.h, BODY_WIDTH[k.species] * (k.part === 'whole' ? 0.7 : 0.4));
@@ -645,6 +710,23 @@ export class OceanView {
     for (const k of ocean.kelp) {
       if (visible(k.z)) items.push({ depth: k.z, draw: () => this.drawKelp(k) });
     }
+    for (const m of ocean.meadows) {
+      if (m.blades.length && m.z + m.rz >= z0 && m.z - m.rz <= z1) this.addSeagrass(m, items);
+    }
+    for (const fan of ocean.fans) if (visible(fan.z)) items.push({ depth: fan.z, draw: () => this.drawFan(fan) });
+    for (const w of ocean.whips) if (visible(w.z)) items.push({ depth: w.z, draw: () => this.drawWhip(w) });
+    for (const l of ocean.lettuce) {
+      if (l.leaves >= 1 && visible(l.z)) items.push({ depth: l.z, draw: () => this.drawLettuce(l) });
+    }
+    for (const fd of ocean.fields) {
+      if (fd.polyps.length && fd.z + fd.rz >= z0 && fd.z - fd.rz <= z1) this.addPolyps(fd, items);
+    }
+    for (const sh of ocean.shells) {
+      if (!visible(sh.z)) continue;
+      // Old shells fade as they crumble away.
+      const fade = Math.min(1, (sh.until - ocean.tick) / 600);
+      items.push({ depth: sh.z, draw: () => this.sprite(creatureSprite('hermitShell', sh.palette, 0), sh.x, sh.z, 0, { anchor: 'bottom', scale: 0.6 + sh.size * 0.1, alpha: Math.max(0.2, fade) }) });
+    }
     for (const a of ocean.anemones) {
       if (visible(a.z)) items.push({ depth: a.z, draw: () => this.drawAnemone(a) });
     }
@@ -653,7 +735,7 @@ export class OceanView {
     }
     if (wf && visible(wf.z)) items.push({ depth: wf.z, draw: () => this.drawWhale(wf) });
     for (const k of ocean.carcasses) {
-      if (visible(k.z)) items.push({ depth: k.z + 0.1, draw: () => this.drawCarcass(k) });
+      if (visible(k.z)) items.push({ depth: k.z + 0.1, draw: () => { this.size = SIZE[k.species] ?? 1; this.drawCarcass(k); this.size = 1; } });
     }
     // Plankton are tiny specks that don't need depth sorting: draw them all in
     // one pass, by colour, before everything else.
@@ -695,6 +777,7 @@ export class OceanView {
             this.sprite(puffSprite(frame, d.shade), d.x, d.z, d.h, { alpha: 0.85 });
             return;
           }
+          if (d.kind === 'flash') { this.drawFlash(d); return; }
           const q = this.project(d.x, d.z, d.h);
           const fade = Math.min(1, (d.life / d.maxLife) * 1.6);
           ctx.fillStyle = DROP_COLORS[d.kind][d.shade];
@@ -720,6 +803,7 @@ export class OceanView {
           const wake = this.lean ? 0 : WAKE_SPEED[c.species];
           if (wake && !c.hidden && c.vx * c.vx + c.vz * c.vz > wake * wake) this.drawWake(c);
           this.stretch = c.squash;
+          this.size = SIZE[c.species] ?? 1;
           this.drawCreature(c);
           this.stretch = 0;
           // Courting fish flash their colours.
@@ -730,6 +814,7 @@ export class OceanView {
             ctx.globalCompositeOperation = 'source-over';
             this.glow = false;
           }
+          this.size = 1;
           if (c.parasites > 0.45 && c.species !== 'eel') this.drawParasites(c);
         },
       });
@@ -858,6 +943,43 @@ export class OceanView {
         if (c.lunge > 0 && c.prey?.alive) this.drawTentacles(c, c.prey);
         return;
       }
+      case 'lionfish': {
+        // The long fins ripple slowly, folded or fanned out.
+        const frame = ((tick + c.id * 5) >> 4) & 1;
+        this.sprite(creatureSprite(c.puff > 0.5 ? 'lionfishFlared' : 'lionfish', 0, frame, washed), c.x, c.z, c.h, { flipX: c.facing < 0 });
+        return;
+      }
+      case 'mantis': {
+        const burrow = this.project(c.anchorX, c.anchorZ, 0);
+        const { spriteCtx: ctx, px } = this;
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = 'rgb(8,18,28)';
+        ctx.fillRect(Math.round(burrow.x - px * 1.5), Math.round(burrow.y - px * 0.5), px * 3, px);
+        if (c.lunge < 0.3) {
+          // Only the eyes, swivelling on their stalks.
+          const look = ((tick + c.id * 13) >> 5) % 3 === 0;
+          this.sprite(creatureSprite('mantisPeek', c.palette, 0, washed), c.anchorX, c.anchorZ - 0.2, 1, { anchor: 'bottom', flipX: look });
+          return;
+        }
+        // The club snaps out as it punches.
+        this.sprite(creatureSprite('mantis', c.palette, c.squash > 0.15 ? 1 : 0, washed), c.x, c.z, 1.5, { flipX: c.facing < 0 });
+        return;
+      }
+      case 'gardenEel':
+        this.drawGardenEel(c, washed);
+        return;
+      case 'hermit': {
+        const scale = 0.6 + Math.max(1, c.shell) * 0.1;
+        if (c.shell === 0) {
+          // Soft and exposed, hurrying to its next shell.
+          this.sprite(creatureSprite('hermitNaked', 0, 0, washed), c.x, c.z, 0, { anchor: 'bottom', flipX: c.facing < 0 });
+          return;
+        }
+        const walking = Math.hypot(c.vx, c.vz) > 0.02;
+        const kind: SpriteKind = c.hidden ? 'hermitShell' : 'hermit';
+        this.sprite(creatureSprite(kind, c.palette, walking ? (tick >> 3) & 1 : 0, washed), c.x, c.z, 0, { anchor: 'bottom', flipX: c.facing < 0, scale });
+        return;
+      }
       default: {
         const kind: SpriteKind = c.species === 'minnow' && c.age < SPECIES.minnow.mature ? 'fry' : c.species;
         const speed = Math.hypot(c.vx, c.vz);
@@ -866,6 +988,243 @@ export class OceanView {
         this.sprite(creatureSprite(kind, c.palette, frame, washed), c.x, c.z, c.h, { flipX: c.facing < 0, alpha: c.hidden ? 0.7 : 1 });
       }
     }
+  }
+
+  /**
+   * A garden eel: a sprite standing up out of its burrow, swaying, bent back
+   * by the current with its head turned into it; sinking into the sand as it
+   * ducks. Each eel is its own height.
+   */
+  private drawGardenEel(c: Creature, washed: boolean) {
+    const { spriteCtx: ctx, px, ocean } = this;
+    const hole = this.project(c.anchorX, c.anchorZ, 0);
+    const pit = shadowSprite(4);
+    ctx.globalAlpha = 0.8;
+    ctx.drawImage(pit, Math.round(hole.x - 2 * px), Math.round(hole.y - pit.height * px * 0.5), 4 * px, pit.height * px);
+    const full = Math.round(c.cruiseH * ELEVATION) + 2;
+    const rows = Math.round(c.lunge * full);
+    if (rows < 2) return;
+    const frame = ((ocean.tick + c.id * 7) >> 4) % GARDEN_EEL_FRAMES;
+    this.sprite(gardenEelSprite(c.palette, frame, rows, washed, full), c.anchorX, c.anchorZ, 0, { anchor: 'bottom', flipX: c.facing < 0 });
+  }
+
+  /**
+   * A seagrass meadow, in bands of depth so whatever swims or hides among
+   * the blades is drawn between them. The blades sway together and part
+   * around anything moving through them.
+   */
+  private addSeagrass(m: Meadow, items: Drawable[]) {
+    const movers: number[] = [];
+    for (const c of this.ocean.creatures) {
+      if (c.h > 16 || Math.abs(c.x - m.x) > m.rx + GRASS_PART || Math.abs(c.z - m.z) > m.rz + GRASS_PART) continue;
+      if (Math.hypot(c.vx, c.vz) > 0.03 || c.mood === 'grazing') movers.push(c.x, c.z);
+    }
+    const { blades } = m;
+    for (let first = 0; first < blades.length;) {
+      const band = Math.floor(blades[first].z / GRASS_BAND);
+      let last = first;
+      while (last < blades.length && Math.floor(blades[last].z / GRASS_BAND) === band) last++;
+      const from = first, to = last;
+      items.push({ depth: (band + 0.5) * GRASS_BAND, draw: () => { this.movers = movers; this.drawBlades(m, from, to); } });
+      first = last;
+    }
+  }
+
+  private drawBlades(m: Meadow, from: number, to: number) {
+    const { spriteCtx: ctx, px, ocean, regionTop } = this;
+    const runs = this.grassRuns;
+    for (const run of runs) run.length = 0;
+    const t = ocean.tick * 0.045;
+    // Only the swimmers close enough to this band to part any of it.
+    const z0 = m.blades[from].z - GRASS_PART, z1 = m.blades[to - 1].z + GRASS_PART;
+    const movers: number[] = [];
+    for (let k = 0; k < this.movers.length; k += 2) {
+      const z = this.movers[k + 1];
+      if (z > z0 && z < z1) movers.push(this.movers[k], z);
+    }
+    for (let n = from; n < to; n++) {
+      const b = m.blades[n];
+      // Pushed aside by anything swimming through.
+      let leanX = 0, leanZ = 0;
+      for (let k = 0; k < movers.length; k += 2) {
+        const dx = b.x - movers[k], dz = b.z - movers[k + 1];
+        const d = Math.hypot(dx, dz);
+        if (d >= GRASS_PART || d === 0) continue;
+        const f = (1 - d / GRASS_PART) * 3.5;
+        leanX += (dx / d) * f;
+        leanZ += (dz / d) * f * 0.5;
+      }
+      const shade = (WEED_FIRST[b.kind] + b.shade) * 3;
+      const red = b.kind === 'red', purple = b.kind === 'purple';
+      const wave = Math.sin(t + b.phase * 0.3 + b.x * 0.12);
+      const flutter = Math.sin(t * 1.7 + b.phase) * 0.4;
+      // Squares stacked in the same column and colour go in as one tall
+      // rectangle: a blade only steps sideways two or three times.
+      let col = -1, left = 0, top = 0, bottom = 0, size = 0;
+      // One cell up the screen per step: squares meet without overlapping.
+      for (let i = 0; i <= b.len; i += 1 / ELEVATION) {
+        const k = i / b.maxLen;
+        const give = k * Math.sqrt(k);
+        const sx = (b.x + (wave * 1.6 + flutter + leanX) * give) * px;
+        const sy = Math.round((b.z + leanZ * give - i * ELEVATION) * px - regionTop);
+        const s = Math.ceil(px * (1 + i * PERSPECTIVE));
+        const l = Math.round(sx - s / 2);
+        const c = shade + (i > b.len - 2 ? 2 : i < b.len * 0.35 ? 0 : 1);
+        // Red seaweed is frilly, a little leaf off alternate sides; purple
+        // forks near the top into two tips.
+        if (red && i > 2 && (Math.round(i * ELEVATION) & 1)) runs[shade + 2].push(l + (Math.round(i * ELEVATION) & 2 ? s : -s), sy, s, s);
+        if (purple && i > b.len * 0.55) {
+          const spread = Math.round((i - b.len * 0.55) * 0.7 * px);
+          runs[c].push(l - spread, sy, s, s, l + spread, sy, s, s);
+          continue;
+        }
+        if (c === col && l === left && s === size) { top = sy; continue; }
+        if (col >= 0) runs[col].push(left, top, size, bottom - top + size);
+        col = c; left = l; top = sy; bottom = sy; size = s;
+      }
+      if (col >= 0) runs[col].push(left, top, size, bottom - top + size);
+    }
+    ctx.globalAlpha = 1;
+    for (let c = 0; c < runs.length; c++) {
+      const run = runs[c];
+      if (!run.length) continue;
+      ctx.fillStyle = WEED_SETS[(c / 3) | 0][c % 3];
+      for (let n = 0; n < run.length; n += 4) ctx.fillRect(run[n], run[n + 1], run[n + 2], run[n + 3]);
+    }
+  }
+
+  /**
+   * A sea fan, drawn a couple of rows at a time so it can flex as one piece:
+   * the higher the row, the further it is pushed over, swayed, or shaken
+   * when something has just brushed it.
+   */
+  private drawFan(f: SeaFan) {
+    const { spriteCtx: ctx, px, ocean } = this;
+    const img = fanSprite(f.seed, f.palette, f.w, f.ht);
+    const base = this.project(f.x, f.z, 0);
+    const left = base.x - (f.w * px) / 2;
+    const top = base.y - f.ht * px;
+    const t = ocean.tick;
+    const sway = Math.sin(t * 0.03 + f.phase) * 1.1;
+    const shake = f.shudder * Math.sin(t * 1.1 + f.phase) * 1.6;
+    ctx.globalAlpha = 1;
+    for (let y = 0; y < f.ht; y += 2) {
+      const up = (f.ht - y) / f.ht;
+      const give = up * Math.sqrt(up);
+      const dx = Math.round((f.bx * 0.8 + sway + shake) * give * px);
+      const dy = Math.round(f.bz * 0.4 * give * px);
+      const rows = Math.min(2, f.ht - y);
+      ctx.drawImage(img, 0, y, f.w, rows, Math.round(left + dx), Math.round(top + y * px + dy), f.w * px, rows * px);
+    }
+  }
+
+  /** A sea whip: a thin stalk, stiff at the root and springy toward its pale tip. */
+  private drawWhip(b: SeaWhip) {
+    const { spriteCtx: ctx, px, ocean, regionTop } = this;
+    const runs = this.whipRuns;
+    const set = b.palette * 3;
+    const t = ocean.tick * 0.05 + b.phase;
+    let col = -1, left = 0, top = 0, bottom = 0, size = 0;
+    for (let i = 0; i <= b.len; i += 1 / ELEVATION) {
+      const k = i / b.len;
+      const give = k * k;
+      const sx = (b.x + (b.bx + Math.sin(t + i * 0.08) * 0.9) * give) * px;
+      const sy = Math.round((b.z + b.bz * give * 0.5 - i * ELEVATION) * px - regionTop);
+      const s = Math.ceil(px * (1 + i * PERSPECTIVE));
+      const l = Math.round(sx - s / 2);
+      const c = set + (i > b.len - 2.5 ? 2 : i < b.len * 0.25 ? 0 : 1);
+      if (c === col && l === left && s === size) { top = sy; continue; }
+      if (col >= 0) runs[col].push(left, top, size, bottom - top + size);
+      col = c; left = l; top = sy; bottom = sy; size = s;
+    }
+    if (col >= 0) runs[col].push(left, top, size, bottom - top + size);
+    ctx.globalAlpha = 1;
+    for (let c = set; c < set + 3; c++) {
+      const run = runs[c];
+      ctx.fillStyle = WHIPS[b.palette][c - set];
+      for (let n = 0; n < run.length; n += 4) ctx.fillRect(run[n], run[n + 1], run[n + 2], run[n + 3]);
+      run.length = 0;
+    }
+  }
+
+  /** A clump of sea lettuce at the foot of a rock, its frilly edges rippling. */
+  private drawLettuce(l: Lettuce) {
+    const frame = Math.floor(this.ocean.tick / 14 + l.phase * 3) % LETTUCE_FRAMES;
+    this.sprite(lettuceSprite(Math.ceil(l.leaves), frame, l.palette), l.x, l.z, 0, { anchor: 'bottom' });
+  }
+
+  /** A field of small anemones, in bands of depth like the meadows. */
+  private addPolyps(f: AnemoneField, items: Drawable[]) {
+    const { polyps } = f;
+    for (let first = 0; first < polyps.length;) {
+      const band = Math.floor(polyps[first].z / GRASS_BAND);
+      let last = first;
+      while (last < polyps.length && Math.floor(polyps[last].z / GRASS_BAND) === band) last++;
+      const from = first, to = last;
+      items.push({ depth: (band + 0.5) * GRASS_BAND, draw: () => this.drawPolyps(f, from, to) });
+      first = last;
+    }
+  }
+
+  /**
+   * Small anemones, like little copies of the big ones: a fleshy foot on the
+   * sand and five separate tentacles fanning out from it, each ending in a
+   * pale tip. Open, they stand up and sway together; shut, only the foot and
+   * a nub are left.
+   */
+  private drawPolyps(f: AnemoneField, from: number, to: number) {
+    const { spriteCtx: ctx, px, ocean, regionTop } = this;
+    const runs = this.polypRuns;
+    const t = ocean.tick * 0.06;
+    for (let n = from; n < to; n++) {
+      const p = f.polyps[n];
+      const set = p.palette * 3;
+      const bx = p.x * px;
+      const by = Math.round(p.z * px - regionTop);
+      runs[set].push(Math.round(bx - px * 1.5), by - px, px * 3, px);
+      const reach = 1 + p.open * 3.5;
+      if (reach < 1.6) { runs[set + 1].push(Math.round(bx - px / 2), by - px * 2, px, px); continue; }
+      const sway = Math.sin(t + p.phase * 0.4 + p.x * 0.2) * p.open;
+      for (let k = -2; k <= 2; k++) {
+        const root = k * 0.55;
+        const lean = k * 0.45 * p.open;
+        for (let j = 1; j <= reach; j++) {
+          const x = Math.round(bx + (root + lean * j * 0.6 + sway * (j / reach)) * px - px / 2);
+          runs[set + (j > reach - 1 ? 2 : 1)].push(x, by - px * (j + 1), px, px);
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+    for (let c = 0; c < runs.length; c++) {
+      const run = runs[c];
+      if (!run.length) continue;
+      ctx.fillStyle = POLYPS[(c / 3) | 0][c % 3];
+      for (let k = 0; k < run.length; k += 4) ctx.fillRect(run[k], run[k + 1], run[k + 2], run[k + 3]);
+      run.length = 0;
+    }
+  }
+
+  /** A mantis shrimp's punch: a white-hot flash bursting into a ring of sparks. */
+  private drawFlash(d: Drop) {
+    const { spriteCtx: ctx, px } = this;
+    const q = this.project(d.x, d.z, d.h);
+    const age = 1 - d.life / d.maxLife;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 1 - age * 0.8;
+    if (age < 0.35) {
+      ctx.fillStyle = DROP_COLORS.flash[0];
+      ctx.fillRect(Math.round(q.x - px * 1.5), Math.round(q.y - px * 1.5), px * 3, px * 3);
+    }
+    ctx.fillStyle = DROP_COLORS.flash[age < 0.5 ? 1 : 2];
+    const r = (1.5 + age * 5) * px;
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      const len = k % 2 ? 1 : 2;
+      for (let s = 0; s < len; s++) {
+        ctx.fillRect(Math.round(q.x + Math.cos(a) * (r + s * px) - px / 2), Math.round(q.y + Math.sin(a) * (r + s * px) * 0.7 - px / 2), px, px);
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   /**
@@ -893,7 +1252,7 @@ export class OceanView {
       const t = i / n;
       const wiggle = Math.sin(ocean.tick * 0.22 - t * 6 + c.id) * 2.2 * Math.sin(t * Math.PI);
       const p = this.project(c.anchorX + dx * t + nx * wiggle, c.anchorZ + dz * t + nz * wiggle, 1 + dh * t);
-      const size = Math.ceil(px * p.s * 2);
+      const size = Math.ceil(px * p.s * 2 * this.size);
       const col = i % 3 === 0 ? spot : main;
       ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
       ctx.fillRect(Math.round(p.x - size / 2), Math.round(p.y - size / 2), size, size);
@@ -992,7 +1351,7 @@ export class OceanView {
     const working = client?.alive && client.mood === 'cleaning';
     for (let k = 0; k < 3; k++) {
       const frame = (tick + k * 5) >> 3 & 1;
-      const img = creatureSprite('shrimp', 0, frame);
+      const img = creatureSprite('cleaner', 0, frame);
       if (working) {
         const width = BODY_WIDTH[client.species];
         // Spread along the fish, each pottering about its own patch.

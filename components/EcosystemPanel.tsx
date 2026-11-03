@@ -10,7 +10,6 @@ interface EcosystemPanelProps {
 // Algae cover rarely passes this, so it fills the meter.
 const ALGAE_FULL_PERCENT = 40;
 const FEED_LENGTH = 3;
-const OPEN_BY_DEFAULT_MIN_WIDTH = 1900;
 
 const EVENT_COLOR: Record<OceanEvent['kind'], string> = {
   birth: '#7fd18b',
@@ -41,6 +40,11 @@ const PLURAL: Record<Species, string> = {
   turtle: 'Turtles',
   manta: 'Mantas',
   dolphin: 'Dolphins',
+  shrimp: 'Shrimp',
+  mantis: 'Mantises',
+  gardenEel: 'Garden eels',
+  lionfish: 'Lionfish',
+  hermit: 'Hermits',
 };
 
 // Each species' own sprite as a tiny icon, drawn once.
@@ -68,8 +72,8 @@ const Row: React.FC<{ label: string; value: string | number; fill: number; color
 
 /** Live census of the reef, bottom left by the food button. */
 const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
-  // Open by default only where it has room beside the content.
-  const [isOpen, setIsOpen] = useState(() => window.innerWidth >= OPEN_BY_DEFAULT_MIN_WIDTH);
+  // Closed until the visitor opens it.
+  const [isOpen, setIsOpen] = useState(false);
   if (!stats) return null;
   const { deaths } = stats;
   const icon = speciesIcons();

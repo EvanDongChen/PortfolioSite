@@ -11,6 +11,7 @@ export interface ReefDebugActions {
   parasites: () => void;
   spawning: () => void;
   baitBall: () => void;
+  shell: () => void;
   setSpeed: (speed: number) => void;
 }
 
@@ -78,6 +79,7 @@ const ReefDebugPanel: React.FC<ReefDebugPanelProps> = ({ actions }) => {
         <button type="button" onClick={() => act?.parasites()}>Parasites on big fish</button>
         <button type="button" onClick={() => act?.spawning()}>Coral spawning</button>
         <button type="button" onClick={() => act?.baitBall()}>Bait ball here</button>
+        <button type="button" onClick={() => act?.shell()}>Hermit shell here</button>
       </div>
       <p className="reef-debug-label">Simulation speed</p>
       <div className="reef-debug-speed" role="radiogroup" aria-label="Simulation speed">

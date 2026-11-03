@@ -42,7 +42,9 @@ export type SpriteKind =
   | 'minnow' | 'fry' | 'barracuda' | 'crab' | 'jelly' | 'turtle'
   | 'puffer' | 'pufferPuffed' | 'seahorse' | 'urchin' | 'octopus'
   | 'eel' | 'eelHead' | 'shark' | 'manta' | 'angler'
-  | 'clownfish' | 'dolphin' | 'shrimp' | 'starfish' | 'cuttlefish';
+  | 'clownfish' | 'dolphin' | 'cleaner' | 'starfish' | 'cuttlefish'
+  | 'shrimp' | 'mantis' | 'mantisPeek' | 'gardenEel' | 'lionfish' | 'lionfishFlared'
+  | 'hermit' | 'hermitShell' | 'hermitNaked';
 
 // A dolphin seen side on, without its tail; the flukes beat up and down.
 const DOLPHIN_BODY = [
@@ -147,10 +149,45 @@ const ROWS: Record<SpriteKind, string[][]> = {
     dolphinFrame([[4, '.TT'], [5, 'TTT'], [6, 'T']]),
   ],
   // Cleaner shrimp: striped, with long feelers; the legs patter.
-  shrimp: [
+  cleaner: [
     ['D.......', '.DBWBBW.', '..BWBBWT', '..L.L.L.'],
     ['.D......', '.DBWBBW.', '..BWBBWT', '...L.L.L'],
   ],
+  // A glassy little shrimp: tail fan (T), body (B), banding (L), long feelers (D); the legs patter.
+  shrimp: [
+    ['......DD', '.BBBBBE.', 'TBLBLBB.', '.T.L.L..'],
+    ['.....D.D', '.BBBBBE.', 'TBLBLBB.', '.T..L.L.'],
+  ],
+  // Mantis shrimp: carapace (D), body (B), bright bands (L), legs, tail and
+  // eyestalks (T); the folded club (W) snaps out on the second frame.
+  mantis: [
+    ['.........E.E..', '.........T.T..', '..DDDDDDDDBB..', '.DBLBBLBBLBBB.', 'TBBBBBBBBBBBBW', 'TT.LLLLLLLL.WW', '..T.T.T.T.....'],
+    ['.........E.E....', '.........T.T....', '..DDDDDDDDBB....', '.DBLBBLBBLBBB...', 'TBBBBBBBBBBBBWWW', 'TT.LLLLLLLL....W', '..T.T.T.T.......'],
+  ],
+  // Just the eyes on their stalks, watching from the burrow.
+  mantisPeek: [['E.E', 'T.T', 'DBD']],
+  // Drawn by code (see gardenEelSprite); kept here for the types.
+  gardenEel: [['.']],
+  // Lionfish: striped body (B, D) and long venomous spines (T, D), folded
+  // back, then fanned out wide to herd or to warn.
+  lionfish: [
+    ['...T.T.T.......', '..T.T.T.T......', '..TDTDTDT......', '.TBBDBBDBBB....', 'TTBDBBDBBDBBE..', 'TTBBDBBDBBBBBB.', '.TLLLLLLLLLB...', '..TDTDTDT......', '...T.T.T.T.....'],
+    ['....T.T.T......', '..T.T.T.T......', '..TDTDTDT......', '.TBBDBBDBBB....', '.TBDBBDBBDBBE..', 'TTBBDBBDBBBBBB.', '.TLLLLLLLLLB...', '..TDTDTDT......', '..T.T.T.T......'],
+  ],
+  lionfishFlared: [
+    ['T...T...T....', '.T..T..T.....', '..T.T.T......', '...TDTDT.....', 'TTTBBDBBDBB..', 'TTBDBBDBBDBE.', 'TTTBDBBDBBBBB', '...LLLLLLLB..', '...TDTDT.....', '..T.T.T......', '.T..T..T.....', 'T...T...T....'],
+    ['.T...T...T...', '..T..T..T....', '...T.T.T.....', '...TDTDT.....', 'TTTBBDBBDBB..', 'TTBDBBDBBDBE.', 'TTTBDBBDBBBBB', '...LLLLLLLB..', '...TDTDT.....', '...T.T.T.....', '..T..T..T....', '.T...T...T...'],
+  ],
+  // A hermit crab in its spiral shell (D spiral, B shell, L highlight), legs
+  // and claw (T) and eyes poking out the front; the legs step.
+  hermit: [
+    ['...DD.......', '..DLLD......', '.DLBBLD..E.E', 'DLBDDBLD.T.T', 'DBDLLDBBTTTT', '.BBDDBBTTLTT', '..BBBB.T.T..'],
+    ['...DD.......', '..DLLD......', '.DLBBLD..E.E', 'DLBDDBLD.T.T', 'DBDLLDBBTTTT', '.BBDDBBTTLTT', '..BBBB..T.T.'],
+  ],
+  // Pulled right in: just the shell.
+  hermitShell: [['...DD...', '..DLLD..', '.DLBBLD.', 'DLBDDBLB', 'DBDLLDBB', '.BBDDBB.', '..BBBB..']],
+  // Between shells: soft, curled and pink.
+  hermitNaked: [['.....E.E', '.LLL.TT.', 'LLLLTTTT', '.LL.T.T.']],
   // Drawn by code (see starfishSprite and cuttleSprite); kept here for the types.
   starfish: [['.']],
   cuttlefish: [['.']],
@@ -226,8 +263,35 @@ const PALETTES: Record<SpriteKind, Rgb[][]> = {
   dolphin: [
     [[72, 88, 108], [124, 144, 164], [214, 224, 232], [92, 110, 130]],
   ],
-  shrimp: [
+  cleaner: [
     [[255, 235, 225], [235, 70, 60], [255, 190, 180], [210, 50, 50]],
+  ],
+  shrimp: [
+    [[255, 214, 200], [236, 150, 132], [255, 204, 188], [214, 104, 100]],
+    [[214, 238, 250], [160, 196, 214], [226, 240, 248], [120, 160, 190]],
+  ],
+  mantis: [
+    [[130, 226, 124], [40, 160, 92], [232, 92, 70], [250, 146, 60]],
+    [[124, 204, 255], [60, 120, 222], [255, 212, 80], [255, 92, 124]],
+  ],
+  mantisPeek: [],
+  // Spotted (dark spots on pale), and splendid (orange, banded white).
+  gardenEel: [
+    [[40, 40, 52], [232, 228, 212], [70, 70, 84], [196, 188, 168]],
+    [[200, 92, 40], [250, 150, 60], [252, 242, 230], [255, 206, 120]],
+  ],
+  lionfish: [
+    [[250, 240, 230], [186, 70, 52], [240, 204, 184], [222, 92, 72]],
+  ],
+  lionfishFlared: [],
+  hermit: [
+    [[150, 100, 60], [214, 170, 110], [250, 222, 170], [232, 112, 80]],
+    [[170, 80, 92], [232, 140, 142], [255, 212, 202], [232, 112, 80]],
+    [[80, 90, 122], [140, 150, 182], [212, 216, 236], [232, 112, 80]],
+  ],
+  hermitShell: [],
+  hermitNaked: [
+    [[255, 190, 180], [255, 170, 160], [255, 196, 184], [232, 112, 80]],
   ],
   // [outline, body, arm tips, speckles]
   starfish: [
@@ -241,6 +305,9 @@ const PALETTES: Record<SpriteKind, Rgb[][]> = {
 };
 PALETTES.pufferPuffed = PALETTES.puffer;
 PALETTES.eelHead = PALETTES.eel;
+PALETTES.mantisPeek = PALETTES.mantis;
+PALETTES.lionfishFlared = PALETTES.lionfish;
+PALETTES.hermitShell = PALETTES.hermit;
 const EYE: Rgb = [12, 14, 26];
 const TEETH: Rgb = [232, 232, 220];
 
@@ -263,6 +330,7 @@ export const creaturePalette = (kind: SpriteKind, palette: number, washed = fals
 
 export const creatureSprite = (kind: SpriteKind, palette: number, frame: number, washed = false): HTMLCanvasElement => {
   if (kind === 'starfish') return starfishSprite(palette, 5, 0, frame & 1, washed);
+  if (kind === 'gardenEel') return gardenEelSprite(palette, frame, GARDEN_EEL_ROWS, washed);
   if (kind === 'cuttlefish') return cuttleSprite(frame, false, washed);
   return cached(`${kind}-${palette}-${frame}-${washed}`, () => {
     const set = PALETTES[kind][palette % PALETTES[kind].length].map(c => (washed ? pale(c) : c));
@@ -270,6 +338,132 @@ export const creatureSprite = (kind: SpriteKind, palette: number, frame: number,
     return fromRows(frames[frame % frames.length], { D: set[0], B: set[1], L: set[2], T: set[3], E: EYE, W: TEETH });
   });
 };
+
+/** Sea fan colours: [rim and tips, branches, trunk and shade]: purple, red, orange, yellow. */
+const FAN_SETS: Rgb[][] = [
+  [[226, 160, 244], [172, 96, 214], [112, 54, 154]],
+  [[255, 146, 136], [222, 72, 74], [150, 40, 52]],
+  [[255, 196, 116], [240, 134, 54], [170, 82, 32]],
+  [[255, 240, 146], [228, 198, 70], [160, 130, 42]],
+];
+
+/**
+ * A sea fan seen broadside: a short trunk forking into a half-disc lattice
+ * of branches (radiating ribs joined by arcs), with pale tips round the rim
+ * and a few gaps where it has worn through.
+ */
+export const fanSprite = (seed: number, palette: number, w: number, h: number) =>
+  cached(`fan-${seed}-${palette}-${w}-${h}`, () => {
+    const rnd = seeded(seed);
+    const [rim, branch, trunk] = FAN_SETS[palette % FAN_SETS.length];
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const ribs = 4 + Math.floor(rnd() * 3);
+    const cx = (w - 1) / 2;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const up = h - 1 - y;
+        if (up < 2) {
+          if (Math.abs(x - cx) < 1) { ctx.fillStyle = css(trunk); ctx.fillRect(x, y, 1, 1); }
+          continue;
+        }
+        const dx = (x - cx) / (w / 2), dy = (up - 1) / (h - 2);
+        const r = Math.hypot(dx, dy);
+        if (r > 1) continue;
+        const a = Math.atan2(dx, dy); // 0 straight up
+        const rib = Math.abs(((a / Math.PI) * ribs + 0.5 * ribs) % 1 - 0.5) < 0.12 / Math.max(0.25, r);
+        const arc = Math.round(r * (h - 2)) % 3 === 0;
+        if (!(rib || arc) || rnd() < 0.08) continue;
+        ctx.fillStyle = css(r > 0.86 ? rim : r < 0.3 ? trunk : branch);
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    return c;
+  });
+
+/** Sea lettuce colours: [light, leaf, shade]: bright green, and a yellower green. */
+const LETTUCE_SETS: Rgb[][] = [
+  [[170, 240, 120], [104, 204, 84], [58, 146, 62]],
+  [[210, 246, 130], [150, 214, 80], [92, 160, 58]],
+];
+export const LETTUCE_FRAMES = 3;
+
+/**
+ * A clump of sea lettuce: up to seven ruffled leaves, back ones first, their
+ * frilly edges rippling over three frames. Fewer leaves once it is grazed.
+ */
+export const lettuceSprite = (leaves: number, frame: number, palette: number) =>
+  cached(`lettuce-${leaves}-${frame % LETTUCE_FRAMES}-${palette}`, () => {
+    const [light, leaf, shade] = LETTUCE_SETS[palette % LETTUCE_SETS.length];
+    const w = 14, h = 8;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    // Leaf centres, back to front: the clump fills in from the middle.
+    const spots = [[7, 3], [4, 4], [10, 4], [6, 5], [9, 5], [3, 6], [11, 6]];
+    for (let k = 0; k < Math.min(leaves, spots.length); k++) {
+      const [lx, ly] = spots[k];
+      for (let y = ly - 3; y <= ly + 2; y++) {
+        for (let x = lx - 3; x <= lx + 3; x++) {
+          const nx = (x - lx) / 3.2, ny = (y - ly) / 2.4;
+          if (nx * nx + ny * ny > 1 || y < 0 || y >= h) continue;
+          // The rim ruffles: edge pixels come and go with the frame.
+          const edge = nx * nx + ny * ny > 0.6;
+          if (edge && y < ly && ((x + y + frame + k) % 3 === 0)) continue;
+          ctx.fillStyle = css(edge && y < ly ? light : y > ly ? shade : leaf);
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+      // A pale midrib.
+      ctx.fillStyle = css(light);
+      ctx.fillRect(lx, ly - 1, 1, 2);
+    }
+    return c;
+  });
+
+/** A garden eel's height when it is all the way out, in art pixels (for icons). */
+export const GARDEN_EEL_ROWS = 14;
+export const GARDEN_EEL_FRAMES = 4;
+
+/**
+ * A garden eel standing out of its burrow, facing right: a body two pixels
+ * thick (lit side B, shaded side L, dark spots D, or white bands W on the
+ * orange kind), bent back by the current and curling into a head with an
+ * eye (E) and a pale chin (T). `full` is its height all the way out; the
+ * frames sway it side to side, and fewer rows is it partway down its
+ * burrow, the bottom of the body hidden in the sand.
+ */
+export const gardenEelSprite = (palette: number, frame: number, rows: number, washed = false, full = GARDEN_EEL_ROWS) =>
+  cached(`geel-${palette}-${frame % GARDEN_EEL_FRAMES}-${rows}-${full}-${washed}`, () => {
+    rows = Math.min(rows, full);
+    const mark = palette % 2 ? 'W' : 'D';
+    const sway = Math.sin(((frame % GARDEN_EEL_FRAMES) / GARDEN_EEL_FRAMES) * Math.PI * 2);
+    // Column of the body's lit side at a height up the eel (0 at the sand).
+    const column = (up: number) => {
+      const k = up / full;
+      return 3 + Math.round(sway * 1.6 * k * Math.sqrt(k) - 1.6 * k * k);
+    };
+    const w = 8;
+    const grid = Array.from({ length: rows }, () => Array<string>(w).fill('.'));
+    for (let y = 0; y < rows; y++) {
+      const up = full - 1 - y;
+      const c = Math.max(0, Math.min(w - 3, column(up)));
+      if (y === 0) {
+        // The head: a bump over the eye, the chin below.
+        grid[y][c + 1] = 'B';
+        grid[y][c + 2] = 'E';
+      } else if (y === 1) {
+        grid[y][c] = 'B';
+        grid[y][c + 1] = 'B';
+        grid[y][c + 2] = 'T';
+      } else {
+        const spot = up % 3 === 1;
+        grid[y][c] = spot ? mark : 'B';
+        grid[y][c + 1] = spot && (mark === 'W' || up % 2) ? mark : 'L';
+      }
+    }
+    const [spot, body, band, chin] = creaturePalette('gardenEel', palette, washed);
+    return fromRows(grid.map(r => r.join('')), { D: spot, B: body, L: shadeOf(body, 0.78), T: chin, E: EYE, W: band });
+  });
 
 /**
  * A puff of sand kicked off the seabed, seen from slightly above: a lump

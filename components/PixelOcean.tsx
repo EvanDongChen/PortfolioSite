@@ -72,6 +72,10 @@ const MOOD_LABEL: Record<Mood, string> = {
   mesmerised: 'Mesmerised',
   eating: 'Eating',
   nestled: 'Nestled in its anemone',
+  swaying: 'Swaying in the current',
+  ducking: 'Ducked into its burrow',
+  flaring: 'Fanning out its fins',
+  swapping: 'Swapping shells',
 };
 
 /** What the adopt bar can ask the running reef to do. */
@@ -257,6 +261,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
       parasites: () => send({ type: 'debug', action: 'parasites' }),
       spawning: () => send({ type: 'debug', action: 'spawning' }),
       baitBall: () => send({ type: 'debug', action: 'baitBall' }),
+      shell: () => send({ type: 'debug', action: 'shell' }),
       setSpeed: speed => send({ type: 'debug', action: 'speed', speed }),
     };
 
