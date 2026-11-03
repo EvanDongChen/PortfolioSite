@@ -77,13 +77,16 @@ export interface Roots { x: number; z: number; side: 1 | -1; seed: number }
 export interface Frond { x: number; z: number; vx: number; vz: number; patch: number; shade: number; alive: boolean }
 export interface DuckweedPatch { x: number; z: number; rx: number; rz: number; target: number; count: number }
 
-export type PondSpecies = 'frog';
-export const POND_SPECIES_LIST: PondSpecies[] = ['frog'];
+export type PondSpecies = 'spawn' | 'tadpole' | 'frog';
+export const POND_SPECIES_LIST: PondSpecies[] = ['frog', 'spawn', 'tadpole'];
+/** A frog's life, stage by stage, for the census. */
+export type FrogStage = 'spawn' | 'tadpole' | 'backLegs' | 'fourLegs' | 'froglet' | 'adult';
+export const FROG_STAGES: FrogStage[] = ['spawn', 'tadpole', 'backLegs', 'fourLegs', 'froglet', 'adult'];
 
 /** What a creature is up to this tick, for the inspector. */
 export type PondMood =
   | 'sitting' | 'croaking' | 'catching' | 'leaping' | 'swimming' | 'floating' | 'climbing' | 'fleeing' | 'diving'
-  | 'singing';
+  | 'singing' | 'calling' | 'clasping' | 'laying' | 'developing' | 'wriggling' | 'schooling' | 'grazing' | 'emerging';
 
 /** Something a frog can sit on: a lily pad, a floating log, or a spot on the bank. */
 export type Perch =
@@ -121,10 +124,20 @@ export interface PondCreature {
   /** Squash and stretch: positive stretches it along its length. */
   squash: number;
   squashV: number;
+  /** Frogs: female or male. A pair in amplexus are each other's mate. */
+  sex: 'f' | 'm';
+  mate: PondCreature | null;
+  /** Where it is making for: a female's laying site, a froglet's way out. */
+  goal: { x: number; z: number } | null;
   lineId: number;
   adopted: boolean;
   alive: boolean;
 }
+
+/** How a creature died: eaten, starved, of old age, or lost (the many young that never make it). */
+export type PondDeath = 'eaten' | 'starved' | 'oldAge' | 'lost';
+export interface PondEvent { tick: number; kind: 'mating' | 'spawn' | 'hatch' | 'emerge' | 'eaten' | 'visit' | 'nest'; text: string; starred: boolean }
+const EVENT_LOG_SIZE = 6;
 
 /** A midge dancing in its swarm over the reeds: food for frogs. */
 export interface Midge { x: number; z: number; h: number; vx: number; vz: number; vh: number; swarm: number; alive: boolean }
@@ -151,16 +164,26 @@ interface SpeciesDef {
 
 // Ticks run at 30 a second.
 export const POND_SPECIES: Record<PondSpecies, SpeciesDef> = {
+  spawn: {
+    label: 'Frogspawn', names: ['Clump', 'Jelly', 'Cluster', 'Brood', 'Pearls', 'Beads'],
+    cruise: 0, burst: 0, vision: 0, metabolism: 0, maxAge: [99999, 99999], mature: 0, hungerLine: 0,
+    cap: [26000, 0, 7], palettes: 1,
+  },
+  tadpole: {
+    label: 'Tadpole', names: ['Wriggle', 'Comma', 'Dot', 'Squiggle', 'Nib', 'Tad', 'Polly', 'Wiggle', 'Speck', 'Inky'],
+    cruise: 0.14, burst: 0.4, vision: 14, metabolism: 0.00025, maxAge: [99999, 99999], mature: 0, hungerLine: 0.75,
+    cap: [2400, 0, 90], palettes: 1,
+  },
   frog: {
     label: 'Frog', names: ['Ribbit', 'Hopper', 'Lily', 'Pond', 'Croaky', 'Toad', 'Jumper', 'Fern', 'Moss', 'Bog', 'Kermie', 'Pip', 'Leap', 'Basil'],
-    cruise: 0.18, burst: 0.6, vision: 30, metabolism: 0.00012, maxAge: [12000, 18000], mature: 2400, hungerLine: 0.7,
+    cruise: 0.18, burst: 0.6, vision: 30, metabolism: 0.00008, maxAge: [12000, 18000], mature: 2400, hungerLine: 0.7,
     cap: [7000, 4, 26], palettes: 3,
   },
 };
 
 /** How far a frog can leap, and how far its tongue reaches (cells). */
 const LEAP_RANGE = 46;
-const TONGUE_REACH = 13;
+const TONGUE_REACH = 16;
 const TONGUE_TICKS = 14;
 /** How high (h) a perch's top is: on a pad its bob, on a log its rounded top. */
 export const LOG_TOP = 7.5;
@@ -169,6 +192,21 @@ const FLOAT_H = -0.7;
 /** How far a fast cursor startles a frog off its perch (cells). */
 const STARTLE_REACH = 16;
 const MAX_MIDGES = 420;
+/** Frogspawn takes this long to hatch, and a tadpole this long to turn into a froglet. */
+export const SPAWN_TICKS = 1500;
+export const TADPOLE_TICKS = 2700;
+/** A froglet's tail is gone after this many ticks. */
+export const TAIL_TICKS = 700;
+/** Tadpoles that hatch from one clump. */
+const BROOD: [number, number] = [5, 9];
+/** How long a pair stay in amplexus at the laying site before the spawn is out. */
+const LAYING_TICKS = 150;
+/** After laying, before either frog will pair again. */
+const FROG_BREED_COOLDOWN = 3600;
+/** A tadpole's chance of dying any tick (disease, cold): most never make it. */
+const TADPOLE_MORTALITY = 0.00012;
+/** On top of that, more die (and more froglets never make it) when the pond is crowded with frogs. */
+const CROWDING_MORTALITY = 0.0012;
 const BUCKET = 32;
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
@@ -235,6 +273,12 @@ export class Pond {
   rings: Ring[] = [];
   droplets: Droplet[] = [];
   private nextId = 1;
+  births = 0;
+  /** Midges and other insects caught, for the census. */
+  meals = 0;
+  deaths: Record<PondDeath, number> = { eaten: 0, starved: 0, oldAge: 0, lost: 0 };
+  /** Recent happenings for the census, newest first. */
+  events: PondEvent[] = [];
   private grid: PondCreature[][] = [];
   private gridCols = 0;
   private gridRows = 0;
@@ -331,7 +375,11 @@ export class Pond {
       for (const f of this.fronds) if (!inside(f)) f.alive = false;
     }
     if (h > from) this.plant(from, h);
-    this.swarms = this.clumps.filter((_, n) => n % 2 === 0).map(c => ({ x: c.x + (c.x < w / 2 ? 6 : -6), z: c.z, h: rand(8, 14) }));
+    // Midges dance over the reeds and over the lily pads.
+    this.swarms = [
+      ...this.clumps.filter((_, n) => n % 2 === 0).map(c => ({ x: c.x + (c.x < w / 2 ? 6 : -6), z: c.z, h: rand(8, 14) })),
+      ...this.pads.filter((_, n) => n % 2 === 0).map(p => ({ x: p.x, z: p.z, h: rand(9, 14) })),
+    ];
     for (const m of this.midges) m.swarm = Math.min(m.swarm, this.swarms.length - 1);
     if (!this.swarms.length) this.midges.length = 0;
     for (const c of this.creatures) {
@@ -701,9 +749,22 @@ export class Pond {
       energy: rand(0.6, 0.9), hungry: false, age: parent ? 0 : randInt(sp.mature, sp.maxAge[0] * 0.6),
       maxAge: randInt(sp.maxAge[0], sp.maxAge[1]), breedCooldown: randInt(0, 1200), palette: randInt(0, sp.palettes - 1),
       heading: rand(0, Math.PI * 2), timer: randInt(30, 300), perch: null, leap: null, target: null, tongue: 0, throat: 0,
-      squash: 0, squashV: 0, lineId: parent ? parent.lineId : id, adopted: false, alive: true,
+      squash: 0, squashV: 0, sex: Math.random() < 0.5 ? 'f' : 'm', mate: null, goal: null,
+      lineId: parent ? parent.lineId : id, adopted: false, alive: true,
     };
     this.creatures.push(c);
+    if (species === 'spawn' || species === 'tadpole') {
+      // Laid (or hatched) in the shallows: a fresh clump, or tadpoles of any age.
+      c.age = parent ? 0 : randInt(0, species === 'spawn' ? SPAWN_TICKS * 0.6 : TADPOLE_TICKS * 0.8);
+      c.layer = 'under';
+      c.mood = species === 'spawn' ? 'developing' : 'wriggling';
+      const site = parent ? { x: parent.x, z: parent.z } : this.layingSite(rand(0, this.w), rand(0, this.h));
+      c.x = site.x + (species === 'tadpole' ? rand(-3, 3) : 0);
+      c.z = site.z + (species === 'tadpole' ? rand(-2, 2) : 0);
+      c.h = species === 'spawn' ? -1.6 : -rand(1.5, 4);
+      if (!this.isWater(c.x, c.z)) { c.x = site.x; c.z = site.z; }
+      return c;
+    }
     // A frog starts on a free pad, a log or the bank, or out in the water.
     const perch = this.findPerch(rand(4, this.w - 4), rand(4, this.h - 4), 1e9);
     if (perch && Math.random() < 0.8) this.sitOn(c, perch);
@@ -814,15 +875,19 @@ export class Pond {
     return counts;
   }
 
+  /** How far over its cap the frog population is (0 when it has room). */
+  private crowding = 0;
+
   private updateCreatures() {
     const counts = this.counts();
+    if (this.tick % 30 === 0) this.crowding = Math.max(0, (counts.frog + counts.tadpole * 0.25) / this.cap('frog') - 0.8);
     for (let n = 0, total = this.creatures.length; n < total; n++) {
       const c = this.creatures[n];
       if (c.alive) this.updateCreature(c);
     }
     // Newcomers hop in from the bank if the frogs are down to their last few.
     if (this.tick % 150 === 0) {
-      for (const sp of POND_SPECIES_LIST) if (counts[sp] < POND_SPECIES[sp].cap[1] && Math.random() < 0.4) this.spawn(sp);
+      if (counts.frog < POND_SPECIES.frog.cap[1] && Math.random() < 0.4) { this.spawn('frog'); this.logEvent('visit', this.creatures[this.creatures.length - 1]); }
     }
   }
 
@@ -839,21 +904,278 @@ export class Pond {
     else if (c.energy > 0.95) c.hungry = false;
     switch (c.species) {
       case 'frog': this.thinkFrog(c); break;
+      case 'spawn': this.thinkSpawn(c); break;
+      case 'tadpole': this.thinkTadpole(c); break;
     }
     if (!c.alive) return;
     c.energy -= sp.metabolism * (c.mood === 'swimming' || c.mood === 'leaping' ? 2 : 1);
-    if (c.energy <= 0 || c.age > c.maxAge) c.alive = false;
+    if (c.energy <= 0) this.die(c, 'starved');
+    else if (c.age > c.maxAge) this.die(c, 'oldAge');
+  }
+
+  private die(c: PondCreature, cause: PondDeath) {
+    c.alive = false;
+    this.deaths[cause]++;
+    const mate = c.mate;
+    if (mate) { mate.mate = null; if (mate.mood === 'clasping') mate.mood = 'swimming'; }
+    c.mate = null;
+  }
+
+  /** Where a frog is in its life: spawn, tadpole (then with legs), froglet or adult. */
+  stageOf(c: PondCreature): FrogStage | null {
+    if (c.species === 'spawn') return 'spawn';
+    if (c.species === 'tadpole') {
+      const dev = c.age / TADPOLE_TICKS;
+      return dev < 0.4 ? 'tadpole' : dev < 0.72 ? 'backLegs' : 'fourLegs';
+    }
+    if (c.species === 'frog') return c.age < POND_SPECIES.frog.mature ? 'froglet' : 'adult';
+    return null;
+  }
+
+  /**
+   * Somewhere in the shallows to lay spawn: among the reeds by the water's
+   * edge, or under a lily pad. The nearest few to a point, picked at random.
+   */
+  layingSite(x: number, z: number) {
+    const sites: { x: number; z: number; d: number }[] = [];
+    for (const c of this.clumps) {
+      const st = c.stems.find(st => this.isWater(st.x, st.z) && this.depthAt(st.x, st.z) > 1.5);
+      if (st) sites.push({ x: st.x + rand(-1, 1), z: st.z, d: Math.hypot(st.x - x, st.z - z) });
+    }
+    // At a pad's near edge, peeping out from under it.
+    for (const p of this.pads) sites.push({ x: p.x + rand(-0.4, 0.4) * p.r, z: p.z + p.r * 0.6 + 1.5, d: Math.hypot(p.x - x, p.z - z) });
+    if (!sites.length) return { x: this.w / 2, z };
+    sites.sort((a, b) => a.d - b.d);
+    return sites[randInt(0, Math.min(3, sites.length - 1))];
+  }
+
+  logEvent(kind: PondEvent['kind'], a: PondCreature | null, b: PondCreature | null = null, text?: string) {
+    const name = (c: PondCreature | null) => c?.name.replace(/ #\d+$/, '') ?? '';
+    const say = text ?? {
+      mating: `${name(a)} and ${name(b)} paired up`,
+      spawn: `${name(a)} laid frogspawn`,
+      hatch: 'Tadpoles hatched',
+      emerge: `${name(a)} climbed out as a froglet`,
+      eaten: `${name(b)} ate ${name(a)}`,
+      visit: `${name(a)} arrived`,
+      nest: `${name(a)} built a nest`,
+    }[kind];
+    this.events.unshift({ tick: this.tick, kind, text: say, starred: !!(a?.adopted || b?.adopted) });
+    if (this.events.length > EVENT_LOG_SIZE) this.events.length = EVENT_LOG_SIZE;
+  }
+
+  // --- the life cycle -----------------------------------------------------------
+
+  /** Frogspawn: the eggs darken as they develop and the jelly wobbles; then the tadpoles hatch. */
+  private thinkSpawn(c: PondCreature) {
+    c.h = -1.6 + Math.sin(this.tick * 0.05 + c.id) * 0.15;
+    if (c.age < SPAWN_TICKS) return;
+    const counts = this.counts();
+    const room = this.cap('tadpole') - counts.tadpole;
+    for (let k = Math.min(randInt(BROOD[0], BROOD[1]), Math.max(1, room)); k > 0; k--) {
+      const t = this.spawn('tadpole', c);
+      t.lineId = c.lineId;
+      this.births++;
+    }
+    this.logEvent('hatch', c);
+    c.alive = false;
+  }
+
+  /**
+   * Tadpoles wriggle about in loose schools, nibbling algae off the bed, and
+   * grow back legs, then front legs; then they turn into froglets.
+   */
+  private thinkTadpole(c: PondCreature) {
+    c.layer = 'under';
+    if (Math.random() < TADPOLE_MORTALITY + CROWDING_MORTALITY * this.crowding) { this.die(c, 'lost'); return; }
+    if (c.age >= TADPOLE_TICKS) { this.metamorphose(c); return; }
+    const depth = this.depthAt(c.x, c.z);
+    let sx = 0, sz = 0, sh = 0;
+    // Loosely together with the tadpoles nearby.
+    let n = 0, cx = 0, cz = 0;
+    this.near(c.x, c.z, 10, o => {
+      if (o === c || o.species !== 'tadpole') return;
+      const dx = o.x - c.x, dz = o.z - c.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 10) return;
+      n++; cx += o.x; cz += o.z;
+      // Not on top of each other.
+      if (d < 2 && d > 0) { sx -= dx / d * 0.02; sz -= dz / d * 0.02; }
+    });
+    if (n) { sx += (cx / n - c.x) * 0.002; sz += (cz / n - c.z) * 0.002; }
+    c.heading += rand(-0.3, 0.3);
+    sx += Math.cos(c.heading) * 0.012;
+    sz += Math.sin(c.heading) * 0.009;
+    // They keep to the warm shallows, where the algae grows.
+    if (depth > MAX_DEPTH * 0.45) sx += (c.x < this.w / 2 ? -1 : 1) * 0.01;
+    // Hungry: down to the bed to nibble the algae there.
+    if (c.hungry) {
+      c.mood = 'grazing';
+      sh = (-(depth - 0.8) - c.h) * 0.03;
+      const i = this.cellAt(c.x, this.bedRow(c.x, c.z));
+      if (c.h < -(depth - 2) && this.algae[i] >= ALGAE_PER_UNIT && (this.tick + c.id) % 8 === 0) {
+        this.algae[i] -= ALGAE_PER_UNIT;
+        if (this.nutrients[i] < 255) this.nutrients[i]++;
+        c.energy = Math.min(1, c.energy + 0.03);
+      }
+    } else {
+      c.mood = n > 2 ? 'schooling' : 'wriggling';
+      sh = (-Math.min(depth - 1, 3 + (c.id % 4)) - c.h) * 0.01;
+    }
+    c.vx = (c.vx + sx) * 0.9;
+    c.vz = (c.vz + sz) * 0.9;
+    c.vh = (c.vh + sh) * 0.9;
+    const sp = POND_SPECIES.tadpole;
+    const speed = Math.hypot(c.vx, c.vz);
+    if (speed > sp.cruise) { c.vx *= sp.cruise / speed; c.vz *= sp.cruise / speed; }
+    this.swimMove(c, depth);
+    if (Math.abs(c.vx) > 0.02) c.facing = c.vx > 0 ? 1 : -1;
+  }
+
+  /** A tadpole with four legs becomes a froglet: up it swims, to climb out onto something. */
+  private metamorphose(c: PondCreature) {
+    c.species = 'frog';
+    const sp = POND_SPECIES.frog;
+    c.name = `${sp.names[c.id % sp.names.length]} #${c.id}`;
+    c.age = 0;
+    c.maxAge = randInt(sp.maxAge[0], sp.maxAge[1]);
+    c.breedCooldown = FROG_BREED_COOLDOWN;
+    c.palette = randInt(0, sp.palettes - 1);
+    c.mood = 'emerging';
+    c.timer = 1;
+    c.energy = Math.max(c.energy, 0.7);
+    c.squashV += 0.4;
   }
 
   // --- frogs ----------------------------------------------------------------
 
   private thinkFrog(c: PondCreature) {
+    // Froglets are easy pickings: in a crowded pond, many don't make it.
+    if (c.age < POND_SPECIES.frog.mature && Math.random() < CROWDING_MORTALITY * this.crowding * 0.5) { this.die(c, 'lost'); return; }
     // A tongue out for a midge snaps back whatever the frog is doing.
     if (c.tongue > 0 || c.target) this.flickTongue(c);
     if (c.leap) { this.stepLeap(c); return; }
+    if (c.mate) { this.frogPairing(c); return; }
+    if (this.readyToBreed(c) && (this.tick + c.id) % 30 === 0) this.seekMate(c);
     if (c.perch) { this.frogOnPerch(c); return; }
     if (c.mood === 'floating') this.frogFloating(c);
     else this.frogSwimming(c);
+  }
+
+  // --- frogs: courtship and spawning -------------------------------------------------
+
+  private readyToBreed(c: PondCreature) {
+    if (c.species !== 'frog' || c.age < POND_SPECIES.frog.mature || c.breedCooldown > 0 || c.energy < 0.5 || c.mate) return false;
+    const counts = this.counts();
+    return counts.spawn < this.cap('spawn') && counts.tadpole < this.cap('tadpole') * 0.7 && counts.frog < this.cap('frog') + 4;
+  }
+
+  /**
+   * A ready female goes to the nearest calling male; a ready male calls
+   * (croaks) from where he sits until one comes. The pair meet in the
+   * water, where he clasps her from behind.
+   */
+  private seekMate(c: PondCreature) {
+    if (c.sex === 'm') {
+      if (c.perch && c.mood !== 'croaking' && Math.random() < 0.3) { c.mood = 'croaking'; c.timer = randInt(60, 120); }
+      return;
+    }
+    // She hears the nearest calling male from a long way off.
+    let best: PondCreature | null = null;
+    let bestD = 400;
+    for (const o of this.creatures) {
+      if (o.species !== 'frog' || o.sex !== 'm' || o.mate || !o.alive || !this.readyToBreed(o)) continue;
+      const d = Math.hypot(o.x - c.x, o.z - c.z);
+      if (d < bestD) { bestD = d; best = o; }
+    }
+    if (!best) return;
+    c.mate = best; best.mate = c;
+    c.mood = 'swimming'; best.mood = 'calling';
+    if (c.perch) this.leapIntoWater(c);
+  }
+
+  /** Off a perch and into the nearest water, in a leap. */
+  private leapIntoWater(c: PondCreature) {
+    const side = c.perch?.kind === 'bank' ? (c.x < this.w / 2 ? 1 : -1) : c.facing;
+    let tx = c.perch?.kind === 'bank' ? this.offShore(c.z, side, rand(5, 10)) : c.x + side * rand(6, 12);
+    if (!this.isWater(tx, c.z)) tx = this.offShore(c.z, c.x < this.w / 2 ? 1 : -1, rand(5, 10));
+    this.leapTo(c, tx, c.z + rand(-3, 3), null, 0.7);
+  }
+
+  private frogPairing(c: PondCreature) {
+    const mate = c.mate!;
+    if (!mate.alive || mate.mate !== c) { c.mate = null; c.mood = c.perch ? 'sitting' : 'swimming'; return; }
+    if (c.sex === 'm') {
+      if (c.mood === 'clasping') {
+        // Riding on her back, gripping tight.
+        // Just behind her head and over her back, drawn in front of her.
+        c.x = mate.x - mate.facing * 3; c.z = mate.z + 0.05; c.h = mate.h + 4.5;
+        c.facing = mate.facing; c.layer = mate.layer === 'surface' ? 'surface' : 'under';
+        c.vx = mate.vx; c.vz = mate.vz;
+        return;
+      }
+      // Calling from his perch until she is close, then in after her.
+      c.throat += ((c.perch && (this.tick >> 3) % 3 !== 2 ? 1 : 0) - c.throat) * 0.35;
+      const d = Math.hypot(mate.x - c.x, mate.z - c.z);
+      if (c.perch) {
+        const at = this.perchPoint(c.perch);
+        c.x = at.x; c.z = at.z; c.h = at.h;
+        if (d < 18 && mate.layer !== 'air') { c.throat = 0; this.leapTo(c, mate.x, mate.z, null, 0.6); }
+        return;
+      }
+      if (c.layer === 'under' || c.layer === 'surface') {
+        if (d < 4) { c.mood = 'clasping'; c.squashV -= 0.4; this.logEvent('mating', c, mate); return; }
+        this.swimToward(c, mate.x, mate.z, -2);
+      }
+      return;
+    }
+    // Her: first to him, then (with him on her back) to a laying site.
+    const clasped = mate.mood === 'clasping';
+    if (!clasped) {
+      if (c.perch) { this.leapIntoWater(c); return; }
+      if (c.layer === 'under' || c.layer === 'surface') this.swimToward(c, mate.x + mate.facing * 4, mate.z, -2);
+      // Waited too long for him: give up.
+      if (++c.timer > 2400) { c.mate = null; mate.mate = null; mate.mood = mate.perch ? 'sitting' : 'swimming'; }
+      return;
+    }
+    if (!c.goal) c.goal = this.layingSite(c.x, c.z);
+    const g = c.goal;
+    const d = Math.hypot(g.x - c.x, g.z - c.z);
+    if (c.mood !== 'laying') {
+      c.mood = 'swimming';
+      this.swimToward(c, g.x, g.z, -1.6);
+      if (d < 3) { c.mood = 'laying'; c.timer = LAYING_TICKS; }
+      return;
+    }
+    // Laying: a little shudder now and then as the eggs come.
+    c.vx *= 0.8; c.vz *= 0.8;
+    if ((this.tick + c.id) % 30 === 0) c.squashV += 0.2;
+    if (--c.timer > 0) return;
+    const clump = this.spawn('spawn', c);
+    clump.x = g.x; clump.z = g.z;
+    clump.lineId = c.lineId;
+    this.logEvent('spawn', c, mate);
+    c.mate = null; mate.mate = null;
+    c.goal = null;
+    c.breedCooldown = mate.breedCooldown = FROG_BREED_COOLDOWN;
+    c.energy -= 0.25;
+    c.mood = mate.mood = 'swimming';
+    c.timer = mate.timer = randInt(100, 300);
+  }
+
+  /** Swims toward a point, at a depth, with frog kicks. */
+  private swimToward(c: PondCreature, x: number, z: number, h: number) {
+    const depth = this.depthAt(c.x, c.z);
+    c.layer = 'under';
+    const dx = x - c.x, dz = z - c.z;
+    const d = Math.hypot(dx, dz) || 1;
+    let sx = 0, sz = 0;
+    if ((this.tick + c.id * 7) % 22 === 0) { sx = (dx / d) * 0.3; sz = (dz / d) * 0.25; c.squashV += 0.2; }
+    c.vx = (c.vx + sx) * 0.94;
+    c.vz = (c.vz + sz) * 0.94;
+    c.vh = (c.vh + (Math.max(h, -(depth - 1)) - c.h) * 0.02) * 0.9;
+    this.swimMove(c, depth);
+    if (Math.abs(c.vx) > 0.03) c.facing = c.vx > 0 ? 1 : -1;
   }
 
   /** Something big and fast close by (for now, the visitor's cursor). */
@@ -878,7 +1200,7 @@ export class Pond {
     }
     if (--c.timer > 0) {
       // A midge in reach: out goes the tongue.
-      if (!c.target && c.tongue === 0 && (this.tick + c.id) % 6 === 0 && (c.hungry || Math.random() < 0.5)) {
+      if (!c.target && c.tongue === 0 && (this.tick + c.id) % 4 === 0 && (c.hungry || Math.random() < 0.4)) {
         const m = this.nearestMidge(c, TONGUE_REACH);
         if (m) { c.target = m; c.mood = 'catching'; c.facing = m.x > c.x ? 1 : -1; }
       }
@@ -890,8 +1212,12 @@ export class Pond {
       c.mood = 'croaking';
       c.timer = randInt(40, 90);
     } else if (roll < 0.75) {
-      // Off to another pad, a log or the bank.
-      const next = this.findPerch(c.x, c.z, LEAP_RANGE, c, 8);
+      // Off to another pad, a log or the bank: a hungry frog to one where the midges are.
+      const swarm = c.hungry ? this.nearestSwarm(c.x, c.z) : null;
+      const next = swarm && Math.hypot(swarm.x - c.x, swarm.z - c.z) > TONGUE_REACH
+        ? this.findPerch(c.x + Math.sign(swarm.x - c.x) * Math.min(LEAP_RANGE * 0.7, Math.abs(swarm.x - c.x)),
+          c.z + Math.sign(swarm.z - c.z) * Math.min(LEAP_RANGE * 0.7, Math.abs(swarm.z - c.z)), LEAP_RANGE * 0.6, c, 8)
+        : this.findPerch(c.x, c.z, LEAP_RANGE, c, 8);
       if (next) {
         const p = this.perchPoint(next);
         this.leapTo(c, p.x, p.z, next, 1);
@@ -963,7 +1289,7 @@ export class Pond {
     const ahead = { x: c.x + Math.cos(c.heading) * 8, z: c.z + Math.sin(c.heading) * 8 };
     if (!this.isWater(ahead.x, ahead.z)) c.heading += Math.PI * 0.6;
     if (c.mood === 'diving' && c.h < -Math.min(depth - 2, 6)) c.mood = 'swimming';
-    const surfacing = --c.timer <= 0;
+    const surfacing = --c.timer <= 0 || c.mood === 'emerging';
     const want = surfacing ? FLOAT_H : -Math.min(depth - 1.5, 4 + (c.id % 5) * 1.5);
     sh = (want - c.h) * 0.02;
     // A kick every so often, then a glide.
@@ -978,11 +1304,14 @@ export class Pond {
     this.swimMove(c, depth);
     if (Math.abs(c.vx) > 0.03) c.facing = c.vx > 0 ? 1 : -1;
     if (surfacing && c.h > FLOAT_H - 0.4) {
+      // A new froglet heads straight out of the water.
+      const fresh = c.mood === 'emerging';
       c.mood = 'floating';
       c.layer = 'surface';
       c.h = FLOAT_H;
       c.vh = 0;
-      c.timer = randInt(120, 360);
+      c.timer = fresh ? 0 : randInt(120, 360);
+      if (fresh) this.logEvent('emerge', c);
       this.ring(c.x, c.z, 1, 0.2, 40);
     }
   }
@@ -1051,7 +1380,8 @@ export class Pond {
       if (c.tongue >= 1) {
         if (m.alive && Math.hypot(m.x - c.x, m.z - c.z) < TONGUE_REACH + 3) {
           m.alive = false;
-          c.energy = Math.min(1, c.energy + 0.12);
+          this.meals++;
+          c.energy = Math.min(1, c.energy + 0.15);
         }
         c.target = null;
       }
@@ -1067,6 +1397,16 @@ export class Pond {
     const mouth = { x: c.x + c.facing * 5, z: c.z, h: c.h + 6 };
     const to = t ?? { x: mouth.x + c.facing * 6, z: c.z, h: mouth.h };
     return { mouth, tip: { x: mouth.x + (to.x - mouth.x) * c.tongue, z: mouth.z + (to.z - mouth.z) * c.tongue, h: mouth.h + (to.h - mouth.h) * c.tongue } };
+  }
+
+  private nearestSwarm(x: number, z: number) {
+    let best: Swarm | null = null;
+    let bestD = 200;
+    for (const s of this.swarms) {
+      const d = Math.hypot(s.x - x, s.z - z);
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    return best;
   }
 
   private nearestMidge(c: PondCreature, reach: number) {

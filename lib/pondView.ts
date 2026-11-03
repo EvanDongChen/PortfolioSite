@@ -17,10 +17,12 @@
 // light cover the whole page at a canvas pixel per cell, and the sprites are
 // drawn into a window around the view, swapped between two canvases.
 
-import { ELEVATION, MAX_DEPTH, Pad, Pond, PondCreature, PondSpecies, ReedClump, Stem, WeedBed } from './pond';
+import {
+  ELEVATION, MAX_DEPTH, POND_SPECIES, Pad, Pond, PondCreature, PondSpecies, ReedClump, SPAWN_TICKS, Stem, TADPOLE_TICKS, TAIL_TICKS, WeedBed,
+} from './pond';
 import {
   CATTAIL_HEAD, DUCKWEED, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
-  logSprite, makeCanvas, padSprite, pondSprite, rippleTile, rootSprite, splashSprite, stoneSprite,
+  logSprite, makeCanvas, padSprite, pondSprite, rippleTile, rootSprite, spawnSprite, splashSprite, stoneSprite,
 } from './pondArt';
 import { shadowSprite } from './pixelOceanArt';
 import type { ReefLayout } from './pixelOceanView';
@@ -57,7 +59,7 @@ interface SpriteOptions {
 }
 
 /** Sprite widths in art pixels, for shadows and the inspection reticle. */
-export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 12 };
+export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 12, spawn: 11, tadpole: 6 };
 
 /** Reed clumps and weed beds are drawn in bands this many rows deep, each sorted with whatever is among them. */
 const BAND = 3;
@@ -538,8 +540,25 @@ export class PondView {
   }
 
   private drawCreature(c: PondCreature, alpha: number) {
+    const tick = this.pond.tick;
     switch (c.species) {
       case 'frog': this.drawFrog(c, alpha); return;
+      case 'spawn': {
+        // The eggs darken and stretch into commas, and the jelly wobbles more as hatching nears.
+        const dev = c.age / SPAWN_TICKS;
+        const stage = Math.min(3, Math.floor(dev * 4));
+        const jiggle = stage >= 2 ? Math.sin(tick * 0.25 + c.id) * 0.08 * stage : 0;
+        this.sprite(spawnSprite(c.id, stage, (tick >> 3) & 1), c.x, c.z, c.h, { alpha: alpha * 0.9, stretch: jiggle });
+        return;
+      }
+      case 'tadpole': {
+        // A wriggling comma: back legs first, then front legs.
+        const dev = c.age / TADPOLE_TICKS;
+        const wriggle = (tick + c.id * 3) >> 2 & 1;
+        const kind: PondSpriteKind = dev < 0.4 ? (wriggle ? 'tad1' : 'tad0') : dev < 0.72 ? (wriggle ? 'tadLegs1' : 'tadLegs0') : 'tadArms';
+        this.sprite(pondSprite(kind, c.palette, c.energy < 0.15), c.x, c.z, c.h, { flipX: c.facing < 0, alpha, stretch: kind === 'tadArms' ? (wriggle ? 0.12 : -0.05) : c.squash });
+        return;
+      }
     }
   }
 
@@ -552,7 +571,9 @@ export class PondView {
     const tick = this.pond.tick;
     const washed = c.energy < 0.15;
     let kind: PondSpriteKind;
-    if (c.leap) kind = c.leap.t < 3 ? 'frogCrouch' : 'frogLeap';
+    const froglet = c.age < POND_SPECIES.frog.mature;
+    if (froglet && c.layer !== 'surface') kind = c.age < TAIL_TICKS ? 'froglet' : 'frogletBare';
+    else if (c.leap) kind = c.leap.t < 3 ? 'frogCrouch' : 'frogLeap';
     else if (c.layer === 'surface') kind = 'frogEyes';
     else if (c.layer === 'under') kind = (tick + c.id * 7) % 22 < 8 ? 'frogSwim0' : 'frogSwim1';
     else if (c.throat > 0.5) kind = 'frogCroak';

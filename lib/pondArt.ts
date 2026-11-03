@@ -297,7 +297,7 @@ export const DUCKWEED = ['rgb(108,168,60)', 'rgb(142,196,76)', 'rgb(80,138,52)']
 // eye's gold ring, S the throat sac; K, k and g a tadpole's head and tail.
 export type PondSpriteKind =
   | 'frogSit' | 'frogBlink' | 'frogCroak' | 'frogCrouch' | 'frogLeap' | 'frogSwim0' | 'frogSwim1' | 'frogEyes'
-  | 'tad0' | 'tad1' | 'tadLegs0' | 'tadLegs1' | 'tadArms' | 'froglet';
+  | 'tad0' | 'tad1' | 'tadLegs0' | 'tadLegs1' | 'tadArms' | 'froglet' | 'frogletBare';
 
 const POND_ROWS: Record<PondSpriteKind, string[]> = {
   frogSit: ['.......TT...', '......ToET..', '...DDDDDDDD.', '.DDBBBBBBBBB', 'DBBBBBBBLLL.', 'DBTTTBBLLL..', '.TTTTTT.T...', 'TT.....TT...'],
@@ -308,12 +308,13 @@ const POND_ROWS: Record<PondSpriteKind, string[]> = {
   frogSwim0: ['.........TT..', 'T.......ToET.', '.TT.DDDDDDDDD', '...TBBBBBBBBB', '.TT.BLLLLLLB.', 'T.......T....'],
   frogSwim1: ['.........TT..', '........ToET.', '..TTDDDDDDDDD', '.T.TBBBBBBBBB', '..TTBLLLLLLB.', '......TT.....'],
   frogEyes: ['.oE...oE.', 'DDDDDDDDD'],
-  tad0: ['.kk...', 'KKKkg.', '.KK..g'],
-  tad1: ['.kk..g', 'KKKkg.', '.KK...'],
-  tadLegs0: ['.kk....', 'KKKkkg.', '.KKT..g', '..T....'],
-  tadLegs1: ['.kk...g', 'KKKkkg.', '.KKT...', '..T....'],
-  tadArms: ['..kk....', 'DKKKkkg.', '.TKKT..g', '.T.T....'],
+  tad0: ['.kk...', 'KKek.g', '.KK.g.'],
+  tad1: ['.kk...', 'KKekg.', '.KK..g'],
+  tadLegs0: ['.kk....', 'KKekkg.', '.KKT..g', '..T....'],
+  tadLegs1: ['.kk...g', 'KKekkg.', '.KKT...', '..T....'],
+  tadArms: ['..kk....', 'DKKekkg.', '.TKKT..g', '.T.T....'],
   froglet: ['....TT..', '...ToET.', '..DDDDDD', 'gDBBBBBB', 'gBTTBLL.', '.TT..T..'],
+  frogletBare: ['....TT..', '...ToET.', '..DDDDDD', '.DBBBBBB', '.BTTBLL.', '.TT..T..'],
 };
 
 /** Frog colourways: [D, B, L, T, o, S]: green, brown (a common frog), olive. */
@@ -322,7 +323,7 @@ const FROG_SETS: Rgb[][] = [
   [[176, 142, 92], [132, 100, 62], [228, 208, 160], [94, 70, 46], [212, 172, 80], [242, 232, 192]],
   [[170, 186, 92], [112, 136, 58], [224, 216, 142], [80, 102, 44], [214, 180, 70], [244, 240, 190]],
 ];
-const TADPOLE: Record<string, Rgb> = { K: [40, 46, 32], k: [70, 78, 52], g: [104, 118, 72] };
+const TADPOLE: Record<string, Rgb> = { K: [46, 50, 34], k: [96, 104, 66], g: [128, 140, 88], e: [214, 190, 96] };
 const POND_EYE: Rgb = [20, 22, 26];
 
 /** Washed-out greys for the starving and the dead (as on the reef). */
@@ -347,3 +348,43 @@ export const TONGUE = ['rgb(232,120,140)', 'rgb(176,64,90)'];
 export const MIDGE = ['rgb(30,34,30)', 'rgb(190,210,200)'];
 /** Ripple rings on the surface: light, and lighter. */
 export const RING = ['rgb(176,226,206)', 'rgb(214,244,232)'];
+
+/** Frogspawn jelly (pale, paler at the rim) and its eggs, darkening as they develop. */
+const JELLY: Rgb[] = [[214, 226, 206], [178, 198, 176]];
+const EGG: Rgb[] = [[52, 54, 46], [34, 36, 30], [24, 26, 22]];
+
+/**
+ * A clump of frogspawn: a blob of clear jelly packed with eggs. The eggs
+ * start as round black dots, stretch into commas as the tadpoles grow
+ * inside (stage 0 to 3), and wriggle (the two frames) just before hatching.
+ */
+export const spawnSprite = (seed: number, stage: number, frame: number) =>
+  cached(`pond-spawn-${seed % 8}-${stage}-${frame}`, () => {
+    const rnd = seededRandom(seed % 8 + 1);
+    const w = 11, h = 7;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const inside = (x: number, y: number) => {
+      const nx = (x + 0.5 - w / 2) / (w / 2), ny = (y + 0.5 - h / 2) / (h / 2);
+      return nx * nx + ny * ny <= 1 - (Math.sin(x * 1.7 + seed) * 0.08);
+    };
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (!inside(x, y)) continue;
+      const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
+      put(ctx, x, y, JELLY[edge ? 0 : 1]);
+    }
+    // Eggs on a loose grid inside the jelly.
+    const egg = EGG[Math.min(2, stage)];
+    for (let y = 1; y < h - 1; y += 2) {
+      for (let x = 1 + (y & 2 ? 1 : 0); x < w - 1; x += 2) {
+        if (!inside(x, y) || rnd() < 0.15) continue;
+        put(ctx, x, y, egg);
+        // Growing tadpoles: a tail curling off each egg.
+        if (stage >= 1 && x + 1 < w && inside(x + 1, y + (frame ? -1 : 0) + (stage >= 3 ? 1 : 0))) {
+          const ty = Math.min(h - 1, Math.max(0, y + (stage >= 3 ? (frame ? -1 : 1) : 0)));
+          if (stage >= 2) put(ctx, x + 1, ty, egg);
+        }
+      }
+    }
+    return c;
+  });
