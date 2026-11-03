@@ -23,6 +23,7 @@ import {
 import {
   CATTAIL_HEAD, DUCKWEED, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
   logSprite, makeCanvas, padSprite, pondSprite, rippleTile, rootSprite, spawnSprite, splashSprite, stoneSprite,
+  DuckSpriteKind, duckSprite, nestSprite,
 } from './pondArt';
 import { shadowSprite } from './pixelOceanArt';
 import type { ReefLayout } from './pixelOceanView';
@@ -59,7 +60,7 @@ interface SpriteOptions {
 }
 
 /** Sprite widths in art pixels, for shadows and the inspection reticle. */
-export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 12, spawn: 11, tadpole: 6 };
+export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 12, spawn: 11, tadpole: 6, mallard: 24, tufted: 20 };
 
 /** Reed clumps and weed beds are drawn in bands this many rows deep, each sorted with whatever is among them. */
 const BAND = 3;
@@ -512,6 +513,9 @@ export class PondView {
     // pads, logs, reeds and the banks' stones, depth-sorted.
     this.drawDuckweed(z0, z1);
     this.drawRings(z0, z1);
+    for (const c of pond.creatures) {
+      if (c.layer === 'surface' && (c.species === 'mallard' || c.species === 'tufted') && visible(c.z)) this.drawWake(c);
+    }
     // Shadows of things in the air, on the water or the ground beneath them.
     for (const c of pond.creatures) {
       if (c.layer !== 'air' || c.perch || !visible(c.z)) continue;
@@ -521,6 +525,7 @@ export class PondView {
     for (const c of pond.creatures) {
       if ((c.layer === 'air' || c.layer === 'surface') && visible(c.z)) over.push({ depth: c.z + 0.3, draw: () => this.drawCreature(c, 1) });
     }
+    for (const n of pond.nests) if (visible(n.z)) over.push({ depth: n.z - 0.5, draw: () => this.sprite(nestSprite(), n.x, n.z + 1, 0, { anchor: 'bottom' }) });
     for (const p of pond.pads) if (visible(p.z)) over.push({ depth: p.z - p.r * 0.6, draw: () => this.drawPad(p) });
     for (const l of pond.logs) {
       if (!l.floating || !visible(l.z)) continue;
@@ -543,6 +548,7 @@ export class PondView {
     const tick = this.pond.tick;
     switch (c.species) {
       case 'frog': this.drawFrog(c, alpha); return;
+      case 'mallard': case 'tufted': this.drawDuck(c, alpha); return;
       case 'spawn': {
         // The eggs darken and stretch into commas, and the jelly wobbles more as hatching nears.
         const dev = c.age / SPAWN_TICKS;
@@ -582,6 +588,64 @@ export class PondView {
     this.sprite(pondSprite(kind, c.palette, washed), c.x, c.z, c.h, { flipX: c.facing < 0, alpha, anchor, stretch: c.squash });
     if (c.tongue > 0) this.drawTongue(c);
     if (kind === 'frogCroak') this.drawCroak(c);
+  }
+
+  /**
+   * A duck: floating, quacking, preening, tail-up dabbling, running across
+   * the water to take off, beating its wings in flight, or (a tufted duck)
+   * swimming under; ducklings are little balls of fluff.
+   */
+  private drawDuck(c: PondCreature, alpha: number) {
+    const tick = this.pond.tick;
+    const washed = c.energy < 0.15;
+    const tufted = c.species === 'tufted';
+    let kind: DuckSpriteKind;
+    if (c.age < POND_SPECIES[c.species].mature) kind = 'duckling';
+    else if (tufted) kind = c.layer === 'under' ? 'tuftedDive' : 'tufted';
+    else if (c.mood === 'flying') kind = (tick + c.id * 3) >> 2 & 1 ? 'fly1' : 'fly0';
+    else if (c.mood === 'landing') kind = c.h > 4 ? 'fly0' : 'run';
+    else if (c.mood === 'takingOff') kind = c.h > 0 ? ((tick >> 2) & 1 ? 'fly1' : 'fly0') : 'run';
+    else if (c.mood === 'dabbling') kind = 'dabble';
+    else if (c.mood === 'preening') kind = (tick + c.id) >> 4 & 1 ? 'preen' : 'float';
+    else if (c.mood === 'quacking') kind = (tick >> 2) & 1 ? 'quack' : 'float';
+    else kind = 'float';
+    // Floating birds sit low in the water; their bobbing is a pixel up and down.
+    const afloat = c.layer === 'surface';
+    const bob = afloat ? ((tick + c.id * 11) >> 4 & 1) * 0.5 - 1.5 : 0;
+    this.sprite(duckSprite(kind, c.palette, washed), c.x, c.z, c.h + bob, { flipX: c.facing < 0, alpha, anchor: c.layer === 'under' ? 'center' : 'bottom', stretch: c.squash });
+    if (kind === 'quack') this.drawQuack(c);
+  }
+
+  /** A V of ripples spreading back from a paddling bird. */
+  private drawWake(c: PondCreature) {
+    const { spriteCtx: ctx, px, pond } = this;
+    const speed = Math.hypot(c.vx, c.vz);
+    if (speed < 0.04) return;
+    const dx = c.vx / speed, dz = c.vz / speed;
+    const big = c.age >= POND_SPECIES[c.species].mature;
+    const n = big ? 7 : 3;
+    const stern = BODY_WIDTH[c.species] * (big ? 0.4 : 0.2);
+    ctx.fillStyle = RING[0];
+    for (let k = 1; k <= n; k++) {
+      const along = stern + k * 2.2;
+      const spread = k * 1.15;
+      // The arms shimmer as they spread, every other dot dropping out in turn.
+      if (((pond.tick >> 2) + k) % 3 === 0) continue;
+      ctx.globalAlpha = 0.7 * (1 - k / (n + 1)) * Math.min(1, speed * 6);
+      for (const side of [-1, 1]) {
+        const p = this.project(c.x - dx * along - dz * spread * side, c.z - dz * along * 0.6 + dx * spread * side * 0.5, 0);
+        ctx.fillRect(Math.round(p.x - px / 2), Math.round(p.y), px * (k > 3 ? 2 : 1), px);
+      }
+    }
+  }
+
+  /** A quack: three little strokes from the open bill. */
+  private drawQuack(c: PondCreature) {
+    const { spriteCtx: ctx, px } = this;
+    const p = this.project(c.x + c.facing * 10, c.z, c.h + 10);
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = RING[1];
+    for (const [dx, dy] of [[0, -2], [1, 0], [0, 2]]) ctx.fillRect(Math.round(p.x + c.facing * dx * px), Math.round(p.y + dy * px), px * 2, px);
   }
 
   /** A frog's tongue, out to a midge and back: a pink line with a sticky tip. */

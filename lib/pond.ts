@@ -77,8 +77,10 @@ export interface Roots { x: number; z: number; side: 1 | -1; seed: number }
 export interface Frond { x: number; z: number; vx: number; vz: number; patch: number; shade: number; alive: boolean }
 export interface DuckweedPatch { x: number; z: number; rx: number; rz: number; target: number; count: number }
 
-export type PondSpecies = 'spawn' | 'tadpole' | 'frog';
-export const POND_SPECIES_LIST: PondSpecies[] = ['frog', 'spawn', 'tadpole'];
+export type PondSpecies = 'spawn' | 'tadpole' | 'frog' | 'mallard' | 'tufted';
+export const POND_SPECIES_LIST: PondSpecies[] = ['frog', 'spawn', 'tadpole', 'mallard', 'tufted'];
+/** Species that are a big, frightening shape to a frog, and steer clear of the page's hero text. */
+const BIG: Partial<Record<PondSpecies, boolean>> = { mallard: true, tufted: true };
 /** A frog's life, stage by stage, for the census. */
 export type FrogStage = 'spawn' | 'tadpole' | 'backLegs' | 'fourLegs' | 'froglet' | 'adult';
 export const FROG_STAGES: FrogStage[] = ['spawn', 'tadpole', 'backLegs', 'fourLegs', 'froglet', 'adult'];
@@ -86,7 +88,8 @@ export const FROG_STAGES: FrogStage[] = ['spawn', 'tadpole', 'backLegs', 'fourLe
 /** What a creature is up to this tick, for the inspector. */
 export type PondMood =
   | 'sitting' | 'croaking' | 'catching' | 'leaping' | 'swimming' | 'floating' | 'climbing' | 'fleeing' | 'diving'
-  | 'singing' | 'calling' | 'clasping' | 'laying' | 'developing' | 'wriggling' | 'schooling' | 'grazing' | 'emerging';
+  | 'singing' | 'calling' | 'clasping' | 'laying' | 'developing' | 'wriggling' | 'schooling' | 'grazing' | 'emerging'
+  | 'paddling' | 'dabbling' | 'preening' | 'quacking' | 'takingOff' | 'flying' | 'landing' | 'nesting' | 'following' | 'walking';
 
 /** Something a frog can sit on: a lily pad, a floating log, or a spot on the bank. */
 export type Perch =
@@ -129,6 +132,8 @@ export interface PondCreature {
   mate: PondCreature | null;
   /** Where it is making for: a female's laying site, a froglet's way out. */
   goal: { x: number; z: number } | null;
+  /** A duckling's leader: the one ahead of it in the line behind its mother. */
+  leader: PondCreature | null;
   lineId: number;
   adopted: boolean;
   alive: boolean;
@@ -136,6 +141,8 @@ export interface PondCreature {
 
 /** How a creature died: eaten, starved, of old age, or lost (the many young that never make it). */
 export type PondDeath = 'eaten' | 'starved' | 'oldAge' | 'lost';
+/** A mallard's nest on the bank, with the hen sitting on her eggs. */
+export interface Nest { x: number; z: number; eggs: number; hen: PondCreature; timer: number; alive: boolean }
 export interface PondEvent { tick: number; kind: 'mating' | 'spawn' | 'hatch' | 'emerge' | 'eaten' | 'visit' | 'nest'; text: string; starred: boolean }
 const EVENT_LOG_SIZE = 6;
 
@@ -174,10 +181,20 @@ export const POND_SPECIES: Record<PondSpecies, SpeciesDef> = {
     cruise: 0.14, burst: 0.4, vision: 14, metabolism: 0.00025, maxAge: [99999, 99999], mature: 0, hungerLine: 0.75,
     cap: [2400, 0, 90], palettes: 1,
   },
+  mallard: {
+    label: 'Mallard', names: ['Drake', 'Mallory', 'Puddle', 'Quackers', 'Dabble', 'Webster', 'Waddles', 'Daisy', 'Bill', 'Feather'],
+    cruise: 0.16, burst: 1.1, vision: 40, metabolism: 0.00005, maxAge: [40000, 60000], mature: 6000, hungerLine: 0.75,
+    cap: [26000, 2, 8], palettes: 2,
+  },
+  tufted: {
+    label: 'Tufted duck', names: ['Tuft', 'Diver', 'Crest', 'Pebble', 'Bob', 'Inkwell'],
+    cruise: 0.15, burst: 0.9, vision: 30, metabolism: 0.00005, maxAge: [40000, 60000], mature: 6000, hungerLine: 0.75,
+    cap: [120000, 0, 2], palettes: 1,
+  },
   frog: {
     label: 'Frog', names: ['Ribbit', 'Hopper', 'Lily', 'Pond', 'Croaky', 'Toad', 'Jumper', 'Fern', 'Moss', 'Bog', 'Kermie', 'Pip', 'Leap', 'Basil'],
-    cruise: 0.18, burst: 0.6, vision: 30, metabolism: 0.00008, maxAge: [12000, 18000], mature: 2400, hungerLine: 0.7,
-    cap: [7000, 4, 26], palettes: 3,
+    cruise: 0.18, burst: 0.6, vision: 30, metabolism: 0.00006, maxAge: [12000, 18000], mature: 2400, hungerLine: 0.7,
+    cap: [7000, 6, 26], palettes: 3,
   },
 };
 
@@ -208,6 +225,14 @@ const TADPOLE_MORTALITY = 0.00012;
 /** On top of that, more die (and more froglets never make it) when the pond is crowded with frogs. */
 const CROWDING_MORTALITY = 0.0012;
 const BUCKET = 32;
+/** Ducks: how long a hen sits on her eggs, how many hatch, how far ducklings keep behind. */
+const NEST_TICKS = 1800;
+const CLUTCH: [number, number] = [4, 7];
+const DUCKLING_GAP = 4.5;
+const DUCK_BREED_COOLDOWN = 20000;
+/** How high ducks fly, and how far off a frog takes fright at one. */
+const FLIGHT_H = 40;
+const DUCK_FRIGHT = 14;
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
@@ -272,6 +297,7 @@ export class Pond {
   swarms: Swarm[] = [];
   rings: Ring[] = [];
   droplets: Droplet[] = [];
+  nests: Nest[] = [];
   private nextId = 1;
   births = 0;
   /** Midges and other insects caught, for the census. */
@@ -292,8 +318,10 @@ export class Pond {
   constructor(w: number, h: number) {
     this.resize(w, h);
     for (const species of POND_SPECIES_LIST) {
-      for (let n = Math.max(1, Math.round(this.cap(species) * 0.6)); n > 0; n--) this.spawn(species);
+      if (species === 'mallard') continue;
+      for (let n = Math.max(species === 'tufted' ? 0 : 1, Math.round(this.cap(species) * 0.6)); n > 0; n--) this.spawn(species);
     }
+    for (let n = Math.max(1, Math.round(this.cap('mallard') * 0.25)); n > 0; n--) this.spawnDuckPair();
   }
 
   // --- the shape of the pond ------------------------------------------------
@@ -573,6 +601,7 @@ export class Pond {
     compact(this.midges);
     compact(this.rings);
     compact(this.droplets);
+    compact(this.nests);
   }
 
   /** The breeze turns slowly, and gusts now and then. */
@@ -650,7 +679,7 @@ export class Pond {
     const out: number[] = [];
     if (this.pointer) out.push(this.pointer.x, this.pointer.z, PART_REACH);
     for (const c of this.creatures) {
-      if (c.layer === 'surface' && (c.vx !== 0 || c.vz !== 0)) out.push(c.x, c.z, 4);
+      if (c.layer === 'surface' && (c.vx !== 0 || c.vz !== 0)) out.push(c.x, c.z, BIG[c.species] && c.age > 1500 ? 9 : 4);
     }
     return out;
   }
@@ -749,7 +778,7 @@ export class Pond {
       energy: rand(0.6, 0.9), hungry: false, age: parent ? 0 : randInt(sp.mature, sp.maxAge[0] * 0.6),
       maxAge: randInt(sp.maxAge[0], sp.maxAge[1]), breedCooldown: randInt(0, 1200), palette: randInt(0, sp.palettes - 1),
       heading: rand(0, Math.PI * 2), timer: randInt(30, 300), perch: null, leap: null, target: null, tongue: 0, throat: 0,
-      squash: 0, squashV: 0, sex: Math.random() < 0.5 ? 'f' : 'm', mate: null, goal: null,
+      squash: 0, squashV: 0, sex: Math.random() < 0.5 ? 'f' : 'm', mate: null, goal: null, leader: null,
       lineId: parent ? parent.lineId : id, adopted: false, alive: true,
     };
     this.creatures.push(c);
@@ -763,6 +792,20 @@ export class Pond {
       c.z = site.z + (species === 'tadpole' ? rand(-2, 2) : 0);
       c.h = species === 'spawn' ? -1.6 : -rand(1.5, 4);
       if (!this.isWater(c.x, c.z)) { c.x = site.x; c.z = site.z; }
+      return c;
+    }
+    if (species === 'mallard' || species === 'tufted') {
+      // Ducks start out on the open water.
+      c.layer = 'surface';
+      c.mood = 'paddling';
+      c.age = parent ? 0 : randInt(POND_SPECIES[species].mature, 20000);
+      c.palette = species === 'mallard' && c.sex === 'f' ? 1 : 0;
+      if (parent) { c.x = parent.x; c.z = parent.z; } else {
+        c.z = rand(10, this.h - 10);
+        const row = Math.round(c.z);
+        c.x = rand(this.shoreL[row] + 8, this.shoreR[row] - 8);
+      }
+      c.h = 0;
       return c;
     }
     // A frog starts on a free pad, a log or the bank, or out in the water.
@@ -888,6 +931,8 @@ export class Pond {
     // Newcomers hop in from the bank if the frogs are down to their last few.
     if (this.tick % 150 === 0) {
       if (counts.frog < POND_SPECIES.frog.cap[1] && Math.random() < 0.4) { this.spawn('frog'); this.logEvent('visit', this.creatures[this.creatures.length - 1]); }
+      // A pair of mallards flies in now and then if the pond has none.
+      if (counts.mallard < 2 && Math.random() < 0.15) this.flyIn(this.spawnDuckPair());
     }
   }
 
@@ -906,6 +951,7 @@ export class Pond {
       case 'frog': this.thinkFrog(c); break;
       case 'spawn': this.thinkSpawn(c); break;
       case 'tadpole': this.thinkTadpole(c); break;
+      case 'mallard': case 'tufted': this.thinkDuck(c); break;
     }
     if (!c.alive) return;
     c.energy -= sp.metabolism * (c.mood === 'swimming' || c.mood === 'leaping' ? 2 : 1);
@@ -1181,7 +1227,14 @@ export class Pond {
   /** Something big and fast close by (for now, the visitor's cursor). */
   private threatened(c: PondCreature) {
     const p = this.pointer;
-    return !!p && this.pointerSpeed > 2.5 && Math.hypot(p.x - c.x, p.z - (c.z - c.h * ELEVATION)) < STARTLE_REACH;
+    if (p && this.pointerSpeed > 2.5 && Math.hypot(p.x - c.x, p.z - (c.z - c.h * ELEVATION)) < STARTLE_REACH) return true;
+    // A duck paddling up, or anything big landing close by.
+    let scared = false;
+    this.near(c.x, c.z, DUCK_FRIGHT, o => {
+      if (!scared && BIG[o.species] && o.age > POND_SPECIES[o.species].mature * 0.5 && o.layer !== 'under'
+        && Math.hypot(o.x - c.x, o.z - c.z) < DUCK_FRIGHT && (Math.hypot(o.vx, o.vz) > 0.05 || o.mood === 'landing')) scared = true;
+    });
+    return scared;
   }
 
   private frogOnPerch(c: PondCreature) {
@@ -1320,7 +1373,7 @@ export class Pond {
   private swimMove(c: PondCreature, depth: number) {
     const nx = c.x + c.vx, nz = c.z + c.vz;
     if (this.isWater(nx, nz)) { c.x = nx; c.z = nz; } else { c.vx = -c.vx; c.vz = -c.vz; c.heading += Math.PI; }
-    c.h = Math.max(-Math.max(1, depth - 1), Math.min(FLOAT_H, c.h + c.vh));
+    c.h = Math.max(-Math.max(1, depth - 1), Math.min(c.species === 'tufted' ? 0 : FLOAT_H, c.h + c.vh));
   }
 
   /** Eyes up at the surface: drifting, then off to climb out onto something, or back under. */
@@ -1329,6 +1382,11 @@ export class Pond {
     c.h = FLOAT_H + Math.sin(this.tick * 0.07 + c.id) * 0.1;
     if (this.threatened(c)) { c.mood = 'diving'; c.layer = 'under'; c.vh = -0.4; c.timer = randInt(200, 400); this.ring(c.x, c.z, 1, 0.3, 40); return; }
     c.timer--;
+    // A midge low over the water is fair game from here too.
+    if (!c.target && c.tongue === 0 && (this.tick + c.id) % 6 === 0) {
+      const m = this.nearestMidge(c, TONGUE_REACH * 0.8);
+      if (m) { c.target = m; c.facing = m.x > c.x ? 1 : -1; }
+    }
     const goal = c.target ? null : this.climbGoal(c);
     if (goal) {
       const g = this.perchPoint(goal);
@@ -1418,6 +1476,366 @@ export class Pond {
       if (d < bestD) { bestD = d; best = m; }
     }
     return best;
+  }
+
+  // --- ducks ---------------------------------------------------------------------
+
+  private spawnDuckPair() {
+    const hen = this.spawn('mallard');
+    hen.sex = 'f'; hen.palette = 1;
+    const drake = this.spawn('mallard');
+    drake.sex = 'm'; drake.palette = 0;
+    drake.x = hen.x + rand(-6, 6); drake.z = hen.z + rand(-3, 3);
+    if (!this.isWater(drake.x, drake.z)) { drake.x = hen.x; drake.z = hen.z; }
+    hen.mate = drake; drake.mate = hen;
+    drake.lineId = hen.lineId;
+    return hen;
+  }
+
+  /** Ducks arriving from elsewhere: high over the page, coming down to land. */
+  private flyIn(hen: PondCreature) {
+    for (const d of [hen, hen.mate!]) {
+      d.goal = { x: d.x, z: d.z };
+      d.x += rand(-1, 1) * 120; d.z += rand(-60, -20);
+      d.h = FLIGHT_H;
+      d.layer = 'air';
+      d.mood = 'flying';
+    }
+    this.logEvent('visit', hen, null, 'A pair of mallards flew in');
+  }
+
+  private thinkDuck(c: PondCreature) {
+    const young = c.age < POND_SPECIES[c.species].mature;
+    if (young && c.leader && c.leader.alive && c.age < POND_SPECIES[c.species].mature * 0.8) { this.duckling(c); return; }
+    c.leader = null;
+    switch (c.mood) {
+      case 'takingOff': this.duckTakeOff(c); return;
+      case 'flying': case 'landing': this.duckFly(c); return;
+      case 'nesting': this.duckNesting(c); return;
+      case 'walking': this.duckWalk(c); return;
+      case 'diving': this.duckDive(c); return;
+    }
+    c.layer = 'surface';
+    c.h = 0;
+    const sp = POND_SPECIES[c.species];
+    // Drakes stay with their hen (and fly when she does).
+    const hen = c.sex === 'm' && c.mate?.alive ? c.mate : null;
+    if (hen && (hen.mood === 'flying' || hen.mood === 'takingOff')) {
+      this.startTakeOff(c, hen.goal ?? { x: hen.x, z: hen.z });
+      return;
+    }
+    if (c.timer-- > 0) {
+      const busy = c.mood === 'dabbling' || c.mood === 'preening' || c.mood === 'quacking';
+      if (c.mood === 'dabbling') this.dabble(c);
+      if (!busy || c.mood === 'quacking') this.paddle(c, hen, sp.cruise);
+      else { c.vx *= 0.9; c.vz *= 0.9; c.x += c.vx; c.z += c.vz; }
+      return;
+    }
+    // Something new to do.
+    c.mood = 'paddling';
+    if (c.sex === 'f' && c.species === 'mallard' && this.readyToNest(c)) { this.goNest(c); return; }
+    if (c.species === 'mallard' && !c.mate?.alive) {
+      c.mate = null;
+      // A grown duckling pairs up with another single bird; a crowded pond's spares fly off.
+      const single = this.creatures.find(o => o !== c && o.alive && o.species === 'mallard' && o.sex !== c.sex && !o.mate?.alive && o.age >= POND_SPECIES.mallard.mature);
+      if (single) { c.mate = single; single.mate = c; c.lineId = single.lineId = Math.min(c.lineId, single.lineId); }
+      else if (this.counts().mallard > this.cap('mallard') && Math.random() < 0.3) { this.leave(c); return; }
+    }
+    const roll = Math.random();
+    if (roll < 0.3) { c.mood = 'dabbling'; c.timer = randInt(80, 160); c.squashV += 0.3; }
+    else if (roll < 0.42) { c.mood = 'preening'; c.timer = randInt(60, 140); }
+    else if (roll < 0.52 && c.species === 'mallard') { c.mood = 'quacking'; c.timer = 24; }
+    else if (roll < 0.6 && c.species === 'tufted') { this.startDive(c); }
+    else if (roll < 0.64 && c.sex === 'f' && !this.hasDucklings(c)) {
+      // Off to another part of the pond.
+      const z = Math.max(20, Math.min(this.h - 20, c.z + rand(-1, 1) * 400));
+      const row = Math.round(z);
+      this.startTakeOff(c, { x: rand(this.shoreL[row] + 10, this.shoreR[row] - 10), z });
+    } else c.timer = randInt(100, 300);
+  }
+
+  /** Off over the trees and away: it flies off the edge of the page and is gone. */
+  private leave(c: PondCreature) {
+    const side = c.x < this.w / 2 ? -1 : 1;
+    this.startTakeOff(c, { x: side < 0 ? -80 : this.w + 80, z: c.z + rand(-60, 60) });
+    this.leaving.add(c.id);
+    this.logEvent('visit', c, null, `${c.name.replace(/ #\d+$/, '')} flew off`);
+  }
+  private leaving = new Set<number>();
+
+  private hasDucklings(c: PondCreature) {
+    return this.creatures.some(o => o.leader && o.alive && o.species === c.species && o.lineId === c.lineId && o.age < POND_SPECIES[o.species].mature);
+  }
+
+  /** Paddles about the open water (a drake keeps near his hen), turning away from the banks. */
+  private paddle(c: PondCreature, follow: PondCreature | null, cruise: number) {
+    let sx = 0, sz = 0;
+    if (follow) {
+      const dx = follow.x - follow.facing * 6 - c.x, dz = follow.z + 2 - c.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 3) { sx += (dx / d) * 0.012; sz += (dz / d) * 0.012; }
+    } else if (c.goal) {
+      // Heading somewhere in particular: out from the bank with the brood.
+      const dx = c.goal.x - c.x, dz = c.goal.z - c.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 3) c.goal = null;
+      else { sx += (dx / d) * 0.012; sz += (dz / d) * 0.012; c.heading = Math.atan2(dz, dx); }
+    } else {
+      c.heading += rand(-0.08, 0.08);
+      // Hungry: drifting over toward the nearest duckweed.
+      if (c.hungry && (this.tick + c.id) % 60 === 0) {
+        let best: DuckweedPatch | null = null, bestD = 250;
+        for (const p of this.patches) {
+          const d = Math.hypot(p.x - c.x, p.z - c.z);
+          if (p.count > 10 && d < bestD) { bestD = d; best = p; }
+        }
+        if (best) c.heading = Math.atan2(best.z - c.z, best.x - c.x);
+      }
+      sx += Math.cos(c.heading) * 0.008;
+      sz += Math.sin(c.heading) * 0.005;
+    }
+    const ahead = { x: c.x + Math.cos(c.heading) * 14, z: c.z + Math.sin(c.heading) * 10 };
+    if (!c.goal && !this.isWater(ahead.x, ahead.z)) c.heading += 0.15;
+    // Big birds steer clear of the hero text.
+    const away = this.awayFromZones(c.x, c.z, 20);
+    sx += away.x * 0.02; sz += away.z * 0.02;
+    c.vx = (c.vx + sx) * 0.96;
+    c.vz = (c.vz + sz) * 0.96;
+    const speed = Math.hypot(c.vx, c.vz);
+    if (speed > cruise) { c.vx *= cruise / speed; c.vz *= cruise / speed; }
+    const nx = c.x + c.vx, nz = c.z + c.vz;
+    if (this.isWater(nx, nz)) { c.x = nx; c.z = nz; } else { c.vx *= -0.5; c.vz *= -0.5; c.heading += Math.PI * 0.7; c.goal = null; }
+    if (Math.abs(c.vx) > 0.02) this.turn(c, c.vx);
+  }
+
+  /** Faces the way it is going, but not again for a moment, so it doesn't flicker. */
+  private turn(c: PondCreature, vx: number) {
+    const want = vx > 0 ? 1 : -1;
+    if (want !== c.facing && (this.tick + c.id) % 12 === 0) c.facing = want;
+  }
+
+  /** A push away from the hero's clear zones, for anything within `margin` of one. */
+  private awayFromZones(x: number, z: number, margin: number) {
+    let ax = 0, az = 0;
+    for (const r of this.clearZones) {
+      const dx = x < r.x0 ? x - r.x0 : x > r.x1 ? x - r.x1 : 0;
+      const dz = z < r.z0 ? z - r.z0 : z > r.z1 ? z - r.z1 : 0;
+      const d = Math.hypot(dx, dz);
+      if (d >= margin) continue;
+      if (d === 0) { ax += x < (r.x0 + r.x1) / 2 ? -1 : 1; continue; }
+      ax += (dx / d) * (1 - d / margin);
+      az += (dz / d) * (1 - d / margin);
+    }
+    return { x: ax, z: az };
+  }
+
+  /** Tail up, head under: nibbling duckweed, and snapping up a tadpole if one is close. */
+  private dabble(c: PondCreature) {
+    if ((this.tick + c.id) % 10) return;
+    let ate = 0;
+    for (const f of this.fronds) {
+      if (ate >= 2 || !f.alive || Math.abs(f.x - c.x) > 5 || Math.abs(f.z - c.z) > 3) continue;
+      f.alive = false;
+      ate++;
+    }
+    if (ate) c.energy = Math.min(1, c.energy + 0.004 * ate);
+    // Grubbing about for weed, seeds and larvae, wherever it can reach the bottom (or near it).
+    c.energy = Math.min(1, c.energy + 0.0012);
+    const i = this.cellAt(c.x, this.bedRow(c.x, c.z));
+    if (this.depthAt(c.x, c.z) < 12 && this.algae[i] >= ALGAE_PER_UNIT) { this.algae[i] -= ALGAE_PER_UNIT; c.energy = Math.min(1, c.energy + 0.002); }
+    this.near(c.x, c.z, 6, o => {
+      if (o.alive && o.species === 'tadpole' && Math.hypot(o.x - c.x, o.z - c.z) < 6 && Math.random() < 0.25) {
+        this.die(o, 'eaten');
+        this.logEvent('eaten', o, c, `${c.name.replace(/ #\d+$/, '')} snapped up a tadpole`);
+        c.energy = Math.min(1, c.energy + 0.03);
+      }
+    });
+  }
+
+  /** A run across the water, wings beating, then up into the air. */
+  private startTakeOff(c: PondCreature, goal: { x: number; z: number }) {
+    c.mood = 'takingOff';
+    c.goal = goal;
+    c.timer = 40;
+    c.heading = Math.atan2(goal.z - c.z, goal.x - c.x);
+    c.facing = goal.x > c.x ? 1 : -1;
+  }
+
+  private duckTakeOff(c: PondCreature) {
+    const t = 40 - c.timer--;
+    const speed = Math.min(0.9, 0.15 + t * 0.03);
+    c.vx = Math.cos(c.heading) * speed;
+    c.vz = Math.sin(c.heading) * speed * 0.6;
+    c.x += c.vx; c.z += c.vz;
+    // Pattering across the surface, then lifting off.
+    if (t < 26) {
+      c.layer = 'surface';
+      if (t % 4 === 0 && this.isWater(c.x, c.z)) { this.splash(c.x - c.facing * 4, c.z, 3); this.ring(c.x, c.z, 1, 0.25, 30); }
+    } else {
+      c.layer = 'air';
+      c.h += 0.9;
+    }
+    if (c.timer <= 0) { c.mood = 'flying'; c.layer = 'air'; }
+  }
+
+  /** Flying to its goal, high over the pond, then gliding down to splash-land and skid to a stop. */
+  private duckFly(c: PondCreature) {
+    const g = c.goal ?? { x: c.x, z: c.z };
+    c.layer = 'air';
+    const dx = g.x - c.x, dz = g.z - c.z;
+    const d = Math.hypot(dx, dz);
+    if (c.mood === 'flying') {
+      const speed = 1.1;
+      c.vx = (dx / (d || 1)) * speed;
+      c.vz = (dz / (d || 1)) * speed;
+      c.h += (FLIGHT_H - c.h) * 0.04;
+      if (d < 50) c.mood = 'landing';
+    } else {
+      // Gliding in: down in step with the distance left, wings set.
+      c.vx = (dx / (d || 1)) * Math.max(0.35, Math.min(1, d / 30));
+      c.vz = (dz / (d || 1)) * Math.max(0.35, Math.min(1, d / 30));
+      c.h = Math.max(0, Math.min(c.h, d * 0.8));
+    }
+    c.x += c.vx; c.z += c.vz;
+    // Gone over the edge of the page.
+    if (this.leaving.has(c.id) && (c.x < -30 || c.x > this.w + 30)) { c.alive = false; this.leaving.delete(c.id); return; }
+    if (this.leaving.has(c.id)) { c.mood = 'flying'; c.h = Math.max(c.h, FLIGHT_H * 0.8); }
+    if (Math.abs(c.vx) > 0.05) c.facing = c.vx > 0 ? 1 : -1;
+    if (c.mood === 'landing' && (c.h <= 0.3 || d < 1)) {
+      // Touchdown: a skid, a long splash, a ring.
+      c.h = 0;
+      c.layer = 'surface';
+      c.mood = 'paddling';
+      c.timer = randInt(60, 200);
+      c.vx *= 0.6; c.vz *= 0.6;
+      c.squashV -= 0.5;
+      this.splash(c.x, c.z, 12);
+      this.ring(c.x, c.z, 2, 0.35, 70);
+      c.goal = null;
+      if (!this.isWater(c.x, c.z)) { const row = Math.round(c.z); c.x = (this.shoreL[row] + this.shoreR[row]) / 2; }
+    }
+  }
+
+  private readyToNest(c: PondCreature) {
+    if (c.breedCooldown > 0 || c.age < POND_SPECIES.mallard.mature || c.energy < 0.6 || !c.mate?.alive) return false;
+    if (this.nests.some(n => n.alive) || this.hasDucklings(c)) return false;
+    return this.counts().mallard < this.cap('mallard');
+  }
+
+  /** Off to the bank to make a nest: swims to the shore, then waddles up it. */
+  private goNest(c: PondCreature) {
+    const side: 1 | -1 = c.x < this.w / 2 ? 1 : -1;
+    let z = c.z;
+    for (let tries = 0; tries < 10 && this.isClear(this.offShore(z, side, -6), z); tries++) z += 40;
+    c.goal = { x: this.offShore(z, side, -6), z };
+    c.mood = 'walking';
+    c.timer = 1200;
+  }
+
+  /** Paddling to the shore, then up onto the bank to the nest site. */
+  private duckWalk(c: PondCreature) {
+    const g = c.goal!;
+    const dx = g.x - c.x, dz = g.z - c.z;
+    const d = Math.hypot(dx, dz);
+    const onLand = !this.isWater(c.x, c.z);
+    c.layer = onLand ? 'air' : 'surface';
+    c.h = 0;
+    const speed = onLand ? 0.08 : 0.15;
+    c.vx = (dx / (d || 1)) * speed; c.vz = (dz / (d || 1)) * speed;
+    c.x += c.vx; c.z += c.vz;
+    if (Math.abs(c.vx) > 0.02) c.facing = c.vx > 0 ? 1 : -1;
+    if (d < 1.5 || --c.timer <= 0) {
+      this.nests.push({ x: c.x, z: c.z, eggs: randInt(CLUTCH[0], CLUTCH[1]), hen: c, timer: NEST_TICKS, alive: true });
+      c.mood = 'nesting';
+      c.vx = c.vz = 0;
+      this.logEvent('nest', c, null, `${c.name.replace(/ #\d+$/, '')} is sitting on a nest of eggs`);
+    }
+  }
+
+  /** On the nest, now and then shuffling the eggs; when they hatch, back to the water with the brood. */
+  private duckNesting(c: PondCreature) {
+    const nest = this.nests.find(n => n.alive && n.hen === c);
+    c.layer = 'air';
+    c.h = 1;
+    if (!nest) { c.mood = 'paddling'; return; }
+    c.x = nest.x; c.z = nest.z;
+    if (--nest.timer > 0) return;
+    nest.alive = false;
+    let leader: PondCreature = c;
+    for (let k = 0; k < nest.eggs; k++) {
+      const d = this.spawn('mallard', c);
+      d.x = nest.x + rand(-2, 2); d.z = nest.z + rand(-1, 1);
+      d.layer = 'air'; d.mood = 'following'; d.leader = leader; d.lineId = c.lineId;
+      d.palette = 0;
+      leader = d;
+      this.births++;
+    }
+    this.logEvent('hatch', c, null, `${c.name.replace(/ #\d+$/, '')}'s ducklings hatched`);
+    c.breedCooldown = DUCK_BREED_COOLDOWN;
+    // Back down the bank and into the water, the ducklings in a line behind.
+    const side = c.x < this.w / 2 ? 1 : -1;
+    c.goal = { x: this.offShore(c.z, side, 14), z: c.z + 6 };
+    c.mood = 'paddling';
+    c.layer = 'surface';
+    c.timer = 400;
+    c.heading = side > 0 ? 0 : Math.PI;
+    c.x = this.offShore(c.z, side, 2);
+  }
+
+  /** A duckling follows the one ahead of it, keeping a little gap: a line behind its mother. */
+  private duckling(c: PondCreature) {
+    const lead = c.leader!;
+    c.mood = 'following';
+    const back = lead.facing;
+    const tx = lead.x - back * DUCKLING_GAP, tz = lead.z + 0.4;
+    const dx = tx - c.x, dz = tz - c.z;
+    const d = Math.hypot(dx, dz);
+    const speed = Math.min(0.5, d * 0.08);
+    c.vx = (dx / (d || 1)) * speed; c.vz = (dz / (d || 1)) * speed;
+    c.x += c.vx; c.z += c.vz;
+    c.layer = this.isWater(c.x, c.z) ? 'surface' : 'air';
+    c.h = 0;
+    if (Math.abs(c.vx) > 0.02) c.facing = c.vx > 0 ? 1 : -1;
+    // A little dabble of its own now and then.
+    if ((this.tick + c.id * 13) % 400 === 0) c.squashV += 0.3;
+    c.energy = Math.min(1, c.energy + 0.00006);
+  }
+
+  /** A tufted duck dives clean under, swims about the bed, and pops back up. */
+  private startDive(c: PondCreature) {
+    c.mood = 'diving';
+    c.layer = 'under';
+    c.timer = randInt(100, 180);
+    c.vh = -0.4;
+    c.squashV += 0.4;
+    this.ring(c.x, c.z, 1, 0.3, 50);
+  }
+
+  private duckDive(c: PondCreature) {
+    const depth = this.depthAt(c.x, c.z);
+    c.layer = 'under';
+    c.heading += rand(-0.1, 0.1);
+    c.vx = (c.vx + Math.cos(c.heading) * 0.01) * 0.95;
+    c.vz = (c.vz + Math.sin(c.heading) * 0.008) * 0.95;
+    const want = c.timer > 20 ? -(depth - 2) : 0;
+    c.vh = (c.vh + (want - c.h) * 0.02) * 0.9;
+    this.swimMove(c, depth);
+    if (Math.abs(c.vx) > 0.02) c.facing = c.vx > 0 ? 1 : -1;
+    this.near(c.x, c.z, 5, o => {
+      if (o.alive && o.species === 'tadpole' && Math.random() < 0.1 && Math.hypot(o.x - c.x, o.z - c.z) < 5) { this.die(o, 'eaten'); c.energy = Math.min(1, c.energy + 0.03); }
+    });
+    // Snails and larvae picked off the bottom.
+    if (c.h < -(depth - 3)) c.energy = Math.min(1, c.energy + 0.0008);
+    if (--c.timer <= 0 && c.h > -1.5) {
+      // Bob: back up, shaking off the water.
+      c.mood = 'paddling';
+      c.layer = 'surface';
+      c.h = 0;
+      c.timer = randInt(80, 200);
+      c.squashV -= 0.4;
+      this.ring(c.x, c.z, 1, 0.3, 50);
+      this.splash(c.x, c.z, 4);
+    }
   }
 
   // --- midges, rings and splashes ---------------------------------------------

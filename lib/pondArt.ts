@@ -388,3 +388,44 @@ export const spawnSprite = (seed: number, stage: number, frame: number) =>
     }
     return c;
   });
+
+// --- ducks ------------------------------------------------------------------------
+
+// Designed in pxl (duck.px.js, duck2.px.js), facing right. Roles: H head (h its
+// sheen), Y bill, W collar, C chest, B body (b its shade), D back and wing, S the
+// blue speculum, T tail, E eye, F feet, L the waterline.
+export type DuckSpriteKind = 'float' | 'quack' | 'preen' | 'dabble' | 'run' | 'fly0' | 'fly1' | 'duckling' | 'tufted' | 'tuftedDive';
+const DUCK_ROWS: Record<DuckSpriteKind, string[]> = {
+  float: ['..................hHH....', '.................hHHHH...', '.................HHHEH...', '.................HHHHHYYY', '..................HHH.YY.', '..................WWW....', '..T..........DDDDCCC.....', '.TTT..bBBBBDDDDDDCCCC....', 'TTWTBBBBBBBDDSSDDCCCC....', '.TBBBBBBBBBBBBBBBCCC.....', '..bBBBBBBBBBBBBBBBC......', '...LLLLLLLLLLLLLLL.......'],
+  quack: ['..................hHH....', '.................hHHHH...', '.................HHHE.YY.', '.................HHHHHY..', '..................HHH..YY', '..................WWW....', '..T..........DDDDCCC.....', '.TTT..bBBBBDDDDDDCCCC....', 'TTWTBBBBBBBDDSSDDCCCC....', '.TBBBBBBBBBBBBBBBCCC.....', '..bBBBBBBBBBBBBBBBC......', '...LLLLLLLLLLLLLLL.......'],
+  preen: ['.........................', '.........................', '...........hHH...........', '.........YhHHHH..........', '..T.....YYHHEHH..CCC.....', '.TTT..bBBHHHHDDDDCCCC....', 'TTWTBBBBBBBDDSSDDCCCC....', '.TBBBBBBBBBBBBBBBCCC.....', '..bBBBBBBBBBBBBBBBC......', '...LLLLLLLLLLLLLLL.......'],
+  dabble: ['...T.......', '..TTT......', '..TWT......', '.bBBDD.....', '.BBBDSD....', 'BBBBDSDD...', 'BBBBBDD....', '.BBBBBB.F..', '..LLLLL.FF.'],
+  run: ['........DD..........hHH..', '.......DSSD........hHHHH.', '......DDDDD........HHHEH.', '.....DDDDD.........HHHHHYY', '..T..DDDD..........WHH...', '.TTT..bBBBBBBBBBWWCCC....', 'TTWTBBBBBBBBBBBBBCCCC....', '.TBBBBBBBBBBBBBBBCCC.....', '..bBBBBBBBBBBBBBC........', '.....F....F..............', '....FF...FF..............'],
+  fly0: ['.........DD...............', '........DSSD..............', '........DDDD..............', '.........DDDD........hHH..', '..........DDD.......hHHHH.', '..T........DD......WHHHEH.', '.TTTbBBBBBBBBBBBBBWWHHHHYY', 'TTWTBBBBBBBBBBBCCCC.......', '.TBBBBBBBBBBBCCC..........', '...FF.....................'],
+  fly1: ['...........................', '.....................hHH...', '....................hHHHH..', '...................WHHHEH..', '.TTTbBBBBBBBBBBBBBWWHHHHYY.', 'TTWTBBBBBBBDDDDCCCC........', '.TBBBBBBBDDDSSDCC..........', '...FF.....DDDDD............', '...........DDDD............', '............DD.............'],
+  duckling: ['....bb..', '...bbEbo', '..yyyy..', '.yyybyy.', '.yyyyy..'],
+  tufted: ['...............KKK..', '..............KKKKK.', '.............KKKKeK.', '.............KKKKKgg', '..............KKK...', '..K.......KKKKK.....', '.KKKKwwwwwwwwKKK....', 'KKKwwwwwwwwwwKK.....', '.KKwwwwwwwwwKK......', '...LLLLLLLLLLL......'],
+  tuftedDive: ['..........KKKK.....', 'K....KKKKKKKKKKeKg.', 'KKKKKwwwwwwwwKKKKgg', '.K.KKKKKKKKKKKK....', '...F.....F.........'],
+};
+/** Mallard drake (0) and hen (1): [H, h, Y, W, C, B, b, D, S, T, L]. */
+const DUCK_SETS: Rgb[][] = [
+  [[47, 122, 74], [74, 154, 98], [232, 196, 58], [244, 242, 232], [138, 74, 46], [200, 196, 184], [168, 164, 152], [138, 132, 120], [58, 90, 200], [34, 38, 42], [126, 122, 112]],
+  [[128, 96, 62], [150, 116, 80], [214, 132, 48], [150, 118, 82], [150, 112, 74], [178, 142, 100], [156, 122, 84], [120, 92, 60], [58, 90, 200], [96, 74, 50], [120, 96, 70]],
+];
+const DUCK_EXTRA: Record<string, Rgb> = {
+  E: [16, 18, 20], F: [232, 137, 42], y: [242, 210, 74], o: [168, 120, 46], b: [106, 74, 34],
+  K: [28, 30, 36], w: [238, 240, 238], g: [108, 116, 136], e: [232, 196, 58],
+};
+
+export const duckSprite = (kind: DuckSpriteKind, palette: number, washed = false) =>
+  cached(`pond-duck-${kind}-${palette}-${washed}`, () => {
+    const set = DUCK_SETS[palette % DUCK_SETS.length];
+    const roles = ['H', 'h', 'Y', 'W', 'C', 'B', 'b', 'D', 'S', 'T', 'L'];
+    const colours: Record<string, Rgb> = { ...DUCK_EXTRA, ...Object.fromEntries(roles.map((r, i) => [r, set[i]])) };
+    if (washed) for (const k of Object.keys(colours)) colours[k] = paleOf(colours[k]);
+    return fromRows(DUCK_ROWS[kind], colours);
+  });
+
+/** A mallard's nest: a ring of grass and twigs on the bank. */
+export const nestSprite = () =>
+  cached('pond-nest', () => fromRows(['..tTtTtTt..', '.TtgggggtT.', 'tTgggggggTt', '.TtTtTtTtT.'], { t: [120, 92, 54], T: [92, 70, 42], g: [70, 56, 36] }));
