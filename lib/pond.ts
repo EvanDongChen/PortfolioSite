@@ -778,9 +778,14 @@ export class Pond {
 
   /** Pads bob, spring back from a dip, drift aside for swimmers and are pulled home by their stems. */
   private updatePads() {
-    const t = this.tick;
-    const pushers = this.surfacePushers();
+    const all = this.surfacePushers();
+    const pushers: number[] = [];
     for (const p of this.pads) {
+      // Only the pushers close enough to reach this pad.
+      pushers.length = 0;
+      for (let k = 0; k < all.length; k += 3) {
+        if (Math.abs(all[k] - p.x) < p.r + all[k + 2] && Math.abs(all[k + 1] - p.z) < p.r + all[k + 2]) pushers.push(all[k], all[k + 1], all[k + 2]);
+      }
       p.dipV = (p.dipV - p.dip * 0.08) * 0.9;
       p.dip += p.dipV;
       p.tilt *= 0.93;
@@ -802,7 +807,6 @@ export class Pond {
       // Flowers open by day and close at night (see nightfall).
       const open = 1 - this.nightfall();
       p.bloom += (open - p.bloom) * 0.01;
-      void t;
     }
   }
 
@@ -1829,7 +1833,8 @@ export class Pond {
   private paddle(c: PondCreature, follow: PondCreature | null, cruise: number) {
     let sx = 0, sz = 0;
     if (follow) {
-      const dx = follow.x - follow.facing * 6 - c.x, dz = follow.z + 2 - c.z;
+      // A body-length behind her and a little to one side.
+      const dx = follow.x - follow.facing * 22 - c.x, dz = follow.z + 4 - c.z;
       const d = Math.hypot(dx, dz);
       if (d > 3) { sx += (dx / d) * 0.012; sz += (dz / d) * 0.012; }
     } else if (c.goal) {

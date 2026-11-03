@@ -22,7 +22,7 @@ import {
 } from './pond';
 import {
   CATTAIL_HEAD, DUCKWEED, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
-  logSprite, makeCanvas, padSprite, pondSprite, rippleTile, rootSprite, spawnSprite, splashSprite, stoneSprite,
+  logSprite, padSprite, pondSprite, rippleTile, rootSprite, spawnSprite, splashSprite, stoneSprite,
   DuckSpriteKind, duckSprite, nestSprite, FishSpriteKind, fishSprite, SILT, ExtraSpriteKind, extraSprite,
   FIREFLY, RAIN, SKY, mayflySprite, nymphSprite,
 } from './pondArt';
@@ -1129,5 +1129,3 @@ export class PondView {
     }
   }
 }
-
-export { makeCanvas };
