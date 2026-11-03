@@ -2908,7 +2908,8 @@ export class Pond {
    * streaks off low over the water to another bough.
    */
   private thinkKingfisher(c: PondCreature) {
-    if (!this.boughs.length) { this.leave(c); return; }
+    // Nowhere left to perch (the page reshaped under it): it moves on.
+    if (!this.boughs.length) { c.alive = false; return; }
     if (c.cruise < 0 || c.cruise >= this.boughs.length) c.cruise = randInt(0, this.boughs.length - 1);
     const b = this.boughs[c.cruise];
     const seat = this.boughSeat(b);
@@ -3302,6 +3303,17 @@ export class Pond {
         place(c);
         if (kind === 'snail') this.placeSnail(c);
         if (kind === 'dragonfly') c.h = rand(10, 20);
+        // A kingfisher flies in to the nearest bough.
+        if (kind === 'kingfisher' && this.boughs.length) {
+          let best = 0;
+          this.boughs.forEach((b, n) => { if (Math.hypot(b.x - x, b.z - z) < Math.hypot(this.boughs[best].x - x, this.boughs[best].z - z)) best = n; });
+          c.cruise = best; c.goal = this.boughSeat(this.boughs[best]); c.mood = 'flying'; c.h = 8;
+        }
+        // A whirligig comes with its crowd: all of them, and their spot, move here.
+        if (kind === 'whirligig' && c.goal) {
+          for (const o of this.creatures) if (o.lineId === c.lineId && o !== c) { o.x = c.x + rand(-3, 3); o.z = c.z + rand(-2, 2); }
+          c.goal.x = c.x; c.goal.z = c.z;
+        }
         if (FISH[kind]) c.h = -Math.min(this.depthAt(c.x, c.z) - 1, 3);
       }
     }
