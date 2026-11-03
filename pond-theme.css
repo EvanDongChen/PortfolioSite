@@ -64,8 +64,6 @@ html.pond-theme {
 
 /* --- the pond's own controls ---------------------------------------------------- */
 
-.pond-theme .pond-btn > svg { color: var(--px-foam); }
-.pond-theme .pond-btn[aria-pressed='true'] > svg { color: #3a1222; }
 
 /* --- the pond census: a frog's life, stage by stage --------------------------- */
 
