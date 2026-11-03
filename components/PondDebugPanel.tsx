@@ -18,7 +18,10 @@ const STAGE_LABEL: Record<FrogStage, string> = {
   spawn: 'Frogspawn', tadpole: 'Tadpoles', backLegs: 'Back legs', fourLegs: 'Four legs', froglet: 'Froglet', adult: 'Frog',
 };
 /** Everything else that can be spawned (frogs come by stage). */
-const OTHERS: PondSpecies[] = ['mallard', 'tufted', 'minnow', 'koi', 'catfish', 'pike', 'dragonfly', 'strider', 'snail', 'turtle', 'heron'];
+const OTHERS: PondSpecies[] = [
+  'mallard', 'tufted', 'moorhen', 'minnow', 'koi', 'catfish', 'pike', 'newt',
+  'dragonfly', 'damselfly', 'butterfly', 'strider', 'whirligig', 'snail', 'turtle', 'kingfisher', 'heron',
+];
 const OTHER_LABEL: Partial<Record<PondSpecies, string>> = { mallard: 'Mallards + brood', heron: 'Heron (lands)' };
 
 // Icons drawn once.

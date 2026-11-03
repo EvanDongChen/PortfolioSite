@@ -16,7 +16,7 @@ export const POND_FLOOR = {
   /** Pale silt in the shallows, where the sun reaches the bed. */
   silt: [118, 110, 74] as Rgb,
   /** What the bed fades toward at full depth: murky green-black water. */
-  deep: [12, 34, 32] as Rgb,
+  deep: [18, 50, 44] as Rgb,
   algae: [64, 106, 44] as Rgb,
   algaeDense: [44, 86, 36] as Rgb,
   /** Turf on the banks, dark to light, with sun-dried tips. */
@@ -29,7 +29,12 @@ export const POND_FLOOR = {
   lip: [30, 30, 22] as Rgb,
   /** The bank's shadow on the water just below it. */
   bankShadow: [20, 32, 26] as Rgb,
-  caustic: [18, 28, 14] as Rgb,
+  caustic: [30, 46, 24] as Rgb,
+  /** Wildflowers in the turf, in drifts of one colour: buttercup, daisy, clover, speedwell and campion. */
+  flowers: [[244, 214, 60], [246, 244, 236], [222, 132, 176], [140, 150, 226], [214, 96, 150]] as Rgb[],
+  /** Pebbles in the shallows, and fallen leaves sunk on the bed. */
+  pebble: [[150, 144, 124], [112, 108, 94]] as Rgb[],
+  litter: [[120, 78, 42], [150, 100, 48]] as Rgb[],
 };
 
 /** The water surface: its tint over everything below, and its glints. */
@@ -161,10 +166,11 @@ const LILY = {
 const LILY_SETS: Record<string, Rgb>[] = [
   { w: [255, 244, 246], p: [244, 166, 192], P: [216, 112, 143], y: [255, 216, 74], G: [47, 94, 42] },
   { w: [255, 255, 255], p: [236, 236, 226], P: [204, 206, 190], y: [255, 206, 64], G: [47, 94, 42] },
+  { w: [255, 246, 160], p: [246, 212, 60], P: [214, 160, 30], y: [184, 116, 30], G: [47, 94, 42] },
 ];
-/** A water lily: open by day, half open at dusk and dawn, a closed bud at night. Palette 1 is pink, 2 white. */
+/** A water lily: open by day, half open at dusk and dawn, a closed bud at night. Palette 1 is pink, 2 white, 3 a yellow pond lily. */
 export const lilySprite = (stage: 'open' | 'half' | 'bud', palette: number) =>
-  cached(`pond-lily-${stage}-${palette}`, () => fromRows(LILY[stage], LILY_SETS[(palette - 1) & 1]));
+  cached(`pond-lily-${stage}-${palette}`, () => fromRows(LILY[stage], LILY_SETS[(palette - 1) % LILY_SETS.length]));
 
 // --- stones, logs and roots -------------------------------------------------
 
@@ -262,7 +268,7 @@ export const rootSprite = (seed: number) =>
   });
 
 /** Reed colours by kind and shade: [base, stalk, tip]. */
-export const REED_COLORS: Record<'reed' | 'cattail' | 'rush', string[][]> = {
+export const REED_COLORS: Record<'reed' | 'cattail' | 'rush' | 'iris' | 'loosestrife', string[][]> = {
   reed: [
     ['rgb(58,104,50)', 'rgb(88,140,62)', 'rgb(160,176,96)'],
     ['rgb(66,110,46)', 'rgb(104,150,66)', 'rgb(176,180,104)'],
@@ -278,17 +284,38 @@ export const REED_COLORS: Record<'reed' | 'cattail' | 'rush', string[][]> = {
     ['rgb(54,98,52)', 'rgb(80,128,62)', 'rgb(168,160,100)'],
     ['rgb(44,88,58)', 'rgb(64,116,68)', 'rgb(140,148,98)'],
   ],
+  // Blue-green sword leaves.
+  iris: [
+    ['rgb(46,92,70)', 'rgb(70,126,86)', 'rgb(104,150,98)'],
+    ['rgb(52,98,66)', 'rgb(80,134,84)', 'rgb(116,158,100)'],
+    ['rgb(42,86,72)', 'rgb(64,118,90)', 'rgb(96,142,104)'],
+  ],
+  loosestrife: [
+    ['rgb(58,94,48)', 'rgb(84,118,56)', 'rgb(116,136,66)'],
+    ['rgb(64,100,46)', 'rgb(92,124,58)', 'rgb(124,142,70)'],
+    ['rgb(54,90,50)', 'rgb(78,112,60)', 'rgb(110,130,70)'],
+  ],
 };
 /** A cattail's brown head: dark, lit. */
 export const CATTAIL_HEAD = ['rgb(96,56,32)', 'rgb(136,84,46)'];
-/** Underwater pondweed, by shade: [stalk, leaf]. */
-export const WEED_COLORS = [
-  ['rgb(40,90,52)', 'rgb(62,122,60)'],
-  ['rgb(46,96,44)', 'rgb(74,132,56)'],
-  ['rgb(36,84,58)', 'rgb(54,112,70)'],
+/** A yellow flag iris's petals and its darker throat; purple loosestrife's flower spike, two pinks. */
+export const IRIS_FLOWER = ['rgb(250,214,60)', 'rgb(206,140,28)'];
+export const LOOSESTRIFE_FLOWER = ['rgb(168,78,164)', 'rgb(214,128,200)'];
+/** Underwater weeds by kind (see WEED_KINDS) and shade: [stalk, leaf, tip]. */
+export const WEED_COLORS: string[][][] = [
+  // Pondweed: broad leaves in pairs.
+  [['rgb(40,90,52)', 'rgb(62,122,60)', 'rgb(84,140,66)'], ['rgb(46,96,44)', 'rgb(74,132,56)', 'rgb(96,150,64)'], ['rgb(36,84,58)', 'rgb(54,112,70)', 'rgb(76,132,76)']],
+  // Eelgrass: pale ribbons.
+  [['rgb(84,138,68)', 'rgb(112,164,80)', 'rgb(150,188,100)'], ['rgb(92,146,64)', 'rgb(122,170,78)', 'rgb(162,196,104)'], ['rgb(78,132,72)', 'rgb(104,156,84)', 'rgb(140,180,100)']],
+  // Hornwort: dark and bushy.
+  [['rgb(26,70,48)', 'rgb(40,96,56)', 'rgb(64,122,66)'], ['rgb(30,76,44)', 'rgb(46,102,52)', 'rgb(72,128,62)'], ['rgb(24,66,52)', 'rgb(36,90,60)', 'rgb(58,116,70)']],
+  // Milfoil: feathery, with red tips.
+  [['rgb(56,96,54)', 'rgb(80,128,66)', 'rgb(170,82,62)'], ['rgb(62,102,52)', 'rgb(88,134,64)', 'rgb(186,96,64)'], ['rgb(52,92,58)', 'rgb(74,122,70)', 'rgb(156,74,66)']],
 ];
-/** Duckweed fronds, three greens. */
-export const DUCKWEED = ['rgb(108,168,60)', 'rgb(142,196,76)', 'rgb(80,138,52)'];
+/** Floating fronds: duckweed in three greens, then water crowfoot's leaves in two. */
+export const DUCKWEED = ['rgb(108,168,60)', 'rgb(142,196,76)', 'rgb(80,138,52)', 'rgb(56,116,58)', 'rgb(82,140,66)'];
+/** Water crowfoot's flower: white petals round a yellow heart. */
+export const CROWFOOT_FLOWER = ['rgb(250,250,244)', 'rgb(250,212,70)'];
 
 // --- creatures ----------------------------------------------------------------
 
@@ -476,7 +503,7 @@ export type ExtraSpriteKind = 'dfly0' | 'dfly1' | 'strider' | 'snail' | 'turtle'
 const EXTRA_ROWS: Record<ExtraSpriteKind, string[]> = {
   dfly0: ['..ww..ww...', '...WW.WW...', 'aaaaaaaAAEE', '...WW.WW...', '..ww..ww...'],
   dfly1: ['...........', '...........', 'aaaaaaaAAEE', '..wwWWwwW..', '...........'],
-  strider: ['s.......s', '.s.SSS.s.', '..SSSSSE.', '.s..s..s.', 's.......s'],
+  strider: ['s.....s', '.sSSSE.', '.s...s.', 's.....s'],
   snail: ['.cCc.', 'cCcCc', 'CcCc.', 'kkkky'],
   turtle: ['....TTTTTT......', '..TtyTtyTtyT....', '.TtttttttttttT..', 'TtytttyttttyttT.kkk', '.kTTTTTTTTTTTkkkkE', '..kk......kk.....'],
   turtleSwim: ['....TTTTTT.......', '..TtyTtyTtyT.....', 'kTtttttttttttTkk.', 'kkTTTTTTTTTTTkkkE', '.k..k.....kk.....'],
@@ -498,6 +525,118 @@ export const extraSprite = (kind: ExtraSpriteKind, palette = 0, washed = false) 
     const colours = { ...EXTRA_COLOURS, ...(palette === 1 ? RED_DARTER : {}) };
     if (washed) for (const k of Object.keys(colours)) colours[k] = paleOf(colours[k]);
     return fromRows(EXTRA_ROWS[kind], colours);
+  });
+
+// --- the newer arrivals: beetles, damselflies, the kingfisher, moorhens, butterflies, newts --
+
+// Facing right, as the rest. Each kind has its own colour roles (see WILD_COLOURS).
+export type WildSpriteKind =
+  | 'whirligig' | 'damselPerch' | 'damsel0' | 'damsel1'
+  | 'kfPerch' | 'kfFly0' | 'kfFly1' | 'kfDive'
+  | 'moorhen' | 'moorhenBob' | 'moorhenWalk'
+  | 'flyOpen' | 'flyHalf' | 'newt0' | 'newt1';
+const WILD_ROWS: Record<WildSpriteKind, string[]> = {
+  // A whirligig beetle: a glossy black oval.
+  whirligig: ['kK.', 'KKK'],
+  // A damselfly: a long thin banded body, wings folded over its back at rest, a blur in flight.
+  damselPerch: ['....www..', 'adadadAAE'],
+  damsel0: ['....ww...', 'adadadAAE', '....ww...'],
+  damsel1: ['.....w...', 'adadadAAE', '.....w...'],
+  // A kingfisher: blue crown and back, orange cheek and breast, a white neck patch, a long dark bill.
+  kfPerch: ['...BBB.....', '..BbBbB....', '..BOOEKKKK.', '..WWOB.....', '..BOOO.....', '.CBOOO.....', 'CCBOoO.....', 'CTB.oo.....', 'T...F......'],
+  kfFly0: ['....CbC......', '...CCBC......', 'TTBBBBBBOEKKK', '....OOOOO....'],
+  kfFly1: ['.............', '.............', 'TTBBBBBBOEKKK', '...CBBCOOO...', '....CbC......'],
+  kfDive: ['TT.....', '.BB....', '..CBO..', '...BOO.', '....BOE', '......K'],
+  // A moorhen: slate black with a brown back, a white flank stripe and tail, a red shield and a yellow-tipped bill.
+  moorhen: ['.........KK...', '........KKKER.', '........KKKKRY', '.........KK...', 'UU.......KK...', 'UDDDDDDDDKK...', '.KKWWWWKKKK...', '..KKKKKKKK....', '...LLLLLLL....'],
+  moorhenBob: ['..............', '..........KK..', '.........KKKER', '.........KKKKRY', 'UU.......KK...', 'UDDDDDDDDKK...', '.KKWWWWKKKK...', '..KKKKKKKK....', '...LLLLLLL....'],
+  moorhenWalk: ['.........KK...', '........KKKER.', '........KKKKRY', '.........KK...', 'UU.......KK...', 'UDDDDDDDDKK...', '.KKWWWWKKKK...', '..KKKKKKKK....', '.....G..G.....', '....G..G.G....', '...GG.GG.GG...'],
+  // A butterfly from above: wings spread, and half closed.
+  flyOpen: ['WW.WW', 'wWBWw', '.W.W.'],
+  flyHalf: ['.W.W.', '.WBW.', '.....'],
+  // A smooth newt: olive back, orange belly and feet, a long tail.
+  newt0: ['....DDDD..', 'TTTDBBBBBE', '.....OO.O.'],
+  newt1: ['T...DDDD..', '.TTDBBBBBE', '.....O..O.'],
+};
+/** Damselflies: azure blue, emerald green and red, as [a, d, A, E]. */
+const DAMSEL_SETS: Rgb[][] = [
+  [[86, 172, 232], [24, 44, 66], [62, 140, 206], [36, 86, 140]],
+  [[70, 184, 122], [26, 62, 44], [54, 150, 100], [30, 96, 70]],
+  [[220, 72, 60], [70, 24, 24], [190, 56, 50], [120, 36, 36]],
+];
+/** Butterflies: a small tortoiseshell's orange, a cabbage white, a common blue, a brimstone's yellow, as [W, w]. */
+const BUTTERFLY_SETS: Rgb[][] = [
+  [[236, 136, 44], [60, 40, 30]],
+  [[246, 246, 238], [70, 70, 70]],
+  [[110, 142, 236], [206, 218, 250]],
+  [[242, 226, 96], [214, 186, 60]],
+];
+const WILD_COLOURS: Record<string, Rgb> = {
+  K: [26, 30, 32], k: [150, 172, 184], w: [222, 238, 246], B: [30, 104, 170], b: [116, 204, 238], C: [60, 176, 220],
+  O: [232, 122, 48], o: [192, 88, 36], W: [244, 240, 230], E: [16, 18, 20], F: [214, 70, 60], T: [24, 76, 138],
+};
+const MOORHEN_COLOURS: Record<string, Rgb> = {
+  K: [44, 46, 56], D: [78, 68, 50], W: [232, 230, 222], U: [242, 242, 238], R: [214, 48, 40], Y: [240, 210, 60],
+  E: [176, 36, 36], L: [64, 72, 76], G: [172, 190, 64],
+};
+const NEWT_COLOURS: Record<string, Rgb> = { D: [86, 84, 56], B: [124, 116, 76], O: [232, 128, 48], T: [104, 98, 66], E: [16, 18, 20] };
+
+export const wildSprite = (kind: WildSpriteKind, palette = 0, washed = false) =>
+  cached(`pond-wild-${kind}-${palette}-${washed}`, () => {
+    let colours: Record<string, Rgb> = WILD_COLOURS;
+    if (kind.startsWith('damsel')) {
+      const [a, d, A, E] = DAMSEL_SETS[palette % DAMSEL_SETS.length];
+      colours = { a, d, A, E, w: WILD_COLOURS.w };
+    } else if (kind.startsWith('fly')) {
+      const [W, w] = BUTTERFLY_SETS[palette % BUTTERFLY_SETS.length];
+      colours = { W, w, B: [40, 34, 30] };
+    } else if (kind.startsWith('moorhen')) colours = MOORHEN_COLOURS;
+    else if (kind.startsWith('newt')) colours = NEWT_COLOURS;
+    if (washed) colours = Object.fromEntries(Object.entries(colours).map(([k, c]) => [k, paleOf(c)]));
+    return fromRows(WILD_ROWS[kind], colours);
+  });
+
+const BOUGH_LEAVES: Rgb[] = [[62, 118, 54], [92, 152, 68], [46, 94, 44]];
+
+/**
+ * A bough reaching out over the water from the bank, toward the right: a
+ * limb thick at the bank and thinning, level along its outer half where a
+ * kingfisher sits (its top at row BOUGH_LIMB), twigs off it, and leaves.
+ */
+export const BOUGH_HEIGHT = 11;
+export const BOUGH_LIMB = 6;
+export const boughSprite = (seed: number, len: number) =>
+  cached(`pond-bough-${seed}-${len}`, () => {
+    const rnd = seededRandom(seed);
+    const h = BOUGH_HEIGHT;
+    const c = makeCanvas(len, h);
+    const ctx = c.getContext('2d')!;
+    const leaves: [number, number][] = [];
+    for (let x = 0; x < len; x++) {
+      const k = x / len;
+      const thick = k < 0.25 ? 3 : k < 0.5 ? 2 : 1;
+      // Rising a little off the bank, then level, drooping at the very tip.
+      const top = k < 0.25 ? BOUGH_LIMB + 1 : k > 0.92 ? BOUGH_LIMB + 1 : BOUGH_LIMB;
+      for (let y = top; y < top + thick && y < h; y++) put(ctx, x, y, y === top ? BARK[0] : y === top + thick - 1 ? BARK[3] : BARK[2]);
+      // Twigs, up or down, ending in leaves.
+      if (x > 2 && x % 4 === (seed & 3) && rnd() < 0.85) {
+        const up = rnd() < 0.6;
+        const tl = 1 + Math.floor(rnd() * 3);
+        for (let t = 1; t <= tl; t++) {
+          const tx = x + (t > 1 ? 1 : 0), ty = up ? top - t : top + thick - 1 + t;
+          if (ty >= 0 && ty < h && tx < len) put(ctx, tx, ty, BARK[1]);
+          if (t === tl) leaves.push([tx, ty]);
+        }
+      }
+      if (k > 0.3 && rnd() < 0.18) leaves.push([x, top - 1]);
+    }
+    for (const [lx, ly] of leaves) {
+      for (let n = 0; n < 5; n++) {
+        const x = lx + Math.floor(rnd() * 3) - 1, y = ly + Math.floor(rnd() * 3) - 1;
+        if (x >= 0 && x < len && y >= 0 && y < h) put(ctx, x, y, BOUGH_LEAVES[Math.floor(rnd() * 3)]);
+      }
+    }
+    return c;
   });
 
 // --- events -------------------------------------------------------------------------
@@ -542,6 +681,12 @@ export const pondIcon = (kind: string): HTMLCanvasElement => {
     case 'snail': return extraSprite('snail');
     case 'turtle': return extraSprite('turtle');
     case 'heron': return extraSprite('heronStand');
+    case 'whirligig': return wildSprite('whirligig');
+    case 'damselfly': return wildSprite('damselPerch', 0);
+    case 'kingfisher': return wildSprite('kfPerch');
+    case 'moorhen': return wildSprite('moorhen');
+    case 'butterfly': return wildSprite('flyOpen', 0);
+    case 'newt': return wildSprite('newt0');
     default: return pondSprite('frogSit', 0);
   }
 };

@@ -18,13 +18,13 @@
 // drawn into a window around the view, swapped between two canvases.
 
 import {
-  ELEVATION, MAX_DEPTH, POND_SPECIES, Pad, Pond, PondCreature, PondSpecies, ReedClump, SPAWN_TICKS, Stem, TADPOLE_TICKS, TAIL_TICKS, WeedBed,
+  BOUGH_H, ELEVATION, MAX_DEPTH, POND_SPECIES, Pad, Pond, PondCreature, PondSpecies, ReedClump, SPAWN_TICKS, Stem, TADPOLE_TICKS, TAIL_TICKS, WEED_KINDS, WeedBed,
 } from './pond';
 import {
-  CATTAIL_HEAD, DUCKWEED, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
+  CATTAIL_HEAD, CROWFOOT_FLOWER, DUCKWEED, IRIS_FLOWER, LOOSESTRIFE_FLOWER, makeCanvas, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
   logSprite, padSprite, pondSprite, rippleTile, rootSprite, spawnSprite, splashSprite, stoneSprite,
   DuckSpriteKind, duckSprite, nestSprite, FishSpriteKind, fishSprite, SILT, ExtraSpriteKind, extraSprite,
-  FIREFLY, RAIN, SKY, mayflySprite, nymphSprite,
+  FIREFLY, RAIN, SKY, mayflySprite, nymphSprite, WildSpriteKind, wildSprite, boughSprite,
 } from './pondArt';
 import { shadowSprite, silhouetteSprite } from './pixelOceanArt';
 import type { ReefLayout } from './pixelOceanView';
@@ -60,15 +60,24 @@ interface SpriteOptions {
   stretch?: number;
 }
 
-/** Sprite widths in art pixels, for shadows and the inspection reticle. */
-export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 12, spawn: 11, tadpole: 6, mallard: 24, tufted: 20, minnow: 9, koi: 20, catfish: 20, pike: 25,
-  dragonfly: 11, strider: 9, snail: 5, turtle: 18, heron: 18,
+/**
+ * How big each species is drawn, against its sprite: so a frog is a small
+ * thing beside a duck and a heron stands tall over both (see the reef's SIZE).
+ */
+const SIZE: Partial<Record<PondSpecies, number>> = { frog: 0.75, heron: 1.5, pike: 1.25 };
+
+/** Sprite widths in art pixels as drawn, for shadows and the inspection reticle. */
+export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 9, spawn: 11, tadpole: 6, mallard: 24, tufted: 20, minnow: 9, koi: 20, catfish: 20, pike: 31,
+  dragonfly: 11, strider: 7, snail: 5, turtle: 18, heron: 24,
+  whirligig: 3, damselfly: 9, kingfisher: 10, moorhen: 14, butterfly: 5, newt: 10,
 };
 
 /** Reed clumps and weed beds are drawn in bands this many rows deep, each sorted with whatever is among them. */
-const BAND = 3;
+const BAND = 5;
 /** The kinds of stem, in the order their colour runs are kept. */
-const STEM_KINDS = ['reed', 'cattail', 'rush'] as const;
+const STEM_KINDS = ['reed', 'cattail', 'rush', 'iris', 'loosestrife'] as const;
+/** Where the flower colours' runs sit, after every kind's three shades of three parts. */
+const HEAD = STEM_KINDS.length * 9;
 
 const hash = (n: number) => {
   let x = n | 0;
@@ -110,15 +119,16 @@ export class PondView {
   private backlogRow = 0;
   private backlogImage: ImageData | null = null;
   private backlogWait = 0;
-  /** The banks, in floor cells, for masking the light: rebuilt with the world. */
-  private landPath: Path2D | null = null;
-  private landKey = '';
+  /** The banks and the deep water, for dimming the light (see shade): rebuilt with the world. */
+  private shadeCanvas: HTMLCanvasElement | null = null;
+  private shadeKey = '';
   /** The water in the sprite window, in its canvas pixels: rebuilt as the window moves. */
   private waterPath: Path2D | null = null;
   private waterKey = '';
   /** Stem squares by colour (left, top, width, height each), reused from clump to clump. */
-  private stemRuns: number[][] = Array.from({ length: 3 * 3 * 3 + 2 }, () => []);
-  private weedRuns: number[][] = Array.from({ length: WEED_COLORS.length * 2 }, () => []);
+  private stemRuns: number[][] = Array.from({ length: HEAD + 6 }, () => []);
+  private weedRuns: number[][] = Array.from({ length: WEED_KINDS.length * 9 }, () => []);
+  private frondRuns: number[][] = Array.from({ length: DUCKWEED.length + 2 }, () => []);
 
   constructor(
     private pond: Pond,
@@ -297,6 +307,10 @@ export class PondView {
             // Blades of turf: sunlit tips and dark roots, scattered.
             if ((g & 15) === 0) c = F.grassTip;
             else if ((g & 15) === 1) c = F.grassDark.map(v => v * 0.8);
+            // Wildflowers in drifts, each drift one colour, thickest where the turf swells.
+            else if (up > 4.5 && hash(i * 31 + 7) < (k > 0.8 ? 0.16 : 0.003)) {
+              c = F.flowers[Math.floor(hash(Math.floor(x / 9) + Math.floor(z / 7) * 1013) * F.flowers.length)];
+            }
           }
         } else {
           const d = depth[i] / MAX_DEPTH;
@@ -312,9 +326,14 @@ export class PondView {
           const silt = Math.max(0, 1 - banded * 3) * 0.75;
           rr += (F.silt[0] - rr) * silt; gg += (F.silt[1] - gg) * silt; bb += (F.silt[2] - bb) * silt;
           // Into the murk.
-          const murk = Math.min(0.85, banded * 0.95);
+          const murk = Math.min(0.72, banded * 0.85);
           rr += (F.deep[0] - rr) * murk; gg += (F.deep[1] - gg) * murk; bb += (F.deep[2] - bb) * murk;
           c = [rr, gg, bb];
+          // Pebbles in the shallows and fallen leaves further out, seen through the water.
+          const speck = hash(i * 17 + 3);
+          const seen = 1 - murk;
+          if (banded < 0.4 && speck < 0.03) c = c.map((v, n) => v + (F.pebble[speck < 0.012 ? 0 : 1][n] - v) * seen);
+          else if (banded >= 0.2 && speck > 0.988) c = c.map((v, n) => v + (F.litter[speck > 0.995 ? 1 : 0][n] - v) * seen * 0.8);
           // The bank's shadow just off its edge.
           if (fromShore < 1.6) c = F.bankShadow;
           else if (fromShore < 2.6) c = c.map((v, n) => (v + F.bankShadow[n]) / 2);
@@ -363,52 +382,62 @@ export class PondView {
     }
   }
 
-  /** The banks as one path of floor cells, for keeping the light off them. */
-  private land() {
+  /**
+   * The banks in black and the water darkening with depth, a canvas pixel
+   * per cell: laid over the caustics, so they dance brightest in the
+   * shallows and fade out over the deep middle. Rebuilt with the world.
+   */
+  private shade() {
     const { pond } = this;
     const key = `${pond.w}x${pond.h}`;
-    if (this.landPath && key === this.landKey) return this.landPath;
-    const path = new Path2D();
-    const { shoreL, shoreR, w, h } = pond;
-    let start = 0;
-    for (let z = 1; z <= h; z++) {
-      const same = z < h && Math.round(shoreL[z]) === Math.round(shoreL[start]) && Math.round(shoreR[z]) === Math.round(shoreR[start]);
-      if (same) continue;
-      const l = Math.round(shoreL[start]) + 1, r = Math.round(shoreR[start]) - 1;
-      path.rect(0, start, l, z - start);
-      path.rect(r, start, w - r, z - start);
-      start = z;
+    if (this.shadeCanvas && key === this.shadeKey) return this.shadeCanvas;
+    const { w, h, depth } = pond;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d') as CanvasRenderingContext2D;
+    const img = ctx.createImageData(w, h);
+    const px = new Uint32Array(img.data.buffer);
+    for (let i = 0; i < w * h; i++) {
+      const d = depth[i] / MAX_DEPTH;
+      const a = depth[i] === 0 ? 255 : Math.round(255 * Math.min(0.72, d * d * 0.9));
+      px[i] = a << 24;
     }
-    this.landPath = path;
-    this.landKey = key;
-    return path;
+    ctx.putImageData(img, 0, 0);
+    this.shadeCanvas = c;
+    this.shadeKey = key;
+    return c;
   }
 
-  /** Caustic light dancing on the bed, kept off the banks. */
+  /**
+   * Caustic light dancing on the bed: two sets of ripples crossing, one
+   * mirrored, a little larger and drifting, so the pattern never visibly
+   * repeats; kept off the banks and faint over the deep water.
+   */
   private renderLight(top: number, rows: number) {
     const { pond, lightCtx: ctx } = this;
+    ctx.imageSmoothingEnabled = false;
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     ctx.fillStyle = '#000';
     ctx.fillRect(0, top, pond.w, rows);
-    const tile = rippleTile(this.ripples, RIPPLE_SIZE, (pond.tick >> 1) % RIPPLE_FRAMES, POND_FLOOR.caustic, false);
-    const pattern = ctx.createPattern(tile, 'repeat');
-    if (pattern) {
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = pattern;
-      // The sun's light on the bed dims under rain clouds and goes at night.
-      ctx.globalAlpha = Math.max(0.05, (1 - pond.nightfall() * 0.9) * (1 - pond.rainAmount() * 0.6));
+    // The sun's light on the bed dims under rain clouds and goes at night.
+    const sun = Math.max(0.05, (1 - pond.nightfall() * 0.9) * (1 - pond.rainAmount() * 0.6));
+    ctx.globalCompositeOperation = 'lighter';
+    const frame = (pond.tick >> 1) % RIPPLE_FRAMES;
+    const a = ctx.createPattern(rippleTile(this.ripples, RIPPLE_SIZE, frame, POND_FLOOR.caustic, false), 'repeat');
+    const b = ctx.createPattern(rippleTile(this.ripples, RIPPLE_SIZE, (frame + 11) % RIPPLE_FRAMES, POND_FLOOR.caustic, false), 'repeat');
+    if (a && b && typeof DOMMatrix !== 'undefined') {
+      ctx.globalAlpha = sun * 0.8;
+      ctx.fillStyle = a;
       ctx.fillRect(0, top, pond.w, rows);
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
+      const drift = pond.tick * 0.02;
+      b.setTransform(new DOMMatrix([-1.3125, 0, 0, 1.3125, 37 + drift, 19 + drift * 0.6]));
+      ctx.globalAlpha = sun * 0.7;
+      ctx.fillStyle = b;
+      ctx.fillRect(0, top, pond.w, rows);
     }
-    ctx.fillStyle = '#000';
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, top, pond.w, rows);
-    ctx.clip();
-    ctx.fill(this.land());
-    ctx.restore();
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(this.shade(), 0, top, pond.w, rows, 0, top, pond.w, rows);
   }
 
   // --- sprites ------------------------------------------------------------
@@ -436,7 +465,7 @@ export class PondView {
 
   /** How solid something this deep is drawn: the murk swallows the deepest. */
   private depthAlpha(depth: number) {
-    return Math.max(0.3, 1 - (0.62 * depth) / MAX_DEPTH);
+    return Math.max(0.5, 1 - (0.5 * depth) / MAX_DEPTH);
   }
 
   /**
@@ -528,10 +557,10 @@ export class PondView {
       } else if (c.species === 'strider') {
         // Each foot dimples the surface, and every dimple throws a round shadow on the bed.
         const d = pond.depthAt(c.x, c.z);
-        for (const [fx, fz] of [[-4, -1.2], [4, -1.2], [-4, 1.2], [4, 1.2]]) this.shadow(c.x + fx, c.z + fz, -d, 3, 0.35 * this.depthAlpha(d));
+        for (const [fx, fz] of [[-3, -1], [3, -1], [-3, 1], [3, 1]]) this.shadow(c.x + fx, c.z + fz, -d, 2, 0.35 * this.depthAlpha(d));
       } else if (c.layer === 'surface' && c.species === 'frog') {
         // A frog floating with its eyes up: the rest of it hangs just below the surface.
-        under.push({ depth: c.z + 0.3, draw: () => this.sprite(pondSprite('frogSwim1', c.palette, c.energy < 0.15), c.x, c.z, c.h - 1.5, { flipX: c.facing < 0, alpha: 0.55 }) });
+        under.push({ depth: c.z + 0.3, draw: () => this.sprite(pondSprite('frogSwim1', c.palette, c.energy < 0.15), c.x, c.z, c.h - 1.5, { flipX: c.facing < 0, alpha: 0.55, scale: SIZE.frog }) });
       }
     }
     under.sort((a, b) => a.depth - b.depth);
@@ -570,6 +599,13 @@ export class PondView {
     for (const l of pond.logs) {
       if (!l.floating || !visible(l.z)) continue;
       over.push({ depth: l.z, draw: () => this.sprite(logSprite(l.seed, l.len), l.x, l.z, 0.6, { anchor: 'bottom', flipX: l.side < 0 }) });
+    }
+    for (const b of pond.boughs) {
+      if (!visible(b.z)) continue;
+      const cx = b.x + (b.side * b.len) / 2;
+      // Its shade on the water below.
+      this.shadow(cx + b.side * 3, b.z + 2, 0, b.len * 0.9, 0.22);
+      over.push({ depth: b.z + 1, draw: () => this.sprite(boughSprite(b.seed, b.len), cx, b.z, BOUGH_H, { anchor: 'bottom', flipX: b.side < 0 }) });
     }
     for (const st of pond.stones) {
       if (st.land && visible(st.z)) over.push({ depth: st.z, draw: () => this.sprite(stoneSprite(st.seed, st.w, st.ht), st.x, st.z, 0, { anchor: 'bottom' }) });
@@ -712,7 +748,45 @@ export class PondView {
         if (c.layer === 'air') kind = (tick + c.id) >> 3 & 1 ? 'heronFly1' : 'heronFly0';
         else if (c.mood === 'striking') kind = 'heronStrike';
         // Standing in the shallows, its feet below the surface.
-        this.sprite(extraSprite(kind), c.x, c.z, c.layer === 'air' ? c.h : -2, { flipX: c.facing < 0, alpha, anchor: 'bottom' });
+        this.sprite(extraSprite(kind), c.x, c.z, c.layer === 'air' ? c.h : -2, { flipX: c.facing < 0, alpha, anchor: 'bottom', scale: SIZE.heron });
+        return;
+      }
+      case 'whirligig':
+        this.sprite(wildSprite('whirligig'), c.x, c.z, 0.3, { flipX: c.facing < 0, alpha });
+        return;
+      case 'damselfly': {
+        const kind: WildSpriteKind = c.mood === 'perched' ? 'damselPerch' : (tick + c.id) & 1 ? 'damsel1' : 'damsel0';
+        this.sprite(wildSprite(kind, c.palette), c.x, c.z, c.h, { flipX: c.facing < 0, alpha, anchor: c.mood === 'perched' ? 'bottom' : 'center' });
+        return;
+      }
+      case 'kingfisher': {
+        let kind: WildSpriteKind = 'kfPerch';
+        if (c.mood === 'diving') kind = 'kfDive';
+        else if (c.mood === 'flying') kind = (tick + c.id) >> 1 & 1 ? 'kfFly1' : 'kfFly0';
+        // Perched, it bobs its head now and then.
+        const bob = c.mood === 'perched' && (tick + c.id * 13) % 90 < 6 ? -0.6 : 0;
+        this.sprite(wildSprite(kind), c.x, c.z, c.h + bob, { flipX: c.facing < 0, alpha, anchor: c.mood === 'perched' ? 'bottom' : 'center' });
+        return;
+      }
+      case 'moorhen': {
+        const onPad = c.layer === 'air';
+        // A nod of the head with every stroke, and pecking at the pad it stands on.
+        const nod = onPad ? (tick + c.id * 7) % 40 < 8 : Math.hypot(c.vx, c.vz) > 0.06 && (tick + c.id * 5) % 16 < 6;
+        const kind: WildSpriteKind = onPad ? (nod ? 'moorhenBob' : 'moorhenWalk') : nod ? 'moorhenBob' : 'moorhen';
+        const bob = onPad ? 0 : ((tick + c.id * 11) >> 4 & 1) * 0.5 - 1.5;
+        this.sprite(wildSprite(kind, 0, c.energy < 0.15), c.x, c.z, c.h + bob, { flipX: c.facing < 0, alpha, anchor: 'bottom', stretch: c.squash });
+        return;
+      }
+      case 'butterfly': {
+        // Wings beating fast in flight, opening and closing slowly on a flower.
+        const open = c.mood === 'feeding' ? (tick + c.id * 3) % 70 < 40 : (tick + c.id) >> 1 & 1;
+        this.sprite(wildSprite(open ? 'flyOpen' : 'flyHalf', c.palette), c.x, c.z, c.h, { flipX: c.facing < 0, alpha, anchor: c.mood === 'feeding' ? 'bottom' : 'center' });
+        return;
+      }
+      case 'newt': {
+        const moving = Math.hypot(c.vx, c.vz) > 0.01;
+        const kind: WildSpriteKind = moving && (tick + c.id * 3) >> 3 & 1 ? 'newt1' : 'newt0';
+        this.sprite(wildSprite(kind, 0, c.energy < 0.15), c.x, c.z, c.h, { flipX: c.facing < 0, alpha });
         return;
       }
       case 'minnow': case 'koi': case 'catfish': case 'pike': {
@@ -723,7 +797,7 @@ export class PondView {
           : c.species === 'koi' ? (beat ? 'koi1' : 'koi0') : c.species === 'catfish' ? 'catfish0' : beat ? 'pike1' : 'pike0';
         // A lurking pike is half hidden among the weeds.
         const hide = c.species === 'pike' && c.mood !== 'striking' ? 0.8 : 1;
-        this.sprite(fishSprite(c.species, kind, c.palette, c.energy < 0.15), c.x, c.z, c.h, { flipX: c.facing < 0, alpha: alpha * hide, stretch: c.squash });
+        this.sprite(fishSprite(c.species, kind, c.palette, c.energy < 0.15), c.x, c.z, c.h, { flipX: c.facing < 0, alpha: alpha * hide, stretch: c.squash, scale: SIZE[c.species] });
         return;
       }
       case 'spawn': {
@@ -762,7 +836,7 @@ export class PondView {
     else if (c.throat > 0.5) kind = 'frogCroak';
     else kind = (tick + c.id * 37) % 110 < 4 ? 'frogBlink' : 'frogSit';
     const anchor = c.layer === 'under' || c.layer === 'surface' ? 'center' : 'bottom';
-    this.sprite(pondSprite(kind, c.palette, washed), c.x, c.z, c.h, { flipX: c.facing < 0, alpha, anchor, stretch: c.squash });
+    this.sprite(pondSprite(kind, c.palette, washed), c.x, c.z, c.h, { flipX: c.facing < 0, alpha, anchor, stretch: c.squash, scale: SIZE.frog });
     if (c.tongue > 0) this.drawTongue(c);
     if (kind === 'frogCroak') this.drawCroak(c);
   }
@@ -938,18 +1012,28 @@ export class PondView {
     }
   }
 
-  /** Duckweed: a speck or two of green per frond, in one pass by colour. */
+  /**
+   * Duckweed and crowfoot: a little oval leaf two cells across per frond,
+   * and crowfoot's flowers (white petals round a yellow heart) held just
+   * above the water; gathered by colour in one pass, then filled.
+   */
   private drawDuckweed(z0: number, z1: number) {
     const { spriteCtx: ctx, pond, px, regionTop } = this;
+    const runs = this.frondRuns;
+    const petals = DUCKWEED.length, heart = petals + 1;
+    for (const f of pond.fronds) {
+      if (!f.alive || f.z < z0 || f.z > z1) continue;
+      const x = Math.round(f.x) * px, y = Math.round(f.z) * px - regionTop;
+      runs[f.shade].push(x, y, px * 2, px);
+      if (f.flower) runs[petals].push(x - px, y - px, px * 3, px, x, y - px * 2, px, px * 3), runs[heart].push(x, y - px, px, px);
+    }
     ctx.globalAlpha = 1;
-    for (let shade = 0; shade < DUCKWEED.length; shade++) {
-      ctx.fillStyle = DUCKWEED[shade];
-      for (const f of pond.fronds) {
-        if (f.shade !== shade || !f.alive || f.z < z0 || f.z > z1) continue;
-        const x = Math.round(f.x) * px, y = Math.round(f.z) * px - regionTop;
-        // Each frond is a little oval leaf, two cells across.
-        ctx.fillRect(x, y, px * 2, px);
-      }
+    for (let c = 0; c < runs.length; c++) {
+      const run = runs[c];
+      if (!run.length) continue;
+      ctx.fillStyle = c < petals ? DUCKWEED[c] : CROWFOOT_FLOWER[c - petals];
+      for (let k = 0; k < run.length; k += 4) ctx.fillRect(run[k], run[k + 1], run[k + 2], run[k + 3]);
+      run.length = 0;
     }
   }
 
@@ -975,13 +1059,16 @@ export class PondView {
   private drawStems(stems: Stem[], from: number, to: number) {
     const { spriteCtx: ctx, px, pond, regionTop } = this;
     const runs = this.stemRuns;
-    const head = 27, headLit = 28;
+    const head = HEAD, headLit = HEAD + 1, petal = HEAD + 2, throat = HEAD + 3, spike = HEAD + 4, spikeLit = HEAD + 5;
     const t = pond.tick * 0.035;
     for (let n = from; n < to; n++) {
       const st = stems[n];
       const set = (STEM_KINDS.indexOf(st.kind) * 3 + st.shade) * 3;
       const wave = Math.sin(t + st.phase + st.x * 0.05) * 0.9 + pond.wind.x * 120;
       let col = -1, left = 0, top = 0, bottom = 0, size = 0;
+      // Not every iris is in flower.
+      const blooms = st.kind === 'iris' ? st.phase < 2.8 : st.kind === 'loosestrife';
+      let bloomed = false;
       for (let i = 0; i <= st.len; i += 1 / ELEVATION) {
         const k = i / st.len;
         const give = k * k;
@@ -995,9 +1082,23 @@ export class PondView {
           runs[headLit].push(l + Math.round(s / 2), sy, s, s);
           continue;
         }
+        if (blooms && st.kind === 'iris' && k > 0.86) {
+          // An iris flower at the tip: falls to either side and a standard above, round a dark throat.
+          if (!bloomed) runs[petal].push(l - s, sy, s, s, l + s, sy, s, s, l, sy - s, s, s, l - s, sy + s, s, s);
+          if (!bloomed) runs[throat].push(l, sy, s, s);
+          bloomed = true;
+          continue;
+        }
+        if (blooms && st.kind === 'loosestrife' && k > 0.58) {
+          // A spike of little purple flowers, stepping from side to side.
+          const n2 = Math.round(i * ELEVATION);
+          runs[n2 & 1 ? spike : spikeLit].push(l, sy, s, s);
+          if (k < 0.92) runs[spike].push(l + (n2 & 1 ? s : -s), sy, s, s);
+          continue;
+        }
         const c = set + (k > 0.86 ? 2 : k < 0.3 ? 0 : 1);
         // Leaf blades off alternate sides, angled up and out.
-        if (st.kind === 'reed' && i > 4 && Math.round(i * ELEVATION) % 5 === 0) {
+        if ((st.kind === 'reed' || st.kind === 'loosestrife') && i > 4 && Math.round(i * ELEVATION) % 5 === 0) {
           const side = Math.round(i * ELEVATION) % 10 === 0 ? 1 : -1;
           runs[set + 1].push(l + side * s, sy - s, s, s, l + side * s * 2, sy - s * 2, s, s);
         }
@@ -1011,7 +1112,8 @@ export class PondView {
     for (let c = 0; c < runs.length; c++) {
       const run = runs[c];
       if (!run.length) continue;
-      ctx.fillStyle = c === head ? CATTAIL_HEAD[0] : c === headLit ? CATTAIL_HEAD[1] : REED_COLORS[STEM_KINDS[Math.floor(c / 9)]][Math.floor(c / 3) % 3][c % 3];
+      ctx.fillStyle = c >= HEAD ? [...CATTAIL_HEAD, ...IRIS_FLOWER, ...LOOSESTRIFE_FLOWER][c - HEAD]
+        : REED_COLORS[STEM_KINDS[Math.floor(c / 9)]][Math.floor(c / 3) % 3][c % 3];
       for (let k = 0; k < run.length; k += 4) ctx.fillRect(run[k], run[k + 1], run[k + 2], run[k + 3]);
       run.length = 0;
     }
@@ -1030,11 +1132,17 @@ export class PondView {
     }
   }
 
-  /** Pondweed stalks rising from the bed with leaves along them, swaying in the water, dim with depth. */
+  /**
+   * Weed stalks rising from the bed, swaying in the water and dim with
+   * depth: pondweed with paired leaves, eelgrass in long pale ribbons,
+   * hornwort bushy with whorls all the way up, milfoil feathery and red-tipped.
+   */
   private drawWeeds(b: WeedBed, from: number, to: number) {
     const { spriteCtx: ctx, px, pond, regionTop } = this;
     const runs = this.weedRuns;
     const t = pond.tick * 0.03;
+    const kind = WEED_KINDS.indexOf(b.kind);
+    const swing = b.kind === 'eelgrass' ? 2.6 : b.kind === 'hornwort' ? 0.9 : 1.6;
     let alpha = 1;
     for (let n = from; n < to; n++) {
       const wd = b.weeds[n];
@@ -1042,48 +1150,52 @@ export class PondView {
       alpha = this.depthAlpha(d);
       const base = wd.z + d * ELEVATION;
       const shift = this.wobbleAt(base);
+      const set = (kind * 3 + wd.shade) * 3;
       for (let i = 0; i <= wd.len; i += 1 / ELEVATION) {
         const k = i / wd.len;
-        const sway = Math.sin(t + wd.phase + i * 0.25) * 1.6 * k;
+        const sway = Math.sin(t + wd.phase + i * 0.25) * swing * k;
         const x = Math.round((wd.x + sway + shift) * px - px / 2);
         const y = Math.round((base - i * ELEVATION) * px - regionTop);
-        runs[wd.shade * 2].push(x, y, px, px);
-        // Leaves in pairs every few cells.
-        if (Math.round(i * ELEVATION) % 3 === 1) runs[wd.shade * 2 + 1].push(x - px, y, px, px, x + px, y - px, px, px);
+        const step = Math.round(i * ELEVATION);
+        const tip = k > (b.kind === 'milfoil' ? 0.72 : 0.85);
+        runs[set + (tip ? 2 : 0)].push(x, y, px, px);
+        const leaf = set + (tip ? 2 : 1);
+        if (b.kind === 'pondweed') {
+          // Leaves in pairs every few cells.
+          if (step % 3 === 1) runs[leaf].push(x - px, y, px, px, x + px, y - px, px, px);
+        } else if (b.kind === 'hornwort') {
+          // Whorls of needles all the way up: a pair close in, then a pair further out.
+          if (step & 1) runs[leaf].push(x - px * 2, y - px, px, px, x + px * 2, y - px, px, px);
+          else runs[leaf].push(x - px, y, px, px, x + px, y, px, px);
+        } else if (b.kind === 'milfoil') {
+          // Feathery leaves every other cell.
+          if (step & 1) runs[leaf].push(x - px * 2, y - px, px * 2, px, x + px, y - px, px * 2, px);
+        } else if (step % 4 === 2) {
+          // Eelgrass: a second ribbon beside the first, now and then.
+          runs[leaf].push(x + px, y, px, px);
+        }
       }
     }
     ctx.globalAlpha = alpha;
     for (let c = 0; c < runs.length; c++) {
       const run = runs[c];
       if (!run.length) continue;
-      ctx.fillStyle = WEED_COLORS[c >> 1][c & 1];
+      ctx.fillStyle = WEED_COLORS[Math.floor(c / 9)][Math.floor(c / 3) % 3][c % 3];
       for (let k = 0; k < run.length; k += 4) ctx.fillRect(run[k], run[k + 1], run[k + 2], run[k + 3]);
       run.length = 0;
     }
   }
 
   /**
-   * The water surface: a translucent sheet over everything below it, faint
-   * ripples of light across it, and glints that come and go as it moves.
+   * The water surface: a translucent sheet over everything below it, and
+   * glints that come and go as it moves.
    */
   private drawSurface() {
-    const { spriteCtx: ctx, pond, px } = this;
+    const { spriteCtx: ctx } = this;
     const water = this.water();
     ctx.globalAlpha = 1;
     ctx.fillStyle = WATER.sheet;
     ctx.fill(water);
-    if (!this.lean) {
-      // Ripples of light on the surface: the caustic frames, half a cycle on and twice the size.
-      const tile = rippleTile(this.ripples, RIPPLE_SIZE, ((pond.tick >> 2) + RIPPLE_FRAMES / 2) % RIPPLE_FRAMES, [150, 210, 190], true);
-      const pattern = ctx.createPattern(tile, 'repeat');
-      if (pattern && typeof DOMMatrix !== 'undefined') {
-        const scale = px * 2;
-        pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, -(this.regionTop % (RIPPLE_SIZE * scale))]));
-        ctx.globalAlpha = 0.08;
-        ctx.fillStyle = pattern;
-        ctx.fill(water);
-      }
-    }
     this.drawGlints();
     ctx.globalAlpha = 1;
   }

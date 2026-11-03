@@ -112,7 +112,8 @@ export class PondEngine {
   private adopted: PondCreature | null;
 
   constructor(init: PondEngineInit, private post: (message: FromPond) => void) {
-    this.pond = new Pond(init.w, init.h);
+    // Stocked with a good share of its life where the visitor is looking.
+    this.pond = new Pond(init.w, init.h, { z0: init.scrollY / init.px, z1: (init.scrollY + init.viewH) / init.px }, init.zones);
     this.pond.setClearZones(init.zones);
     this.view = new PondView(this.pond, init.floor, init.light, init.sprites, init.px,
       layout => this.post({ type: 'layout', layout }), init.worker ? 2 : 1);
