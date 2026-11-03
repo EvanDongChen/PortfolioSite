@@ -107,6 +107,8 @@ export class PondView {
   regionHeight = 0;
   /** Set when frames are slow to draw: finishing touches are left out (see the reef's). */
   lean = false;
+  /** How strong the sun shafts are, easing out when the view goes lean and back in after (0 to 1). */
+  private shafts = 1;
   /** The creature under inspection, drawn with a reticle. */
   highlighted: PondCreature | null = null;
 
@@ -479,10 +481,11 @@ export class PondView {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.drawImage(this.shade(), 0, top, pond.w, rows, 0, top, pond.w, rows);
-    if (!this.lean) {
-      this.drawShafts(top, rows, sun);
-      if (this.landCanvas) ctx.drawImage(this.landCanvas, 0, top, pond.w, rows, 0, top, pond.w, rows);
-    }
+    // The shafts fade rather than blink when the view goes lean (or comes back).
+    this.shafts += ((this.lean ? 0 : 1) - this.shafts) * 0.04;
+    if (this.shafts > 0.02) this.drawShafts(top, rows, sun * this.shafts);
+    // Then the land masked out of the light, always.
+    if (this.landCanvas) ctx.drawImage(this.landCanvas, 0, top, pond.w, rows, 0, top, pond.w, rows);
   }
 
   /**

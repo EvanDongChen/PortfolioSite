@@ -17,6 +17,9 @@ const SLOW_DRAW_MS = 20;
 const SLOW_FRAME_MS = 1000 / 20;
 const LEAN_DRAW_MS = 9;
 const LEAN_RECOVER_MS = 5;
+/** How long the draw cost must stay past either line before the view goes lean, or back (so it doesn't flip back and forth). */
+const LEAN_HOLD_MS = 1500;
+const RECOVER_HOLD_MS = 8000;
 const INSPECT_INTERVAL_MS = 100;
 /** How close (page pixels) a click or tap must be to pick a creature. */
 const CLICK_REACH = 32;
@@ -100,6 +103,8 @@ export class PondEngine {
   private lastDraw = 0;
   /** A running average of how long a frame takes to draw, in ms. */
   drawCost = 0;
+  /** When the draw cost crossed the line for going lean (or back), if it is still past it. */
+  private leanSince = 0;
   private drawnScroll = Number.NaN;
   private lastStats = 0;
   private lastInspect = 0;
@@ -317,8 +322,10 @@ export class PondEngine {
       const started = performance.now();
       this.draw();
       this.drawCost += (performance.now() - started - this.drawCost) * 0.1;
-      if (!view.lean && this.drawCost > LEAN_DRAW_MS) view.lean = true;
-      else if (view.lean && this.drawCost < LEAN_RECOVER_MS) view.lean = false;
+      const want = view.lean ? this.drawCost > LEAN_RECOVER_MS : this.drawCost > LEAN_DRAW_MS;
+      if (want === view.lean) this.leanSince = 0;
+      else if (!this.leanSince) this.leanSince = now;
+      else if (now - this.leanSince > (want ? LEAN_HOLD_MS : RECOVER_HOLD_MS)) { view.lean = want; this.leanSince = 0; }
     }
     if (now - this.lastStats > STATS_INTERVAL_MS) {
       this.lastStats = now;
