@@ -467,3 +467,35 @@ export const fishSprite = (species: 'minnow' | 'koi' | 'catfish' | 'pike', kind:
 
 /** Silt stirred off the bed: two muddy browns. */
 export const SILT = ['rgb(104,92,62)', 'rgb(134,120,84)'];
+
+
+// --- insects, snails, the turtle and the heron -----------------------------------
+
+// Designed in pxl (extras.px.js), facing right.
+export type ExtraSpriteKind = 'dfly0' | 'dfly1' | 'strider' | 'snail' | 'turtle' | 'turtleSwim' | 'heronStand' | 'heronStrike' | 'heronFly0' | 'heronFly1';
+const EXTRA_ROWS: Record<ExtraSpriteKind, string[]> = {
+  dfly0: ['..ww..ww...', '...WW.WW...', 'aaaaaaaAAEE', '...WW.WW...', '..ww..ww...'],
+  dfly1: ['...........', '...........', 'aaaaaaaAAEE', '..wwWWwwW..', '...........'],
+  strider: ['s.......s', '.s.SSS.s.', '..SSSSSE.', '.s..s..s.', 's.......s'],
+  snail: ['.cCc.', 'cCcCc', 'CcCc.', 'kkkky'],
+  turtle: ['....TTTTTT......', '..TtyTtyTtyT....', '.TtttttttttttT..', 'TtytttyttttyttT.kkk', '.kTTTTTTTTTTTkkkkE', '..kk......kk.....'],
+  turtleSwim: ['....TTTTTT.......', '..TtyTtyTtyT.....', 'kTtttttttttttTkk.', 'kkTTTTTTTTTTTkkkE', '.k..k.....kk.....'],
+  heronStand: ['.......KKK....', '.....KKHHHE...', '.....HHHHHYYYY', '......HHH.....', '.......HH.....', '.......HH.....', '......HHH.....', '.....gHHH.....', '...ggggHH.....', '..GgggggH.....', '.GGgggggg.....', 'KGGgggggg.....', 'K.GGgggg......', '....GgL.......', '.....L........', '.....L........', '.....L........', '....LL........'],
+  heronStrike: ['..................', '..................', '..................', '..................', '...gggg...........', '..GgggggHHH.......', '.GGggggggHHHH.....', 'KGGgggggg..HHHH...', 'K.GGgggg.....HHHKK', '....GgL.......HHHE', '.....L.........HYYYY', '.....L............', '.....L............', '....LL............'],
+  heronFly0: ['........GGGGG.........', '.......GGGGGGGG.......', '......GGggggggG.......', 'LLLL..ggggggggHHHKK...', '...LLLggggggggHHHHEYYY', '......gggggg..........'],
+  heronFly1: ['......................', '......................', '...........KK.........', 'LLLL..ggggggggHHHKK...', '...LLLggggggggHHHHEYYY', '......GggggggG........', '.....GGGGGGGGGG.......', '.......GGGGGG.........'],
+};
+const EXTRA_COLOURS: Record<string, Rgb> = {
+  A: [58, 184, 216], a: [31, 112, 144], w: [216, 240, 244], W: [168, 212, 224], E: [16, 18, 20],
+  s: [58, 50, 38], S: [106, 90, 64], c: [200, 180, 138], C: [138, 116, 80], k: [106, 96, 64], y: [200, 180, 90],
+  t: [74, 122, 58], T: [46, 84, 40], g: [138, 150, 160], G: [90, 100, 110], H: [216, 220, 216], Y: [232, 196, 58], K: [34, 38, 42], L: [200, 168, 104],
+};
+/** A red dragonfly (a darter), for variety. */
+const RED_DARTER: Record<string, Rgb> = { A: [226, 72, 58], a: [150, 40, 36] };
+
+export const extraSprite = (kind: ExtraSpriteKind, palette = 0, washed = false) =>
+  cached(`pond-extra-${kind}-${palette}-${washed}`, () => {
+    const colours = { ...EXTRA_COLOURS, ...(palette === 1 ? RED_DARTER : {}) };
+    if (washed) for (const k of Object.keys(colours)) colours[k] = paleOf(colours[k]);
+    return fromRows(EXTRA_ROWS[kind], colours);
+  });

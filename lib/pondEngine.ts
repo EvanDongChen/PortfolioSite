@@ -71,9 +71,17 @@ export class PondEngine {
     this.viewW = init.viewW;
     this.viewH = init.viewH;
     this.frameMs = init.frameMs;
+    this.watch();
     this.draw();
     this.last = performance.now();
     this.schedule();
+  }
+
+  /** Tells the pond which rows the visitor can see, so visits happen in view. */
+  private watch() {
+    const top = this.view.pageToWorld(0, this.scrollY, 0).z;
+    const bottom = this.view.pageToWorld(0, this.scrollY + this.viewH, 0).z;
+    this.pond.viewZ = { z0: top, z1: bottom };
   }
 
   stop() {
@@ -88,6 +96,7 @@ export class PondEngine {
         this.scrollY = m.scrollY;
         this.viewW = m.viewW;
         this.viewH = m.viewH;
+        this.watch();
         break;
       case 'world':
         pond.resize(m.w, m.h);

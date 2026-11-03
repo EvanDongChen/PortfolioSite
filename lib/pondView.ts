@@ -23,9 +23,9 @@ import {
 import {
   CATTAIL_HEAD, DUCKWEED, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
   logSprite, makeCanvas, padSprite, pondSprite, rippleTile, rootSprite, spawnSprite, splashSprite, stoneSprite,
-  DuckSpriteKind, duckSprite, nestSprite, FishSpriteKind, fishSprite, SILT,
+  DuckSpriteKind, duckSprite, nestSprite, FishSpriteKind, fishSprite, SILT, ExtraSpriteKind, extraSprite,
 } from './pondArt';
-import { shadowSprite } from './pixelOceanArt';
+import { shadowSprite, silhouetteSprite } from './pixelOceanArt';
 import type { ReefLayout } from './pixelOceanView';
 
 /** How much bigger things get per unit of height (as on the reef). */
@@ -60,7 +60,9 @@ interface SpriteOptions {
 }
 
 /** Sprite widths in art pixels, for shadows and the inspection reticle. */
-export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 12, spawn: 11, tadpole: 6, mallard: 24, tufted: 20, minnow: 9, koi: 20, catfish: 20, pike: 25 };
+export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 12, spawn: 11, tadpole: 6, mallard: 24, tufted: 20, minnow: 9, koi: 20, catfish: 20, pike: 25,
+  dragonfly: 11, strider: 9, snail: 5, turtle: 18, heron: 18,
+};
 
 /** Reed clumps and weed beds are drawn in bands this many rows deep, each sorted with whatever is among them. */
 const BAND = 3;
@@ -498,6 +500,10 @@ export class PondView {
         // Its shadow on the bed below it, fainter the further above the bed it is.
         this.shadow(c.x, c.z, -d, BODY_WIDTH[c.species] * 0.7, 0.3 * Math.max(0.2, 1 - (d + c.h) / 20) * this.depthAlpha(d));
         under.push({ depth: c.z + 0.3, draw: () => this.drawCreature(c, this.depthAlpha(-c.h)) });
+      } else if (c.species === 'strider') {
+        // Each foot dimples the surface, and every dimple throws a round shadow on the bed.
+        const d = pond.depthAt(c.x, c.z);
+        for (const [fx, fz] of [[-4, -1.2], [4, -1.2], [-4, 1.2], [4, 1.2]]) this.shadow(c.x + fx, c.z + fz, -d, 3, 0.35 * this.depthAlpha(d));
       } else if (c.layer === 'surface' && c.species === 'frog') {
         // A frog floating with its eyes up: the rest of it hangs just below the surface.
         under.push({ depth: c.z + 0.3, draw: () => this.sprite(pondSprite('frogSwim1', c.palette, c.energy < 0.15), c.x, c.z, c.h - 1.5, { flipX: c.facing < 0, alpha: 0.55 }) });
@@ -509,6 +515,7 @@ export class PondView {
 
     // 2. The surface itself, over everything below it.
     this.drawSurface();
+    if (pond.heronPass && !this.lean) this.drawHeronPass();
 
     // 3. On and above the surface: duckweed flat on the water first, then
     // pads, logs, reeds and the banks' stones, depth-sorted.
@@ -550,6 +557,29 @@ export class PondView {
     switch (c.species) {
       case 'frog': this.drawFrog(c, alpha); return;
       case 'mallard': case 'tufted': this.drawDuck(c, alpha); return;
+      case 'dragonfly': {
+        // Wings a blur: they beat every tick while it hovers.
+        const kind: ExtraSpriteKind = (tick + c.id) & 1 ? 'dfly1' : 'dfly0';
+        this.sprite(extraSprite(kind, c.palette), c.x, c.z, c.h, { flipX: c.facing < 0, alpha });
+        return;
+      }
+      case 'strider':
+        this.sprite(extraSprite('strider'), c.x, c.z, 0.4, { flipX: c.facing < 0, alpha });
+        return;
+      case 'snail':
+        this.sprite(extraSprite('snail'), c.x, c.z, c.h, { flipX: c.facing < 0, alpha: alpha * 0.95 });
+        return;
+      case 'turtle':
+        this.sprite(extraSprite(c.layer === 'under' ? 'turtleSwim' : 'turtle'), c.x, c.z, c.h, { flipX: c.facing < 0, alpha, anchor: c.layer === 'under' ? 'center' : 'bottom', stretch: c.squash });
+        return;
+      case 'heron': {
+        let kind: ExtraSpriteKind = 'heronStand';
+        if (c.layer === 'air') kind = (tick + c.id) >> 3 & 1 ? 'heronFly1' : 'heronFly0';
+        else if (c.mood === 'striking') kind = 'heronStrike';
+        // Standing in the shallows, its feet below the surface.
+        this.sprite(extraSprite(kind), c.x, c.z, c.layer === 'air' ? c.h : -2, { flipX: c.facing < 0, alpha, anchor: 'bottom' });
+        return;
+      }
       case 'minnow': case 'koi': case 'catfish': case 'pike': {
         const young = c.age < POND_SPECIES[c.species].mature;
         const fast = Math.hypot(c.vx, c.vz) > 0.4 || c.mood === 'striking';
@@ -685,6 +715,26 @@ export class PondView {
       ctx.globalAlpha = 0.7 - k * 0.3;
       for (const dy of [-1, 0, 1]) ctx.fillRect(Math.round(p.x + c.facing * (r - Math.abs(dy) * px)), Math.round(p.y + dy * px), px, px);
     }
+  }
+
+  /**
+   * A heron high overhead: only its shadow, a big dark silhouette three
+   * times its size, slides across the water with slow wingbeats.
+   */
+  private drawHeronPass() {
+    const { spriteCtx: ctx, pond, px } = this;
+    const hp = pond.heronPass!;
+    const frame = (pond.tick >> 4) & 1 ? 'heronFly1' : 'heronFly0';
+    const img = silhouetteSprite(`pond-${frame}`, extraSprite(frame), 'rgb(4,16,12)');
+    const k = px * 3;
+    const w = img.width * k, h = img.height * k;
+    const p = this.project(hp.x, hp.z, 0);
+    ctx.globalAlpha = 0.24;
+    ctx.save();
+    ctx.translate(Math.round(p.x), Math.round(p.y));
+    ctx.scale(hp.dir, 1);
+    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    ctx.restore();
   }
 
   /** Clouds of silt stirred up off the bed, thinning as they settle. */
