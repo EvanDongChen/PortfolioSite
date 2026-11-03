@@ -1,0 +1,133 @@
+/* The page dial (ThemeDial.tsx): a knob in the right-hand stack that opens
+   into a D-shaped gauge to its left. The colours come from custom
+   properties: glassy cyan on the aquarium, and on the pixel pages the
+   reef's or the pond's own palette (their --px-* colours). */
+
+.theme-dial {
+  --td-face: rgba(8, 22, 44, 0.9);
+  --td-face-deep: rgba(4, 14, 30, 0.92);
+  --td-rim: rgba(34, 211, 238, 0.35);
+  --td-rim-lit: rgba(103, 232, 249, 0.7);
+  --td-tick: rgba(165, 243, 252, 0.4);
+  --td-tick-major: #a5f3fc;
+  --td-icon: rgba(186, 230, 253, 0.55);
+  --td-icon-lit: #ecfeff;
+  --td-eye: #0b1a2c;
+  --td-label: rgba(186, 230, 253, 0.6);
+  --td-label-lit: #ecfeff;
+  --td-glow: rgba(34, 211, 238, 0.3);
+  --td-needle: #fb923c;
+  --td-needle-dark: #c2410c;
+  --td-needle-tip: #fed7aa;
+  --td-knob: #1e3a5f;
+  --td-knob-lit: #67e8f9;
+  --td-knob-shade: #0f1f36;
+  --td-cap: #fb923c;
+  --td-font: 'Poppins', system-ui, sans-serif;
+  --td-font-size: 2.6px;
+  touch-action: none;
+}
+html.pixel-theme .theme-dial {
+  --td-face: var(--px-abyss);
+  --td-face-deep: var(--px-ink);
+  --td-rim: var(--px-line);
+  --td-rim-lit: var(--px-foam);
+  --td-tick: var(--px-line);
+  --td-tick-major: var(--px-foam);
+  --td-icon: var(--px-mute);
+  --td-icon-lit: var(--px-text);
+  --td-eye: var(--px-ink);
+  --td-label: var(--px-mute);
+  --td-label-lit: var(--px-sand-color);
+  --td-glow: var(--px-line);
+  --td-needle: var(--px-coral);
+  --td-needle-dark: var(--px-coral);
+  --td-needle-tip: var(--px-sand-color);
+  --td-knob: var(--px-line);
+  --td-knob-lit: var(--px-foam);
+  --td-knob-shade: var(--px-ink);
+  --td-cap: var(--px-sand-color);
+  --td-font: var(--px-mono);
+  --td-font-size: 4.2px;
+}
+
+.theme-dial-svg {
+  position: absolute;
+  /* Centred on the knob: half the 224px gauge, less half the 48px knob. */
+  left: -88px;
+  top: -88px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* The gauge itself, folded away into the knob until it is opened. */
+.theme-dial-face {
+  transform-origin: 28px 28px;
+  transform: scale(0.25) rotate(-35deg);
+  opacity: 0;
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 160ms ease-out;
+}
+.theme-dial--pixel .theme-dial-face { transition-timing-function: steps(4, end), steps(2, end); }
+.theme-dial.is-open .theme-dial-face {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+.td-needle-g, .td-needle-line, .td-needle-tip:is(circle) { opacity: 0; transition: opacity 120ms; }
+.theme-dial.is-open :is(.td-needle-g, .td-needle-line, circle.td-needle-tip) { opacity: 1; }
+
+.td-face { fill: var(--td-face); }
+.td-face-deep { fill: var(--td-face-deep); }
+.td-rim { fill: var(--td-rim); }
+.td-rim-lit { fill: var(--td-rim-lit); }
+.td-rim-line { fill: none; stroke: var(--td-rim-lit); stroke-width: 1.2; }
+rect.td-tick { fill: var(--td-tick); }
+rect.td-tick-major { fill: var(--td-tick-major); }
+line.td-tick { stroke: var(--td-tick); stroke-width: 0.5; }
+line.td-tick-major { stroke: var(--td-tick-major); stroke-width: 0.9; }
+
+.td-station { cursor: pointer; outline: none; }
+.td-station-hit { fill: transparent; transition: fill 150ms; }
+.td-station.is-lit .td-station-hit { fill: var(--td-glow); }
+.td-icon { fill: var(--td-icon); transition: fill 150ms; }
+.td-icon-eye { fill: var(--td-eye); }
+.td-station.is-lit .td-icon { fill: var(--td-icon-lit); }
+.td-label {
+  fill: var(--td-label);
+  font-family: var(--td-font);
+  font-size: var(--td-font-size);
+  letter-spacing: 0.06em;
+  pointer-events: none;
+}
+.td-station.is-lit .td-label { fill: var(--td-label-lit); }
+.td-station:focus-visible .td-station-hit { stroke: var(--td-tick-major); stroke-width: 0.5; }
+/* The page picked blinks as the needle lands on it. */
+.td-station.is-picked .td-icon,
+.td-station.is-picked .td-label { animation: td-blink 220ms steps(2, end) 3; }
+@keyframes td-blink { 50% { fill: var(--td-needle-tip); } }
+
+.td-needle, .td-needle-dark { fill: var(--td-needle); }
+.td-needle-dark { fill: var(--td-needle-dark); }
+.td-needle-tip { fill: var(--td-needle-tip); }
+.td-needle-line { stroke: var(--td-needle); stroke-width: 1.1; stroke-linecap: round; }
+.td-knob { fill: var(--td-knob); }
+.td-knob-lit { fill: var(--td-knob-lit); }
+.td-knob-shade { fill: var(--td-knob-shade); }
+.td-knob-ring { fill: none; stroke: var(--td-knob-lit); stroke-width: 0.5; stroke-dasharray: 0.6 0.6; }
+.td-cap { fill: var(--td-cap); }
+.td-notch { fill: var(--td-needle-tip); }
+.theme-dial--smooth .td-knob { filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.5)); }
+
+/* The knob's own button sits over the drawn knob. */
+.theme-dial-knob {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: transparent;
+  cursor: grab;
+  transition: transform 150ms;
+}
+.theme-dial:not(.is-open) .theme-dial-knob:hover { transform: scale(1.08); }
+.theme-dial.is-open .theme-dial-knob:active { cursor: grabbing; }
+.theme-dial-knob:focus-visible { outline: 2px solid var(--td-tick-major); outline-offset: 2px; }
+.theme-dial:not(.is-open):hover .theme-dial-svg { transform: scale(1.08); transform-origin: 112px 112px; transition: transform 150ms; }

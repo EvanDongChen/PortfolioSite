@@ -1,6 +1,8 @@
 import React, { createContext, useState, useContext, useCallback, useLayoutEffect, ReactNode } from 'react';
 
 type Theme = 'underwater' | 'deepsea';
+/** The three pages: the aquarium, the pixel reef and the pixel pond. */
+export type Page = 'aquarium' | 'reef' | 'pond';
 
 // Keep deep-sea support available while it is temporarily disabled in the UI.
 export const DEEP_SEA_MODE_ENABLED = false;
@@ -10,13 +12,11 @@ interface ThemeContextType {
   toggleTheme: () => void;
   /** The pixel ecosystem replaces the whole aquarium page while on. */
   isPixelMode: boolean;
-  togglePixelMode: () => void;
-  /**
-   * The pixel pond replaces whichever page was showing while on; turning it
-   * off goes back to that page (the reef or the aquarium).
-   */
+  /** The pixel pond replaces whichever page was showing while on. */
   isPondMode: boolean;
-  togglePondMode: () => void;
+  /** Which page is showing, and switching to another (see ThemeDial). */
+  page: Page;
+  setPage: (page: Page) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -35,19 +35,16 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setTheme(prevTheme => (prevTheme === 'underwater' ? 'deepsea' : 'underwater'));
   };
 
-  const togglePixelMode = useCallback(() => {
-    pendingScrollY = window.scrollY;
-    setIsPondMode(false);
-    setIsPixelMode(prev => !prev);
-  }, []);
+  const page: Page = isPondMode ? 'pond' : isPixelMode ? 'reef' : 'aquarium';
 
-  const togglePondMode = useCallback(() => {
+  const setPage = useCallback((next: Page) => {
     pendingScrollY = window.scrollY;
-    setIsPondMode(prev => !prev);
+    setIsPondMode(next === 'pond');
+    if (next !== 'pond') setIsPixelMode(next === 'reef');
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, isPixelMode, togglePixelMode, isPondMode, togglePondMode }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, isPixelMode, isPondMode, page, setPage }}>
       {children}
     </ThemeContext.Provider>
   );

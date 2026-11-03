@@ -4,8 +4,7 @@ import PixelOcean from './components/PixelOcean';
 import EcosystemPanel from './components/EcosystemPanel';
 import FishFoodButton from './components/FishFoodButton';
 import BackToTopButton from './components/BackToTopButton';
-import PixelModeButton from './components/PixelModeButton';
-import PondModeButton from './components/PondModeButton';
+import ThemeDial from './components/ThemeDial';
 import PerformanceButton from './components/PerformanceButton';
 import PerformancePanel from './components/PerformancePanel';
 import PixelTransition from './components/PixelTransition';
@@ -75,8 +74,7 @@ const PixelApp: React.FC = () => {
       <BackToTopButton />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
-      <PixelModeButton />
-      <PondModeButton />
+      <ThemeDial />
       <FishFoodButton isActive={isFoodMode} onToggle={toggleFoodMode} />
       <EcosystemPanel stats={stats} />
       {isSwitchIn && <PixelTransition />}
