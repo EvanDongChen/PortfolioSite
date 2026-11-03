@@ -601,7 +601,7 @@ export type WildSpriteKind =
   | 'moorhen' | 'moorhenBob' | 'moorhenWalk'
   | 'flyOpen' | 'flyHalf' | 'newt0' | 'newt1'
   | 'swallow0' | 'swallow1' | 'swallowGlide'
-  | 'beaverSwim' | 'beaverWalk0' | 'beaverWalk1' | 'beaverGnaw' | 'beaverSit' | 'beaverSlap';
+  | 'beaverTop' | 'beaverBelow' | 'beaverSit' | 'beaverSlap';
 const WILD_ROWS: Record<WildSpriteKind, string[]> = {
   // A whirligig beetle: a glossy black oval.
   whirligig: ['kK.', 'KKK'],
@@ -628,22 +628,51 @@ const WILD_ROWS: Record<WildSpriteKind, string[]> = {
   swallow0: ['....B......', '...BB......', 'TT.SSSSSRK.', '.T..WWWW...'],
   swallow1: ['...........', 'TT.SSSSSRK.', '.T.BWWWW...', '...BB......', '....B......'],
   swallowGlide: ['....BB.....', 'TT.SSSSSRK.', '.T.BWWWWB..', '....BB.....'],
-  // A beaver: a sleek brown back lit along the top, a blunt head with a
-  // small ear and orange teeth, and the broad, flat, scaly tail. Swimming
-  // only its head and the hump of its back show above the water.
-  beaverSwim: ['...............B....', '..............HHHH..', '......HHHHH..HBBBBEH', '...HHHBBBBBHHBBBBBBN', 'ttHBBBBBBBBBBBBBBBO.', 'TTTDDDDDDDDDDDDDDD..'],
-  beaverWalk0: ['.............B.....', '.....HHHHH..HHHH...', '...HHBBBBBHHBBBBEH.', '..HBBBBBBBBBBBBBBBN', 'TTBBBBBBBBBBBBBBDO.', 'TTTtDDDDDDDDDDDD...', '.......DD.....DD...'],
-  beaverWalk1: ['.............B.....', '.....HHHHH..HHHH...', '...HHBBBBBHHBBBBEH.', '..HBBBBBBBBBBBBBBBN', 'TTBBBBBBBBBBBBBBDO.', 'TTTtDDDDDDDDDDDD...', '.....DD.....DD.....'],
-  // Head down at the foot of a tree, teeth to the wood.
-  beaverGnaw: ['...................', '.....HHHHHH........', '...HHBBBBBBHH.B....', '..HBBBBBBBBBBHHHH..', 'TTBBBBBBBBBBBBBBEH.', 'TTTtDDDDDDDDDDDBBBN', '.......DD.....DDDO.'],
-  // Sitting up on its haunches on the lodge, tail out in front.
-  beaverSit: ['.......B..', '.....HHHH.', '....HBBBEH', '....HBBBBN', '...HBBBBO.', '...HBBBD..', '..HBBBBD..', '..HBBBBD..', 'TTTDDDDD..'],
+  // A beaver, swimming: only its head (a small round ear, a bright eye, a
+  // blunt dark nose) and the low curve of its back break the water...
+  beaverTop: [
+    '..........ab.....',
+    '.........aaBBa...',
+    '..aaaaa.aBBBBEa..',
+    '.aBBBBBBBBBBBBBBN',
+    'bbbbbbbbbbbbbbbD.',
+  ],
+  // ...and the rest of it is a dim shape below: its body, the hind feet
+  // kicking, and the broad flat tail trailing behind.
+  beaverBelow: [
+    '.......aaaaaaaa.......',
+    '......aBBBBBBBBaaBB...',
+    'tTTTT.bBBBBBBBBBBBBBa.',
+    'TTTTTTbBBBBBBBBBBBBBBN',
+    '.TTTT..bbbbbbbbbbbbbD.',
+    '.......ff......ff.....',
+  ],
+  // Sitting up on its haunches on the lodge, forepaws to its chest, tail out in front.
+  beaverSit: [
+    '......ab..',
+    '.....aBBa.',
+    '....aBBEBa',
+    '....aBBBBN',
+    '...aBBBbf.',
+    '...aBBBb..',
+    '..aBBBBbf.',
+    '..aBBBBb..',
+    'TTTbbbbff.',
+  ],
   // Tail flung up, about to crack down on the water as it dives.
-  beaverSlap: ['TT............', 'tTT...........', '.tTHHH........', '..HBBBBHH.....', '...DBBBBBBHE..', '....DDDDDDDDN.'],
+  beaverSlap: [
+    'tT............',
+    'TTt...........',
+    '.TTaaa........',
+    '..aBBBBaa.....',
+    '...bBBBBBBaE..',
+    '....bbbbbbbbN.',
+  ],
 };
+// Wet fur: a warm sheen along the top, chestnut, a dark belly; a charcoal tail.
 const BEAVER_COLOURS: Record<string, Rgb> = {
-  H: [168, 118, 70], B: [130, 86, 50], D: [94, 62, 38], T: [72, 64, 60], t: [100, 90, 82],
-  E: [20, 16, 14], N: [46, 34, 30], O: [234, 156, 64],
+  a: [168, 116, 72], B: [122, 80, 48], b: [86, 56, 36], D: [62, 40, 28], E: [20, 14, 12], N: [40, 28, 24],
+  T: [70, 66, 68], t: [104, 98, 98], f: [58, 42, 32],
 };
 /** Damselflies: azure blue, emerald green and red, as [a, d, A, E]. */
 const DAMSEL_SETS: Rgb[][] = [
@@ -1012,91 +1041,178 @@ export const snagSprite = (seed: number, h: number) =>
   });
 
 /** Wood the beavers have stripped of its bark: pale, from lit to shaded. */
-const PEELED: Rgb[] = [[226, 204, 154], [194, 166, 116], [156, 128, 86]];
-const MUD: Rgb[] = [[124, 100, 68], [100, 80, 54], [78, 62, 42], [60, 48, 34]];
-const STICK_LEAVES: Rgb[] = [[92, 152, 68], [62, 118, 54]];
+const PEELED: Rgb[] = [[226, 204, 154], [194, 166, 116]];
+const MUD: Rgb[] = [[118, 96, 66], [96, 78, 54], [76, 60, 42], [58, 46, 34]];
+const DAM_LEAVES: Rgb[] = [[96, 150, 70], [66, 118, 56]];
+/** Water spilling over a dam's foot. */
+const SPILL: Rgb[] = [[214, 236, 228], [164, 208, 202]];
+
+/** A log lying along a dam, `len` long and three rows thick at row y: lit along the top, its end grain on the right. */
+const damLog = (ctx: CanvasRenderingContext2D, x0: number, y: number, len: number, rnd: () => number, w: number) => {
+  for (let x = x0; x < x0 + len; x++) {
+    if (x < 0 || x >= w) continue;
+    const end = x === x0 + len - 1, start = x === x0;
+    if (end) {
+      put(ctx, x, y, GRAIN[1]); put(ctx, x, y + 1, GRAIN[0]); put(ctx, x, y + 2, GRAIN[1]);
+      continue;
+    }
+    if (!start) put(ctx, x, y, rnd() < 0.18 ? LOG_MOSS : BARK[0]);
+    put(ctx, x, y + 1, rnd() < 0.25 ? BARK[2] : BARK[1]);
+    put(ctx, x, y + 2, BARK[2]);
+  }
+};
 
 /**
- * A stick, len long, its cut end on the right, rising or falling a row or
- * two along its length (slope): fresh off a tree with leaves at its tip
- * and bark on, or (in a dam) peeled pale, or dark and waterlogged.
+ * A beaver dam `len` long, its root (by the lodge) on the left: a low bank
+ * of mud with logs laid along it in two courses like brickwork, their cut
+ * ends showing, twigs and the odd leafy branch along the crest, sloping
+ * down to the unfinished tip, and water spilling white at its foot.
  */
-export const stickSprite = (seed: number, len: number, slope: number, leafy: boolean) =>
-  cached(`pond-stick-${seed}-${len}-${slope}-${leafy}`, () => {
-    const rnd = seededRandom(seed * 7 + len);
-    const rise = slope * 2;
-    const h = 3 + Math.abs(rise) + (leafy ? 2 : 0);
+export const DAM_HEIGHT = 11;
+export const damSprite = (seed: number, len: number) =>
+  cached(`pond-dam-${seed}-${len}`, () => {
+    const rnd = seededRandom(seed);
+    const h = DAM_HEIGHT;
     const c = makeCanvas(len, h);
     const ctx = c.getContext('2d')!;
-    // In a dam: some peeled pale, some dark and waterlogged, most still in their bark.
-    const r = leafy ? 1 : rnd();
-    const wood = r < 0.3 ? PEELED : r < 0.55 ? [BARK[1], BARK[2], BARK[3]] : [BARK[0], BARK[1], BARK[2]];
-    const y0 = h - 2 - Math.max(0, rise);
+    // The crest, lower toward the tip.
+    const crest = (x: number) => 1 + Math.round(Math.max(0, x - (len - 9)) * 0.5);
     for (let x = 0; x < len; x++) {
-      const y = Math.round(y0 + (rise * x) / Math.max(1, len - 1));
-      // Lit along the top, shaded beneath, thinning to a twig at the far end.
-      put(ctx, x, y, wood[0]);
-      if (x > len * 0.25) put(ctx, x, y + 1, wood[x % 5 === 2 ? 2 : 1]);
-      // A side twig or two.
-      if (x > 2 && x < len - 3 && rnd() < 0.12) put(ctx, x - 1, y - 1, wood[1]);
-      if (leafy && x < len * 0.45 && rnd() < 0.55) {
-        put(ctx, x, y - 1 - Math.floor(rnd() * 2), STICK_LEAVES[rnd() < 0.6 ? 0 : 1]);
-        if (rnd() < 0.4) put(ctx, x, y + 1, STICK_LEAVES[1]);
+      const top = crest(x);
+      for (let y = top + 1; y < h - 1; y++) {
+        const k = (y - top) / (h - 1 - top);
+        put(ctx, x, y, k < 0.3 ? MUD[1] : k < 0.75 ? MUD[2] : MUD[3]);
+      }
+      if (top + 1 < h - 1) put(ctx, x, top + 1, MUD[0]);
+      // Water spilling over the foot.
+      const r = rnd();
+      if (r < 0.5) put(ctx, x, h - 1, SPILL[r < 0.2 ? 0 : 1]);
+    }
+    // Two courses of logs, the upper set back from the tip.
+    for (const [row, from, stop] of [[2, 0, len - 6], [5, -4 - Math.floor(rnd() * 4), len - 2]] as [number, number, number][]) {
+      let x = from;
+      while (x < stop) {
+        const l = Math.min(stop - x, 7 + Math.floor(rnd() * 8));
+        if (l >= 4) damLog(ctx, x, row + Math.max(0, crest(x + l) - 1), l, rnd, len);
+        x += l + 1;
       }
     }
-    // The gnawed end, pointed and pale.
-    const ye = Math.round(y0 + rise);
-    put(ctx, len - 1, ye, PEELED[0]);
+    // Twigs along the crest, and a leafy branch here and there.
+    for (let x = 2; x < len - 2; x += 3 + Math.floor(rnd() * 4)) {
+      const top = crest(x) + 1;
+      const lean = rnd() < 0.5 ? -1 : 1;
+      const tone = rnd() < 0.3 ? PEELED[1] : BARK[1];
+      put(ctx, x, top, tone);
+      put(ctx, x + lean, top - 1, tone);
+      if (rnd() < 0.35) { put(ctx, x + lean * 2, top - 1, DAM_LEAVES[0]); put(ctx, x + lean, top - 2 < 0 ? 0 : top - 2, DAM_LEAVES[1]); }
+    }
     return c;
   });
 
 /**
- * A beaver lodge, w wide and about half as tall: a dome of mud packed
- * between sticks laid every which way, lit from the upper left, darker
- * and wet at the waterline, with a few peeled sticks poking out.
+ * A beaver lodge, w wide and about half as tall: a heap of logs and sticks
+ * leaning together, plastered with mud, lit from the upper left, a few cut
+ * ends showing low down, peeled sticks poking from its top, and wet at the
+ * waterline.
  */
 export const lodgeSprite = (seed: number, w: number) =>
   cached(`pond-lodge-${seed}-${w}`, () => {
     const rnd = seededRandom(seed);
-    const h = Math.round(w * 0.5);
-    const c = makeCanvas(w + 4, h + 2);
+    const h = Math.round(w * 0.55);
+    const c = makeCanvas(w, h + 2);
     const ctx = c.getContext('2d')!;
-    const cx = (w + 4) / 2, base = h + 1;
-    const inDome = (x: number, y: number) => {
-      const nx = (x + 0.5 - cx) / (w / 2), ny = (base - y - 0.5) / h;
-      return ny >= 0 && nx * nx + ny * ny <= 1;
+    const cx = w / 2, base = h;
+    // A rounded heap: a cone with its shoulders filled out.
+    const shape = (x: number, y: number) => {
+      const nx = (x + 0.5 - cx) / (w / 2), ny = (base - y) / h;
+      return ny >= 0 && ny <= 1 && Math.abs(nx) <= Math.pow(1 - ny, 0.6);
+    };
+    const light = (x: number, y: number) => {
+      const nx = (x + 0.5 - cx) / (w / 2), ny = (base - y) / h;
+      return ny * 0.8 - nx * 0.55;
     };
     for (let y = 0; y <= base; y++) {
-      for (let x = 0; x < w + 4; x++) {
-        if (!inDome(x, y)) continue;
-        const nx = (x + 0.5 - cx) / (w / 2), ny = (base - y - 0.5) / h;
-        // Light from the upper left: the top and that shoulder lit, the right side and foot in shade.
-        const lit = ny * 0.9 - nx * 0.45 + (rnd() - 0.5) * 0.35;
-        put(ctx, x, y, y >= base - 1 ? MUD[3] : lit > 0.55 ? MUD[0] : lit > 0.1 ? MUD[1] : MUD[2]);
+      for (let x = 0; x < w; x++) {
+        if (!shape(x, y)) continue;
+        const l = light(x, y) + (rnd() - 0.5) * 0.2;
+        put(ctx, x, y, y >= base - 1 ? MUD[3] : l > 0.45 ? MUD[0] : l > 0 ? MUD[1] : MUD[2]);
       }
     }
-    // Sticks laid across it every which way.
-    for (let k = Math.round(w * 2.2); k > 0; k--) {
-      let x = rnd() * (w + 4), y = rnd() * base;
-      if (!inDome(Math.floor(x), Math.floor(y))) continue;
-      const a = (rnd() - 0.5) * 1.6 + (rnd() < 0.5 ? 0 : Math.PI);
+    // Sticks and small logs leaning up the heap, each lit along its top.
+    for (let k = Math.round(w * 1.6); k > 0; k--) {
+      const x0 = Math.floor(rnd() * w), y0 = Math.floor(rnd() * base);
+      if (!shape(x0, y0)) continue;
+      // Leaning with the slope: up to the right on the left side, down to the right on the right.
+      const dir = x0 < cx ? -1 : 1;
       const len = 3 + Math.floor(rnd() * 5);
-      const tones = rnd() < 0.25 ? PEELED : [BARK[0], BARK[1], BARK[2]];
-      const tone = tones[y < h * 0.45 ? 0 : y < h * 0.8 ? 1 : 2];
+      const l = light(x0, y0);
+      const top = l > 0.4 ? BARK[0] : l > -0.1 ? BARK[1] : BARK[2];
+      const under = l > 0.4 ? BARK[1] : BARK[3];
+      let x = x0, y = y0;
       for (let t = 0; t < len; t++) {
-        const px = Math.floor(x), py = Math.floor(y);
-        if (inDome(px, py)) put(ctx, px, py, tone);
-        x += Math.cos(a); y += Math.sin(a) * 0.5;
+        if (shape(x, y)) put(ctx, x, y, top);
+        if (shape(x, y + 1) && y + 1 < base - 1) put(ctx, x, y + 1, under);
+        x += 1;
+        if (t % 2 === 1) y += dir;
       }
     }
-    // A few poking out over the top.
-    for (let k = 2 + Math.floor(rnd() * 3); k > 0; k--) {
-      const x = Math.floor(cx + (rnd() - 0.5) * w * 0.6);
+    // Cut ends of the logs low down.
+    for (let k = Math.max(2, Math.round(w / 8)); k > 0; k--) {
+      const x = 2 + Math.floor(rnd() * (w - 5)), y = base - 2 - Math.floor(rnd() * h * 0.4);
+      if (!shape(x, y) || !shape(x + 1, y + 1)) continue;
+      put(ctx, x, y, GRAIN[0]); put(ctx, x + 1, y, GRAIN[1]); put(ctx, x, y + 1, GRAIN[1]); put(ctx, x + 1, y + 1, BARK[2]);
+    }
+    // Peeled sticks poking from the top.
+    for (let k = 2 + Math.floor(rnd() * 2); k > 0; k--) {
+      const x = Math.floor(cx + (rnd() - 0.5) * w * 0.35);
       let top = 0;
-      while (top < base && !inDome(x, top)) top++;
+      while (top < base && !shape(x, top)) top++;
       const lean = rnd() < 0.5 ? -1 : 1;
       put(ctx, x, top, PEELED[1]);
       if (top > 0) put(ctx, x + lean, top - 1, PEELED[0]);
+    }
+    // The water lapping round its foot.
+    for (let x = 0; x < w; x++) if (shape(x, base) && rnd() < 0.55) put(ctx, x, base + 1, SPILL[rnd() < 0.4 ? 0 : 1]);
+    return c;
+  });
+
+/** How many directions a towed log is drawn in. */
+export const LOG_ANGLES = 16;
+/**
+ * A log seen from above as a beaver tows it, pointing `step` sixteenths of
+ * a turn round from the right (toward the beaver), its length along the
+ * page's rows foreshortened as it lies flat: lit along its upper side,
+ * furrowed bark, moss, and its cut end trailing.
+ */
+export const towedLogSprite = (seed: number, len: number, step: number, foreshorten: number) =>
+  cached(`pond-towlog-${seed}-${len}-${step}`, () => {
+    const rnd = seededRandom(seed);
+    const a = (step / LOG_ANGLES) * Math.PI * 2;
+    const dx = Math.cos(a), dy = Math.sin(a) * foreshorten;
+    const r = (len >= 50 ? 9 : len >= 38 ? 7 : 5) / 2;
+    const w = Math.ceil(Math.abs(dx) * len + r * 2 + 2), h = Math.ceil(Math.abs(dy) * len + r * 2 + 2);
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const x0 = w / 2 - (dx * len) / 2, y0 = h / 2 - (dy * len) / 2;
+    const L = Math.hypot(dx * len, dy * len);
+    const ux = (dx * len) / L, uy = (dy * len) / L;
+    // Its upper side (or, pointing straight up or down the page, its left) is the lit one.
+    let nx = -uy, ny = ux;
+    if (ny > 0 || (ny === 0 && nx > 0)) { nx = -nx; ny = -ny; }
+    const furrow = Array.from({ length: Math.ceil(L) + 1 }, () => rnd());
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const px = x + 0.5 - x0, py = y + 0.5 - y0;
+        const t = px * ux + py * uy;
+        const s = px * nx + py * ny;
+        if (t < 0 || t > L || Math.abs(s) > r) continue;
+        let col: Rgb;
+        if (t < 1.2) col = Math.abs(s) < r * 0.5 ? GRAIN[0] : GRAIN[1];
+        else if (s > r * 0.4) col = furrow[Math.floor(t)] < 0.15 ? LOG_MOSS : BARK[0];
+        else if (s < -r * 0.55) col = BARK[3];
+        else col = furrow[Math.floor(t)] < 0.3 ? BARK[2] : BARK[1];
+        put(ctx, x, y, col);
+      }
     }
     return c;
   });
@@ -1150,7 +1266,7 @@ export const pondIcon = (kind: string): HTMLCanvasElement => {
     case 'butterfly': return wildSprite('flyOpen', 0);
     case 'newt': return wildSprite('newt0');
     case 'swallow': return wildSprite('swallowGlide');
-    case 'beaver': return wildSprite('beaverWalk0');
+    case 'beaver': return wildSprite('beaverSit');
     default: return pondSprite('frogSit', 0);
   }
 };

@@ -82,7 +82,11 @@ export const rockTop = (r: Rock) => (rockAbove(r) - 1.5) / ELEVATION;
  * A log: sunk on the bed, or floating at the surface with one end grounded
  * on the bank, where frogs and the turtle climb out to bask.
  */
-export interface Log { x: number; z: number; len: number; seed: number; floating: boolean; side: 1 | -1 }
+export interface Log {
+  x: number; z: number; len: number; seed: number; floating: boolean; side: 1 | -1;
+  /** While a beaver tows it: which way it points (radians, toward the beaver), trailing behind along its path. */
+  angle?: number;
+}
 /** How thick a log is drawn (art pixels): the longer, the stouter. */
 export const logThickness = (len: number) => (len >= 50 ? 10 : len >= 38 ? 8 : 6);
 /**
@@ -102,38 +106,34 @@ export interface Biome { kind: BiomeKind; x: number; z: number; rx: number; rz: 
 /** How far each kind of patch raises the bed toward the surface at its middle (0 not at all, 1 to the top). */
 const BIOME_RISE: Record<BiomeKind, number> = { marsh: 0.75, lotus: 0.55, snags: 0.35, boulders: 0.8, lagoon: 0, spring: 0.85 };
 
-/** A stick (or a whole log, towed in) the beavers have laid in their dam: x, z its middle, sloping a row up or down along it. */
-export interface DamPiece { x: number; z: number; len: number; slope: -1 | 0 | 1; seed: number; log: boolean }
 /**
- * A beaver dam: sticks and towed logs piled in a long, low bank running
- * out from an island's shore (along `side`, drifting `drift` rows a cell),
- * built out as far as `built` toward `reach`, with the family's lodge at
- * its root.
+ * A beaver dam: a low bank of logs laid in mud running straight out from
+ * an island's shore (along `side`), with the family's lodge at its root.
+ * Every log the beavers tow home lengthens it (`built`, out toward
+ * `reach`); once it is finished they pile them on the lodge (`logs`).
  */
-export interface Dam { x: number; z: number; side: 1 | -1; drift: number; reach: number; built: number; pieces: DamPiece[]; seed: number }
-/** How many pieces a dam holds; past that, the oldest sticks rot away as new ones go on. */
-const DAM_PIECES = 100;
-/** The lodge's width (art pixels), growing as the dam does; it is about half as tall. */
-export const lodgeWidth = (d: Dam) => 16 + 2 * Math.min(6, Math.floor(d.pieces.length / 8));
-/** Where the lodge stands: at the dam's root, half on the island's shore. */
-export const lodgeAt = (d: Dam) => ({ x: d.x - d.side * 3, z: d.z - 1 });
+export interface Dam { x: number; z: number; side: 1 | -1; reach: number; built: number; logs: number; seed: number }
+/** How much a towed log lengthens a dam, for its length. */
+const DAM_PER_LOG = 0.2;
+/** How many logs the lodge takes before it is as big as it gets. */
+const LODGE_LOGS = 10;
+/** The lodge's width (art pixels), growing with every log piled on; it is about half as tall. */
+export const lodgeWidth = (d: Dam) => 20 + 2 * Math.min(LODGE_LOGS, d.logs);
+/** Where the lodge stands: on the island's shore at the dam's root, a little in front of it. */
+export const lodgeAt = (d: Dam) => ({ x: d.x - d.side * 2, z: d.z + 1 });
+/** Where the dam leaves the lodge's side; it runs `built` on from there. */
+export const damRoot = (d: Dam) => d.x + d.side * (lodgeWidth(d) / 2 - 6);
+/** How far past the shore the biggest lodge reaches, before the dam starts. */
+const LODGE_REACH = (20 + 2 * LODGE_LOGS) / 2 - 6;
 /** The height (h) of the lodge's top, where a beaver sits to groom. */
-export const lodgeTop = (d: Dam) => (Math.round(lodgeWidth(d) * 0.5) - 2) / ELEVATION;
-/** A beaver's errand: out to a tree, a log or the bed, and back to the dam with what it got. */
+export const lodgeTop = (d: Dam) => (Math.round(lodgeWidth(d) * 0.55) - 2) / ELEVATION;
+/** A beaver's errand: out to a floating log, and towing it home to the dam. */
 interface BeaverJob {
   by: PondCreature;
-  stage: 'out' | 'ashore' | 'gnaw' | 'back' | 'dive' | 'home' | 'tow' | 'build';
+  stage: 'out' | 'tow' | 'build';
   /** Where it is making for now. */
   to: { x: number; z: number };
-  /** The water's edge where it climbs out to a tree, and the tree. */
-  shore: { x: number; z: number } | null;
-  plant: { x: number; z: number } | null;
-  /** The floating log it is towing home. */
-  log: Log | null;
-  /** The stick in its mouth. */
-  load: { len: number; seed: number; leafy: boolean } | null;
-  /** How far along the dam the piece will go. */
-  along: number;
+  log: Log;
   ticks: number;
 }
 
@@ -158,6 +158,8 @@ export interface Bough { x: number; z: number; side: 1 | -1; len: number; seed: 
 /** How high a bough's sprite stands off the water, and how far above that its limb's top is (h). */
 export const BOUGH_H = 6;
 const BOUGH_SEAT = 9.1;
+/** How much a log's length along the page's rows is foreshortened, lying flat on the water. */
+export const LOG_FORESHORTEN = 0.6;
 
 export type PondSpecies = 'spawn' | 'tadpole' | 'frog' | 'mallard' | 'tufted' | 'minnow' | 'koi' | 'catfish' | 'pike'
   | 'dragonfly' | 'strider' | 'snail' | 'turtle' | 'heron'
@@ -850,16 +852,16 @@ export class Pond {
       const dam = this.foundDam(b);
       if (!dam) continue;
       this.dams.push(dam);
-      for (let k = randInt(28, 44); k > 0; k--) {
-        const spot = this.damSpot(dam);
-        this.addDamPiece(dam, spot.along, randInt(8, 14), randInt(1, 1e9), false);
-      }
       // Cleared of whatever stood in the way.
       const onDam = (x: number, z: number, r: number) => {
         const t = (x - dam.x) * dam.side;
-        return t > -10 - r && t < dam.reach + 6 + r && Math.abs(z - (dam.z + dam.drift * Math.max(0, t))) < 6 + r * 0.5;
+        return t > -24 - r && t < dam.reach + LODGE_REACH + 6 + r && Math.abs(z - dam.z) < 7 + r * 0.5;
       };
       this.rocks = this.rocks.filter(r => !onDam(r.x, r.z, r.w / 2));
+      // And the island's plants in front of (and just behind) the lodge, so it stands clear.
+      const lodge = lodgeAt(dam);
+      this.flora = this.flora.filter(f => !(Math.abs(f.x - lodge.x) < 24 + (f.kind === 'tree' || f.kind === 'willow' ? f.size : 0) && f.z > lodge.z - 8 && f.z < lodge.z + 14));
+      this.stones = this.stones.filter(st => !(Math.abs(st.x - lodge.x) < 24 && st.z > lodge.z - 8 && st.z < lodge.z + 14));
       this.logs = this.logs.filter(l => !l.floating || !onDam(l.x, l.z, l.len / 2));
       for (const c of this.clumps) c.stems = c.stems.filter(st => !onDam(st.x, st.z, 0));
       this.clumps = this.clumps.filter(c => c.stems.length);
@@ -1172,21 +1174,23 @@ export class Pond {
   private foundDam(b: LandBlob): Dam | null {
     const sides: (1 | -1)[] = Math.random() < 0.5 ? [1, -1] : [-1, 1];
     for (const side of sides) {
-      const z = b.z + rand(-0.3, 0.3) * b.r;
+      const z = Math.round(b.z + rand(-0.3, 0.3) * b.r);
       let x = b.x;
       for (let k = 0; k < 80 && !this.isWater(x, z); k++) x += side;
       if (!this.isWater(x, z)) continue;
-      const drift = rand(-0.22, 0.22);
       let reach = 0;
       for (let t = 2; t < 72; t += 2) {
-        const px = x + side * t, pz = z + drift * t;
-        if (px < 6 || px > this.w - 6 || this.shoreDist[this.cellAt(px, pz)] < Math.min(5, t)) break;
-        if (this.clearZones.some(r => px > r.x0 - 12 && px < r.x1 + 12 && pz > r.z0 - 10 && pz < r.z1 + 14)) break;
+        const px = x + side * t;
+        if (px < 6 || px > this.w - 6 || this.shoreDist[this.cellAt(px, z)] < Math.min(6, t) || this.shoreDist[this.cellAt(px, z - 8)] < Math.min(3, t)) break;
+        if (this.clearZones.some(r => px > r.x0 - 12 && px < r.x1 + 12 && z > r.z0 - 10 && z < r.z1 + 16)) break;
         reach = t;
       }
       // Shorter on a narrow (phone) page.
-      if (reach < Math.min(26, this.w * 0.2)) continue;
-      return { x: x + side, z, side, drift, reach: Math.min(reach, randInt(38, 62), Math.round(this.w * 0.4)), built: 0, pieces: [], seed: randInt(1, 1e9) };
+      reach -= LODGE_REACH;
+      if (reach < Math.min(22, this.w * 0.15)) continue;
+      reach = Math.min(reach, randInt(32, 52), Math.round(this.w * 0.35));
+      // Part built already, so there is something to see.
+      return { x: x + side, z, side, reach, built: Math.round(reach * rand(0.35, 0.65)), logs: randInt(0, 3), seed: randInt(1, 1e9) };
     }
     return null;
   }
@@ -1195,29 +1199,17 @@ export class Pond {
   nearDam(x: number, z: number, r: number) {
     for (const d of this.dams) {
       const t = (x - d.x) * d.side;
-      if (t < -12 - r || t > d.reach + 6 + r) continue;
-      if (Math.abs(z - (d.z + d.drift * Math.max(0, t))) < 4 + r) return true;
+      if (t < -24 - r || t > d.reach + LODGE_REACH + 6 + r) continue;
+      if (Math.abs(z - d.z) < 5 + r) return true;
     }
     return false;
   }
 
-  /** Where the next piece goes: mostly out at the end, lengthening the dam, otherwise thickening it. */
-  private damSpot(d: Dam) {
-    const along = d.built < d.reach && Math.random() < 0.65 ? Math.min(d.reach, d.built + rand(0, 5)) : rand(0, Math.max(4, d.built));
-    return { along, x: d.x + d.side * along, z: d.z + d.drift * along };
-  }
-
-  private addDamPiece(d: Dam, along: number, len: number, seed: number, log: boolean) {
-    d.pieces.push({
-      x: d.x + d.side * along + rand(-3, 3), z: d.z + d.drift * along + rand(-2.4, 2.4),
-      len, slope: log ? 0 : (randInt(-1, 1) as -1 | 0 | 1), seed, log,
-    });
-    d.built = Math.max(d.built, along);
-    // The oldest stick rots away.
-    if (d.pieces.length > DAM_PIECES) {
-      const k = d.pieces.findIndex(p => !p.log);
-      d.pieces.splice(k < 0 ? 0 : k, 1);
-    }
+  /** Where a towed log goes: on the end of the dam, or once it is finished, onto the lodge. */
+  private damEnd(d: Dam) {
+    if (d.built < d.reach) return { x: damRoot(d) + d.side * (d.built + 4), z: d.z + 4 };
+    const l = lodgeAt(d);
+    return { x: l.x + d.side * (lodgeWidth(d) / 2 + 2), z: l.z + 4 };
   }
 
   private addFrond(x: number, z: number, patch: number) {
@@ -1444,7 +1436,7 @@ export class Pond {
     this.clumps = this.clumps.filter(c => c.stems.length);
     this.logs = this.logs.filter(l => !blocks(l.x, l.z, l.len / 2, 4, l.floating ? 0 : MAX_DEPTH * ELEVATION));
     this.rocks = this.rocks.filter(r => !blocks(r.x, r.z, r.w / 2, r.ht));
-    this.dams = this.dams.filter(d => !blocks(d.x + (d.side * d.reach) / 2, d.z + (d.drift * d.reach) / 2, d.reach / 2 + 10, 12));
+    this.dams = this.dams.filter(d => !blocks(d.x + (d.side * (d.reach + LODGE_REACH)) / 2, d.z, (d.reach + LODGE_REACH) / 2 + 24, 22));
     this.boughs = this.boughs.filter(b => !blocks(b.x + b.side * b.len / 2, b.z, b.len / 2, (BOUGH_H + 12) * ELEVATION));
     this.flora = this.flora.filter(f => !blocks(f.x, f.z, f.kind === 'tree' || f.kind === 'willow' ? f.size + 2 : 5, f.kind === 'tree' || f.kind === 'willow' ? f.size * 2.6 : 8));
     this.stones = this.stones.filter(st => !blocks(st.x, st.z, st.w / 2, st.ht, st.land ? 0 : this.depthAt(st.x, st.z) * ELEVATION));
@@ -1748,7 +1740,7 @@ export class Pond {
       else if (species === 'strider') { c.layer = 'surface'; c.mood = 'skating'; c.h = 0; }
       else if (species === 'snail') { c.layer = 'under'; c.mood = 'creeping'; this.placeSnail(c); }
       else if (species === 'turtle') {
-        const log = this.logs.find(l => l.floating);
+        const log = this.logs.find(l => l.floating && l.angle === undefined);
         if (log) { c.perch = { kind: 'log', log, ox: rand(-0.2, 0.2) * log.len }; const p = this.perchPoint(c.perch); c.x = p.x; c.z = p.z; c.h = p.h; }
         c.layer = 'air'; c.mood = 'basking'; c.timer = randInt(1200, 3000);
       } else { c.layer = 'air'; c.mood = 'flying'; c.h = 40; }
@@ -1845,7 +1837,7 @@ export class Pond {
       if (!this.perchTaken(perch, by)) options.push({ perch, d });
     }
     for (const log of this.logs) {
-      if (!log.floating) continue;
+      if (!log.floating || log.angle !== undefined) continue;
       const ox = rand(-0.3, 0.3) * log.len;
       const d = Math.hypot(log.x + ox - x, log.z - z);
       if (d > reach || d < minDist) continue;
@@ -1957,7 +1949,7 @@ export class Pond {
       // A pair of mallards flies in now and then if the pond has none.
       if (counts.mallard < 2 && Math.random() < 0.15) this.flyIn(this.spawnDuckPair());
       // Driftwood washes in, out of sight, to make up for the logs the beavers take.
-      if (this.tick % 600 === 0 && this.logs.filter(l => l.floating).length < this.driftwood && Math.random() < 0.3) this.washInLog();
+      if (this.tick % 300 === 0 && this.logs.filter(l => l.floating).length < this.driftwood && Math.random() < 0.6) this.washInLog();
       // A beaver comes up the pond to a dam that is short of builders.
       if (counts.beaver < this.dams.length * 2 && Math.random() < 0.04) this.logEvent('visit', this.spawn('beaver'));
       // Errands of beavers that are gone.
@@ -2690,8 +2682,8 @@ export class Pond {
     // And round the beavers' dams.
     for (const d of this.dams) {
       const t = (c.x - d.x) * d.side;
-      if (t < -14 || t > d.built + 10) continue;
-      const dz = c.z - (d.z + d.drift * Math.max(0, t));
+      if (t < -24 || t > d.built + LODGE_REACH + 10) continue;
+      const dz = c.z - d.z;
       if (dz > -7 && dz < 7) sz += (dz < 0 ? -1 : 1) * 0.03 * (1 - Math.abs(dz) / 7);
     }
     // Big birds steer clear of the hero text.
@@ -3315,7 +3307,7 @@ export class Pond {
     }
     c.layer = 'under';
     const depth = this.depthAt(c.x, c.z);
-    const log = this.logs.find(l => l.floating);
+    const log = this.logs.find(l => l.floating && l.angle === undefined);
     if (--c.timer <= 0 && log) {
       // Back to the log, and up onto it.
       const perch: Perch = { kind: 'log', log, ox: rand(-0.2, 0.2) * log.len };
@@ -4022,19 +4014,14 @@ export class Pond {
     return best;
   }
 
-  /** The stick in a beaver's mouth, if it has one, for drawing. */
-  beaverLoad(c: PondCreature) {
-    return this.beaverJobs.get(c.id)?.load ?? null;
-  }
-
   /**
-   * Beavers build. Each trip out, one fetches timber for its dam: it
-   * climbs out onto an island to gnaw a branch off a tree, dives for a
-   * sunken branch, or now and then tows a whole floating log home behind
-   * it; then it works the piece into the dam. Between trips it potters
-   * about by the lodge or grooms on top of it. A fright (the visitor's
-   * cursor, a heron) brings a crack of its tail on the water, and down it
-   * goes, the rest of the family with it.
+   * Beavers build. Each trip out, one picks a floating log a good way off,
+   * swims out to it, takes its end in its teeth and tows it home, the log
+   * swinging round to trail behind it; at the dam it works the log in on
+   * the end, and once the dam is finished, piles it on the lodge. Between
+   * trips it potters about by the lodge or grooms on top of it. A fright
+   * (the visitor's cursor, a heron) brings a crack of its tail on the
+   * water, and down it goes, the rest of the family with it.
    */
   private thinkBeaver(c: PondCreature) {
     let dam = this.beaverHome.get(c.id);
@@ -4050,8 +4037,7 @@ export class Pond {
       if (--c.timer <= 0) { c.mood = 'diving'; c.layer = 'under'; c.timer = randInt(150, 260); c.heading = rand(0, Math.PI * 2); }
       return;
     }
-    const job = this.beaverJobs.get(c.id);
-    if (!job && c.mood === 'diving') {
+    if (c.mood === 'diving') {
       // Gone under in a fright, swimming off a way before it comes up.
       this.beaverUnder(c);
       if (--c.timer <= 0) { c.layer = 'surface'; c.h = 0; c.mood = 'swimming'; c.timer = randInt(200, 500); this.ring(c.x, c.z, 1, 0.25, 36); }
@@ -4067,8 +4053,9 @@ export class Pond {
       });
       return;
     }
-    const lodge = lodgeAt(dam);
+    const job = this.beaverJobs.get(c.id);
     if (!job) {
+      const lodge = lodgeAt(dam);
       if (c.mood === 'grooming') {
         c.x = lodge.x; c.z = lodge.z + 0.1; c.h = lodgeTop(dam); c.layer = 'air';
         c.vx = c.vz = 0;
@@ -4077,204 +4064,146 @@ export class Pond {
         if (--c.timer <= 0) {
           // Down the side of the lodge and into the water.
           c.mood = 'swimming'; c.layer = 'surface'; c.h = 0;
-          c.x = dam.x + dam.side * 5; c.z = dam.z + 3;
+          c.x = lodge.x + dam.side * (lodgeWidth(dam) / 2 + 2); c.z = dam.z + 4;
           if (!this.isWater(c.x, c.z)) this.toNearestWater(c);
           this.ring(c.x, c.z, 1, 0.25, 36);
-          c.timer = randInt(20, 200);
+          c.timer = randInt(20, 120);
         }
         return;
       }
       if (c.layer === 'air') this.toNearestWater(c);
       c.layer = 'surface'; c.h = 0; c.mood = 'swimming';
       // Pottering in front of the dam till the next trip.
-      const g = c.goal ?? (c.goal = { x: dam.x + dam.side * rand(4, Math.max(8, dam.built)), z: dam.z + rand(4, 10) });
+      const g = c.goal ?? (c.goal = { x: damRoot(dam) + dam.side * rand(4, Math.max(8, dam.built)), z: dam.z + rand(5, 12) });
       if (this.beaverSwim(c, g.x, g.z, 0.06)) c.goal = null;
       if (--c.timer <= 0) { c.goal = null; this.planTrip(c, dam); }
       return;
     }
+    const L = job.log;
     job.ticks++;
-    // Given up on (stuck behind an island, say): a long tow gets longer.
-    if (job.ticks > (job.log ? 9000 : 5000)) { this.dropJob(c); c.timer = randInt(100, 300); return; }
+    // Given up on (the log gone, or stuck behind an island).
+    if (!this.logs.includes(L) || job.ticks > 12000) { this.dropJob(c); c.timer = randInt(100, 300); return; }
+    c.layer = 'surface'; c.h = 0;
     switch (job.stage) {
       case 'out': {
-        c.layer = 'surface'; c.h = 0; c.mood = 'swimming';
-        const L = job.log;
-        if (L) {
-          if (!L.floating || !this.logs.includes(L)) { this.dropJob(c); return; }
-          const e = c.x < L.x ? -1 : 1;
-          job.to = { x: L.x + e * (L.len / 2 + 3), z: L.z + 1 };
-        }
-        if (!this.beaverSwim(c, job.to.x, job.to.z, POND_SPECIES.beaver.cruise)) return;
-        if (L) { job.stage = 'tow'; c.squashV += 0.3; job.to = this.damApproach(dam, job.along); }
-        else if (job.plant) { job.stage = 'ashore'; c.layer = 'air'; c.mood = 'walking'; this.ring(c.x, c.z, 1, 0.25, 30); }
-        else { job.stage = 'dive'; c.mood = 'diving'; c.layer = 'under'; c.timer = randInt(120, 220); this.ring(c.x, c.z, 1.5, 0.3, 40); c.squashV += 0.3; }
+        c.mood = 'swimming';
+        // To the nearer end of the log.
+        const e = c.x < L.x ? -1 : 1;
+        job.to = { x: L.x + e * (L.len / 2 + 4), z: L.z + 1 };
+        if (!this.beaverSwim(c, job.to.x, job.to.z, POND_SPECIES.beaver.burst * 0.6)) return;
+        // Teeth into its end: anyone sitting on it is tipped off.
+        this.tipOff(L);
+        L.angle = e > 0 ? 0 : Math.PI;
+        job.stage = 'tow';
+        job.to = this.damEnd(dam);
+        c.squashV += 0.35;
+        this.ring(c.x, c.z, 1.5, 0.3, 40);
         return;
       }
-      case 'ashore':
-        c.layer = 'air'; c.h = 0; c.mood = 'walking';
-        if (this.beaverWalk(c, job.plant!.x, job.plant!.z)) { job.stage = 'gnaw'; c.timer = randInt(200, 380); }
-        return;
-      case 'gnaw':
-        c.layer = 'air'; c.mood = 'gnawing';
-        c.vx = c.vz = 0;
-        // Chewing away at a branch.
-        if ((this.tick + c.id) % 6 === 0) c.squashV += 0.12;
-        if (--c.timer <= 0) { job.load = { len: randInt(10, 15), seed: randInt(1, 1e9), leafy: true }; job.stage = 'back'; }
-        return;
-      case 'back':
-        c.layer = 'air'; c.mood = 'walking';
-        if (this.beaverWalk(c, job.shore!.x, job.shore!.z)) {
-          c.layer = 'surface'; c.mood = 'towing';
-          this.ring(c.x, c.z, 1.2, 0.25, 36);
-          this.splash(c.x, c.z, 3);
-          job.stage = 'home';
-          job.to = this.damApproach(dam, job.along);
-        }
-        return;
-      case 'dive':
-        c.mood = 'diving';
-        this.beaverUnder(c);
-        if (--c.timer <= 0) {
-          // Up again with a waterlogged branch off the bed.
-          c.layer = 'surface'; c.h = 0;
-          this.ring(c.x, c.z, 1, 0.25, 36);
-          job.load = { len: randInt(8, 13), seed: randInt(1, 1e9), leafy: false };
-          job.stage = 'home';
-          job.to = this.damApproach(dam, job.along);
-        }
-        return;
-      case 'home': case 'tow': {
-        c.layer = 'surface'; c.h = 0; c.mood = 'towing';
-        const L = job.log;
-        if (L) {
-          if (!this.logs.includes(L)) { this.dropJob(c); return; }
-          // The log trails behind, its end in the beaver's teeth.
-          L.x += (c.x - c.facing * (L.len / 2 + 4) - L.x) * 0.06;
-          L.z += (c.z - 0.6 - L.z) * 0.06;
-        }
-        if (!this.beaverSwim(c, job.to.x, job.to.z, L ? 0.085 : 0.11)) return;
+      case 'tow': {
+        c.mood = 'towing';
+        job.to = this.damEnd(dam);
+        const there = this.beaverSwim(c, job.to.x, job.to.z, 0.1);
+        this.trail(c, L);
+        // Hard work: a heave every few strokes.
+        if ((this.tick + c.id) % 24 === 0) c.squashV += 0.12;
+        if (!there) return;
         job.stage = 'build';
         c.mood = 'building';
-        c.timer = randInt(80, 140);
+        c.timer = randInt(90, 150);
         return;
       }
       case 'build': {
-        c.layer = 'surface'; c.h = 0; c.mood = 'building';
+        c.mood = 'building';
         c.vx *= 0.8; c.vz *= 0.8;
-        const at = { x: dam.x + dam.side * job.along, z: dam.z + dam.drift * job.along };
-        // Pushing and tucking it into place.
+        // Pushing it up onto the dam (or the lodge) and tucking it in.
+        const full = dam.built >= dam.reach;
+        const lodge = lodgeAt(dam);
+        const at = full ? { x: lodge.x, z: lodge.z + 1 } : { x: damRoot(dam) + dam.side * (dam.built + L.len * 0.3), z: dam.z + 1 };
+        L.x += (at.x - L.x) * 0.03; L.z += (at.z - L.z) * 0.03;
+        L.angle = this.turnToward(L.angle ?? 0, dam.side > 0 ? Math.PI : 0, 0.05);
         if ((this.tick + c.id) % 9 === 0) c.squashV += 0.15;
-        if (job.log) { job.log.x += (at.x - job.log.x) * 0.04; job.log.z += (at.z - job.log.z) * 0.04; }
         if (--c.timer > 0) return;
-        if (job.log) this.logIntoDam(dam, job.log, job.along);
-        else if (job.load) this.addDamPiece(dam, job.along, job.load.len, job.load.seed, false);
-        this.ring(at.x, at.z + 1, 1.5, 0.25, 40);
+        this.tipOff(L);
+        this.logs = this.logs.filter(l => l !== L);
+        if (full) dam.logs = Math.min(LODGE_LOGS, dam.logs + 1);
+        else dam.built = Math.min(dam.reach, dam.built + Math.max(6, L.len * DAM_PER_LOG));
+        this.ring(at.x, at.z + 1, 2, 0.3, 50);
+        this.splash(at.x, at.z, 4);
         this.beaverJobs.delete(c.id);
         // A rest on the lodge, or another trip before long.
-        if (Math.random() < 0.35) { c.mood = 'grooming'; c.timer = randInt(400, 1100); this.ring(c.x, c.z, 1, 0.2, 30); }
-        else { c.mood = 'swimming'; c.timer = randInt(60, 400); }
+        if (Math.random() < 0.4) { c.mood = 'grooming'; c.timer = randInt(400, 1000); this.ring(c.x, c.z, 1, 0.2, 30); }
+        else { c.mood = 'swimming'; c.timer = randInt(60, 300); }
         return;
       }
     }
   }
 
-  /** Where a beaver comes to lay a piece, in the water just in front of the dam. */
-  private damApproach(d: Dam, along: number) {
-    const p = { x: d.x + d.side * along, z: d.z + d.drift * along + 3.5 };
-    if (!this.isWater(p.x, p.z)) this.toNearestWater(p);
-    return p;
+  /** The towed log swings round to trail behind, its near end at the beaver's tail. */
+  private trail(c: PondCreature, L: Log) {
+    if (Math.hypot(c.vx, c.vz) > 0.02) L.angle = this.turnToward(L.angle ?? 0, Math.atan2(c.vz, c.vx), 0.035);
+    const a = L.angle ?? 0;
+    // Lying flat on the water, its length along the page's rows is foreshortened.
+    const back = L.len / 2 + 5;
+    const tx = c.x - Math.cos(a) * back, tz = c.z - Math.sin(a) * back * LOG_FORESHORTEN;
+    L.x += (tx - L.x) * 0.2;
+    L.z += (tz - L.z) * 0.2;
   }
 
-  /** Off on the next errand: a log to tow, a tree to gnaw at, or a dive for a sunken branch. */
-  private planTrip(c: PondCreature, dam: Dam) {
-    const job: BeaverJob = { by: c, stage: 'out', to: { x: c.x, z: c.z }, shore: null, plant: null, log: null, load: null, along: this.damSpot(dam).along, ticks: 0 };
-    const r = Math.random();
-    if (r < 0.22) {
-      // A floating log not far off, so long as a couple are left for the turtle and the frogs to bask on.
-      const floating = this.logs.filter(l => l.floating);
-      if (floating.length > 2) {
-        const towing = new Set([...this.beaverJobs.values()].map(j => j.log));
-        let best: Log | null = null, bestD = 200;
-        for (const l of floating) {
-          const d = Math.hypot(l.x - dam.x, l.z - dam.z);
-          if (d >= bestD || towing.has(l) || this.isClear(l.x, l.z)) continue;
-          if (this.creatures.some(o => o.alive && o.perch?.kind === 'log' && o.perch.log === l)) continue;
-          best = l; bestD = d;
-        }
-        if (best) {
-          job.log = best;
-          job.along = Math.min(dam.reach, Math.max(job.along, best.len * 0.45));
-          this.beaverJobs.set(c.id, job);
-          return;
-        }
-      }
-    }
-    if (r < 0.8) {
-      // A branch off a tree or a bush near an island's shore.
-      const near: { f: Flora; d: number }[] = [];
-      for (const f of this.flora) {
-        if (f.kind !== 'tree' && f.kind !== 'willow' && f.kind !== 'bush') continue;
-        if (Math.abs(f.z - dam.z) > 220 || Math.abs(f.x - dam.x) > 260 || -this.shoreDist[this.cellAt(f.x, f.z)] > 9) continue;
-        near.push({ f, d: Math.hypot(f.x - dam.x, f.z - dam.z) });
-      }
-      near.sort((a, b) => a.d - b.d);
-      for (let tries = 0; tries < 4 && near.length; tries++) {
-        const f = near[Math.floor(Math.random() ** 2 * Math.min(near.length, 10))].f;
-        // The water's edge on the side of the island it is coming from.
-        let sx = NaN, sz = NaN, best = Infinity;
-        for (let k = 0; k < 16; k++) {
-          const a = (k / 16) * Math.PI * 2;
-          let x = f.x, z = f.z;
-          for (let t = 0; t < 30 && this.shoreDist[this.cellAt(x, z)] < 1.5; t++) { x += Math.cos(a); z += Math.sin(a); }
-          const d = Math.hypot(x - c.x, z - c.z) + Math.hypot(x - f.x, z - f.z) * 3;
-          if (this.isWater(x, z) && x > 4 && x < this.w - 4 && d < best) { best = d; sx = x; sz = z; }
-        }
-        if (!(best < Infinity)) continue;
-        // It stands at the trunk on the side it came up from.
-        const s = sx < f.x ? -1 : 1;
-        job.shore = { x: sx, z: sz };
-        job.plant = { x: f.x + s * 4, z: f.z + 1 };
-        job.to = job.shore;
-        this.beaverJobs.set(c.id, job);
-        return;
-      }
-    }
-    // Down to the bed for a sunken branch, out in the water not far off.
-    for (let tries = 0; tries < 10; tries++) {
-      const a = rand(0, Math.PI * 2), d = rand(25, 80);
-      const x = dam.x + dam.side * 20 + Math.cos(a) * d, z = dam.z + Math.sin(a) * d * 0.7;
-      if (x < 8 || x > this.w - 8 || z < 8 || z > this.h - 8) continue;
-      if (this.shoreDist[this.cellAt(x, z)] > 4 && !this.nearDam(x, z, 4) && !this.isClear(x, z)) {
-        job.to = { x, z };
-        this.beaverJobs.set(c.id, job);
-        return;
-      }
-    }
-    c.timer = randInt(100, 300);
+  /** An angle turned toward another by at most `step`. */
+  private turnToward(a: number, to: number, step: number) {
+    let d = to - a;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return a + Math.max(-step, Math.min(step, d));
   }
 
-  /** Lets go of whatever it was fetching (a towed log stays floating where it is). */
-  private dropJob(c: PondCreature) {
-    this.beaverJobs.delete(c.id);
-    c.goal = null;
-  }
-
-  /** The towed log goes into the dam: anyone sitting on it is tipped off into the water. */
-  private logIntoDam(d: Dam, L: Log, along: number) {
+  /** Anyone sitting on the log is tipped off, and anyone leaping for it lands in the water instead. */
+  private tipOff(L: Log) {
     for (const o of this.creatures) {
       if (!o.alive) continue;
       if (o.perch?.kind === 'log' && o.perch.log === L) { o.leap = null; this.dropIn(o); }
       else if (o.leap?.onto?.kind === 'log' && o.leap.onto.log === L) o.leap.onto = null;
     }
-    this.logs = this.logs.filter(l => l !== L);
-    this.addDamPiece(d, along, Math.min(L.len, 44), L.seed, true);
+  }
+
+  /** Off on the next trip: a floating log a good way off (two are always left for the turtle and the frogs to bask on). */
+  private planTrip(c: PondCreature, dam: Dam) {
+    const free = this.logs.filter(l => l.floating && l.angle === undefined);
+    if (free.length <= 2) { c.timer = randInt(300, 700); return; }
+    const taken = new Set([...this.beaverJobs.values()].map(j => j.log));
+    let best: Log | null = null, bestScore = Infinity;
+    for (const l of free) {
+      const d = Math.hypot(l.x - dam.x, (l.z - dam.z) * 1.3);
+      if (d > 460 || taken.has(l) || this.isClear(l.x, l.z)) continue;
+      // Any it can reach will do, but it ranges out: one a good swim away is best.
+      const score = Math.abs(d - 160) + rand(0, 120);
+      if (score < bestScore) { best = l; bestScore = score; }
+    }
+    if (!best) { c.timer = randInt(300, 700); return; }
+    this.beaverJobs.set(c.id, { by: c, stage: 'out', to: { x: best.x, z: best.z }, log: best, ticks: 0 });
+  }
+
+  /** Lets go of the log it was fetching, which floats on where it is, lying straight again. */
+  private dropJob(c: PondCreature) {
+    const job = this.beaverJobs.get(c.id);
+    if (job) this.letGoOf(job.log);
+    this.beaverJobs.delete(c.id);
+    c.goal = null;
+  }
+
+  private letGoOf(L: Log) {
+    if (L.angle === undefined) return;
+    L.side = Math.cos(L.angle) >= 0 ? 1 : -1;
+    L.angle = undefined;
+    if (!this.isWater(L.x - L.len / 2, L.z) || !this.isWater(L.x + L.len / 2, L.z)) this.toNearestWater(L);
   }
 
   /** Swims at the surface toward a point, sliding round any island in the way; true once there. */
   private beaverSwim(c: PondCreature, x: number, z: number, speed: number) {
     const dx = x - c.x, dz = z - c.z;
     const d = Math.hypot(dx, dz);
-    if (d < 1.5) { c.vx *= 0.8; c.vz *= 0.8; return true; }
+    if (d < 2.5) { c.vx *= 0.8; c.vz *= 0.8; return true; }
     let hx = dx / d, hz = dz / d;
     const look = Math.min(9, d);
     if (!this.isWater(c.x + hx * look, c.z + hz * look)) {
@@ -4286,10 +4215,11 @@ export class Pond {
       const m = Math.hypot(hx, hz) || 1;
       hx /= m; hz /= m;
     }
-    // Slowing to a stop at the end.
-    const v = Math.min(speed, d * 0.05 + 0.02);
-    c.vx += (hx * v - c.vx) * 0.08;
-    c.vz += (hz * v * 0.8 - c.vz) * 0.08;
+    // Slowing to a stop at the end, turning tighter as it nears (so it never circles).
+    const v = Math.min(speed, d * 0.03 + 0.015);
+    const grip = d < 8 ? 0.2 : 0.08;
+    c.vx += (hx * v - c.vx) * grip;
+    c.vz += (hz * v * 0.8 - c.vz) * grip;
     const nx = c.x + c.vx, nz = c.z + c.vz;
     if (this.isWater(nx, nz)) { c.x = nx; c.z = nz; } else {
       const n = this.toWater(c.x, c.z);
@@ -4297,18 +4227,6 @@ export class Pond {
       c.vx *= 0.5; c.vz *= 0.5;
     }
     if (Math.abs(c.vx) > 0.02) this.turn(c, c.vx);
-    return false;
-  }
-
-  /** Lumbers over the land toward a point, a step and a pause; true once there. */
-  private beaverWalk(c: PondCreature, x: number, z: number) {
-    const dx = x - c.x, dz = z - c.z;
-    const d = Math.hypot(dx, dz);
-    if (d < 1) { c.vx = c.vz = 0; return true; }
-    const step = (this.tick + c.id * 3) % 20 < 13 ? 0.1 : 0.02;
-    c.vx = (dx / d) * step; c.vz = (dz / d) * step;
-    c.x += c.vx; c.z += c.vz;
-    if (Math.abs(dx) > 0.3) c.facing = dx > 0 ? 1 : -1;
     return false;
   }
 
