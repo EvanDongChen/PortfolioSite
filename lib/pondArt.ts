@@ -499,3 +499,23 @@ export const extraSprite = (kind: ExtraSpriteKind, palette = 0, washed = false) 
     if (washed) for (const k of Object.keys(colours)) colours[k] = paleOf(colours[k]);
     return fromRows(EXTRA_ROWS[kind], colours);
   });
+
+// --- events -------------------------------------------------------------------------
+
+/** A mayfly nymph on a stem, and a mayfly splitting out of it (pale wings up). */
+export const nymphSprite = (emerging: boolean) =>
+  cached(`pond-nymph-${emerging}`, () => fromRows(
+    emerging ? ['.w.', 'ww.', 'nN.', 'nN.', '.n.'] : ['nN', 'nN', '.n'],
+    { n: [96, 78, 50], N: [130, 106, 70], w: [236, 232, 210] },
+  ));
+/** A mayfly in flight (wings up, long tails), and a spent one lying flat on the water. */
+export const mayflySprite = (spent: boolean) =>
+  cached(`pond-mayfly-${spent}`, () => fromRows(
+    spent ? ['.w.w.', 'tmmmw', '.w.w.'] : ['..w.', '..ww', 'tmmm'],
+    { m: [220, 206, 150], w: [244, 242, 230], t: [170, 156, 110] },
+  ));
+/** Night and dusk: the colours laid over the whole pond. */
+export const SKY = { night: 'rgb(4,10,28)', dusk: 'rgb(255,150,60)', dawn: 'rgb(255,170,170)', rain: 'rgb(30,40,46)' };
+/** Fireflies: the glow and the bright core. */
+export const FIREFLY = ['rgb(200,255,120)', 'rgb(255,255,210)'];
+export const RAIN = 'rgb(190,220,226)';

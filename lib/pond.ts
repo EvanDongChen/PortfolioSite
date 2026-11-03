@@ -158,8 +158,18 @@ export interface Nest { x: number; z: number; eggs: number; hen: PondCreature; t
 export interface PondEvent { tick: number; kind: 'mating' | 'spawn' | 'hatch' | 'emerge' | 'eaten' | 'visit' | 'nest'; text: string; starred: boolean }
 const EVENT_LOG_SIZE = 6;
 
-/** A midge dancing in its swarm over the reeds: food for frogs. */
-export interface Midge { x: number; z: number; h: number; vx: number; vz: number; vh: number; swarm: number; alive: boolean }
+/**
+ * A midge dancing in its swarm over the reeds, or a mayfly from a hatch
+ * (swarm -1): food for frogs, dragonflies and rising fish. A mayfly's life
+ * is short; spent, it falls to lie on the water.
+ */
+export interface Midge { x: number; z: number; h: number; vx: number; vz: number; vh: number; swarm: number; alive: boolean; life?: number; spent?: boolean }
+/** A mayfly nymph climbing a reed stem out of the water to emerge. */
+export interface Nymph { x: number; z: number; h: number; top: number; timer: number; dragonfly: boolean; alive: boolean }
+/** A firefly blinking over the bank on a summer night. */
+export interface Firefly { x: number; z: number; h: number; vx: number; vz: number; phase: number; alive: boolean }
+/** The pond's events: a shower of rain, a mayfly hatch, and the evening chorus (dusk, night and dawn). */
+export type PondHappening = 'rain' | 'hatch' | 'chorus';
 export interface Swarm { x: number; z: number; h: number }
 /** A ring spreading across the surface from a splash, a raindrop or a rising fish. */
 export interface Ring { x: number; z: number; r: number; speed: number; life: number; maxLife: number; alive: boolean }
@@ -303,6 +313,14 @@ const HERON_STAY: [number, number] = [1500, 2400];
 const HERON_GAP: [number, number] = [1500, 3000];
 /** How far around its shadow (or itself) frogs take fright at a heron. */
 const HERON_FRIGHT = 24;
+/** How long each event lasts, and the gap between events (ticks). */
+const RAIN_TICKS = 1500;
+const HATCH_TICKS = 1800;
+const CHORUS_TICKS = 3000;
+const HAPPENING_GAP: [number, number] = [5400, 9000];
+const MAX_NYMPHS = 90;
+const MAX_FIREFLIES = 90;
+const MAYFLY_LIFE: [number, number] = [500, 1000];
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
@@ -374,6 +392,12 @@ export class Pond {
   private nextHeron = randInt(900, 1800);
   /** The rows the visitor is looking at, so visits and events happen where they can be seen. */
   viewZ = { z0: 0, z1: 200 };
+  /** The event under way, if any: what it is, how far through, and how long it lasts (ticks). */
+  happening: { kind: PondHappening; t: number; dur: number } | null = null;
+  private nextHappening = randInt(2400, 4200);
+  private lastHappening: PondHappening | null = null;
+  nymphs: Nymph[] = [];
+  fireflies: Firefly[] = [];
   private nextId = 1;
   births = 0;
   /** Midges and other insects caught, for the census. */
@@ -677,6 +701,7 @@ export class Pond {
     this.updateRings();
     this.updateDroplets();
     this.updateHeron();
+    this.updateHappening();
     this.pointerSpeed *= 0.8;
     compact(this.creatures);
     compact(this.midges);
@@ -685,6 +710,8 @@ export class Pond {
     compact(this.nests);
     this.updateSilt();
     compact(this.silt);
+    compact(this.nymphs);
+    compact(this.fireflies);
   }
 
   /** The breeze turns slowly, and gusts now and then. */
@@ -1285,7 +1312,7 @@ export class Pond {
     if (c.tongue > 0 || c.target) this.flickTongue(c);
     if (c.leap) { this.stepLeap(c); return; }
     if (c.mate) { this.frogPairing(c); return; }
-    if (this.readyToBreed(c) && (this.tick + c.id) % 30 === 0) this.seekMate(c);
+    if (this.readyToBreed(c) && (this.tick + c.id) % (this.nightfall() > 0.5 ? 10 : 30) === 0) this.seekMate(c);
     if (c.perch) { this.frogOnPerch(c); return; }
     if (c.mood === 'floating') this.frogFloating(c);
     else this.frogSwimming(c);
@@ -1429,7 +1456,7 @@ export class Pond {
     const at = this.perchPoint(perch);
     c.x = at.x; c.z = at.z; c.h = at.h;
     c.layer = 'air';
-    c.throat += ((c.mood === 'croaking' && (c.timer >> 3) % 3 !== 2 ? 1 : 0) - c.throat) * 0.35;
+    c.throat += (((c.mood === 'croaking' || c.mood === 'singing') && (c.timer >> 3) % 3 !== 2 ? 1 : 0) - c.throat) * 0.35;
     if (this.threatened(c)) {
       // Plop: straight into the nearest water and down.
       c.mood = 'fleeing';
@@ -1446,11 +1473,13 @@ export class Pond {
       }
       return;
     }
-    if (c.mood === 'croaking' || c.mood === 'catching') c.mood = 'sitting';
+    if (c.mood === 'croaking' || c.mood === 'catching' || c.mood === 'singing') c.mood = 'sitting';
+    // Rain and the night set them all calling: at night, in waves across the pond.
+    const calling = this.nightfall() > 0.5 ? 0.85 : this.rainAmount() > 0.3 ? 0.65 : 0.35;
     const roll = Math.random();
-    if (roll < 0.35) {
-      c.mood = 'croaking';
-      c.timer = randInt(40, 90);
+    if (roll < calling && c.age >= POND_SPECIES.frog.mature) {
+      c.mood = this.nightfall() > 0.5 ? 'singing' : 'croaking';
+      c.timer = this.nightfall() > 0.5 ? 40 + Math.round(Math.sin(this.tick * 0.01 + c.x * 0.02) * 20 + 20) : randInt(40, 90);
     } else if (roll < 0.75) {
       // Off to another pad, a log or the bank: a hungry frog to one where the midges are.
       const swarm = c.hungry ? this.nearestSwarm(c.x, c.z) : null;
@@ -2096,7 +2125,23 @@ export class Pond {
         max = sp.burst;
         c.mood = 'fleeing';
       }
-    } else if (c.species === 'koi') {
+    }
+    // In a hatch, fish rise to the spent mayflies lying on the water.
+    if ((c.species === 'minnow' || c.species === 'koi') && this.happening?.kind === 'hatch' && (this.tick + c.id) % 15 === 0) {
+      for (const m of this.midges) {
+        if (!m.alive || !m.spent || Math.abs(m.x - c.x) > 18 || Math.abs(m.z - c.z) > 12) continue;
+        c.heading = Math.atan2(m.z - c.z, m.x - c.x);
+        if (Math.hypot(m.x - c.x, m.z - c.z) < 4) {
+          m.alive = false;
+          this.ring(m.x, m.z, 1, 0.25, 45);
+          this.splash(m.x, m.z, 2);
+          c.energy = Math.min(1, c.energy + 0.04);
+        } else if (c.species === 'koi') c.mood = 'rising';
+        else c.h = Math.min(-0.8, c.h + 0.6);
+        break;
+      }
+    }
+    if (c.species === 'koi') {
       // Rising for an insect: up to the surface, a sip, a ring.
       if (c.mood === 'rising') {
         want = -0.8;
@@ -2539,12 +2584,34 @@ export class Pond {
       this.midges.push({ x: s.x + rand(-3, 3), z: s.z + rand(-2, 2), h: s.h + rand(-2, 2), vx: 0, vz: 0, vh: 0, swarm: sw, alive: true });
     }
     for (const m of this.midges) {
+      if (m.swarm < 0) { this.stepMayfly(m); continue; }
       const s = swarms[m.swarm];
       m.vx = (m.vx + rand(-0.08, 0.08) + (s.x - m.x) * 0.004) * 0.9;
       m.vz = (m.vz + rand(-0.06, 0.06) + (s.z - m.z) * 0.004) * 0.9;
       m.vh = (m.vh + rand(-0.08, 0.08) + (s.h - m.h) * 0.006) * 0.9;
       m.x += m.vx; m.z += m.vz; m.h += m.vh;
     }
+  }
+
+  /** A mayfly rises and falls in its dance over the water; spent, it lies on the surface. */
+  private stepMayfly(m: Midge) {
+    m.life = (m.life ?? 600) - 1;
+    if (m.spent) {
+      m.h = 0;
+      if (m.life < -240) m.alive = false;
+      return;
+    }
+    if (m.life <= 0) {
+      m.spent = true;
+      if (this.isWater(m.x, m.z)) this.ring(m.x, m.z, 0.5, 0.15, 40); else m.alive = false;
+      return;
+    }
+    m.vx = (m.vx + rand(-0.05, 0.05) + this.wind.x * 4) * 0.94;
+    m.vz = (m.vz + rand(-0.04, 0.04)) * 0.94;
+    // Up in a flutter, then a long glide down: the mayfly's dance.
+    m.vh = ((this.tick + Math.round(m.x * 7)) % 90 < 25 ? 0.18 : -0.06);
+    m.x += m.vx; m.z += m.vz;
+    m.h = Math.max(3, Math.min(26, m.h + m.vh));
   }
 
   ring(x: number, z: number, r: number, speed: number, life: number) {
@@ -2577,8 +2644,131 @@ export class Pond {
     }
   }
 
-  /** How far into the night it is, 0 (day) to 1 (full night); events set this. */
+  // --- events ---------------------------------------------------------------------
+
+  /** Starts an event now (any under way ends). */
+  startHappening(kind: PondHappening) {
+    if (this.happening?.kind === 'hatch') this.nymphs.length = 0;
+    const dur = kind === 'rain' ? RAIN_TICKS : kind === 'hatch' ? HATCH_TICKS : CHORUS_TICKS;
+    this.happening = { kind, t: 0, dur };
+    this.lastHappening = kind;
+    this.logEvent('visit', null, null, kind === 'rain' ? 'Rain began to fall' : kind === 'hatch' ? 'A mayfly hatch began' : 'Evening fell over the pond');
+  }
+
+  private updateHappening() {
+    const ev = this.happening;
+    if (!ev) {
+      if (this.tick < this.nextHappening) return;
+      // Something different from last time.
+      const kinds = (['rain', 'hatch', 'chorus'] as PondHappening[]).filter(k => k !== this.lastHappening);
+      this.startHappening(kinds[randInt(0, kinds.length - 1)]);
+      return;
+    }
+    ev.t++;
+    if (ev.kind === 'rain') this.rainfall();
+    else if (ev.kind === 'hatch') this.hatching(ev.t / ev.dur);
+    this.updateNymphs();
+    this.updateFireflies();
+    if (ev.t >= ev.dur) {
+      this.happening = null;
+      this.nextHappening = this.tick + randInt(HAPPENING_GAP[0], HAPPENING_GAP[1]);
+    }
+  }
+
+  /** How hard it is raining, 0 to 1: building up, steady, then easing off. */
+  rainAmount() {
+    const ev = this.happening;
+    if (ev?.kind !== 'rain') return 0;
+    const k = ev.t / ev.dur;
+    return Math.min(1, k / 0.12, (1 - k) / 0.2);
+  }
+
+  /** Raindrops ring the surface everywhere, thickest where the visitor is looking. */
+  private rainfall() {
+    const amount = this.rainAmount();
+    const { z0, z1 } = this.viewZ;
+    const drop = (z: number) => {
+      const row = Math.max(0, Math.min(this.h - 1, Math.round(z)));
+      const x = rand(this.shoreL[row] + 1, this.shoreR[row] - 1);
+      if (this.isWater(x, z)) this.ring(x, z, 0.5, rand(0.15, 0.25), randInt(20, 36));
+    };
+    for (let k = Math.round(amount * 6 + Math.random()); k > 0; k--) drop(rand(z0 - 20, z1 + 20));
+    if (Math.random() < amount) drop(rand(0, this.h));
+    // The midges take shelter.
+    if (amount > 0.5 && this.midges.length > 60 && this.tick % 3 === 0) this.midges[randInt(0, this.midges.length - 1)].alive = false;
+  }
+
+  /** The mayfly hatch: nymphs climb the reed stems out of the water, near the visitor most of all. */
+  private hatching(k: number) {
+    if (k > 0.75 || this.nymphs.length >= MAX_NYMPHS || this.tick % 2) return;
+    const { z0, z1 } = this.viewZ;
+    const clumps = this.clumps.filter(c => c.z > z0 - 60 && c.z < z1 + 60);
+    const pool = clumps.length && Math.random() < 0.8 ? clumps : this.clumps;
+    if (!pool.length) return;
+    const clump = pool[randInt(0, pool.length - 1)];
+    const st = clump.stems[randInt(0, clump.stems.length - 1)];
+    if (!this.isWater(st.x, st.z)) return;
+    this.nymphs.push({ x: st.x + 0.6, z: st.z + 0.2, h: -1.2, top: rand(st.len * 0.25, st.len * 0.5), timer: 0, dragonfly: Math.random() < 0.08, alive: true });
+  }
+
+  /** Nymphs climb, pause, split their skins, and fly: a mayfly (or now and then a dragonfly). */
+  private updateNymphs() {
+    for (const n of this.nymphs) {
+      if (n.h < n.top) { n.h += 0.035; continue; }
+      if (++n.timer < 70) continue;
+      n.alive = false;
+      if (n.dragonfly) {
+        if (this.counts().dragonfly < this.cap('dragonfly') + 2) {
+          const d = this.spawn('dragonfly');
+          d.x = n.x; d.z = n.z; d.h = n.h; d.age = 0; d.mood = 'darting'; d.timer = 0;
+          this.logEvent('emerge', d, null, 'A dragonfly emerged from its nymph');
+        }
+      } else if (this.midges.length < MAX_MIDGES + 200) {
+        this.midges.push({ x: n.x, z: n.z, h: n.h + 1, vx: 0, vz: 0, vh: 0.1, swarm: -1, alive: true, life: randInt(MAYFLY_LIFE[0], MAYFLY_LIFE[1]) });
+      }
+    }
+  }
+
+  /**
+   * How far into the night it is, 0 (day) to 1 (full night): the evening
+   * chorus's dusk deepens into night and lifts again at dawn.
+   */
   nightfall() {
+    const ev = this.happening;
+    if (ev?.kind !== 'chorus') return 0;
+    const k = ev.t / ev.dur;
+    if (k < 0.12) return 0;
+    if (k < 0.3) return (k - 0.12) / 0.18;
+    if (k < 0.8) return 1;
+    return Math.max(0, 1 - (k - 0.8) / 0.15);
+  }
+
+  /** The golden light of dusk (and a pinker dawn), 0 to 1. */
+  duskGlow() {
+    const ev = this.happening;
+    if (ev?.kind !== 'chorus') return 0;
+    const k = ev.t / ev.dur;
+    if (k < 0.12) return k / 0.12;
+    if (k < 0.3) return 1 - (k - 0.12) / 0.18;
+    if (k > 0.8 && k < 0.95) return Math.sin(((k - 0.8) / 0.15) * Math.PI) * 0.7;
     return 0;
+  }
+
+  /** Fireflies come out over the banks and reeds at night, near the visitor, and go at dawn. */
+  private updateFireflies() {
+    const night = this.nightfall();
+    if (night > 0.6 && this.fireflies.length < MAX_FIREFLIES && this.tick % 3 === 0) {
+      const { z0, z1 } = this.viewZ;
+      const z = rand(z0 - 20, z1 + 20);
+      const side: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+      const x = this.offShore(z, side, rand(-14, 6));
+      this.fireflies.push({ x, z, h: rand(4, 16), vx: 0, vz: 0, phase: rand(0, 200), alive: true });
+    }
+    for (const f of this.fireflies) {
+      f.vx = (f.vx + rand(-0.02, 0.02)) * 0.95;
+      f.vz = (f.vz + rand(-0.015, 0.015)) * 0.95;
+      f.x += f.vx; f.z += f.vz; f.h += Math.sin((this.tick + f.phase) * 0.03) * 0.03;
+      if (night < 0.3 && Math.random() < 0.02) f.alive = false;
+    }
   }
 }

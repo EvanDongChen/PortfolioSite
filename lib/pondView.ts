@@ -24,6 +24,7 @@ import {
   CATTAIL_HEAD, DUCKWEED, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
   logSprite, makeCanvas, padSprite, pondSprite, rippleTile, rootSprite, spawnSprite, splashSprite, stoneSprite,
   DuckSpriteKind, duckSprite, nestSprite, FishSpriteKind, fishSprite, SILT, ExtraSpriteKind, extraSprite,
+  FIREFLY, RAIN, SKY, mayflySprite, nymphSprite,
 } from './pondArt';
 import { shadowSprite, silhouetteSprite } from './pixelOceanArt';
 import type { ReefLayout } from './pixelOceanView';
@@ -374,7 +375,10 @@ export class PondView {
     if (pattern) {
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = pattern;
+      // The sun's light on the bed dims under rain clouds and goes at night.
+      ctx.globalAlpha = Math.max(0.05, (1 - pond.nightfall() * 0.9) * (1 - pond.rainAmount() * 0.6));
       ctx.fillRect(0, top, pond.w, rows);
+      ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
     }
     ctx.fillStyle = '#000';
@@ -533,6 +537,13 @@ export class PondView {
     for (const c of pond.creatures) {
       if ((c.layer === 'air' || c.layer === 'surface') && visible(c.z)) over.push({ depth: c.z + 0.3, draw: () => this.drawCreature(c, 1) });
     }
+    for (const n of pond.nymphs) {
+      if (visible(n.z)) over.push({ depth: n.z + 0.2, draw: () => this.sprite(nymphSprite(n.timer > 0), n.x, n.z, Math.max(0, n.h), { anchor: 'bottom', alpha: n.h < 0 ? 0.6 : 1 }) });
+    }
+    for (const m of pond.midges) {
+      if (m.swarm >= 0 || !m.alive || !visible(m.z)) continue;
+      over.push({ depth: m.z + 0.2, draw: () => this.sprite(mayflySprite(!!m.spent), m.x, m.z, m.h, { alpha: m.spent ? 0.85 : 1 }) });
+    }
     for (const n of pond.nests) if (visible(n.z)) over.push({ depth: n.z - 0.5, draw: () => this.sprite(nestSprite(), n.x, n.z + 1, 0, { anchor: 'bottom' }) });
     for (const p of pond.pads) if (visible(p.z)) over.push({ depth: p.z - p.r * 0.6, draw: () => this.drawPad(p) });
     for (const l of pond.logs) {
@@ -549,7 +560,68 @@ export class PondView {
     for (const item of over) item.draw();
     this.drawMidges(z0, z1);
     this.drawDroplets(z0, z1);
+    this.drawSky();
+    this.drawFireflies(z0, z1);
     ctx.globalAlpha = 1;
+  }
+
+  /**
+   * The light of the moment over everything: the warm gold of dusk (pinker
+   * at dawn), the deep blue of night, and grey rain with streaks falling.
+   */
+  private drawSky() {
+    const { spriteCtx: ctx, pond, px } = this;
+    const night = pond.nightfall();
+    const glow = pond.duskGlow();
+    const rain = pond.rainAmount();
+    const ev = pond.happening;
+    if (glow > 0) {
+      ctx.globalAlpha = glow * 0.16;
+      ctx.fillStyle = ev && ev.t > ev.dur / 2 ? SKY.dawn : SKY.dusk;
+      ctx.fillRect(0, 0, this.viewW, this.regionHeight);
+    }
+    if (night > 0) {
+      ctx.globalAlpha = night * 0.5;
+      ctx.fillStyle = SKY.night;
+      ctx.fillRect(0, 0, this.viewW, this.regionHeight);
+    }
+    if (rain > 0) {
+      ctx.globalAlpha = rain * 0.2;
+      ctx.fillStyle = SKY.rain;
+      ctx.fillRect(0, 0, this.viewW, this.regionHeight);
+      // Streaks: short slanted dashes falling across the view, two cells long.
+      ctx.globalAlpha = 0.45 * rain;
+      ctx.fillStyle = RAIN;
+      const top = this.scrollY - this.regionTop;
+      const count = Math.round((this.viewW * this.viewH) / 9000 * rain);
+      for (let k = 0; k < count; k++) {
+        const fall = ((pond.tick * 9 + hash(k * 13 + 7) * this.viewH) % (this.viewH + 40)) - 20;
+        const x = Math.round((hash(k * 31 + 3) * this.viewW + fall * 0.25) / px) * px;
+        const y = Math.round((top + fall) / px) * px;
+        ctx.fillRect(x, y, px, px);
+        ctx.fillRect(x - px, y - px * 2, px, px);
+      }
+    }
+  }
+
+  /** Fireflies blinking over the banks: a soft glow with a bright heart, on, then off. */
+  private drawFireflies(z0: number, z1: number) {
+    const { spriteCtx: ctx, pond, px } = this;
+    if (!pond.fireflies.length) return;
+    ctx.globalCompositeOperation = 'lighter';
+    for (const f of pond.fireflies) {
+      if (f.z < z0 || f.z > z1) continue;
+      const blink = Math.sin((pond.tick + f.phase) * 0.08);
+      if (blink < 0.2) continue;
+      const p = this.project(f.x, f.z, f.h);
+      ctx.globalAlpha = 0.35 * blink;
+      ctx.fillStyle = FIREFLY[0];
+      ctx.fillRect(Math.round(p.x - px), Math.round(p.y - px), px * 3, px * 3);
+      ctx.globalAlpha = blink;
+      ctx.fillStyle = FIREFLY[1];
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), px, px);
+    }
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   private drawCreature(c: PondCreature, alpha: number) {
@@ -776,7 +848,7 @@ export class PondView {
       ctx.globalAlpha = shade ? 0.6 : 0.85;
       ctx.fillStyle = MIDGE[shade];
       for (const m of pond.midges) {
-        if (!m.alive || m.z < z0 || m.z > z1) continue;
+        if (!m.alive || m.swarm < 0 || m.z < z0 || m.z > z1) continue;
         const glint = ((pond.tick >> 1) + (m.swarm * 7 + Math.round(m.x))) % 5 === 0;
         if ((shade === 1) !== glint) continue;
         const p = this.project(m.x, m.z, m.h);
@@ -964,6 +1036,8 @@ export class PondView {
     const z1 = Math.ceil((this.scrollY + this.viewH) / px / GLINT_TILE) + 1;
     const cols = Math.ceil(pond.w / GLINT_TILE);
     const tick = pond.tick;
+    // No sun to glint at night, and less under rain clouds.
+    const dim = (1 - pond.nightfall() * 0.85) * (1 - pond.rainAmount() * 0.5);
     for (let shade = 0; shade < 2; shade++) {
       ctx.fillStyle = WATER.glint[shade];
       for (let tz = z0; tz < z1; tz++) {
@@ -984,7 +1058,7 @@ export class PondView {
             if (life > 0.6) continue;
             const fade = Math.sin((life / 0.6) * Math.PI);
             const len = Math.max(1, Math.round((1 + hash(seed + 2) * 3) * fade));
-            ctx.globalAlpha = 0.2 + 0.55 * fade;
+            ctx.globalAlpha = (0.2 + 0.55 * fade) * dim;
             ctx.fillRect(Math.round(x * px), Math.round(z * px - this.regionTop), len * px, px);
           }
         }
