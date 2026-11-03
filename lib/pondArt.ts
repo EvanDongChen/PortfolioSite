@@ -429,3 +429,41 @@ export const duckSprite = (kind: DuckSpriteKind, palette: number, washed = false
 /** A mallard's nest: a ring of grass and twigs on the bank. */
 export const nestSprite = () =>
   cached('pond-nest', () => fromRows(['..tTtTtTt..', '.TtgggggtT.', 'tTgggggggTt', '.TtTtTtTtT.'], { t: [120, 92, 54], T: [92, 70, 42], g: [70, 56, 36] }));
+
+// --- fish -------------------------------------------------------------------------
+
+// Designed in pxl (fish.px.js), facing right. Roles: D back, B body, L belly,
+// T fins and tail, E eye, P a koi's patches, W a catfish's whiskers, S a pike's spots.
+export type FishSpriteKind = 'minnow0' | 'minnow1' | 'fry' | 'koi0' | 'koi1' | 'catfish0' | 'pike0' | 'pike1';
+const FISH_ROWS: Record<FishSpriteKind, string[]> = {
+  minnow0: ['...DDD...', 'T.DBBBBE.', 'TTBBBBBBB', 'T..LLLL..'],
+  minnow1: ['...DDD...', '.TDBBBBE.', '.TBBBBBBB', '.T.LLLL..'],
+  fry: ['.DD..', 'TBBBE', '..LL.'],
+  koi0: ['........TTT.........', '......DDDDDDDD......', 'T...DDPPPDDDPPDD....', 'TT.BBBPPPBBBBPPBBE..', 'TTTBBBBBBBBBBBBBBBBB', 'TT..LLLLLLLLLLLLLL..', 'T......TT....TT.....'],
+  koi1: ['........TTT.........', '......DDDDDDDD......', '....DDPPPDDDPPDD....', '.T.BBBPPPBBBBPPBBE..', 'TTTBBBBBBBBBBBBBBBBB', '.T..LLLLLLLLLLLLLL..', '.......TT....TT.....'],
+  catfish0: ['.......TTT.........', 'T...DDDDDDDDDDD....', 'TTDDBBBBBBBBBBBBEW.', 'TTBBBBBBBBBBBBBBBBWW', 'T..LLLLLLLLLLLLL..W.', '.....T......T.......'],
+  pike0: ['.....TT..................', 'T...DDDDDDDDDDDDDDD......', 'TT.BBSBBSBBBSBBBSBBBBBE..', 'TTTBBBBBBBBBBBBBBBBBBBBBB', 'TT..LLLLLLLLLLLLLLLLLLL..', 'T......TT.......T........'],
+  pike1: ['.....TT..................', '.T..DDDDDDDDDDDDDDD......', '.T.BBSBBSBBBSBBBSBBBBBE..', 'TTTBBBBBBBBBBBBBBBBBBBBBB', '.T..LLLLLLLLLLLLLLLLLLL..', '.......TT.......T........'],
+};
+/** Colourways by species: [D, B, L, T, P, W, S]. Koi come white with orange patches, or gold. */
+const FISH_SETS: Record<string, Rgb[][]> = {
+  minnow: [[[70, 92, 80], [168, 184, 170], [226, 232, 220], [110, 130, 112], [0, 0, 0], [0, 0, 0], [0, 0, 0]]],
+  koi: [
+    [[236, 232, 222], [246, 244, 236], [255, 255, 250], [230, 214, 200], [232, 96, 40], [0, 0, 0], [0, 0, 0]],
+    [[222, 158, 48], [242, 188, 70], [255, 228, 150], [232, 168, 80], [255, 238, 196], [0, 0, 0], [0, 0, 0]],
+  ],
+  catfish: [[[52, 46, 38], [86, 76, 62], [150, 136, 110], [66, 58, 48], [0, 0, 0], [40, 34, 28], [0, 0, 0]]],
+  pike: [[[62, 84, 52], [104, 128, 74], [214, 214, 170], [84, 102, 62], [0, 0, 0], [0, 0, 0], [200, 206, 140]]],
+};
+
+export const fishSprite = (species: 'minnow' | 'koi' | 'catfish' | 'pike', kind: FishSpriteKind, palette: number, washed = false) =>
+  cached(`pond-fish-${species}-${kind}-${palette}-${washed}`, () => {
+    const sets = FISH_SETS[species];
+    const set = sets[palette % sets.length];
+    const colours: Record<string, Rgb> = { E: [16, 18, 20] };
+    ['D', 'B', 'L', 'T', 'P', 'W', 'S'].forEach((r, i) => { colours[r] = washed ? paleOf(set[i]) : set[i]; });
+    return fromRows(FISH_ROWS[kind], colours);
+  });
+
+/** Silt stirred off the bed: two muddy browns. */
+export const SILT = ['rgb(104,92,62)', 'rgb(134,120,84)'];

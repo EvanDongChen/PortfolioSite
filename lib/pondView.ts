@@ -23,7 +23,7 @@ import {
 import {
   CATTAIL_HEAD, DUCKWEED, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
   logSprite, makeCanvas, padSprite, pondSprite, rippleTile, rootSprite, spawnSprite, splashSprite, stoneSprite,
-  DuckSpriteKind, duckSprite, nestSprite,
+  DuckSpriteKind, duckSprite, nestSprite, FishSpriteKind, fishSprite, SILT,
 } from './pondArt';
 import { shadowSprite } from './pixelOceanArt';
 import type { ReefLayout } from './pixelOceanView';
@@ -60,7 +60,7 @@ interface SpriteOptions {
 }
 
 /** Sprite widths in art pixels, for shadows and the inspection reticle. */
-export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 12, spawn: 11, tadpole: 6, mallard: 24, tufted: 20 };
+export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 12, spawn: 11, tadpole: 6, mallard: 24, tufted: 20, minnow: 9, koi: 20, catfish: 20, pike: 25 };
 
 /** Reed clumps and weed beds are drawn in bands this many rows deep, each sorted with whatever is among them. */
 const BAND = 3;
@@ -505,6 +505,7 @@ export class PondView {
     }
     under.sort((a, b) => a.depth - b.depth);
     for (const item of under) item.draw();
+    this.drawSilt(z0, z1);
 
     // 2. The surface itself, over everything below it.
     this.drawSurface();
@@ -549,6 +550,17 @@ export class PondView {
     switch (c.species) {
       case 'frog': this.drawFrog(c, alpha); return;
       case 'mallard': case 'tufted': this.drawDuck(c, alpha); return;
+      case 'minnow': case 'koi': case 'catfish': case 'pike': {
+        const young = c.age < POND_SPECIES[c.species].mature;
+        const fast = Math.hypot(c.vx, c.vz) > 0.4 || c.mood === 'striking';
+        const beat = ((tick + c.id * 7) >> (fast ? 2 : c.species === 'minnow' ? 3 : 4)) & 1;
+        const kind: FishSpriteKind = c.species === 'minnow' ? (young ? 'fry' : beat ? 'minnow1' : 'minnow0')
+          : c.species === 'koi' ? (beat ? 'koi1' : 'koi0') : c.species === 'catfish' ? 'catfish0' : beat ? 'pike1' : 'pike0';
+        // A lurking pike is half hidden among the weeds.
+        const hide = c.species === 'pike' && c.mood !== 'striking' ? 0.8 : 1;
+        this.sprite(fishSprite(c.species, kind, c.palette, c.energy < 0.15), c.x, c.z, c.h, { flipX: c.facing < 0, alpha: alpha * hide, stretch: c.squash });
+        return;
+      }
       case 'spawn': {
         // The eggs darken and stretch into commas, and the jelly wobbles more as hatching nears.
         const dev = c.age / SPAWN_TICKS;
@@ -672,6 +684,20 @@ export class PondView {
       const r = (k * 3 + phase + 2) * px;
       ctx.globalAlpha = 0.7 - k * 0.3;
       for (const dy of [-1, 0, 1]) ctx.fillRect(Math.round(p.x + c.facing * (r - Math.abs(dy) * px)), Math.round(p.y + dy * px), px, px);
+    }
+  }
+
+  /** Clouds of silt stirred up off the bed, thinning as they settle. */
+  private drawSilt(z0: number, z1: number) {
+    const { spriteCtx: ctx, pond, px } = this;
+    for (const p of pond.silt) {
+      if (p.z < z0 || p.z > z1) continue;
+      const q = this.project(p.x, p.z, p.h);
+      const k = p.life / p.maxLife;
+      ctx.globalAlpha = 0.5 * k;
+      ctx.fillStyle = SILT[k > 0.5 ? 1 : 0];
+      const size = px * (k > 0.6 ? 2 : 1);
+      ctx.fillRect(Math.round(q.x), Math.round(q.y), size, size);
     }
   }
 

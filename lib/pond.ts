@@ -77,10 +77,13 @@ export interface Roots { x: number; z: number; side: 1 | -1; seed: number }
 export interface Frond { x: number; z: number; vx: number; vz: number; patch: number; shade: number; alive: boolean }
 export interface DuckweedPatch { x: number; z: number; rx: number; rz: number; target: number; count: number }
 
-export type PondSpecies = 'spawn' | 'tadpole' | 'frog' | 'mallard' | 'tufted';
-export const POND_SPECIES_LIST: PondSpecies[] = ['frog', 'spawn', 'tadpole', 'mallard', 'tufted'];
+export type PondSpecies = 'spawn' | 'tadpole' | 'frog' | 'mallard' | 'tufted' | 'minnow' | 'koi' | 'catfish' | 'pike';
+export const POND_SPECIES_LIST: PondSpecies[] = ['frog', 'spawn', 'tadpole', 'mallard', 'tufted', 'minnow', 'koi', 'catfish', 'pike'];
 /** Species that are a big, frightening shape to a frog, and steer clear of the page's hero text. */
 const BIG: Partial<Record<PondSpecies, boolean>> = { mallard: true, tufted: true };
+const FISH: Partial<Record<PondSpecies, boolean>> = { minnow: true, koi: true, catfish: true, pike: true };
+/** What the pike will take. */
+const PIKE_PREY: Partial<Record<PondSpecies, number>> = { minnow: 1, tadpole: 0.7, koi: 0.15, frog: 0.35, mallard: 0.25 };
 /** A frog's life, stage by stage, for the census. */
 export type FrogStage = 'spawn' | 'tadpole' | 'backLegs' | 'fourLegs' | 'froglet' | 'adult';
 export const FROG_STAGES: FrogStage[] = ['spawn', 'tadpole', 'backLegs', 'fourLegs', 'froglet', 'adult'];
@@ -89,7 +92,8 @@ export const FROG_STAGES: FrogStage[] = ['spawn', 'tadpole', 'backLegs', 'fourLe
 export type PondMood =
   | 'sitting' | 'croaking' | 'catching' | 'leaping' | 'swimming' | 'floating' | 'climbing' | 'fleeing' | 'diving'
   | 'singing' | 'calling' | 'clasping' | 'laying' | 'developing' | 'wriggling' | 'schooling' | 'grazing' | 'emerging'
-  | 'paddling' | 'dabbling' | 'preening' | 'quacking' | 'takingOff' | 'flying' | 'landing' | 'nesting' | 'following' | 'walking';
+  | 'paddling' | 'dabbling' | 'preening' | 'quacking' | 'takingOff' | 'flying' | 'landing' | 'nesting' | 'following' | 'walking'
+  | 'cruising' | 'rising' | 'rooting' | 'lurking' | 'striking' | 'resting';
 
 /** Something a frog can sit on: a lily pad, a floating log, or a spot on the bank. */
 export type Perch =
@@ -121,6 +125,8 @@ export interface PondCreature {
   leap: { x0: number; z0: number; h0: number; x1: number; z1: number; h1: number; t: number; dur: number; arc: number; onto: Perch | null } | null;
   /** The midge a frog's tongue is out for, and how far out it is (0 to 1 and back). */
   target: Midge | null;
+  /** What a pike is striking at. */
+  prey: PondCreature | null;
   tongue: number;
   /** A frog's throat sac, 0 (flat) to 1 (fully puffed). */
   throat: number;
@@ -152,6 +158,8 @@ export interface Swarm { x: number; z: number; h: number }
 /** A ring spreading across the surface from a splash, a raindrop or a rising fish. */
 export interface Ring { x: number; z: number; r: number; speed: number; life: number; maxLife: number; alive: boolean }
 /** A droplet thrown up by a splash, arcing back down to the water. */
+/** A cloud of silt stirred up off the bed, slowly settling. */
+export interface Silt { x: number; z: number; h: number; vx: number; life: number; maxLife: number; alive: boolean }
 export interface Droplet { x: number; z: number; h: number; vx: number; vz: number; vh: number; life: number; alive: boolean }
 
 interface SpeciesDef {
@@ -190,6 +198,26 @@ export const POND_SPECIES: Record<PondSpecies, SpeciesDef> = {
     label: 'Tufted duck', names: ['Tuft', 'Diver', 'Crest', 'Pebble', 'Bob', 'Inkwell'],
     cruise: 0.15, burst: 0.9, vision: 30, metabolism: 0.00005, maxAge: [40000, 60000], mature: 6000, hungerLine: 0.75,
     cap: [120000, 0, 2], palettes: 1,
+  },
+  minnow: {
+    label: 'Minnow', names: ['Flick', 'Glint', 'Dart', 'Sliver', 'Fin', 'Zip', 'Scale', 'Spark', 'Quill', 'Nimble'],
+    cruise: 0.28, burst: 0.8, vision: 24, metabolism: 0.0002, maxAge: [6000, 9000], mature: 900, hungerLine: 0.6,
+    cap: [3600, 10, 70], palettes: 1,
+  },
+  koi: {
+    label: 'Koi', names: ['Goldie', 'Sakura', 'Kohaku', 'Sunset', 'Biscuit', 'Lantern', 'Marmalade'],
+    cruise: 0.12, burst: 0.5, vision: 30, metabolism: 0.00006, maxAge: [60000, 90000], mature: 6000, hungerLine: 0.7,
+    cap: [45000, 2, 6], palettes: 2,
+  },
+  catfish: {
+    label: 'Catfish', names: ['Whiskers', 'Murk', 'Silt', 'Barbel', 'Mudpie', 'Grumble'],
+    cruise: 0.08, burst: 0.4, vision: 16, metabolism: 0.00005, maxAge: [60000, 90000], mature: 6000, hungerLine: 0.7,
+    cap: [90000, 1, 3], palettes: 1,
+  },
+  pike: {
+    label: 'Pike', names: ['Jaws', 'Lurker', 'Esox', 'Fang', 'Spear', 'Ambush'],
+    cruise: 0.1, burst: 1.5, vision: 26, metabolism: 0.00012, maxAge: [60000, 90000], mature: 6000, hungerLine: 0.7,
+    cap: [160000, 1, 2], palettes: 1,
   },
   frog: {
     label: 'Frog', names: ['Ribbit', 'Hopper', 'Lily', 'Pond', 'Croaky', 'Toad', 'Jumper', 'Fern', 'Moss', 'Bog', 'Kermie', 'Pip', 'Leap', 'Basil'],
@@ -233,6 +261,10 @@ const DUCK_BREED_COOLDOWN = 20000;
 /** How high ducks fly, and how far off a frog takes fright at one. */
 const FLIGHT_H = 40;
 const DUCK_FRIGHT = 14;
+/** The pike: how far it strikes from, how long a strike lasts, and how long it rests after a meal. */
+const STRIKE_REACH = 18;
+const STRIKE_TICKS = 14;
+const PIKE_REST = 900;
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
@@ -298,6 +330,7 @@ export class Pond {
   rings: Ring[] = [];
   droplets: Droplet[] = [];
   nests: Nest[] = [];
+  silt: Silt[] = [];
   private nextId = 1;
   births = 0;
   /** Midges and other insects caught, for the census. */
@@ -319,7 +352,9 @@ export class Pond {
     this.resize(w, h);
     for (const species of POND_SPECIES_LIST) {
       if (species === 'mallard') continue;
-      for (let n = Math.max(species === 'tufted' ? 0 : 1, Math.round(this.cap(species) * 0.6)); n > 0; n--) this.spawn(species);
+      // Minnows arrive in schools of six.
+      const n0 = Math.max(species === 'tufted' ? 0 : 1, Math.round(this.cap(species) * 0.6));
+      for (let n = species === 'minnow' ? Math.ceil(n0 / 6) : n0; n > 0; n--) this.spawn(species);
     }
     for (let n = Math.max(1, Math.round(this.cap('mallard') * 0.25)); n > 0; n--) this.spawnDuckPair();
   }
@@ -602,6 +637,8 @@ export class Pond {
     compact(this.rings);
     compact(this.droplets);
     compact(this.nests);
+    this.updateSilt();
+    compact(this.silt);
   }
 
   /** The breeze turns slowly, and gusts now and then. */
@@ -777,7 +814,7 @@ export class Pond {
       x: 0, z: 0, h: 0, vx: 0, vz: 0, vh: 0, facing: Math.random() < 0.5 ? 1 : -1,
       energy: rand(0.6, 0.9), hungry: false, age: parent ? 0 : randInt(sp.mature, sp.maxAge[0] * 0.6),
       maxAge: randInt(sp.maxAge[0], sp.maxAge[1]), breedCooldown: randInt(0, 1200), palette: randInt(0, sp.palettes - 1),
-      heading: rand(0, Math.PI * 2), timer: randInt(30, 300), perch: null, leap: null, target: null, tongue: 0, throat: 0,
+      heading: rand(0, Math.PI * 2), timer: randInt(30, 300), perch: null, leap: null, target: null, prey: null, tongue: 0, throat: 0,
       squash: 0, squashV: 0, sex: Math.random() < 0.5 ? 'f' : 'm', mate: null, goal: null, leader: null,
       lineId: parent ? parent.lineId : id, adopted: false, alive: true,
     };
@@ -792,6 +829,32 @@ export class Pond {
       c.z = site.z + (species === 'tadpole' ? rand(-2, 2) : 0);
       c.h = species === 'spawn' ? -1.6 : -rand(1.5, 4);
       if (!this.isWater(c.x, c.z)) { c.x = site.x; c.z = site.z; }
+      return c;
+    }
+    if (FISH[species]) {
+      c.layer = 'under';
+      c.mood = species === 'pike' ? 'lurking' : species === 'catfish' ? 'rooting' : 'cruising';
+      c.age = parent ? 0 : randInt(POND_SPECIES[species].mature, POND_SPECIES[species].maxAge[0] * 0.5);
+      c.palette = randInt(0, POND_SPECIES[species].palettes - 1);
+      if (parent) { c.x = parent.x + rand(-3, 3); c.z = parent.z + rand(-2, 2); } else {
+        // Out in the water deep enough to swim in; a pike in a weed bed.
+        for (let tries = 0; tries < 30; tries++) {
+          const bed = species === 'pike' && this.weedBeds.length ? this.weedBeds[randInt(0, this.weedBeds.length - 1)] : null;
+          c.z = bed ? bed.z + rand(-2, 2) : rand(10, this.h - 10);
+          const row = Math.round(c.z);
+          c.x = bed ? bed.x + rand(-4, 4) : rand(this.shoreL[row] + 6, this.shoreR[row] - 6);
+          if (this.isWater(c.x, c.z) && this.depthAt(c.x, c.z) > (species === 'minnow' ? 4 : 8)) break;
+        }
+      }
+      if (!this.isWater(c.x, c.z)) { const row = Math.round(c.z); c.x = (this.shoreL[row] + this.shoreR[row]) / 2; }
+      c.h = -this.fishDepth(c);
+      if (species === 'minnow' && !parent) {
+        // Minnows come as a school.
+        for (let k = 0; k < 5; k++) {
+          const m = this.spawn('minnow', c);
+          m.age = randInt(POND_SPECIES.minnow.mature, 4000);
+        }
+      }
       return c;
     }
     if (species === 'mallard' || species === 'tufted') {
@@ -931,6 +994,11 @@ export class Pond {
     // Newcomers hop in from the bank if the frogs are down to their last few.
     if (this.tick % 150 === 0) {
       if (counts.frog < POND_SPECIES.frog.cap[1] && Math.random() < 0.4) { this.spawn('frog'); this.logEvent('visit', this.creatures[this.creatures.length - 1]); }
+      // Fish find their way in (down the stream, or with the ducks) if they are down to their last few.
+      if (counts.minnow < POND_SPECIES.minnow.cap[1] && Math.random() < 0.3) this.spawn('minnow');
+      for (const sp of ['koi', 'catfish', 'pike'] as PondSpecies[]) {
+        if (counts[sp] < POND_SPECIES[sp].cap[1] && Math.random() < 0.1) this.spawn(sp);
+      }
       // A pair of mallards flies in now and then if the pond has none.
       if (counts.mallard < 2 && Math.random() < 0.15) this.flyIn(this.spawnDuckPair());
     }
@@ -952,6 +1020,8 @@ export class Pond {
       case 'spawn': this.thinkSpawn(c); break;
       case 'tadpole': this.thinkTadpole(c); break;
       case 'mallard': case 'tufted': this.thinkDuck(c); break;
+      case 'minnow': case 'koi': case 'catfish': this.thinkFish(c); break;
+      case 'pike': this.thinkPike(c); break;
     }
     if (!c.alive) return;
     c.energy -= sp.metabolism * (c.mood === 'swimming' || c.mood === 'leaping' ? 2 : 1);
@@ -1836,6 +1906,236 @@ export class Pond {
       this.ring(c.x, c.z, 1, 0.3, 50);
       this.splash(c.x, c.z, 4);
     }
+  }
+
+  // --- fish ---------------------------------------------------------------------
+
+  /** How deep below the surface a fish likes to swim here (a fraction of the depth, by species). */
+  private fishDepth(c: PondCreature) {
+    const depth = this.depthAt(c.x, c.z);
+    switch (c.species) {
+      case 'catfish': return Math.max(1, depth - 1.5);
+      case 'koi': return Math.min(depth - 1, 3 + (c.id % 3) * 2);
+      case 'pike': return Math.max(1, depth * 0.6);
+      default: return Math.min(depth - 1, 2 + (c.id % 5) * 1.6);
+    }
+  }
+
+  /**
+   * Minnows school and dart from the pike; koi cruise slowly and now and then
+   * rise to sip an insect from the surface; the catfish roots along the bed,
+   * stirring up silt. All of them nip at tadpoles.
+   */
+  private thinkFish(c: PondCreature) {
+    const sp = POND_SPECIES[c.species];
+    c.layer = 'under';
+    const depth = this.depthAt(c.x, c.z);
+    let sx = 0, sz = 0;
+    let max = sp.cruise;
+    c.heading += rand(-0.1, 0.1) * (c.species === 'minnow' ? 1.5 : 1);
+    let want = -this.fishDepth(c);
+    if (c.species === 'minnow') {
+      // A school: keep near the others, line up with them, but not on top of them.
+      let n = 0, cx = 0, cz = 0, ax = 0, az = 0;
+      let threat: PondCreature | null = null;
+      this.near(c.x, c.z, 16, o => {
+        if (o === c) return;
+        const d = Math.hypot(o.x - c.x, o.z - c.z);
+        if (o.species === 'pike' && d < 20 && o.mood !== 'resting') threat = o;
+        if (o.species !== 'minnow' || d > 12) return;
+        n++; cx += o.x; cz += o.z; ax += o.vx; az += o.vz;
+        if (d < 3 && d > 0) { sx -= (o.x - c.x) / d * 0.03; sz -= (o.z - c.z) / d * 0.03; }
+      });
+      if (n) {
+        sx += (cx / n - c.x) * 0.003 + (ax / n) * 0.05;
+        sz += (cz / n - c.z) * 0.003 + (az / n) * 0.05;
+        c.mood = 'schooling';
+      } else c.mood = 'cruising';
+      const t = threat as PondCreature | null;
+      if (t) {
+        // Scatter: away from the pike, flat out.
+        const d = Math.hypot(c.x - t.x, c.z - t.z) || 1;
+        sx += (c.x - t.x) / d * 0.08; sz += (c.z - t.z) / d * 0.08;
+        max = sp.burst;
+        c.mood = 'fleeing';
+      }
+    } else if (c.species === 'koi') {
+      // Rising for an insect: up to the surface, a sip, a ring.
+      if (c.mood === 'rising') {
+        want = -0.8;
+        if (c.h > -1.3) {
+          this.ring(c.x + c.facing * 9, c.z, 1, 0.25, 50);
+          const m = this.nearestMidgeAt(c.x, c.z, 14);
+          if (m) { m.alive = false; this.meals++; }
+          c.energy = Math.min(1, c.energy + 0.05);
+          c.mood = 'cruising';
+          c.timer = randInt(300, 900);
+        }
+      } else if (--c.timer <= 0 && (c.hungry || Math.random() < 0.5)) c.mood = 'rising';
+      else c.mood = 'cruising';
+    } else if (c.species === 'catfish') {
+      c.mood = 'rooting';
+      // Rooting along the bottom stirs up clouds of silt.
+      if ((this.tick + c.id) % 14 === 0 && Math.hypot(c.vx, c.vz) > 0.03) this.stirSilt(c.x - c.facing * 6, c.z, -depth + 0.5);
+      const i = this.cellAt(c.x, this.bedRow(c.x, c.z));
+      if ((this.tick + c.id) % 20 === 0 && this.algae[i] >= ALGAE_PER_UNIT) { this.algae[i] -= ALGAE_PER_UNIT; this.nutrients[i] = Math.min(255, this.nutrients[i] + 1); }
+    }
+    // Tiny things in the water keep them going; tadpoles are a treat.
+    c.energy = Math.min(1, c.energy + sp.metabolism * 0.9);
+    if ((this.tick + c.id) % 20 === 0) {
+      this.near(c.x, c.z, 6, o => {
+        if (!o.alive || o.species !== 'tadpole' || Math.hypot(o.x - c.x, o.z - c.z) > 6) return;
+        const chance = c.species === 'minnow' ? 0.04 : c.species === 'koi' ? 0.15 : 0.1;
+        if (Math.random() < chance) {
+          this.die(o, 'eaten');
+          c.energy = Math.min(1, c.energy + 0.05);
+        }
+      });
+    }
+    sx += Math.cos(c.heading) * 0.01;
+    sz += Math.sin(c.heading) * 0.007;
+    // Turn back from the shallows and the banks.
+    const ahead = { x: c.x + Math.cos(c.heading) * 10, z: c.z + Math.sin(c.heading) * 8 };
+    if (!this.isWater(ahead.x, ahead.z) || this.depthAt(ahead.x, ahead.z) < (c.species === 'minnow' ? 3 : 6)) c.heading += 0.25;
+    // Big, bright koi keep out from behind the hero text.
+    if (c.species === 'koi') { const away = this.awayFromZones(c.x, c.z, 16); sx += away.x * 0.02; sz += away.z * 0.02; }
+    c.vx = (c.vx + sx) * 0.95;
+    c.vz = (c.vz + sz) * 0.95;
+    c.vh = (c.vh + (want - c.h) * 0.01) * 0.9;
+    const speed = Math.hypot(c.vx, c.vz);
+    if (speed > max) { c.vx *= max / speed; c.vz *= max / speed; }
+    this.fishMove(c, depth);
+    this.breedFish(c);
+  }
+
+  /** Moves a fish, keeping it in the water between the bed and the surface. */
+  private fishMove(c: PondCreature, depth: number) {
+    const nx = c.x + c.vx, nz = c.z + c.vz;
+    if (this.isWater(nx, nz) && this.depthAt(nx, nz) > 1.5) { c.x = nx; c.z = nz; } else { c.vx = -c.vx * 0.5; c.vz = -c.vz * 0.5; c.heading += Math.PI * 0.8; }
+    c.h = Math.max(-Math.max(1, depth - 0.8), Math.min(-0.6, c.h + c.vh));
+    if (Math.abs(c.vx) > 0.04) this.turn(c, c.vx);
+  }
+
+  /** Fish spawn when there is room: minnows a few fry at a time, the big fish rarely. */
+  private breedFish(c: PondCreature) {
+    const sp = POND_SPECIES[c.species];
+    if (c.age < sp.mature || c.breedCooldown > 0 || c.energy < 0.8 || (this.tick + c.id) % 300) return;
+    if (this.counts()[c.species] >= this.cap(c.species)) return;
+    const n = c.species === 'minnow' ? randInt(2, 4) : 1;
+    for (let k = 0; k < n; k++) { const f = this.spawn(c.species, c); f.lineId = c.lineId; this.births++; }
+    c.breedCooldown = c.species === 'minnow' ? 2400 : 20000;
+    c.energy -= 0.3;
+  }
+
+  /**
+   * The pike lies in wait in the weeds, barely moving, its fins just
+   * stirring; when something swims close in front of it, it strikes in a
+   * burst, and swallows. Fed, it rests, and after a while it moves on to
+   * another weed bed.
+   */
+  private thinkPike(c: PondCreature) {
+    const sp = POND_SPECIES.pike;
+    c.layer = 'under';
+    const depth = this.depthAt(c.x, c.z);
+    if (c.mood === 'striking') {
+      const prey = c.prey;
+      c.timer--;
+      if (prey?.alive) {
+        const dx = prey.x - c.x, dz = prey.z - c.z, dh = prey.h - c.h;
+        const d = Math.hypot(dx, dz, dh) || 1;
+        c.vx = dx / d * sp.burst; c.vz = dz / d * sp.burst; c.vh = dh / d * sp.burst * 0.8;
+        c.x += c.vx; c.z += c.vz; c.h = Math.min(-0.5, c.h + c.vh);
+        c.facing = c.vx > 0 ? 1 : -1;
+        if (d < 4) {
+          // Snap.
+          this.die(prey, 'eaten');
+          this.logEvent('eaten', prey, c);
+          if (prey.layer === 'surface') { this.splash(prey.x, prey.z, 6); this.ring(prey.x, prey.z, 1, 0.3, 50); }
+          c.energy = Math.min(1, c.energy + (prey.species === 'tadpole' ? 0.08 : 0.35));
+          c.squashV -= 0.4;
+          c.prey = null;
+          c.mood = 'resting';
+          c.timer = c.energy > 0.9 ? PIKE_REST : 120;
+          return;
+        }
+      }
+      if (c.timer <= 0 || !prey?.alive) { c.prey = null; c.mood = 'lurking'; c.timer = randInt(200, 500); }
+      return;
+    }
+    // Lurking (or resting): holding still in the weeds, drifting back to its spot.
+    const bed = this.pikeHome.get(c.id) ?? this.nearestWeedBed(c.x, c.z);
+    c.vx *= 0.9; c.vz *= 0.9;
+    if (bed) {
+      const dx = bed.x - c.x, dz = bed.z - c.z;
+      const d = Math.hypot(dx, dz);
+      if (d > Math.max(bed.rx, 4)) { c.vx += dx / d * 0.01; c.vz += dz / d * 0.01; }
+    }
+    c.vh = (c.vh + (-Math.max(1.5, depth * 0.55) - c.h) * 0.01) * 0.9;
+    this.fishMove(c, depth);
+    if (c.mood === 'resting') { if (--c.timer <= 0) c.mood = 'lurking'; return; }
+    c.mood = 'lurking';
+    // Something tasty close in front: strike.
+    if ((this.tick + c.id) % 5 === 0 && (c.hungry || Math.random() < 0.2)) {
+      let best: PondCreature | null = null, bestD = STRIKE_REACH;
+      this.near(c.x, c.z, STRIKE_REACH, o => {
+        const taste = PIKE_PREY[o.species];
+        if (!o.alive || !taste || o === c) return;
+        // Only what is in the water or sitting on it; ducklings, not grown ducks.
+        if (o.layer === 'air' || o.layer === 'bed' || (o.species === 'mallard' && o.age > POND_SPECIES.mallard.mature * 0.5)) return;
+        if ((o.x - c.x) * c.facing < -4) return;
+        const d = Math.hypot(o.x - c.x, o.z - c.z, (o.h - c.h) * 0.5);
+        if (d < bestD && Math.random() < taste) { bestD = d; best = o; }
+      });
+      if (best) { c.prey = best; c.mood = 'striking'; c.timer = STRIKE_TICKS; c.squashV += 0.6; return; }
+    }
+    // Restless after a long wait: off to another weed bed.
+    if (--c.timer <= 0) {
+      c.timer = randInt(1200, 3000);
+      const beds = this.weedBeds;
+      if (beds.length > 1 && Math.random() < 0.4) {
+        const next = beds[randInt(0, beds.length - 1)];
+        c.x += (next.x - c.x) * 0.02; c.z += (next.z - c.z) * 0.02;
+        c.heading = Math.atan2(next.z - c.z, next.x - c.x);
+        this.pikeHome.set(c.id, next);
+      }
+    }
+    // Facing out of the weeds, fins stirring.
+    if ((this.tick + c.id * 7) % 200 === 0) c.facing = c.facing > 0 ? -1 : 1;
+  }
+  private pikeHome = new Map<number, WeedBed>();
+
+  private nearestWeedBed(x: number, z: number) {
+    let best: WeedBed | null = null, bestD = Infinity;
+    for (const b of this.weedBeds) {
+      const d = Math.hypot(b.x - x, b.z - z);
+      if (d < bestD) { bestD = d; best = b; }
+    }
+    return best;
+  }
+
+  /** A puff of silt off the bed, drifting and settling. */
+  stirSilt(x: number, z: number, h: number) {
+    if (this.silt.length > 300) return;
+    for (let k = 0; k < 3; k++) {
+      const life = randInt(60, 140);
+      this.silt.push({ x: x + rand(-2, 2), z: z + rand(-1, 1), h: h + rand(0, 1.5), vx: rand(-0.04, 0.04), life, maxLife: life, alive: true });
+    }
+  }
+
+  private updateSilt() {
+    for (const p of this.silt) {
+      p.x += p.vx; p.h += 0.01;
+      if (--p.life <= 0) p.alive = false;
+    }
+  }
+
+  private nearestMidgeAt(x: number, z: number, reach: number) {
+    let best: Midge | null = null, bestD = reach;
+    for (const m of this.midges) {
+      const d = Math.hypot(m.x - x, m.z - z);
+      if (m.alive && d < bestD) { bestD = d; best = m; }
+    }
+    return best;
   }
 
   // --- midges, rings and splashes ---------------------------------------------
