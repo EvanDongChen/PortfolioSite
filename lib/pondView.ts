@@ -17,10 +17,10 @@
 // light cover the whole page at a canvas pixel per cell, and the sprites are
 // drawn into a window around the view, swapped between two canvases.
 
-import { ELEVATION, MAX_DEPTH, Pad, Pond, ReedClump, Stem, WeedBed } from './pond';
+import { ELEVATION, MAX_DEPTH, Pad, Pond, PondCreature, PondSpecies, ReedClump, Stem, WeedBed } from './pond';
 import {
-  CATTAIL_HEAD, DUCKWEED, POND_FLOOR, REED_COLORS, WATER, WEED_COLORS, buildRipples, lilySprite, logSprite, makeCanvas, padSprite,
-  rippleTile, rootSprite, stoneSprite,
+  CATTAIL_HEAD, DUCKWEED, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
+  logSprite, makeCanvas, padSprite, pondSprite, rippleTile, rootSprite, splashSprite, stoneSprite,
 } from './pondArt';
 import { shadowSprite } from './pixelOceanArt';
 import type { ReefLayout } from './pixelOceanView';
@@ -52,7 +52,12 @@ interface SpriteOptions {
   scaleY?: number;
   scale?: number;
   anchor?: 'bottom' | 'center';
+  /** Squash and stretch: positive stretches it along its length, keeping its volume. */
+  stretch?: number;
 }
+
+/** Sprite widths in art pixels, for shadows and the inspection reticle. */
+export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 12 };
 
 /** Reed clumps and weed beds are drawn in bands this many rows deep, each sorted with whatever is among them. */
 const BAND = 3;
@@ -418,8 +423,9 @@ export class PondView {
     const { spriteCtx: ctx, px } = this;
     const p = this.project(x, z, h);
     const k = px * p.s * (o.scale ?? 1);
-    const w = Math.round(img.width * k);
-    const hh = Math.round(img.height * k * (o.scaleY ?? 1));
+    const st = o.stretch ?? 0;
+    const w = Math.round(img.width * k * (1 + st * 0.35));
+    const hh = Math.round(img.height * k * (o.scaleY ?? 1) * (1 - st * 0.3));
     ctx.globalAlpha = o.alpha ?? 1;
     const top = o.anchor === 'bottom' ? p.y - hh : p.y - hh / 2;
     if (!o.flipX) {
@@ -482,6 +488,18 @@ export class PondView {
     for (const b of pond.weedBeds) {
       if (b.z + b.rz >= z0 && b.z - b.rz <= z1) this.addWeeds(b, under);
     }
+    for (const c of pond.creatures) {
+      if (!visible(c.z)) continue;
+      if (c.layer === 'under' || c.layer === 'bed') {
+        const d = pond.depthAt(c.x, c.z);
+        // Its shadow on the bed below it, fainter the further above the bed it is.
+        this.shadow(c.x, c.z, -d, BODY_WIDTH[c.species] * 0.7, 0.3 * Math.max(0.2, 1 - (d + c.h) / 20) * this.depthAlpha(d));
+        under.push({ depth: c.z + 0.3, draw: () => this.drawCreature(c, this.depthAlpha(-c.h)) });
+      } else if (c.layer === 'surface' && c.species === 'frog') {
+        // A frog floating with its eyes up: the rest of it hangs just below the surface.
+        under.push({ depth: c.z + 0.3, draw: () => this.sprite(pondSprite('frogSwim1', c.palette, c.energy < 0.15), c.x, c.z, c.h - 1.5, { flipX: c.facing < 0, alpha: 0.55 }) });
+      }
+    }
     under.sort((a, b) => a.depth - b.depth);
     for (const item of under) item.draw();
 
@@ -491,7 +509,16 @@ export class PondView {
     // 3. On and above the surface: duckweed flat on the water first, then
     // pads, logs, reeds and the banks' stones, depth-sorted.
     this.drawDuckweed(z0, z1);
+    this.drawRings(z0, z1);
+    // Shadows of things in the air, on the water or the ground beneath them.
+    for (const c of pond.creatures) {
+      if (c.layer !== 'air' || c.perch || !visible(c.z)) continue;
+      this.shadow(c.x, c.z, 0, BODY_WIDTH[c.species] * 0.75, 0.3 * Math.max(0.15, 1 - c.h / 40));
+    }
     const over: Drawable[] = [];
+    for (const c of pond.creatures) {
+      if ((c.layer === 'air' || c.layer === 'surface') && visible(c.z)) over.push({ depth: c.z + 0.3, draw: () => this.drawCreature(c, 1) });
+    }
     for (const p of pond.pads) if (visible(p.z)) over.push({ depth: p.z - p.r * 0.6, draw: () => this.drawPad(p) });
     for (const l of pond.logs) {
       if (!l.floating || !visible(l.z)) continue;
@@ -505,7 +532,103 @@ export class PondView {
     }
     over.sort((a, b) => a.depth - b.depth);
     for (const item of over) item.draw();
+    this.drawMidges(z0, z1);
+    this.drawDroplets(z0, z1);
     ctx.globalAlpha = 1;
+  }
+
+  private drawCreature(c: PondCreature, alpha: number) {
+    switch (c.species) {
+      case 'frog': this.drawFrog(c, alpha); return;
+    }
+  }
+
+  /**
+   * A frog: sitting (blinking now and then), croaking with its throat sac
+   * swelling, crouched to spring, stretched out in the air, kicking through
+   * the water, or just its eyes above the surface.
+   */
+  private drawFrog(c: PondCreature, alpha: number) {
+    const tick = this.pond.tick;
+    const washed = c.energy < 0.15;
+    let kind: PondSpriteKind;
+    if (c.leap) kind = c.leap.t < 3 ? 'frogCrouch' : 'frogLeap';
+    else if (c.layer === 'surface') kind = 'frogEyes';
+    else if (c.layer === 'under') kind = (tick + c.id * 7) % 22 < 8 ? 'frogSwim0' : 'frogSwim1';
+    else if (c.throat > 0.5) kind = 'frogCroak';
+    else kind = (tick + c.id * 37) % 110 < 4 ? 'frogBlink' : 'frogSit';
+    const anchor = c.layer === 'under' || c.layer === 'surface' ? 'center' : 'bottom';
+    this.sprite(pondSprite(kind, c.palette, washed), c.x, c.z, c.h, { flipX: c.facing < 0, alpha, anchor, stretch: c.squash });
+    if (c.tongue > 0) this.drawTongue(c);
+    if (kind === 'frogCroak') this.drawCroak(c);
+  }
+
+  /** A frog's tongue, out to a midge and back: a pink line with a sticky tip. */
+  private drawTongue(c: PondCreature) {
+    const { spriteCtx: ctx, px } = this;
+    const { mouth, tip } = this.pond.tongueTip(c);
+    const steps = Math.max(2, Math.ceil(Math.hypot(tip.x - mouth.x, (tip.h - mouth.h) * ELEVATION)));
+    ctx.globalAlpha = 1;
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps;
+      const p = this.project(mouth.x + (tip.x - mouth.x) * t, mouth.z + (tip.z - mouth.z) * t, mouth.h + (tip.h - mouth.h) * t);
+      ctx.fillStyle = TONGUE[k === steps ? 1 : 0];
+      ctx.fillRect(Math.round(p.x - px / 2), Math.round(p.y - px / 2), px, px);
+    }
+  }
+
+  /** Little arcs of sound spreading from a croaking frog's throat. */
+  private drawCroak(c: PondCreature) {
+    const { spriteCtx: ctx, px } = this;
+    const p = this.project(c.x + c.facing * 7, c.z, c.h + 4);
+    const phase = (this.pond.tick >> 2) % 3;
+    ctx.fillStyle = RING[1];
+    for (let k = 0; k < 2; k++) {
+      const r = (k * 3 + phase + 2) * px;
+      ctx.globalAlpha = 0.7 - k * 0.3;
+      for (const dy of [-1, 0, 1]) ctx.fillRect(Math.round(p.x + c.facing * (r - Math.abs(dy) * px)), Math.round(p.y + dy * px), px, px);
+    }
+  }
+
+  /** Ripple rings spreading over the surface, as dotted pixel ellipses fading as they grow. */
+  private drawRings(z0: number, z1: number) {
+    const { spriteCtx: ctx, pond, px } = this;
+    for (const r of pond.rings) {
+      if (r.z < z0 || r.z > z1) continue;
+      const p = this.project(r.x, r.z, 0);
+      const fade = r.life / r.maxLife;
+      ctx.globalAlpha = 0.75 * fade;
+      ctx.fillStyle = RING[fade > 0.6 ? 1 : 0];
+      const n = Math.max(6, Math.round(r.r * 3));
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2;
+        ctx.fillRect(Math.round(p.x + Math.cos(a) * r.r * px - px / 2), Math.round(p.y + Math.sin(a) * r.r * 0.45 * px - px / 2), px, px);
+      }
+    }
+  }
+
+  /** Midges: specks dancing over the reeds, a wing glinting now and then. */
+  private drawMidges(z0: number, z1: number) {
+    const { spriteCtx: ctx, pond, px } = this;
+    const size = Math.max(2, Math.round(px * 0.75));
+    for (let shade = 0; shade < 2; shade++) {
+      ctx.globalAlpha = shade ? 0.6 : 0.85;
+      ctx.fillStyle = MIDGE[shade];
+      for (const m of pond.midges) {
+        if (!m.alive || m.z < z0 || m.z > z1) continue;
+        const glint = ((pond.tick >> 1) + (m.swarm * 7 + Math.round(m.x))) % 5 === 0;
+        if ((shade === 1) !== glint) continue;
+        const p = this.project(m.x, m.z, m.h);
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), size, size);
+      }
+    }
+  }
+
+  private drawDroplets(z0: number, z1: number) {
+    for (const d of this.pond.droplets) {
+      if (d.z < z0 || d.z > z1) continue;
+      this.sprite(splashSprite(d.vh > 0 ? 0 : d.h > 2 ? 1 : 2), d.x, d.z, d.h, { alpha: 0.9 });
+    }
   }
 
   /** A lily pad (bobbing, dipped or tipped by a weight on it) and its flower. */

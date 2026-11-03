@@ -289,3 +289,61 @@ export const WEED_COLORS = [
 ];
 /** Duckweed fronds, three greens. */
 export const DUCKWEED = ['rgb(108,168,60)', 'rgb(142,196,76)', 'rgb(80,138,52)'];
+
+// --- creatures ----------------------------------------------------------------
+
+// Designed in pxl (frog.px.js), facing right; the renderer mirrors them.
+// Roles as on the reef: D lit back, B body, L belly, T legs, E eye, o the
+// eye's gold ring, S the throat sac; K, k and g a tadpole's head and tail.
+export type PondSpriteKind =
+  | 'frogSit' | 'frogBlink' | 'frogCroak' | 'frogCrouch' | 'frogLeap' | 'frogSwim0' | 'frogSwim1' | 'frogEyes'
+  | 'tad0' | 'tad1' | 'tadLegs0' | 'tadLegs1' | 'tadArms' | 'froglet';
+
+const POND_ROWS: Record<PondSpriteKind, string[]> = {
+  frogSit: ['.......TT...', '......ToET..', '...DDDDDDDD.', '.DDBBBBBBBBB', 'DBBBBBBBLLL.', 'DBTTTBBLLL..', '.TTTTTT.T...', 'TT.....TT...'],
+  frogBlink: ['.......TT...', '......TTTT..', '...DDDDDDDD.', '.DDBBBBBBBBB', 'DBBBBBBBLLL.', 'DBTTTBBLLL..', '.TTTTTT.T...', 'TT.....TT...'],
+  frogCroak: ['.......TT....', '......ToET...', '...DDDDDDDD..', '.DDBBBBBBBBB.', 'DBBBBBBBLSSS.', 'DBTTTBBLSSSSS', '.TTTTTT.SSSS.', 'TT.....TT....'],
+  frogCrouch: ['............', '.......TT...', '......ToET..', '...DDDDDDDDD', '.DDBBBBBBBBB', 'DBTTTTBBLLL.', 'TTTTTTTTTT..'],
+  frogLeap: ['..........TT..', '.........ToET.', '......DDDDDDDD', 'TT..DDBBBBBBBB', '.TTTBBBBBBLLT.', '...TT..LLL..TT'],
+  frogSwim0: ['.........TT..', 'T.......ToET.', '.TT.DDDDDDDDD', '...TBBBBBBBBB', '.TT.BLLLLLLB.', 'T.......T....'],
+  frogSwim1: ['.........TT..', '........ToET.', '..TTDDDDDDDDD', '.T.TBBBBBBBBB', '..TTBLLLLLLB.', '......TT.....'],
+  frogEyes: ['.oE...oE.', 'DDDDDDDDD'],
+  tad0: ['.kk...', 'KKKkg.', '.KK..g'],
+  tad1: ['.kk..g', 'KKKkg.', '.KK...'],
+  tadLegs0: ['.kk....', 'KKKkkg.', '.KKT..g', '..T....'],
+  tadLegs1: ['.kk...g', 'KKKkkg.', '.KKT...', '..T....'],
+  tadArms: ['..kk....', 'DKKKkkg.', '.TKKT..g', '.T.T....'],
+  froglet: ['....TT..', '...ToET.', '..DDDDDD', 'gDBBBBBB', 'gBTTBLL.', '.TT..T..'],
+};
+
+/** Frog colourways: [D, B, L, T, o, S]: green, brown (a common frog), olive. */
+const FROG_SETS: Rgb[][] = [
+  [[140, 207, 90], [79, 154, 60], [230, 220, 138], [58, 116, 48], [201, 166, 74], [242, 238, 188]],
+  [[176, 142, 92], [132, 100, 62], [228, 208, 160], [94, 70, 46], [212, 172, 80], [242, 232, 192]],
+  [[170, 186, 92], [112, 136, 58], [224, 216, 142], [80, 102, 44], [214, 180, 70], [244, 240, 190]],
+];
+const TADPOLE: Record<string, Rgb> = { K: [40, 46, 32], k: [70, 78, 52], g: [104, 118, 72] };
+const POND_EYE: Rgb = [20, 22, 26];
+
+/** Washed-out greys for the starving and the dead (as on the reef). */
+const paleOf = ([r, g, b]: Rgb): Rgb => {
+  const v = (r + g + b) / 3;
+  return [Math.round(v * 0.75 + 40), Math.round(v * 0.72 + 40), Math.round(v * 0.72 + 44)];
+};
+
+export const pondSprite = (kind: PondSpriteKind, palette: number, washed = false): HTMLCanvasElement =>
+  cached(`pond-${kind}-${palette}-${washed}`, () => {
+    const set = FROG_SETS[palette % FROG_SETS.length].map(c => (washed ? paleOf(c) : c));
+    const colours: Record<string, Rgb> = {
+      D: set[0], B: set[1], L: set[2], T: set[3], o: set[4], S: set[5], E: POND_EYE,
+      ...Object.fromEntries(Object.entries(TADPOLE).map(([k, c]) => [k, washed ? paleOf(c) : c])),
+    };
+    return fromRows(POND_ROWS[kind], colours);
+  });
+
+/** A frog's tongue: pink, with a darker sticky tip. */
+export const TONGUE = ['rgb(232,120,140)', 'rgb(176,64,90)'];
+/** Midges: a dark speck with a glint of wing. */
+export const MIDGE = ['rgb(30,34,30)', 'rgb(190,210,200)'];
+/** Ripple rings on the surface: light, and lighter. */
+export const RING = ['rgb(176,226,206)', 'rgb(214,244,232)'];

@@ -106,13 +106,17 @@ const PondWater: React.FC = () => {
     });
 
     let stop = () => {};
+    // In development, `?pond-main` runs the pond here instead, where tests
+    // and benchmarks can reach it as window.__pond.
+    const debugHere = import.meta.env.DEV && new URLSearchParams(window.location.search).has('pond-main');
     const runHere = () => {
       const [floor, light, a, b] = makeCanvases();
       const engine = new PondEngine({ ...init(), floor, light, sprites: [a, b], worker: false }, receive);
       sendRef.current = m => engine.handleMessage(m);
       stop = () => engine.stop();
+      if (debugHere) (window as unknown as { __pond?: PondEngine }).__pond = engine;
     };
-    if (canDrawInWorker()) {
+    if (canDrawInWorker() && !debugHere) {
       const offscreen = makeCanvases().map(c => c.transferControlToOffscreen());
       const worker = new Worker(new URL('../lib/pondWorker.ts', import.meta.url), { type: 'module' });
       let heard = false;
