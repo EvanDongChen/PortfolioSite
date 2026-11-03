@@ -7,6 +7,8 @@ import PerformanceButton from './components/PerformanceButton';
 import PerformancePanel from './components/PerformancePanel';
 import PixelTransition from './components/PixelTransition';
 import DiveCard from './components/DiveCard';
+import PondCensus from './components/PondCensus';
+import { PondStats } from './lib/pond';
 import { POND_COLORS } from './lib/themeColors';
 import { filterProjects, experiences, education, skills } from './data/portfolio';
 import { isSwitchingPages, useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
@@ -40,6 +42,7 @@ const PondApp: React.FC = () => {
   const [isSwitchIn] = useState(isSwitchingPages);
   const [searchTerm, setSearchTerm] = useState('');
   const [isPerformancePanelOpen, setIsPerformancePanelOpen] = useState(false);
+  const [stats, setStats] = useState<PondStats | null>(null);
 
   const filteredProjects = useMemo(() => filterProjects(searchTerm), [searchTerm]);
   const togglePerformancePanel = useCallback(() => setIsPerformancePanelOpen(open => !open), []);
@@ -47,7 +50,7 @@ const PondApp: React.FC = () => {
 
   return (
     <div className="relative min-h-screen text-white overflow-x-hidden bg-[#0b1a14]">
-      <PondWater />
+      <PondWater onStats={setStats} />
       <PortfolioContent
         theme="underwater"
         colors={POND_COLORS}
@@ -64,6 +67,7 @@ const PondApp: React.FC = () => {
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
       <PondModeButton />
+      <PondCensus stats={stats} />
       {isSwitchIn && <PixelTransition ink="#0b1a14" edge="#173226" />}
     </div>
   );

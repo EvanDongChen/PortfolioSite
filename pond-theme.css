@@ -66,3 +66,34 @@ html.pond-theme {
 
 .pond-theme .pond-btn > svg { color: var(--px-foam); }
 .pond-theme .pond-btn[aria-pressed='true'] > svg { color: #3a1222; }
+
+/* --- the pond census: a frog's life, stage by stage --------------------------- */
+
+.pond-census-label {
+  margin: 4px 0 2px;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--px-mute);
+}
+.pond-stages {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px 8px;
+  margin: 0 0 8px;
+  padding-bottom: 8px;
+  font-size: 1.1rem;
+  line-height: 1.1;
+  background: linear-gradient(90deg, var(--px-line) 0 100%) bottom / 100% 2px no-repeat;
+}
+.pond-stages li {
+  display: grid;
+  grid-template-columns: 22px auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 6px;
+}
+.pond-stages li .eco-icon { grid-row: span 2; }
+.pond-stages li .eco-value { justify-self: start; color: var(--px-text); }
+.pond-stage-name { color: var(--px-mute); font-size: 0.95rem; }
+.pond-stages li.is-absent { opacity: 0.4; }

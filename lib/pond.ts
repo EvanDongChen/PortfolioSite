@@ -151,6 +151,28 @@ export interface PondCreature {
   alive: boolean;
 }
 
+/** The census, as the page shows it. */
+export interface PondStats {
+  tick: number;
+  counts: Record<PondSpecies, number>;
+  /** Frogs by life stage, from spawn to adult. */
+  stages: Record<FrogStage, number>;
+  frogCap: number;
+  algae: number;
+  duckweed: number;
+  midges: number;
+  meals: number;
+  births: number;
+  deaths: Record<PondDeath, number>;
+  /** The event under way, and how far through it is (0 to 1). */
+  happening: { kind: PondHappening; progress: number } | null;
+  /** Most recent first. */
+  events: PondEvent[];
+}
+
+/** What the debug panel can spawn: any species, or a frog at any stage of its life. */
+export type PondSpawnable = PondSpecies | FrogStage;
+
 /** How a creature died: eaten, starved, of old age, or lost (the many young that never make it). */
 export type PondDeath = 'eaten' | 'starved' | 'oldAge' | 'lost';
 /** A mallard's nest on the bank, with the hen sitting on her eggs. */
@@ -2640,6 +2662,109 @@ export class Pond {
       if (d.h <= 0 || --d.life <= 0) {
         d.alive = false;
         if (Math.random() < 0.3 && this.isWater(d.x, d.z)) this.ring(d.x, d.z, 0.5, 0.15, 24);
+      }
+    }
+  }
+
+  // --- the census, the visitor's creature, and debugging -------------------------------
+
+  /** Algae cover of the water's bed, as a percentage, counted every few seconds. */
+  private algaeTotal = 0;
+  private algaeAt = -1;
+
+  stats(): PondStats {
+    const counts = Object.fromEntries(POND_SPECIES_LIST.map(s => [s, 0])) as Record<PondSpecies, number>;
+    const stages = Object.fromEntries(FROG_STAGES.map(s => [s, 0])) as Record<FrogStage, number>;
+    for (const c of this.creatures) {
+      if (!c.alive) continue;
+      counts[c.species]++;
+      const st = this.stageOf(c);
+      if (st) stages[st]++;
+    }
+    if (this.algaeAt < 0 || this.tick - this.algaeAt > 90) {
+      let sum = 0, cells = 0;
+      for (let i = 0; i < this.algae.length; i += 7) { if (this.depth[i] > 0) { sum += this.algae[i]; cells++; } }
+      this.algaeTotal = cells ? Math.round((sum / cells / 255) * 100) : 0;
+      this.algaeAt = this.tick;
+    }
+    const ev = this.happening;
+    return {
+      tick: this.tick, counts, stages, frogCap: this.cap('frog'), algae: this.algaeTotal,
+      duckweed: this.fronds.length, midges: this.midges.length, meals: this.meals, births: this.births,
+      deaths: { ...this.deaths }, happening: ev ? { kind: ev.kind, progress: ev.t / ev.dur } : null, events: this.events.slice(),
+    };
+  }
+
+  adopt(c: PondCreature, name: string) {
+    c.name = name;
+    c.adopted = true;
+  }
+
+  /** Brings a returning visitor's creature back, grown, with a relative or two so its line can go on. */
+  release(species: PondSpecies, name: string, palette: number) {
+    const kind = species === 'spawn' || species === 'tadpole' ? 'frog' : species;
+    const c = kind === 'mallard' ? this.spawnDuckPair() : this.spawn(kind);
+    c.palette = palette % POND_SPECIES[kind].palettes;
+    c.age = Math.max(c.age, POND_SPECIES[kind].mature);
+    this.adopt(c, name);
+    if (kind === 'frog' || kind === 'minnow' || kind === 'snail' || kind === 'strider') {
+      for (let k = 0; k < 2; k++) { const r = this.spawn(kind, c); r.age = POND_SPECIES[kind].mature; r.lineId = c.lineId; }
+    }
+    return c;
+  }
+
+  /** The oldest living member of a creature's family, to carry on its line. */
+  heirOf(c: PondCreature) {
+    let heir: PondCreature | null = null;
+    for (const o of this.creatures) {
+      if (o.alive && o !== c && o.lineId === c.lineId && (!heir || o.age > heir.age)) heir = o;
+    }
+    return heir;
+  }
+
+  /** Spawns a creature (or a frog at a stage of its life) at a point, for the debug panel. */
+  debugSpawn(kind: PondSpawnable, x: number, z: number) {
+    const row = Math.max(0, Math.min(this.h - 1, Math.round(z)));
+    // Somewhere sensible near the point: in the water, or for some, on its edge.
+    const wx = this.isWater(x, z) ? x : (this.shoreL[row] + this.shoreR[row]) / 2;
+    const place = (c: PondCreature) => { c.x = wx + rand(-3, 3); c.z = z + rand(-2, 2); };
+    switch (kind) {
+      case 'spawn': case 'tadpole': case 'backLegs': case 'fourLegs': {
+        const species = kind === 'spawn' ? 'spawn' : 'tadpole';
+        const site = this.layingSite(x, z);
+        const c = this.spawn(species);
+        c.x = site.x; c.z = site.z;
+        c.age = kind === 'spawn' ? 0 : kind === 'tadpole' ? 0 : kind === 'backLegs' ? TADPOLE_TICKS * 0.45 : TADPOLE_TICKS * 0.8;
+        if (species === 'tadpole') for (let k = 0; k < 4; k++) { const t = this.spawn('tadpole', c); t.age = c.age; }
+        return;
+      }
+      case 'froglet': case 'adult': case 'frog': {
+        const c = this.spawn('frog');
+        c.perch = null; c.leap = null; place(c); this.dropIn(c);
+        c.age = kind === 'froglet' ? TAIL_TICKS / 2 : POND_SPECIES.frog.mature + 100;
+        if (kind === 'froglet') c.mood = 'emerging';
+        return;
+      }
+      case 'mallard': {
+        const hen = this.spawnDuckPair();
+        for (const d of [hen, hen.mate!]) place(d);
+        // With a brood of ducklings in tow.
+        let lead = hen;
+        for (let k = 0; k < 4; k++) { const d = this.spawn('mallard', hen); d.leader = lead; d.lineId = hen.lineId; d.mood = 'following'; lead = d; }
+        return;
+      }
+      case 'heron': this.heronLands({ x, z }); return;
+      case 'turtle': {
+        const c = this.spawn('turtle');
+        if (!c.perch) { place(c); c.layer = 'under'; c.mood = 'swimming'; c.h = -2; c.timer = 600; }
+        return;
+      }
+      default: {
+        const c = this.spawn(kind);
+        place(c);
+        if (kind === 'snail') this.placeSnail(c);
+        if (kind === 'dragonfly') c.h = rand(10, 20);
+        if (FISH[kind]) c.h = -Math.min(this.depthAt(c.x, c.z) - 1, 3);
       }
     }
   }

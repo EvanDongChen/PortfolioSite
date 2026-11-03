@@ -4,10 +4,10 @@ import { Species } from './pixelOcean';
 // itself restarts on every visit, so the creature is released afresh, and
 // when it dies the adoption passes to one of its children.
 
-export interface Adoption {
+export interface Adoption<S extends string = Species> {
   /** The name the visitor chose, before any generation numeral. */
   name: string;
-  species: Species;
+  species: S;
   palette: number;
   generation: number;
   /** When the line was first adopted (ms since epoch). */
@@ -15,20 +15,22 @@ export interface Adoption {
 }
 
 const KEY = 'reef.adoption';
+/** Where the pond keeps its own adopted creature, apart from the reef's. */
+export const POND_ADOPTION_KEY = 'pond.adoption';
 
-export const loadAdoption = (): Adoption | null => {
+export const loadAdoption = <S extends string = Species>(key = KEY): Adoption<S> | null => {
   try {
-    const raw = window.localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Adoption) : null;
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as Adoption<S>) : null;
   } catch {
     return null;
   }
 };
 
-export const saveAdoption = (adoption: Adoption | null) => {
+export const saveAdoption = <S extends string = Species>(adoption: Adoption<S> | null, key = KEY) => {
   try {
-    if (adoption) window.localStorage.setItem(KEY, JSON.stringify(adoption));
-    else window.localStorage.removeItem(KEY);
+    if (adoption) window.localStorage.setItem(key, JSON.stringify(adoption));
+    else window.localStorage.removeItem(key);
   } catch {
     // Storage can be unavailable (private windows); the adoption just won't persist.
   }
@@ -44,4 +46,4 @@ const roman = (n: number) => {
 };
 
 /** "Mochi", then "Mochi II", "Mochi III"... down the family line. */
-export const displayName = (a: Adoption) => (a.generation > 1 ? `${a.name} ${roman(a.generation)}` : a.name);
+export const displayName = (a: Adoption<string>) => (a.generation > 1 ? `${a.name} ${roman(a.generation)}` : a.name);

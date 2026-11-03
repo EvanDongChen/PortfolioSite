@@ -519,3 +519,29 @@ export const SKY = { night: 'rgb(4,10,28)', dusk: 'rgb(255,150,60)', dawn: 'rgb(
 /** Fireflies: the glow and the bright core. */
 export const FIREFLY = ['rgb(200,255,120)', 'rgb(255,255,210)'];
 export const RAIN = 'rgb(190,220,226)';
+
+// --- icons ---------------------------------------------------------------------------
+
+/** Each species' (or frog life stage's) own sprite, for the census and the debug panel. */
+export const pondIcon = (kind: string): HTMLCanvasElement => {
+  switch (kind) {
+    case 'spawn': return spawnSprite(3, 1, 0);
+    case 'tadpole': return pondSprite('tad0', 0);
+    case 'backLegs': return pondSprite('tadLegs0', 0);
+    case 'fourLegs': return pondSprite('tadArms', 0);
+    case 'froglet': return pondSprite('froglet', 0);
+    case 'frog': case 'adult': return pondSprite('frogSit', 0);
+    case 'mallard': return duckSprite('float', 0);
+    case 'tufted': return duckSprite('tufted', 0);
+    case 'minnow': return fishSprite('minnow', 'minnow0', 0);
+    case 'koi': return fishSprite('koi', 'koi0', 0);
+    case 'catfish': return fishSprite('catfish', 'catfish0', 0);
+    case 'pike': return fishSprite('pike', 'pike0', 0);
+    case 'dragonfly': return extraSprite('dfly0', 0);
+    case 'strider': return extraSprite('strider');
+    case 'snail': return extraSprite('snail');
+    case 'turtle': return extraSprite('turtle');
+    case 'heron': return extraSprite('heronStand');
+    default: return pondSprite('frogSit', 0);
+  }
+};

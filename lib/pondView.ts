@@ -84,6 +84,8 @@ export class PondView {
   regionHeight = 0;
   /** Set when frames are slow to draw: finishing touches are left out (see the reef's). */
   lean = false;
+  /** The creature under inspection, drawn with a reticle. */
+  highlighted: PondCreature | null = null;
 
   private floorCtx: CanvasRenderingContext2D;
   private lightCtx: CanvasRenderingContext2D;
@@ -147,6 +149,25 @@ export class PondView {
   /** The world point under a point on the page at a given height. */
   pageToWorld(x: number, pageY: number, h: number) {
     return { x: x / this.px, z: pageY / this.px + h * ELEVATION };
+  }
+
+  /** Where a creature is drawn, in page pixels. */
+  pagePosition(c: PondCreature) {
+    return { x: c.x * this.px, y: (c.z - c.h * ELEVATION) * this.px };
+  }
+
+  /** The creature drawn nearest a point on the page, if one is within reach. */
+  pick(x: number, pageY: number, reach = 24): PondCreature | null {
+    let best: PondCreature | null = null;
+    let bestD = reach * reach;
+    for (const c of this.pond.creatures) {
+      const p = this.pagePosition(c);
+      // Things standing up are picked by their middle, not their feet.
+      const lift = c.layer === 'air' && c.h < 12 ? BODY_WIDTH[c.species] * 0.25 * this.px : 0;
+      const d = (p.x - x) ** 2 + (p.y - lift - pageY) ** 2;
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    return best;
   }
 
   scrolledFar(scrollY: number) {
@@ -563,6 +584,48 @@ export class PondView {
     this.drawSky();
     this.drawFireflies(z0, z1);
     ctx.globalAlpha = 1;
+    for (const c of pond.creatures) if (c.adopted && visible(c.z)) this.drawAdoptedMarker(c);
+    const target = this.highlighted;
+    if (target?.alive && visible(target.z)) this.drawReticle(target);
+  }
+
+  /** A small bobbing arrow over the visitor's own creature (as on the reef), in lily pink. */
+  private drawAdoptedMarker(c: PondCreature) {
+    const { spriteCtx: ctx, px } = this;
+    const p = this.project(c.x, c.z, c.h);
+    const bob = (this.pond.tick >> 4) & 1 ? px : 0;
+    const up = c.layer === 'air' && c.h < 12 ? BODY_WIDTH[c.species] * 0.6 : BODY_WIDTH[c.species] * 0.35;
+    const y = Math.round(p.y - (up + 5) * px * p.s - bob);
+    const x = Math.round(p.x);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#0b1a14';
+    ctx.fillRect(x - px * 2.5, y - px * 0.5, px * 5, px * 2);
+    ctx.fillRect(x - px * 1.5, y + px * 1.5, px * 3, px);
+    ctx.fillRect(x - px * 0.5, y + px * 2.5, px, px);
+    ctx.fillStyle = '#f2b8cc';
+    ctx.fillRect(x - px * 2, y, px * 4, px);
+    ctx.fillRect(x - px, y + px, px * 2, px);
+  }
+
+  /** Blinking corner brackets around a creature, like a targeting cursor (as on the reef). */
+  private drawReticle(c: PondCreature) {
+    const { spriteCtx: ctx, px } = this;
+    const p = this.project(c.x, c.z, c.h);
+    const lift = c.layer === 'air' && c.h < 12 ? BODY_WIDTH[c.species] * 0.25 * px : 0;
+    const half = BODY_WIDTH[c.species] * px * p.s * 0.5 + px * 2;
+    const arm = px * 2;
+    const t = px * 0.75;
+    const pulse = (this.pond.tick >> 3) & 1 ? px : 0;
+    const x0 = Math.round(p.x - half - pulse);
+    const x1 = Math.round(p.x + half + pulse);
+    const y0 = Math.round(p.y - lift - half * 0.75 - pulse);
+    const y1 = Math.round(p.y - lift + half * 0.75 + pulse);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ffd166';
+    for (const [x, y, dx, dy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
+      ctx.fillRect(dx > 0 ? x : x - arm, dy > 0 ? y : y - t, arm, t);
+      ctx.fillRect(dx > 0 ? x : x - t, dy > 0 ? y : y - arm, t, arm);
+    }
   }
 
   /**
