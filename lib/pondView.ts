@@ -18,10 +18,10 @@
 // drawn into a window around the view, swapped between two canvases.
 
 import {
-  BOUGH_H, ELEVATION, MAX_DEPTH, POND_SPECIES, logThickness, Pad, Pond, PondCreature, PondSpecies, ReedClump, SPAWN_TICKS, Stem, TADPOLE_TICKS, TAIL_TICKS, WEED_KINDS, WeedBed,
+  BOUGH_H, ELEVATION, MAX_DEPTH, POND_SPECIES, logThickness, rockAbove, Pad, Pond, PondCreature, PondSpecies, ReedClump, SPAWN_TICKS, Stem, TADPOLE_TICKS, TAIL_TICKS, WEED_KINDS, WeedBed,
 } from './pond';
 import {
-  CATTAIL_HEAD, CROWFOOT_FLOWER, DUCKWEED, IRIS_FLOWER, LOOSESTRIFE_FLOWER, makeCanvas, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
+  CATTAIL_HEAD, CROWFOOT_FLOWER, DUCKWEED, IRIS_FLOWER, LOOSESTRIFE_FLOWER, PICKEREL_FLOWER, makeCanvas, rockSprite, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
   logSprite, padSprite, pondSprite, rippleTile, rootSprite, spawnSprite, splashSprite, stoneSprite,
   DuckSpriteKind, duckSprite, nestSprite, FishSpriteKind, fishSprite, SILT, ExtraSpriteKind, extraSprite,
   FIREFLY, RAIN, SKY, mayflySprite, nymphSprite, WildSpriteKind, wildSprite, boughSprite,
@@ -69,13 +69,13 @@ const SIZE: Partial<Record<PondSpecies, number>> = { frog: 0.75, heron: 1.5, pik
 /** Sprite widths in art pixels as drawn, for shadows and the inspection reticle. */
 export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 9, spawn: 11, tadpole: 6, mallard: 24, tufted: 20, minnow: 9, koi: 20, catfish: 20, pike: 31,
   dragonfly: 11, strider: 7, snail: 5, turtle: 18, heron: 24,
-  whirligig: 3, damselfly: 9, kingfisher: 10, moorhen: 14, butterfly: 5, newt: 10,
+  whirligig: 3, damselfly: 9, kingfisher: 10, moorhen: 14, butterfly: 5, newt: 10, swallow: 11,
 };
 
 /** Reed clumps and weed beds are drawn in bands this many rows deep, each sorted with whatever is among them. */
 const BAND = 5;
 /** The kinds of stem, in the order their colour runs are kept. */
-const STEM_KINDS = ['reed', 'cattail', 'rush', 'iris', 'loosestrife'] as const;
+const STEM_KINDS = ['reed', 'cattail', 'rush', 'iris', 'loosestrife', 'pickerel', 'arrowhead'] as const;
 /** Where the flower colours' runs sit, after every kind's three shades of three parts. */
 const HEAD = STEM_KINDS.length * 9;
 
@@ -122,11 +122,14 @@ export class PondView {
   /** The banks and the deep water, for dimming the light (see shade): rebuilt with the world. */
   private shadeCanvas: HTMLCanvasElement | null = null;
   private shadeKey = '';
+  /** The trees and sky mirrored in the water (see reflection): rebuilt with the world. */
+  private reflectCanvas: HTMLCanvasElement | null = null;
+  private reflectKey = '';
   /** The water in the sprite window, in its canvas pixels: rebuilt as the window moves. */
   private waterPath: Path2D | null = null;
   private waterKey = '';
   /** Stem squares by colour (left, top, width, height each), reused from clump to clump. */
-  private stemRuns: number[][] = Array.from({ length: HEAD + 6 }, () => []);
+  private stemRuns: number[][] = Array.from({ length: HEAD + 8 }, () => []);
   private weedRuns: number[][] = Array.from({ length: WEED_KINDS.length * 9 }, () => []);
   private frondRuns: number[][] = Array.from({ length: DUCKWEED.length + 2 }, () => []);
 
@@ -602,6 +605,13 @@ export class PondView {
       this.shadow(l.x, l.z + 1, 0, l.len * 1.05, 0.3);
       over.push({ depth: l.z, draw: () => this.sprite(logSprite(l.seed, l.len, logThickness(l.len)), l.x, l.z, 0.6, { anchor: 'bottom', flipX: l.side < 0 }) });
     }
+    for (const r of pond.rocks) {
+      if (!visible(r.z)) continue;
+      const above = rockAbove(r);
+      // Its bulk under the water darkens the bed beneath; its top stands out, foam lapping round it.
+      this.shadow(r.x, r.z, -pond.depthAt(r.x, r.z), r.w * 1.3, 0.3);
+      over.push({ depth: r.z, draw: () => this.sprite(rockSprite(r.seed, r.w, r.ht, above, (pond.tick + r.seed) >> 4 & 1), r.x, r.z, -(r.ht + 1 - above) / ELEVATION, { anchor: 'bottom' }) });
+    }
     for (const b of pond.boughs) {
       if (!visible(b.z)) continue;
       const cx = b.x + (b.side * b.len) / 2;
@@ -783,6 +793,13 @@ export class PondView {
         // Wings beating fast in flight, opening and closing slowly on a flower.
         const open = c.mood === 'feeding' ? (tick + c.id * 3) % 70 < 40 : (tick + c.id) >> 1 & 1;
         this.sprite(wildSprite(open ? 'flyOpen' : 'flyHalf', c.palette), c.x, c.z, c.h, { flipX: c.facing < 0, alpha, anchor: c.mood === 'feeding' ? 'bottom' : 'center' });
+        return;
+      }
+      case 'swallow': {
+        // Quick wingbeats, then a glide on swept-back wings.
+        const beat = (tick + c.id * 5) % 40;
+        const kind: WildSpriteKind = beat > 24 ? 'swallowGlide' : (beat >> 2) & 1 ? 'swallow1' : 'swallow0';
+        this.sprite(wildSprite(kind), c.x, c.z, c.h, { flipX: c.facing < 0, alpha });
         return;
       }
       case 'newt': {
@@ -1062,6 +1079,7 @@ export class PondView {
     const { spriteCtx: ctx, px, pond, regionTop } = this;
     const runs = this.stemRuns;
     const head = HEAD, headLit = HEAD + 1, petal = HEAD + 2, throat = HEAD + 3, spike = HEAD + 4, spikeLit = HEAD + 5;
+    const blue = HEAD + 6, blueLit = HEAD + 7;
     const t = pond.tick * 0.035;
     for (let n = from; n < to; n++) {
       const st = stems[n];
@@ -1069,7 +1087,7 @@ export class PondView {
       const wave = Math.sin(t + st.phase + st.x * 0.05) * 0.9 + pond.wind.x * 120;
       let col = -1, left = 0, top = 0, bottom = 0, size = 0;
       // Not every iris is in flower.
-      const blooms = st.kind === 'iris' ? st.phase < 2.8 : st.kind === 'loosestrife';
+      const blooms = st.kind === 'iris' ? st.phase < 2.8 : st.kind === 'loosestrife' || (st.kind === 'pickerel' && st.phase < 4);
       let bloomed = false;
       for (let i = 0; i <= st.len; i += 1 / ELEVATION) {
         const k = i / st.len;
@@ -1090,6 +1108,24 @@ export class PondView {
           if (!bloomed) runs[throat].push(l, sy, s, s);
           bloomed = true;
           continue;
+        }
+        if (blooms && st.kind === 'pickerel' && k > 0.72) {
+          // A short spike of blue flowers.
+          runs[Math.round(i * ELEVATION) & 1 ? blue : blueLit].push(l, sy, s, s, l + s, sy, s, s);
+          continue;
+        }
+        if (st.kind === 'arrowhead' && k > 0.82) {
+          // The leaf: an arrowhead, point up, its two barbs spread below.
+          if (!bloomed) {
+            const leaf = set + 2;
+            runs[leaf].push(l, sy - s, s, s, l - s, sy, s * 3, s, l - s * 2, sy + s, s * 2, s, l + s, sy + s, s * 2, s);
+          }
+          bloomed = true;
+          continue;
+        }
+        if (st.kind === 'pickerel' && i > 3 && Math.round(i * ELEVATION) % 4 === 0) {
+          // Broad heart-shaped leaves off the stalk.
+          runs[set + 2].push(l + s, sy, s * 2, s);
         }
         if (blooms && st.kind === 'loosestrife' && k > 0.58) {
           // A spike of little purple flowers, stepping from side to side.
@@ -1114,7 +1150,7 @@ export class PondView {
     for (let c = 0; c < runs.length; c++) {
       const run = runs[c];
       if (!run.length) continue;
-      ctx.fillStyle = c >= HEAD ? [...CATTAIL_HEAD, ...IRIS_FLOWER, ...LOOSESTRIFE_FLOWER][c - HEAD]
+      ctx.fillStyle = c >= HEAD ? [...CATTAIL_HEAD, ...IRIS_FLOWER, ...LOOSESTRIFE_FLOWER, ...PICKEREL_FLOWER][c - HEAD]
         : REED_COLORS[STEM_KINDS[Math.floor(c / 9)]][Math.floor(c / 3) % 3][c % 3];
       for (let k = 0; k < run.length; k += 4) ctx.fillRect(run[k], run[k + 1], run[k + 2], run[k + 3]);
       run.length = 0;
@@ -1198,7 +1234,74 @@ export class PondView {
     ctx.globalAlpha = 1;
     ctx.fillStyle = WATER.sheet;
     ctx.fill(water);
+    this.drawReflections();
     this.drawGlints();
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * The banks' trees and the sky mirrored in the water, a canvas pixel per
+   * cell: the dark crowns of the bankside trees reaching out from each
+   * shore, pale sky and drifting clouds over the open water, and gaps where
+   * ripples break it up. Static, built once per world size; drawReflections
+   * sets it moving.
+   */
+  private reflection() {
+    const { pond } = this;
+    const key = `${pond.w}x${pond.h}`;
+    if (this.reflectCanvas && key === this.reflectKey) return this.reflectCanvas;
+    const { w, h, shoreL, shoreR } = pond;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d') as CanvasRenderingContext2D;
+    const img = ctx.createImageData(w, h);
+    const out = new Uint32Array(img.data.buffer);
+    for (let z = 0; z < h; z++) {
+      const l = shoreL[z], r = shoreR[z];
+      // Each shore's trees: crowns of different sizes along the bank.
+      const crown = (side: number) => 6 + 10 * (0.5 + 0.5 * Math.sin(z * 0.045 + side * 2.1)) * (0.6 + 0.4 * Math.sin(z * 0.13 + side * 5.3));
+      const reachL = crown(0), reachR = crown(1);
+      const jitter = hash(z * 977) * 40;
+      for (let x = Math.ceil(l) + 1; x < r - 1; x++) {
+        const fromL = x - l, fromR = r - x;
+        const trees = fromL < fromR ? reachL - fromL : reachR - fromR;
+        let a: number, rr: number, gg: number, bb: number;
+        if (trees > 0) {
+          // Ragged at the crowns' edge.
+          if (trees < 2 && hash(z * w + x) < 0.5) continue;
+          a = 0.34 * Math.min(1, trees / 3); rr = 16; gg = 48; bb = 32;
+        } else {
+          const cloud = Math.sin(x * 0.035 + z * 0.012) * Math.sin(z * 0.019 - x * 0.008 + 1.3);
+          a = 0.05 + Math.max(0, cloud - 0.3) * 0.25;
+          rr = cloud > 0.3 ? 226 : 168; gg = cloud > 0.3 ? 240 : 214; bb = cloud > 0.3 ? 240 : 222;
+        }
+        // Ripples break it into dashes along each row.
+        if (hash(z * 131 + Math.floor((x + jitter) / 5)) < 0.22) a *= 0.35;
+        out[z * w + x] = (Math.round(a * 255) << 24) | (bb << 16) | (gg << 8) | rr;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    this.reflectCanvas = c;
+    this.reflectKey = key;
+    return c;
+  }
+
+  /**
+   * The reflection, laid on the surface in strips four rows deep, each slid
+   * a cell or so sideways as the water moves: the breeze breaks it up more.
+   */
+  private drawReflections() {
+    const { spriteCtx: ctx, pond, px } = this;
+    const img = this.reflection();
+    const z0 = Math.max(0, Math.floor(this.scrollY / px) - 4) & ~3;
+    const z1 = Math.min(pond.h, Math.ceil((this.scrollY + this.viewH) / px) + 4);
+    const t = pond.tick * 0.05;
+    const amp = 0.5 + Math.min(1.5, Math.hypot(pond.wind.x, pond.wind.z) * 500);
+    ctx.globalAlpha = (1 - pond.nightfall() * 0.75) * (1 - pond.rainAmount() * 0.4);
+    for (let z = z0; z < z1; z += 4) {
+      const shift = Math.round(Math.sin(z * 0.37 + t) * amp + Math.sin(z * 0.11 - t * 0.6) * amp * 0.5);
+      const rows = Math.min(4, pond.h - z);
+      ctx.drawImage(img, 0, z, pond.w, rows, shift * px, z * px - this.regionTop, pond.w * px, rows * px);
+    }
     ctx.globalAlpha = 1;
   }
 

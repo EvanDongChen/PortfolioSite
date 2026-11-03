@@ -208,6 +208,45 @@ export const stoneSprite = (seed: number, w: number, h: number) =>
     return c;
   });
 
+/**
+ * A rock standing out of the water: a stone `w` by `h` whose lower rows
+ * are under the surface (tinted by the water) below a waterline at `above`,
+ * where a lip of foam laps against it (two frames).
+ */
+export const rockSprite = (seed: number, w: number, h: number, above: number, frame: number) =>
+  cached(`pond-rock-${seed}-${w}-${h}-${frame}`, () => {
+    const stone = stoneSprite(seed, w, h);
+    const c = makeCanvas(w + 4, h + 1);
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(stone, 2, 0);
+    const img = ctx.getImageData(0, 0, w + 4, h + 1);
+    const d = img.data;
+    const water: Rgb = [40, 98, 86];
+    for (let y = above; y < h + 1; y++) {
+      for (let x = 0; x < w + 4; x++) {
+        const i = (y * (w + 4) + x) * 4;
+        if (!d[i + 3]) continue;
+        // Deeper rows fade further into the water.
+        const k = Math.min(0.85, 0.45 + (y - above) * 0.12);
+        for (let n = 0; n < 3; n++) d[i + n] = Math.round(d[i + n] + (water[n] - d[i + n]) * k);
+        d[i + 3] = Math.round(255 * (1 - k * 0.5));
+      }
+    }
+    // Foam at the waterline, a cell out past each side, lapping.
+    const rnd = seededRandom(seed + frame * 7);
+    let left = -1, right = -1;
+    for (let x = 0; x < w + 4; x++) if (d[(above * (w + 4) + x) * 4 + 3]) { if (left < 0) left = x; right = x; }
+    if (left >= 0) {
+      for (let x = Math.max(0, left - 1); x <= Math.min(w + 3, right + 1); x++) {
+        if (x > left + 1 && x < right - 1 && rnd() < 0.5) continue;
+        const i = (above * (w + 4) + x) * 4;
+        d[i] = 196; d[i + 1] = 232; d[i + 2] = 218; d[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  });
+
 const BARK: Rgb[] = [[132, 100, 64], [104, 76, 48], [78, 56, 36], [52, 38, 26]];
 const GRAIN: Rgb[] = [[196, 160, 110], [160, 124, 82]];
 const LOG_MOSS: Rgb = [92, 128, 58];
@@ -278,7 +317,7 @@ export const rootSprite = (seed: number) =>
   });
 
 /** Reed colours by kind and shade: [base, stalk, tip]. */
-export const REED_COLORS: Record<'reed' | 'cattail' | 'rush' | 'iris' | 'loosestrife', string[][]> = {
+export const REED_COLORS: Record<'reed' | 'cattail' | 'rush' | 'iris' | 'loosestrife' | 'pickerel' | 'arrowhead', string[][]> = {
   reed: [
     ['rgb(58,104,50)', 'rgb(88,140,62)', 'rgb(160,176,96)'],
     ['rgb(66,110,46)', 'rgb(104,150,66)', 'rgb(176,180,104)'],
@@ -305,12 +344,25 @@ export const REED_COLORS: Record<'reed' | 'cattail' | 'rush' | 'iris' | 'loosest
     ['rgb(64,100,46)', 'rgb(92,124,58)', 'rgb(124,142,70)'],
     ['rgb(54,90,50)', 'rgb(78,112,60)', 'rgb(110,130,70)'],
   ],
+  pickerel: [
+    ['rgb(50,98,52)', 'rgb(72,132,62)', 'rgb(96,152,72)'],
+    ['rgb(56,104,50)', 'rgb(80,138,60)', 'rgb(104,158,70)'],
+    ['rgb(46,92,56)', 'rgb(66,124,66)', 'rgb(90,146,76)'],
+  ],
+  // Arrowhead: the third colour is its broad arrow-shaped leaf.
+  arrowhead: [
+    ['rgb(56,102,50)', 'rgb(80,136,60)', 'rgb(110,166,74)'],
+    ['rgb(62,108,48)', 'rgb(88,142,58)', 'rgb(122,174,78)'],
+    ['rgb(52,98,54)', 'rgb(74,130,64)', 'rgb(102,158,80)'],
+  ],
 };
 /** A cattail's brown head: dark, lit. */
 export const CATTAIL_HEAD = ['rgb(96,56,32)', 'rgb(136,84,46)'];
 /** A yellow flag iris's petals and its darker throat; purple loosestrife's flower spike, two pinks. */
 export const IRIS_FLOWER = ['rgb(250,214,60)', 'rgb(206,140,28)'];
 export const LOOSESTRIFE_FLOWER = ['rgb(168,78,164)', 'rgb(214,128,200)'];
+/** Pickerelweed's spike of blue-violet flowers. */
+export const PICKEREL_FLOWER = ['rgb(92,102,206)', 'rgb(140,150,236)'];
 /** Underwater weeds by kind (see WEED_KINDS) and shade: [stalk, leaf, tip]. */
 export const WEED_COLORS: string[][][] = [
   // Pondweed: broad leaves in pairs.
@@ -544,7 +596,8 @@ export type WildSpriteKind =
   | 'whirligig' | 'damselPerch' | 'damsel0' | 'damsel1'
   | 'kfPerch' | 'kfFly0' | 'kfFly1' | 'kfDive'
   | 'moorhen' | 'moorhenBob' | 'moorhenWalk'
-  | 'flyOpen' | 'flyHalf' | 'newt0' | 'newt1';
+  | 'flyOpen' | 'flyHalf' | 'newt0' | 'newt1'
+  | 'swallow0' | 'swallow1' | 'swallowGlide';
 const WILD_ROWS: Record<WildSpriteKind, string[]> = {
   // A whirligig beetle: a glossy black oval.
   whirligig: ['kK.', 'KKK'],
@@ -567,6 +620,10 @@ const WILD_ROWS: Record<WildSpriteKind, string[]> = {
   // A smooth newt: olive back, orange belly and feet, a long tail.
   newt0: ['....DDDD..', 'TTTDBBBBBE', '.....OO.O.'],
   newt1: ['T...DDDD..', '.TTDBBBBBE', '.....O..O.'],
+  // A swallow: glossy blue-black back, long forked tail, red throat, pale belly; wings up, down, and gliding.
+  swallow0: ['....B......', '...BB......', 'TT.SSSSSRK.', '.T..WWWW...'],
+  swallow1: ['...........', 'TT.SSSSSRK.', '.T.BWWWW...', '...BB......', '....B......'],
+  swallowGlide: ['....BB.....', 'TT.SSSSSRK.', '.T.BWWWWB..', '....BB.....'],
 };
 /** Damselflies: azure blue, emerald green and red, as [a, d, A, E]. */
 const DAMSEL_SETS: Rgb[][] = [
@@ -589,6 +646,9 @@ const MOORHEN_COLOURS: Record<string, Rgb> = {
   K: [44, 46, 56], D: [78, 68, 50], W: [232, 230, 222], U: [242, 242, 238], R: [214, 48, 40], Y: [240, 210, 60],
   E: [176, 36, 36], L: [64, 72, 76], G: [172, 190, 64],
 };
+const SWALLOW_COLOURS: Record<string, Rgb> = {
+  B: [34, 48, 96], S: [44, 62, 120], T: [26, 34, 70], R: [186, 64, 44], K: [20, 22, 28], W: [236, 228, 214],
+};
 const NEWT_COLOURS: Record<string, Rgb> = { D: [86, 84, 56], B: [124, 116, 76], O: [232, 128, 48], T: [104, 98, 66], E: [16, 18, 20] };
 
 export const wildSprite = (kind: WildSpriteKind, palette = 0, washed = false) =>
@@ -602,6 +662,7 @@ export const wildSprite = (kind: WildSpriteKind, palette = 0, washed = false) =>
       colours = { W, w, B: [40, 34, 30] };
     } else if (kind.startsWith('moorhen')) colours = MOORHEN_COLOURS;
     else if (kind.startsWith('newt')) colours = NEWT_COLOURS;
+    else if (kind.startsWith('swallow')) colours = SWALLOW_COLOURS;
     if (washed) colours = Object.fromEntries(Object.entries(colours).map(([k, c]) => [k, paleOf(c)]));
     return fromRows(WILD_ROWS[kind], colours);
   });
@@ -697,6 +758,7 @@ export const pondIcon = (kind: string): HTMLCanvasElement => {
     case 'moorhen': return wildSprite('moorhen');
     case 'butterfly': return wildSprite('flyOpen', 0);
     case 'newt': return wildSprite('newt0');
+    case 'swallow': return wildSprite('swallowGlide');
     default: return pondSprite('frogSit', 0);
   }
 };

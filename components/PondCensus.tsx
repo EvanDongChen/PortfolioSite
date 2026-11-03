@@ -21,12 +21,12 @@ const STAGE_LABEL: Record<FrogStage, string> = {
 /** Everyone but the frogs (who are counted by stage), in the order the census lists them. */
 const OTHERS: PondSpecies[] = [
   'mallard', 'tufted', 'moorhen', 'minnow', 'koi', 'catfish', 'pike', 'newt',
-  'dragonfly', 'damselfly', 'butterfly', 'strider', 'whirligig', 'snail', 'turtle', 'kingfisher', 'heron',
+  'dragonfly', 'damselfly', 'butterfly', 'strider', 'whirligig', 'snail', 'turtle', 'swallow', 'kingfisher', 'heron',
 ];
 const PLURAL: Record<string, string> = {
   mallard: 'Mallards', tufted: 'Tufted ducks', moorhen: 'Moorhens', minnow: 'Minnows', koi: 'Koi', catfish: 'Catfish', pike: 'Pike',
   newt: 'Newts', dragonfly: 'Dragonflies', damselfly: 'Damselflies', butterfly: 'Butterflies', strider: 'Water striders',
-  whirligig: 'Whirligigs', snail: 'Snails', turtle: 'Turtles', kingfisher: 'Kingfishers', heron: 'Herons',
+  whirligig: 'Whirligigs', swallow: 'Swallows', snail: 'Snails', turtle: 'Turtles', kingfisher: 'Kingfishers', heron: 'Herons',
 };
 const HAPPENING_LABEL: Record<PondHappening, string> = { rain: 'Raining', hatch: 'Mayfly hatch', chorus: 'Evening chorus' };
 
