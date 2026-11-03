@@ -130,6 +130,8 @@ export class PondView {
   private backlogWait = 0;
   /** The banks and the deep water, for dimming the light (see shade): rebuilt with the world. */
   private shadeCanvas: HTMLCanvasElement | null = null;
+  /** Just the land in black, laid over the sun shafts to keep them off it. */
+  private landCanvas: HTMLCanvasElement | null = null;
   private shadeKey = '';
   /** The trees and sky mirrored in the water (see reflection): rebuilt with the world. */
   private reflectCanvas: HTMLCanvasElement | null = null;
@@ -288,7 +290,7 @@ export class PondView {
    */
   private baseColours(top: number, rows: number) {
     const { pond } = this;
-    const { w, h, terrain, grain, depth, shoreL, shoreR } = pond;
+    const { w, h, terrain, grain, depth, shoreDist } = pond;
     const size = `${w}x${h}`;
     if (size !== this.baseSize) {
       this.baseCache = new Uint32Array(w * h);
@@ -300,12 +302,11 @@ export class PondView {
     for (let z = top; z < top + rows; z++) {
       if (this.baseRowsDone[z]) continue;
       this.baseRowsDone[z] = 1;
-      const l = shoreL[z], r = shoreR[z];
       for (let x = 0; x < w; x++) {
         const i = z * w + x;
         const g = grain[i];
         const t = Math.max(0, Math.min(255, terrain[i] + ((g & 15) - 8)));
-        const fromShore = Math.min(x - l, r - x);
+        const fromShore = shoreDist[i];
         let c: number[];
         // An ordered dither (a 4x4 Bayer matrix): where two tones meet they
         // interleave in a regular pattern, as pixel art shades, not as noise.
@@ -368,7 +369,7 @@ export class PondView {
    */
   private renderBed(top: number, rows: number, out: Uint32Array) {
     const { pond } = this;
-    const { w, algae, grain, shoreL, shoreR, tick } = pond;
+    const { w, algae, grain, land, tick } = pond;
     const base = this.baseColours(top, rows);
     if (this.rowScratch.length !== w) this.rowScratch = new Uint32Array(w);
     const row = this.rowScratch;
@@ -378,8 +379,8 @@ export class PondView {
       const z = top + k;
       const at = z * w;
       row.set(base.subarray(at, at + w));
-      const l = Math.ceil(shoreL[z]) + 1, r = Math.floor(shoreR[z]) - 1;
-      for (let x = l; x < r; x++) {
+      for (let x = 1; x < w - 1; x++) {
+        if (land[at + x]) continue;
         const a = algae[at + x];
         if (a < 96 || a + (grain[at + x] >> 2) <= 150) continue;
         const c = a > 200 ? F.algaeDense : F.algae;
@@ -391,10 +392,18 @@ export class PondView {
       const wobble = Math.round(Math.sin(z * 0.21 + t * 0.35) * 0.8 + Math.sin(z * 0.067 - t * 0.21) * 0.6);
       const o = k * w;
       out.set(row, o);
-      if (wobble !== 0 && r - l > 4) {
-        // The water's span only, so the banks stay put.
-        const from = Math.max(l, l - wobble), to = Math.min(r, r - wobble);
-        out.set(row.subarray(from, to), o + from + wobble);
+      if (wobble !== 0) {
+        // Each stretch of water along the row on its own, a cell in from its
+        // shores, so the land stays put.
+        for (let x = 0; x < w;) {
+          while (x < w && land[at + x]) x++;
+          const start = x;
+          while (x < w && !land[at + x]) x++;
+          const l = start + 1, r = x - 1;
+          if (r - l <= 4) continue;
+          const from = Math.max(l, l - wobble), to = Math.min(r, r - wobble);
+          out.set(row.subarray(from, to), o + from + wobble);
+        }
       }
     }
   }
@@ -419,6 +428,13 @@ export class PondView {
       px[i] = a << 24;
     }
     ctx.putImageData(img, 0, 0);
+    const lc = makeCanvas(w, h);
+    const lctx = lc.getContext('2d') as CanvasRenderingContext2D;
+    const limg = lctx.createImageData(w, h);
+    const lpx = new Uint32Array(limg.data.buffer);
+    for (let i = 0; i < w * h; i++) lpx[i] = pond.land[i] ? 255 << 24 : 0;
+    lctx.putImageData(limg, 0, 0);
+    this.landCanvas = lc;
     this.shadeCanvas = c;
     this.shadeKey = key;
     return c;
@@ -455,7 +471,10 @@ export class PondView {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.drawImage(this.shade(), 0, top, pond.w, rows, 0, top, pond.w, rows);
-    if (!this.lean) this.drawShafts(top, rows, sun);
+    if (!this.lean) {
+      this.drawShafts(top, rows, sun);
+      if (this.landCanvas) ctx.drawImage(this.landCanvas, 0, top, pond.w, rows, 0, top, pond.w, rows);
+    }
   }
 
   /**
@@ -506,13 +525,27 @@ export class PondView {
     const path = new Path2D();
     const z0 = Math.floor(this.regionTop / px);
     const z1 = Math.min(pond.h, z0 + Math.ceil(this.regionHeight / px));
+    // Each row's stretches of water; rows with the same stretches as the row
+    // above are merged into one taller rect.
+    const runsOf = (z: number) => {
+      const out: number[] = [];
+      const at = z * pond.w;
+      for (let x = 0; x < pond.w;) {
+        while (x < pond.w && pond.land[at + x]) x++;
+        const s = x;
+        while (x < pond.w && !pond.land[at + x]) x++;
+        if (x > s) out.push(s, x);
+      }
+      return out;
+    };
     let start = z0;
+    let runs = runsOf(z0);
     for (let z = z0 + 1; z <= z1; z++) {
-      const same = z < z1 && Math.round(pond.shoreL[z]) === Math.round(pond.shoreL[start]) && Math.round(pond.shoreR[z]) === Math.round(pond.shoreR[start]);
-      if (same) continue;
-      const l = Math.round(pond.shoreL[start]) + 1, r = Math.round(pond.shoreR[start]) - 1;
-      path.rect(l * px, start * px - this.regionTop, (r - l) * px, (z - start) * px);
+      const next = z < z1 ? runsOf(z) : null;
+      if (next && next.length === runs.length && next.every((v, k) => v === runs[k])) continue;
+      for (let k = 0; k < runs.length; k += 2) path.rect(runs[k] * px, start * px - this.regionTop, (runs[k + 1] - runs[k]) * px, (z - start) * px);
       start = z;
+      if (next) runs = next;
     }
     this.waterPath = path;
     this.waterKey = key;
@@ -1315,6 +1348,7 @@ export class PondView {
       const reachL = crown(0), reachR = crown(1);
       const jitter = hash(z * 977) * 40;
       for (let x = Math.ceil(l) + 1; x < r - 1; x++) {
+        if (pond.land[z * w + x]) continue;
         const fromL = x - l, fromR = r - x;
         const trees = fromL < fromR ? reachL - fromL : reachR - fromR;
         let a: number, rr: number, gg: number, bb: number;

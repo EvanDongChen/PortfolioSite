@@ -26,7 +26,7 @@ export const POND_FLOOR = {
   /** The deep shade under the bankside trees, toward the page's edges. */
   treeShade: [22, 52, 44] as Rgb,
   /** The shore, from the water up: wet sand, damp earth, then moss before the turf. */
-  shore: [[128, 120, 86], [104, 92, 64], [74, 92, 56], [62, 104, 60]] as Rgb[],
+  shore: [[126, 122, 88], [104, 104, 70], [80, 100, 60], [64, 106, 60]] as Rgb[],
   /** The bank's shadow on the water just below it. */
   bankShadow: [30, 78, 74] as Rgb,
   caustic: [40, 58, 44] as Rgb,
