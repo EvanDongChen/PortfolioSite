@@ -21,7 +21,7 @@ export const makeCanvas = (w: number, h: number): HTMLCanvasElement => {
 };
 
 /** Draws a character map; characters missing from `colors` are transparent. */
-const fromRows = (rows: string[], colors: Record<string, Rgb>) => {
+export const fromRows = (rows: string[], colors: Record<string, Rgb>) => {
   // Rows may be ragged; shorter ones are padded with transparency.
   const w = Math.max(...rows.map(r => r.length));
   const c = makeCanvas(w, rows.length);
@@ -312,7 +312,8 @@ const EYE: Rgb = [12, 14, 26];
 const TEETH: Rgb = [232, 232, 220];
 
 const spriteCache = new Map<string, HTMLCanvasElement>();
-const cached = (key: string, make: () => HTMLCanvasElement) => {
+/** Makes a sprite once and keeps it, under a key unique across the reef and the pond. */
+export const cached = (key: string, make: () => HTMLCanvasElement) => {
   let c = spriteCache.get(key);
   if (!c) { c = make(); spriteCache.set(key, c); }
   return c;
@@ -686,7 +687,7 @@ export const shadowSprite = (w: number) =>
 
 // --- generated scenery ------------------------------------------------------
 
-const seeded = (seed: number) => {
+export const seeded = (seed: number) => {
   let s = seed >>> 0 || 1;
   return () => {
     s ^= s << 13; s >>>= 0;

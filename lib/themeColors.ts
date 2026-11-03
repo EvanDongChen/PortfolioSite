@@ -30,3 +30,15 @@ export const PIXEL_COLORS: ThemeColors = {
   searchBg: 'bg-[#020b24]/80',
   periodBg: 'bg-[#06306b]',
 };
+
+// The pond's content sits on dark green backing, with emerald accents.
+export const POND_COLORS: ThemeColors = {
+  ...UNDERWATER_COLORS,
+  text: 'text-emerald-50', textLighter: 'text-emerald-50/90', highlight: 'text-emerald-300',
+  highlightStrong: 'text-emerald-200', border: 'border-emerald-400/20', timeline: 'bg-emerald-400/30',
+  timelineDot: 'bg-emerald-500', timelineDotBorder: 'border-[#0b1a14]',
+  cardBg: 'bg-[#0b1a14]/75', tagBg: 'bg-emerald-900/50', tagHoverBg: 'hover:bg-emerald-800/70',
+  searchBg: 'bg-[#0b1a14]/80', searchBorder: 'border-emerald-400/30', searchRing: 'focus:ring-emerald-400',
+  searchPlaceholder: 'placeholder-emerald-200/50', periodBg: 'bg-[#1e4a32]',
+  heroGradient: 'from-emerald-300 to-lime-300', contactIcon: 'text-emerald-300',
+};

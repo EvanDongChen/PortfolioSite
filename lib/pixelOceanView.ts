@@ -228,6 +228,8 @@ export class OceanView {
    * are left out until it catches up.
    */
   lean = false;
+  /** How strong the sun rays are, easing out when the view goes lean and back in after (0 to 1). */
+  private rays = 1;
   /** The creature being drawn's squash and stretch (positive stretches it along its length). */
   private stretch = 0;
   /** The creature (or carcass) being drawn's size relative to its sprite (see SIZE). */
@@ -546,11 +548,13 @@ export class OceanView {
       ctx.globalAlpha = (1 - (z / ocean.h) * DEPTH_DARKENING) * (1 - ocean.nightfall() * 0.7);
       ctx.fillRect(0, top + row, ocean.w, Math.min(CAUSTIC_BAND, rows - row));
     }
-    if (!this.lean) {
+    // The rays fade rather than blink when the view goes lean (or comes back).
+    this.rays += ((this.lean ? 0 : 1) - this.rays) * 0.04;
+    if (this.rays > 0.02) {
       // The rays are worked out from the region's top.
       ctx.save();
       ctx.translate(0, top);
-      this.drawRays(top, rows);
+      this.drawRays(top, rows, this.rays);
       ctx.restore();
     }
     ctx.globalAlpha = 1;
@@ -563,7 +567,7 @@ export class OceanView {
    * stays put as the region moves), swaying and shimmering slowly. The light
    * canvas is a cell per pixel, so the edges come out as pixel steps.
    */
-  private drawRays(top: number, rows: number) {
+  private drawRays(top: number, rows: number, strength: number) {
     const { ocean, lightCtx: ctx } = this;
     if (Math.exp(-top / RAY_DEPTH) < 0.03) return;
     const bottom = Math.min(rows, RAY_DEPTH * 3.5 - top);
@@ -590,7 +594,7 @@ export class OceanView {
       // A wide faint glow, then the brighter core of the shaft inside it.
       for (const [grow, alpha] of [[2.2, 0.45], [1, 0.8]]) {
         const pad = (width * (grow - 1)) / 2;
-        ctx.globalAlpha = shimmer * alpha;
+        ctx.globalAlpha = shimmer * alpha * strength;
         ctx.beginPath();
         ctx.moveTo(xa - pad, 0);
         ctx.lineTo(xa + width + pad, 0);
