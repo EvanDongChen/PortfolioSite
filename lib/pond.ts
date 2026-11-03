@@ -314,7 +314,7 @@ export const POND_SPECIES: Record<PondSpecies, SpeciesDef> = {
   frog: {
     label: 'Frog', names: ['Ribbit', 'Hopper', 'Lily', 'Pond', 'Croaky', 'Toad', 'Jumper', 'Fern', 'Moss', 'Bog', 'Kermie', 'Pip', 'Leap', 'Basil'],
     cruise: 0.18, burst: 0.6, vision: 30, metabolism: 0.00006, maxAge: [12000, 18000], mature: 2400, hungerLine: 0.7,
-    cap: [5500, 8, 36], palettes: 3,
+    cap: [4000, 10, 56], palettes: 3,
   },
   whirligig: {
     label: 'Whirligig beetle', names: ['Spinner', 'Twirl', 'Gyro', 'Whirl', 'Loop', 'Pip', 'Jet', 'Bead'],
@@ -510,7 +510,8 @@ export class Pond {
       if (species === 'turtle' && !this.logs.some(l => l.floating)) continue;
       if (species === 'kingfisher' && !this.boughs.length) continue;
       // Minnows arrive in schools, whirligigs in crowds.
-      const n0 = Math.max(species === 'tufted' ? 0 : 1, Math.round(this.cap(species) * 0.75));
+      // Frogs start at full strength, all of them grown.
+      const n0 = Math.max(species === 'tufted' ? 0 : 1, Math.round(this.cap(species) * (species === 'frog' ? 1 : 0.75)));
       const group = GROUP[species] ?? 1;
       for (let n = Math.ceil(n0 / group); n > 0; n--) this.spawn(species);
     }
@@ -1192,6 +1193,8 @@ export class Pond {
       c.h = 0;
       return c;
     }
+    // Starting frogs are of all ages, so they don't all grow old together.
+    if (!parent) c.age = randInt(sp.mature, sp.maxAge[0] * 0.9);
     // A frog starts on a free pad, a log or the bank, or out in the water.
     const perch = this.findPerch(rand(4, this.w - 4), this.someZ(), this.seeding ? 120 : 1e9) ?? this.findPerch(rand(4, this.w - 4), rand(4, this.h - 4), 1e9);
     if (perch && Math.random() < 0.8) this.sitOn(c, perch);
