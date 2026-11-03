@@ -11,6 +11,12 @@ interface ThemeContextType {
   /** The pixel ecosystem replaces the whole aquarium page while on. */
   isPixelMode: boolean;
   togglePixelMode: () => void;
+  /**
+   * The pixel pond replaces whichever page was showing while on; turning it
+   * off goes back to that page (the reef or the aquarium).
+   */
+  isPondMode: boolean;
+  togglePondMode: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -22,6 +28,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [theme, setTheme] = useState<Theme>('underwater');
   // The pixel reef is the default look; the aquarium is one click away.
   const [isPixelMode, setIsPixelMode] = useState(true);
+  const [isPondMode, setIsPondMode] = useState(false);
 
   const toggleTheme = () => {
     if (!DEEP_SEA_MODE_ENABLED) return;
@@ -30,11 +37,17 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const togglePixelMode = useCallback(() => {
     pendingScrollY = window.scrollY;
+    setIsPondMode(false);
     setIsPixelMode(prev => !prev);
   }, []);
 
+  const togglePondMode = useCallback(() => {
+    pendingScrollY = window.scrollY;
+    setIsPondMode(prev => !prev);
+  }, []);
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, isPixelMode, togglePixelMode }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, isPixelMode, togglePixelMode, isPondMode, togglePondMode }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -5,12 +5,20 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { PerformanceProvider } from './contexts/PerformanceContext';
 import './index.css';
 
-// The pixel reef is the default page; the aquarium is fetched only when
-// someone switches to it.
+// The pixel reef is the default page; the aquarium and the pond are fetched
+// only when someone switches to them.
 const App = lazy(() => import('./App'));
+const PondApp = lazy(() => import('./PondApp'));
 
 const Page: React.FC = () => {
-  const { isPixelMode } = useTheme();
+  const { isPixelMode, isPondMode } = useTheme();
+  if (isPondMode) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#0b1a14]" />}>
+        <PondApp />
+      </Suspense>
+    );
+  }
   if (isPixelMode) return <PixelApp />;
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#000428]" />}>

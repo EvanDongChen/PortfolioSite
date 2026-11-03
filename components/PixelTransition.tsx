@@ -19,7 +19,7 @@ const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 
  * Covers the screen in dark blocks that open out from the middle in an
  * ordered dither, each shrinking away in pixel steps, then removes itself.
  */
-const PixelTransition: React.FC = () => {
+const PixelTransition: React.FC<{ ink?: string; edge?: string }> = ({ ink = INK, edge = EDGE }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [done, setDone] = useState(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
 
@@ -56,7 +56,7 @@ const PixelTransition: React.FC = () => {
         const x = (i % cols) * BLOCK + (BLOCK - size) / 2;
         const y = Math.floor(i / cols) * BLOCK + (BLOCK - size) / 2;
         // Blocks about to go are a shade lighter, which softens the edge.
-        ctx.fillStyle = local > 0.5 ? EDGE : INK;
+        ctx.fillStyle = local > 0.5 ? edge : ink;
         ctx.fillRect(x, y, size, size);
       }
     };
@@ -72,7 +72,7 @@ const PixelTransition: React.FC = () => {
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [ink, edge]);
 
   if (done) return null;
   return <canvas ref={canvasRef} className="fixed left-0 top-0 z-[300] pointer-events-none" aria-hidden="true" />;
