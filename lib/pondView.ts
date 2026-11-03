@@ -17,8 +17,12 @@
 // light cover the whole page at a canvas pixel per cell, and the sprites are
 // drawn into a window around the view, swapped between two canvases.
 
-import { ELEVATION, MAX_DEPTH, Pond } from './pond';
-import { POND_FLOOR, WATER, buildRipples, makeCanvas, rippleTile } from './pondArt';
+import { ELEVATION, MAX_DEPTH, Pad, Pond, ReedClump, Stem, WeedBed } from './pond';
+import {
+  CATTAIL_HEAD, DUCKWEED, POND_FLOOR, REED_COLORS, WATER, WEED_COLORS, buildRipples, lilySprite, logSprite, makeCanvas, padSprite,
+  rippleTile, rootSprite, stoneSprite,
+} from './pondArt';
+import { shadowSprite } from './pixelOceanArt';
 import type { ReefLayout } from './pixelOceanView';
 
 /** How much bigger things get per unit of height (as on the reef). */
@@ -39,6 +43,21 @@ const GLINTS_PER_TILE = 2;
 const GLINT_LIFE = 110;
 
 export type PondLayout = ReefLayout;
+
+interface Drawable { depth: number; draw: () => void }
+
+interface SpriteOptions {
+  alpha?: number;
+  flipX?: boolean;
+  scaleY?: number;
+  scale?: number;
+  anchor?: 'bottom' | 'center';
+}
+
+/** Reed clumps and weed beds are drawn in bands this many rows deep, each sorted with whatever is among them. */
+const BAND = 3;
+/** The kinds of stem, in the order their colour runs are kept. */
+const STEM_KINDS = ['reed', 'cattail', 'rush'] as const;
 
 const hash = (n: number) => {
   let x = n | 0;
@@ -84,6 +103,9 @@ export class PondView {
   /** The water in the sprite window, in its canvas pixels: rebuilt as the window moves. */
   private waterPath: Path2D | null = null;
   private waterKey = '';
+  /** Stem squares by colour (left, top, width, height each), reused from clump to clump. */
+  private stemRuns: number[][] = Array.from({ length: 3 * 3 * 3 + 2 }, () => []);
+  private weedRuns: number[][] = Array.from({ length: WEED_COLORS.length * 2 }, () => []);
 
   constructor(
     private pond: Pond,
@@ -250,11 +272,15 @@ export class PondView {
           let rr = F.mudDark[0] + (F.mudLight[0] - F.mudDark[0]) * k;
           let gg = F.mudDark[1] + (F.mudLight[1] - F.mudDark[1]) * k;
           let bb = F.mudDark[2] + (F.mudLight[2] - F.mudDark[2]) * k;
+          // Depth in a few flat bands, dithered where they meet, as pixel art
+          // shades a slope (the cell's grain decides which side of the step it falls).
+          const steps = 6;
+          const banded = Math.min(1, Math.floor(d * steps + ((g >> 4) & 15) / 16) / steps);
           // Pale silt where the water is shallow and the sun gets through.
-          const silt = Math.max(0, 1 - d * 3) * 0.75;
+          const silt = Math.max(0, 1 - banded * 3) * 0.75;
           rr += (F.silt[0] - rr) * silt; gg += (F.silt[1] - gg) * silt; bb += (F.silt[2] - bb) * silt;
           // Into the murk.
-          const murk = Math.min(0.85, d * 0.95);
+          const murk = Math.min(0.85, banded * 0.95);
           rr += (F.deep[0] - rr) * murk; gg += (F.deep[1] - gg) * murk; bb += (F.deep[2] - bb) * murk;
           c = [rr, gg, bb];
           // The bank's shadow just off its edge.
@@ -373,14 +399,248 @@ export class PondView {
     return path;
   }
 
+  /** How solid something this deep is drawn: the murk swallows the deepest. */
+  private depthAlpha(depth: number) {
+    return Math.max(0.3, 1 - (0.62 * depth) / MAX_DEPTH);
+  }
+
+  /**
+   * How far (cells) the bed seen at a floor row is shifted sideways by the
+   * moving water this frame: the same ripple the floor is drawn with.
+   */
+  private wobbleAt(row: number) {
+    const t = Math.floor(this.pond.tick / WOBBLE_EVERY);
+    return Math.round(Math.sin(row * 0.21 + t * 0.35) * 0.8 + Math.sin(row * 0.067 - t * 0.21) * 0.6);
+  }
+
+  /** Draws a sprite at a world point, scaled for its height (see the reef's). */
+  private sprite(img: HTMLCanvasElement, x: number, z: number, h: number, o: SpriteOptions = {}) {
+    const { spriteCtx: ctx, px } = this;
+    const p = this.project(x, z, h);
+    const k = px * p.s * (o.scale ?? 1);
+    const w = Math.round(img.width * k);
+    const hh = Math.round(img.height * k * (o.scaleY ?? 1));
+    ctx.globalAlpha = o.alpha ?? 1;
+    const top = o.anchor === 'bottom' ? p.y - hh : p.y - hh / 2;
+    if (!o.flipX) {
+      ctx.drawImage(img, Math.round(p.x - w / 2), Math.round(top), w, hh);
+      return;
+    }
+    ctx.save();
+    ctx.translate(Math.round(p.x), Math.round(top));
+    ctx.scale(-1, 1);
+    ctx.drawImage(img, -Math.round(w / 2), 0, w, hh);
+    ctx.restore();
+  }
+
+  /** A soft dark ellipse on the bed or the surface (see the reef's shadows). */
+  private shadow(x: number, z: number, h: number, width: number, alpha: number) {
+    const { spriteCtx: ctx, px } = this;
+    const sw = Math.max(3, Math.round(width));
+    const p = this.project(x, z, h);
+    const img = shadowSprite(sw);
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(img, Math.round(p.x - (sw * px) / 2), Math.round(p.y - (img.height * px) / 2), sw * px, img.height * px);
+  }
+
   private renderSprites() {
-    const { spriteCtx: ctx } = this;
+    const { spriteCtx: ctx, pond, px } = this;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, this.viewW, this.regionHeight);
+
+    // Anything whose footprint is near the viewport: things underwater are
+    // drawn further down than their spot on the surface, tall things further up.
+    const z0 = Math.max(this.regionTop, this.scrollY) / px - SPRITE_MARGIN - MAX_DEPTH * ELEVATION;
+    const z1 = Math.min(this.regionTop + this.regionHeight, this.scrollY + this.viewH) / px + SPRITE_MARGIN + 40 * ELEVATION;
+    const visible = (z: number) => z >= z0 && z <= z1;
+
+    // 1. Underwater: shadows on the bed, then the bed's own things and
+    // everything swimming, depth-sorted, fading into the murk.
+    const under: Drawable[] = [];
+    for (const p of pond.pads) {
+      if (!visible(p.z)) continue;
+      const d = pond.depthAt(p.x, p.z);
+      this.shadow(p.x + this.wobbleAt(p.z + d * ELEVATION), p.z, -d, p.r * 2.2, 0.28 * this.depthAlpha(d));
+    }
+    for (const st of pond.stones) {
+      if (st.land || !visible(st.z)) continue;
+      const d = pond.depthAt(st.x, st.z);
+      under.push({ depth: st.z, draw: () => this.sprite(stoneSprite(st.seed, st.w, st.ht), st.x + this.wobbleAt(st.z + d * ELEVATION), st.z, -d, { anchor: 'bottom', alpha: this.depthAlpha(d) }) });
+    }
+    for (const r of pond.roots) {
+      if (!visible(r.z)) continue;
+      under.push({ depth: r.z, draw: () => this.sprite(rootSprite(r.seed), r.x + r.side * 7, r.z, -1.5, { flipX: r.side < 0, alpha: 0.75 }) });
+    }
+    for (const l of pond.logs) {
+      if (l.floating || !visible(l.z)) continue;
+      const d = pond.depthAt(l.x, l.z);
+      under.push({ depth: l.z, draw: () => this.sprite(logSprite(l.seed, l.len), l.x + this.wobbleAt(l.z + d * ELEVATION), l.z, -d, { anchor: 'bottom', flipX: l.side < 0, alpha: this.depthAlpha(d) }) });
+    }
+    for (const b of pond.weedBeds) {
+      if (b.z + b.rz >= z0 && b.z - b.rz <= z1) this.addWeeds(b, under);
+    }
+    under.sort((a, b) => a.depth - b.depth);
+    for (const item of under) item.draw();
+
+    // 2. The surface itself, over everything below it.
     this.drawSurface();
+
+    // 3. On and above the surface: duckweed flat on the water first, then
+    // pads, logs, reeds and the banks' stones, depth-sorted.
+    this.drawDuckweed(z0, z1);
+    const over: Drawable[] = [];
+    for (const p of pond.pads) if (visible(p.z)) over.push({ depth: p.z - p.r * 0.6, draw: () => this.drawPad(p) });
+    for (const l of pond.logs) {
+      if (!l.floating || !visible(l.z)) continue;
+      over.push({ depth: l.z, draw: () => this.sprite(logSprite(l.seed, l.len), l.x, l.z, 0.6, { anchor: 'bottom', flipX: l.side < 0 }) });
+    }
+    for (const st of pond.stones) {
+      if (st.land && visible(st.z)) over.push({ depth: st.z, draw: () => this.sprite(stoneSprite(st.seed, st.w, st.ht), st.x, st.z, 0, { anchor: 'bottom' }) });
+    }
+    for (const c of pond.clumps) {
+      if (c.z + 8 >= z0 && c.z - 8 <= z1) this.addReeds(c, over);
+    }
+    over.sort((a, b) => a.depth - b.depth);
+    for (const item of over) item.draw();
+    ctx.globalAlpha = 1;
+  }
+
+  /** A lily pad (bobbing, dipped or tipped by a weight on it) and its flower. */
+  private drawPad(p: Pad) {
+    const bob = Math.sin(this.pond.tick * 0.05 + p.phase) * 0.45 + p.dip;
+    this.sprite(padSprite(p.r, p.notch, p.palette), p.x, p.z, bob, { scaleY: 1 - Math.min(0.25, Math.abs(p.tilt) * 0.2) });
+    if (p.flower) {
+      const stage = p.bloom > 0.66 ? 'open' : p.bloom > 0.33 ? 'half' : 'bud';
+      const fx = p.x + Math.cos((p.notch / 8) * Math.PI * 2 + Math.PI) * p.r * 0.35;
+      this.sprite(lilySprite(stage, p.flower), fx, p.z, bob + 1.5, { anchor: 'bottom' });
+    }
+  }
+
+  /** Duckweed: a speck or two of green per frond, in one pass by colour. */
+  private drawDuckweed(z0: number, z1: number) {
+    const { spriteCtx: ctx, pond, px, regionTop } = this;
+    ctx.globalAlpha = 1;
+    for (let shade = 0; shade < DUCKWEED.length; shade++) {
+      ctx.fillStyle = DUCKWEED[shade];
+      for (const f of pond.fronds) {
+        if (f.shade !== shade || !f.alive || f.z < z0 || f.z > z1) continue;
+        const x = Math.round(f.x) * px, y = Math.round(f.z) * px - regionTop;
+        // Each frond is a little oval leaf, two cells across.
+        ctx.fillRect(x, y, px * 2, px);
+      }
+    }
+  }
+
+  /** A reed clump in bands of depth, so whatever sits among the stems is drawn between them. */
+  private addReeds(c: ReedClump, items: Drawable[]) {
+    const { stems } = c;
+    for (let first = 0; first < stems.length;) {
+      const band = Math.floor(stems[first].z / BAND);
+      let last = first;
+      while (last < stems.length && Math.floor(stems[last].z / BAND) === band) last++;
+      const from = first, to = last;
+      items.push({ depth: (band + 0.5) * BAND, draw: () => this.drawStems(stems, from, to) });
+      first = last;
+    }
+  }
+
+  /**
+   * Reed, rush and cattail stems, stiff at the root and springy toward the
+   * tip, swaying in the breeze and pushed over by whatever brushes them;
+   * reeds put out leaf blades, cattails carry a brown head below a thin spike.
+   * Squares stacked in one column and colour go in as one tall rectangle.
+   */
+  private drawStems(stems: Stem[], from: number, to: number) {
+    const { spriteCtx: ctx, px, pond, regionTop } = this;
+    const runs = this.stemRuns;
+    const head = 27, headLit = 28;
+    const t = pond.tick * 0.035;
+    for (let n = from; n < to; n++) {
+      const st = stems[n];
+      const set = (STEM_KINDS.indexOf(st.kind) * 3 + st.shade) * 3;
+      const wave = Math.sin(t + st.phase + st.x * 0.05) * 0.9 + pond.wind.x * 120;
+      let col = -1, left = 0, top = 0, bottom = 0, size = 0;
+      for (let i = 0; i <= st.len; i += 1 / ELEVATION) {
+        const k = i / st.len;
+        const give = k * k;
+        const sx = (st.x + (wave + st.bx) * give) * px;
+        const sy = Math.round((st.z + st.bz * give * 0.5 - i * ELEVATION) * px - regionTop);
+        const s = Math.ceil(px * (1 + i * PERSPECTIVE));
+        const l = Math.round(sx - s / 2);
+        if (st.kind === 'cattail' && k > 0.62 && k < 0.84) {
+          // The head: two cells wide, lit down one side.
+          runs[head].push(l - Math.round(s / 2), sy, s, s);
+          runs[headLit].push(l + Math.round(s / 2), sy, s, s);
+          continue;
+        }
+        const c = set + (k > 0.86 ? 2 : k < 0.3 ? 0 : 1);
+        // Leaf blades off alternate sides, angled up and out.
+        if (st.kind === 'reed' && i > 4 && Math.round(i * ELEVATION) % 5 === 0) {
+          const side = Math.round(i * ELEVATION) % 10 === 0 ? 1 : -1;
+          runs[set + 1].push(l + side * s, sy - s, s, s, l + side * s * 2, sy - s * 2, s, s);
+        }
+        if (c === col && l === left && s === size) { top = sy; continue; }
+        if (col >= 0) runs[col].push(left, top, size, bottom - top + size);
+        col = c; left = l; top = sy; bottom = sy; size = s;
+      }
+      if (col >= 0) runs[col].push(left, top, size, bottom - top + size);
+    }
+    ctx.globalAlpha = 1;
+    for (let c = 0; c < runs.length; c++) {
+      const run = runs[c];
+      if (!run.length) continue;
+      ctx.fillStyle = c === head ? CATTAIL_HEAD[0] : c === headLit ? CATTAIL_HEAD[1] : REED_COLORS[STEM_KINDS[Math.floor(c / 9)]][Math.floor(c / 3) % 3][c % 3];
+      for (let k = 0; k < run.length; k += 4) ctx.fillRect(run[k], run[k + 1], run[k + 2], run[k + 3]);
+      run.length = 0;
+    }
+  }
+
+  /** A bed of pondweed, in bands of depth like the reeds. */
+  private addWeeds(b: WeedBed, items: Drawable[]) {
+    const { weeds } = b;
+    for (let first = 0; first < weeds.length;) {
+      const band = Math.floor(weeds[first].z / BAND);
+      let last = first;
+      while (last < weeds.length && Math.floor(weeds[last].z / BAND) === band) last++;
+      const from = first, to = last;
+      items.push({ depth: (band + 0.5) * BAND, draw: () => this.drawWeeds(b, from, to) });
+      first = last;
+    }
+  }
+
+  /** Pondweed stalks rising from the bed with leaves along them, swaying in the water, dim with depth. */
+  private drawWeeds(b: WeedBed, from: number, to: number) {
+    const { spriteCtx: ctx, px, pond, regionTop } = this;
+    const runs = this.weedRuns;
+    const t = pond.tick * 0.03;
+    let alpha = 1;
+    for (let n = from; n < to; n++) {
+      const wd = b.weeds[n];
+      const d = pond.depthAt(wd.x, wd.z);
+      alpha = this.depthAlpha(d);
+      const base = wd.z + d * ELEVATION;
+      const shift = this.wobbleAt(base);
+      for (let i = 0; i <= wd.len; i += 1 / ELEVATION) {
+        const k = i / wd.len;
+        const sway = Math.sin(t + wd.phase + i * 0.25) * 1.6 * k;
+        const x = Math.round((wd.x + sway + shift) * px - px / 2);
+        const y = Math.round((base - i * ELEVATION) * px - regionTop);
+        runs[wd.shade * 2].push(x, y, px, px);
+        // Leaves in pairs every few cells.
+        if (Math.round(i * ELEVATION) % 3 === 1) runs[wd.shade * 2 + 1].push(x - px, y, px, px, x + px, y - px, px, px);
+      }
+    }
+    ctx.globalAlpha = alpha;
+    for (let c = 0; c < runs.length; c++) {
+      const run = runs[c];
+      if (!run.length) continue;
+      ctx.fillStyle = WEED_COLORS[c >> 1][c & 1];
+      for (let k = 0; k < run.length; k += 4) ctx.fillRect(run[k], run[k + 1], run[k + 2], run[k + 3]);
+      run.length = 0;
+    }
   }
 
   /**

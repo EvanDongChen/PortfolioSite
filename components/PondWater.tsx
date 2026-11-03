@@ -158,10 +158,15 @@ const PondWater: React.FC = () => {
     const observer = new ResizeObserver(handleResize);
     observer.observe(document.body);
     const handleVisibility = () => send({ type: 'visible', visible: document.visibilityState === 'visible' });
+    const handlePointerMove = (e: PointerEvent) =>
+      send({ type: 'pointer', x: e.clientX, y: e.clientY + window.scrollY, mouse: e.pointerType === 'mouse' });
+    const handlePointerLeave = () => send({ type: 'pointerLeave' });
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', handleResize);
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pointermove', handlePointerMove);
+    document.documentElement.addEventListener('pointerleave', handlePointerLeave);
     return () => {
       live = false;
       stop();
@@ -174,6 +179,8 @@ const PondWater: React.FC = () => {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('pointermove', handlePointerMove);
+      document.documentElement.removeEventListener('pointerleave', handlePointerLeave);
     };
   }, [px]);
 

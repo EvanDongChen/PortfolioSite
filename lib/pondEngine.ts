@@ -36,6 +36,8 @@ export type ToPond =
   | { type: 'view'; scrollY: number; viewW: number; viewH: number }
   | { type: 'world'; w: number; h: number; zones: ClearZone[] }
   | { type: 'zones'; zones: ClearZone[] }
+  | { type: 'pointer'; x: number; y: number; mouse: boolean }
+  | { type: 'pointerLeave' }
   | { type: 'frameMs'; ms: number }
   | { type: 'visible'; visible: boolean };
 
@@ -94,6 +96,15 @@ export class PondEngine {
         break;
       case 'zones':
         pond.setClearZones(m.zones);
+        break;
+      case 'pointer': {
+        // The cursor moves through the water like a swimmer at the surface.
+        const p = this.view.pageToWorld(m.x, m.y, 0);
+        pond.setPointer(p.x, p.z);
+        break;
+      }
+      case 'pointerLeave':
+        pond.clearPointer();
         break;
       case 'frameMs':
         this.frameMs = m.ms;
