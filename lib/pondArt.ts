@@ -8,28 +8,30 @@ import { Rgb, cached, fromRows, makeCanvas } from './pixelOceanArt';
 
 export { makeCanvas };
 
-/** The pond bed, the banks and the light, before the water's own tint. */
+/**
+ * The pond bed, the banks and the light, before the water's own tint. A
+ * clear spring pond: pale sand in the sunlit shallows going down through
+ * jade to a deep cool teal, so the greens of the pads and weeds stand out
+ * against the water as the reef's creatures do against its blue.
+ */
 export const POND_FLOOR = {
-  /** Mud and silt on the bed, dark to light. */
-  mudDark: [50, 50, 34] as Rgb,
-  mudLight: [88, 82, 52] as Rgb,
-  /** Pale silt in the shallows, where the sun reaches the bed. */
-  silt: [118, 110, 74] as Rgb,
-  /** What the bed fades toward at full depth: murky green-black water. */
-  deep: [18, 50, 44] as Rgb,
-  algae: [64, 106, 44] as Rgb,
-  algaeDense: [44, 86, 36] as Rgb,
-  /** Turf on the banks, dark to light, with sun-dried tips. */
-  grassDark: [52, 94, 44] as Rgb,
-  grassLight: [84, 132, 58] as Rgb,
-  grassTip: [128, 160, 76] as Rgb,
-  /** Damp earth near the water, the wet mud at its edge, and the dark lip where the bank drops in. */
-  earth: [96, 76, 48] as Rgb,
-  wetMud: [64, 52, 34] as Rgb,
-  lip: [30, 30, 22] as Rgb,
+  /** The bed seen through the water, shallow to deep, in flat steps. */
+  bed: [[196, 186, 132], [160, 168, 114], [110, 154, 110], [70, 134, 108], [44, 110, 100], [30, 88, 88], [22, 68, 74]] as Rgb[],
+  algae: [92, 150, 84] as Rgb,
+  algaeDense: [70, 132, 76] as Rgb,
+  /** Turf on the banks in three flat tones, with sunlit tufts and dark roots. */
+  grass: [[66, 122, 56], [88, 148, 64], [116, 172, 74]] as Rgb[],
+  grassTip: [162, 202, 98] as Rgb,
+  grassRoot: [50, 98, 50] as Rgb,
+  /** Damp earth near the water, the wet sand at its edge, and the dark lip where the bank drops in. */
+  earth: [138, 104, 66] as Rgb,
+  wetMud: [104, 80, 54] as Rgb,
+  lip: [46, 40, 32] as Rgb,
   /** The bank's shadow on the water just below it. */
-  bankShadow: [20, 32, 26] as Rgb,
-  caustic: [30, 46, 24] as Rgb,
+  bankShadow: [24, 70, 70] as Rgb,
+  caustic: [40, 58, 44] as Rgb,
+  /** Shafts of sunlight slanting down through the water. */
+  ray: [30, 40, 26] as Rgb,
   /** Wildflowers in the turf, in drifts of one colour: buttercup, daisy, clover, speedwell and campion. */
   flowers: [[244, 214, 60], [246, 244, 236], [222, 132, 176], [140, 150, 226], [214, 96, 150]] as Rgb[],
   /** Pebbles in the shallows, and fallen leaves sunk on the bed. */
@@ -39,8 +41,8 @@ export const POND_FLOOR = {
 
 /** The water surface: its tint over everything below, and its glints. */
 export const WATER = {
-  sheet: 'rgba(38,104,90,0.26)',
-  glint: ['rgb(196,236,214)', 'rgb(140,200,180)'],
+  sheet: 'rgba(36,126,124,0.16)',
+  glint: ['rgb(236,252,246)', 'rgb(170,226,224)'],
 };
 
 /** Disturbed water: a splash droplet that shrinks to a fleck. */
@@ -106,9 +108,9 @@ const seededRandom = (seed: number) => {
 
 /** Pad colours: [rim and underside, body, sunlit, veins]: green, yellow-green, old and red-rimmed. */
 const PAD_SETS: Rgb[][] = [
-  [[30, 74, 38], [58, 122, 54], [92, 156, 70], [44, 98, 46]],
-  [[44, 84, 32], [86, 136, 52], [126, 172, 74], [68, 114, 44]],
-  [[88, 42, 40], [70, 120, 56], [104, 154, 72], [56, 102, 50]],
+  [[30, 92, 56], [70, 156, 78], [128, 198, 98], [48, 124, 66]],
+  [[52, 104, 44], [112, 170, 66], [168, 212, 102], [82, 142, 56]],
+  [[26, 86, 70], [60, 146, 100], [112, 192, 128], [40, 114, 84]],
 ];
 
 /**
@@ -366,13 +368,13 @@ export const PICKEREL_FLOWER = ['rgb(92,102,206)', 'rgb(140,150,236)'];
 /** Underwater weeds by kind (see WEED_KINDS) and shade: [stalk, leaf, tip]. */
 export const WEED_COLORS: string[][][] = [
   // Pondweed: broad leaves in pairs.
-  [['rgb(40,90,52)', 'rgb(62,122,60)', 'rgb(84,140,66)'], ['rgb(46,96,44)', 'rgb(74,132,56)', 'rgb(96,150,64)'], ['rgb(36,84,58)', 'rgb(54,112,70)', 'rgb(76,132,76)']],
+  [['rgb(44,108,64)', 'rgb(72,148,74)', 'rgb(104,170,82)'], ['rgb(50,114,58)', 'rgb(84,156,70)', 'rgb(118,178,80)'], ['rgb(40,102,68)', 'rgb(64,138,82)', 'rgb(96,164,92)']],
   // Eelgrass: pale ribbons.
   [['rgb(84,138,68)', 'rgb(112,164,80)', 'rgb(150,188,100)'], ['rgb(92,146,64)', 'rgb(122,170,78)', 'rgb(162,196,104)'], ['rgb(78,132,72)', 'rgb(104,156,84)', 'rgb(140,180,100)']],
   // Hornwort: dark and bushy.
-  [['rgb(26,70,48)', 'rgb(40,96,56)', 'rgb(64,122,66)'], ['rgb(30,76,44)', 'rgb(46,102,52)', 'rgb(72,128,62)'], ['rgb(24,66,52)', 'rgb(36,90,60)', 'rgb(58,116,70)']],
+  [['rgb(30,90,64)', 'rgb(48,120,76)', 'rgb(80,152,88)'], ['rgb(34,96,60)', 'rgb(54,126,72)', 'rgb(88,158,84)'], ['rgb(28,86,68)', 'rgb(44,114,80)', 'rgb(72,146,92)']],
   // Milfoil: feathery, with red tips.
-  [['rgb(56,96,54)', 'rgb(80,128,66)', 'rgb(170,82,62)'], ['rgb(62,102,52)', 'rgb(88,134,64)', 'rgb(186,96,64)'], ['rgb(52,92,58)', 'rgb(74,122,70)', 'rgb(156,74,66)']],
+  [['rgb(56,110,70)', 'rgb(84,144,82)', 'rgb(214,150,96)'], ['rgb(62,116,66)', 'rgb(92,150,78)', 'rgb(226,168,104)'], ['rgb(52,106,74)', 'rgb(78,138,86)', 'rgb(204,140,98)']],
 ];
 /** Floating fronds: duckweed in three greens, then water crowfoot's leaves in two. */
 export const DUCKWEED = ['rgb(108,168,60)', 'rgb(142,196,76)', 'rgb(80,138,52)', 'rgb(56,116,58)', 'rgb(82,140,66)'];

@@ -45,6 +45,10 @@ const SPRITE_MARGIN = 60;
 const GLINT_TILE = 30;
 const GLINTS_PER_TILE = 2;
 const GLINT_LIFE = 110;
+/** Sun shafts through the water: how many to a stretch of page, how long a stretch (rows) and how far they slant. */
+const SHAFTS = 3;
+const SHAFT_PERIOD = 240;
+const SHAFT_SLANT = 0.45;
 
 export type PondLayout = ReefLayout;
 
@@ -295,7 +299,7 @@ export class PondView {
       for (let x = 0; x < w; x++) {
         const i = z * w + x;
         const g = grain[i];
-        const t = Math.max(0, Math.min(255, terrain[i] + ((g & 31) - 16)));
+        const t = Math.max(0, Math.min(255, terrain[i] + ((g & 15) - 8)));
         const fromShore = Math.min(x - l, r - x);
         let c: number[];
         if (fromShore <= 0) {
@@ -306,10 +310,13 @@ export class PondView {
           else if (up < 3.5 + (g & 1)) c = F.earth;
           else {
             const k = t / 255;
-            c = [0, 1, 2].map(n => F.grassDark[n] + (F.grassLight[n] - F.grassDark[n]) * k);
-            // Blades of turf: sunlit tips and dark roots, scattered.
-            if ((g & 15) === 0) c = F.grassTip;
-            else if ((g & 15) === 1) c = F.grassDark.map(v => v * 0.8);
+            // Three flat tones of turf, dithered a cell deep where they meet.
+            const tone = Math.min(2, Math.floor(k * 3 + ((g >> 4) & 7) / 16 - 0.2));
+            c = F.grass[Math.max(0, tone)];
+            // Tufts: a sunlit blade over a dark root, here and there.
+            const tuft = hash(i * 7 + 1);
+            if (tuft < 0.035) c = F.grassTip;
+            else if (hash((i - w) * 7 + 1) < 0.035) c = F.grassRoot;
             // Wildflowers in drifts, each drift one colour, thickest where the turf swells.
             else if (up > 4.5 && hash(i * 31 + 7) < (k > 0.8 ? 0.16 : 0.003)) {
               c = F.flowers[Math.floor(hash(Math.floor(x / 9) + Math.floor(z / 7) * 1013) * F.flowers.length)];
@@ -317,26 +324,18 @@ export class PondView {
           }
         } else {
           const d = depth[i] / MAX_DEPTH;
-          const k = t / 255;
-          let rr = F.mudDark[0] + (F.mudLight[0] - F.mudDark[0]) * k;
-          let gg = F.mudDark[1] + (F.mudLight[1] - F.mudDark[1]) * k;
-          let bb = F.mudDark[2] + (F.mudLight[2] - F.mudDark[2]) * k;
-          // Depth in a few flat bands, dithered where they meet, as pixel art
-          // shades a slope (the cell's grain decides which side of the step it falls).
-          const steps = 6;
-          const banded = Math.min(1, Math.floor(d * steps + ((g >> 4) & 15) / 16) / steps);
-          // Pale silt where the water is shallow and the sun gets through.
-          const silt = Math.max(0, 1 - banded * 3) * 0.75;
-          rr += (F.silt[0] - rr) * silt; gg += (F.silt[1] - gg) * silt; bb += (F.silt[2] - bb) * silt;
-          // Into the murk.
-          const murk = Math.min(0.72, banded * 0.85);
-          rr += (F.deep[0] - rr) * murk; gg += (F.deep[1] - gg) * murk; bb += (F.deep[2] - bb) * murk;
-          c = [rr, gg, bb];
+          // Depth in flat steps, sand to deep teal, dithered where they meet
+          // as pixel art shades a slope; the bed's swells nudge a step up or down.
+          const steps = F.bed.length - 1;
+          const step = Math.max(0, Math.min(steps, Math.floor(d * steps * 1.15 + (t / 255 - 0.5) * 0.5 + ((g >> 4) & 15) / 16)));
+          const banded = step / steps;
+          const murk = banded * 0.85;
+          c = F.bed[step];
           // Pebbles in the shallows and fallen leaves further out, seen through the water.
           const speck = hash(i * 17 + 3);
           const seen = 1 - murk;
           if (banded < 0.4 && speck < 0.03) c = c.map((v, n) => v + (F.pebble[speck < 0.012 ? 0 : 1][n] - v) * seen);
-          else if (banded >= 0.2 && speck > 0.988) c = c.map((v, n) => v + (F.litter[speck > 0.995 ? 1 : 0][n] - v) * seen * 0.8);
+          else if (banded >= 0.2 && speck > 0.997) c = c.map((v, n) => v + (F.litter[speck > 0.9985 ? 1 : 0][n] - v) * seen * 0.6);
           // The bank's shadow just off its edge.
           if (fromShore < 1.6) c = F.bankShadow;
           else if (fromShore < 2.6) c = c.map((v, n) => (v + F.bankShadow[n]) / 2);
@@ -367,9 +366,9 @@ export class PondView {
       const l = Math.ceil(shoreL[z]) + 1, r = Math.floor(shoreR[z]) - 1;
       for (let x = l; x < r; x++) {
         const a = algae[at + x];
-        if (a === 0 || a + (grain[at + x] >> 1) <= 120) continue;
-        const c = a > 200 && (grain[at + x] & 3) === 0 ? F.algaeDense : F.algae;
-        const mix = Math.min(200, 90 + (a >> 1));
+        if (a < 96 || a + (grain[at + x] >> 2) <= 150) continue;
+        const c = a > 200 ? F.algaeDense : F.algae;
+        const mix = Math.min(150, 40 + (a >> 1));
         const p = row[x];
         const pr = p & 255, pg = (p >> 8) & 255, pb = (p >> 16) & 255;
         row[x] = rgba(pr + (((c[0] - pr) * mix) >> 8), pg + (((c[1] - pg) * mix) >> 8), pb + (((c[2] - pb) * mix) >> 8));
@@ -441,6 +440,45 @@ export class PondView {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.drawImage(this.shade(), 0, top, pond.w, rows, 0, top, pond.w, rows);
+    if (!this.lean) this.drawShafts(top, rows, sun);
+  }
+
+  /**
+   * Shafts of sunlight slanting down through the water, as on the reef: a
+   * few broad bands repeating down the page, swaying and shimmering slowly,
+   * brightest in their middles and kept to the water. Drawn after the depth
+   * shade so they reach into the deep middle; in pixel steps of two rows.
+   */
+  private drawShafts(top: number, rows: number, sun: number) {
+    const { pond, lightCtx: ctx } = this;
+    const [r, g, b] = POND_FLOOR.ray;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    const t = pond.tick * 0.004;
+    for (let z = top - (top & 1); z < top + rows; z += 2) {
+      const row = Math.max(0, Math.min(pond.h - 1, z));
+      const l = pond.shoreL[row] + 1, rr = pond.shoreR[row] - 1;
+      for (let n = 0; n < SHAFTS; n++) {
+        // Each shaft runs down-right, and starts over every SHAFT_PERIOD rows.
+        const period = Math.floor((z + n * 97) / SHAFT_PERIOD);
+        const along = ((z + n * 97) % SHAFT_PERIOD) / SHAFT_PERIOD;
+        const seed = hash(period * 31 + n * 7);
+        const width = 10 + seed * 18;
+        const x0 = pond.w * (0.05 + seed * 0.7) + along * SHAFT_PERIOD * SHAFT_SLANT + Math.sin(t + n * 1.7 + period) * 6;
+        const fade = Math.sin(along * Math.PI) * (0.55 + 0.45 * Math.sin(t * 3 + n + period * 2.3));
+        if (fade <= 0.05) continue;
+        for (let band = 0; band < 3; band++) {
+          // A soft edge: the middle third brighter than the sides.
+          const bx = x0 + (band === 1 ? width * 0.25 : band === 2 ? width * 0.75 : 0), bw = band === 0 ? width : width * 0.25;
+          const from = Math.max(l, Math.round(bx)), to = Math.min(rr, Math.round(bx + (band === 0 ? width : bw)));
+          if (to <= from) continue;
+          ctx.globalAlpha = sun * fade * (band === 0 ? 0.55 : 0.35);
+          ctx.fillRect(from, z, to - from, 2);
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   // --- sprites ------------------------------------------------------------
@@ -1268,11 +1306,11 @@ export class PondView {
         if (trees > 0) {
           // Ragged at the crowns' edge.
           if (trees < 2 && hash(z * w + x) < 0.5) continue;
-          a = 0.34 * Math.min(1, trees / 3); rr = 16; gg = 48; bb = 32;
+          a = 0.3 * Math.min(1, trees / 3); rr = 10; gg = 46; bb = 50;
         } else {
           const cloud = Math.sin(x * 0.035 + z * 0.012) * Math.sin(z * 0.019 - x * 0.008 + 1.3);
-          a = 0.05 + Math.max(0, cloud - 0.3) * 0.25;
-          rr = cloud > 0.3 ? 226 : 168; gg = cloud > 0.3 ? 240 : 214; bb = cloud > 0.3 ? 240 : 222;
+          a = cloud > 0.3 ? 0.06 + (cloud - 0.3) * 0.22 : 0.03;
+          rr = cloud > 0.3 ? 236 : 170; gg = cloud > 0.3 ? 248 : 226; bb = cloud > 0.3 ? 250 : 240;
         }
         // Ripples break it into dashes along each row.
         if (hash(z * 131 + Math.floor((x + jitter) / 5)) < 0.22) a *= 0.35;

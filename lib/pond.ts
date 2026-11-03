@@ -586,7 +586,14 @@ export class Pond {
     // Shallow bars out in the middle: kept as they were above, new ones below.
     this.shoals = from === 0 ? [] : this.shoals.filter(s => s.z < h);
     for (let z = from + rand(50, 130); z < h - 20; z += rand(95, 190)) {
-      this.shoals.push({ x: rand(w * 0.3, w * 0.7), z, rx: rand(16, 30), rz: rand(10, 18) });
+      const rx = rand(16, 30), rz = rand(10, 18);
+      // Pale sand behind the hero text would wash it out: somewhere else along the row, or none.
+      for (let tries = 0; tries < 6; tries++) {
+        const x = rand(w * 0.3, w * 0.7);
+        if (this.clearZones.some(r => x + rx > r.x0 && x - rx < r.x1 && z + rz > r.z0 && z - rz < r.z1)) continue;
+        this.shoals.push({ x, z, rx, rz });
+        break;
+      }
     }
     for (let z = 0; z < h; z++) {
       const l = this.shoreL[z], r = this.shoreR[z];
