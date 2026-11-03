@@ -904,7 +904,8 @@ export class Pond {
       // Now and then one sprawls across half the pond.
       const grand = Math.random() < 0.25 ? rand(1.7, 2.3) : 1;
       const rx = Math.min(w * 0.42, rand(26, 48) * fieldScale * grand), rz = rand(14, 24) * grand;
-      raft(grand > 1 ? rand(w * 0.3, w * 0.7) : rand(w * 0.15, w * 0.85), z, Math.min(420, Math.round(rx * rz * 0.09)), rx, rz, Infinity, 0.6, true);
+      // A sprawling one is looser, with open water between the pads (and not too many to draw).
+      raft(grand > 1 ? rand(w * 0.3, w * 0.7) : rand(w * 0.15, w * 0.85), z, Math.min(200, Math.round(rx * rz * (grand > 1 ? 0.05 : 0.09))), rx, rz, Infinity, 0.6, grand === 1);
       if (grand > 1) z += rz;
     }
     // Pickerelweed and arrowhead standing in the shallows a little way out from the shore.
@@ -1091,12 +1092,14 @@ export class Pond {
       // How many times the usual patch's area it covers, to plant it as thickly.
       const big = Math.max(1, (b.rx * b.rz) / 520);
       const times = (n: number) => Math.round(n * big);
+      // Reeds are dear to draw: a big marsh has more stands, spread wider, not as many more as its area.
+      const stands = (n: number) => Math.round(n * Math.min(2, Math.sqrt(big)));
       switch (b.kind) {
         case 'marsh': {
           // Stands of reeds with open pockets of water between, pickerelweed
           // and arrowhead round the edge, a few pads in the pockets.
-          for (let k = times(randInt(6, 10)); k > 0; k--) { const p = inside(b, 0.8); if (p) clump(p.x, p.z, randInt(9, 15), ['cattail', 'reed', 'reed', 'rush'], 6); }
-          for (let k = times(randInt(3, 5)); k > 0; k--) {
+          for (let k = stands(randInt(6, 10)); k > 0; k--) { const p = inside(b, 0.8); if (p) clump(p.x, p.z, randInt(9, 15), ['cattail', 'reed', 'reed', 'rush'], 6); }
+          for (let k = stands(randInt(3, 5)); k > 0; k--) {
             const a = rand(0, Math.PI * 2);
             const x = b.x + Math.cos(a) * b.rx * 0.95, z = b.z + Math.sin(a) * b.rz * 0.95;
             if (this.shoreDist[this.cellAt(x, z)] > 2) clump(x, z, randInt(6, 10), ['pickerel', 'arrowhead'], 4);
