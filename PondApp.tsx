@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useState, useCallback } fro
 import PortfolioContent from './components/PortfolioContent';
 import PondWater from './components/PondWater';
 import BackToTopButton from './components/BackToTopButton';
-import ThemeDial from './components/ThemeDial';
+import ThemeSwitch from './components/ThemeSwitch';
 import PerformanceButton from './components/PerformanceButton';
 import PerformancePanel from './components/PerformancePanel';
 import PixelTransition from './components/PixelTransition';
@@ -66,7 +66,7 @@ const PondApp: React.FC = () => {
       <BackToTopButton />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
-      <ThemeDial />
+      <ThemeSwitch />
       <PondCensus stats={stats} />
       {isSwitchIn && <PixelTransition ink="#0b1a14" edge="#173226" />}
     </div>

@@ -29,7 +29,7 @@ const JellyfishLayer = lazy(() => import('./components/JellyfishLayer'));
 const AnglerFishLayer = lazy(() => import('./components/AnglerFishLayer'));
 
 import ThemeToggleButton from './components/ThemeToggleButton';
-import ThemeDial from './components/ThemeDial';
+import ThemeSwitch from './components/ThemeSwitch';
 import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from './components/Icons';
 import { Bubble as BubbleType, Fish as FishType, FishFood as FishFoodType, FishBehavior } from './types';
 import { useTheme, useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
@@ -1691,7 +1691,7 @@ const App: React.FC = () => {
       />
       <BackToTopButton />
       <ThemeToggleButton />
-      <ThemeDial />
+      <ThemeSwitch />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
       <TutorialButton isOpen={isTutorialOpen} onToggle={toggleTutorial} />
