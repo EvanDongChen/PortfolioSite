@@ -213,34 +213,44 @@ const GRAIN: Rgb[] = [[196, 160, 110], [160, 124, 82]];
 const LOG_MOSS: Rgb = [92, 128, 58];
 
 /**
- * A log lying across the page, its cut end on the right: a sunlit top, bark
- * furrows running along it, a dark underside and rings on the end grain.
+ * A log lying across the page, h thick, its cut end on the right: a sunlit
+ * top with moss along it, bark furrows running its length, a knot or two
+ * where branches were, a dark underside and rings on the end grain.
  */
-export const logSprite = (seed: number, len: number) =>
-  cached(`pond-log-${seed}-${len}`, () => {
+export const logSprite = (seed: number, len: number, h = 6) =>
+  cached(`pond-log-${seed}-${len}-${h}`, () => {
     const rnd = seededRandom(seed);
-    const h = 6;
     const c = makeCanvas(len, h);
     const ctx = c.getContext('2d')!;
-    const furrows = Array.from({ length: 3 }, () => ({ y: 1 + Math.floor(rnd() * 3), from: Math.floor(rnd() * len * 0.5), to: Math.floor(len * (0.5 + rnd() * 0.45)) }));
-    for (let x = 0; x < len - 2; x++) {
+    const furrows = Array.from({ length: Math.max(3, h - 2) }, () => ({ y: 1 + Math.floor(rnd() * (h - 3)), from: Math.floor(rnd() * len * 0.5), to: Math.floor(len * (0.5 + rnd() * 0.45)) }));
+    const knots = Array.from({ length: Math.floor(len / 22) + 1 }, () => ({ x: 4 + Math.floor(rnd() * (len - 10)), y: 1 + Math.floor(rnd() * Math.max(1, h - 4)) }));
+    const moss = Array.from({ length: Math.floor(len / 16) + 1 }, () => ({ from: Math.floor(rnd() * len * 0.8), w: 3 + Math.floor(rnd() * 6) }));
+    const end = len - Math.ceil(h * 0.6);
+    for (let x = 0; x < end; x++) {
       // A gentle taper toward the far (left) end.
       const top = x < 3 ? 1 : 0;
       for (let y = top; y < h; y++) {
-        let col = y === top ? BARK[0] : y >= h - 2 ? BARK[3] : y >= h - 3 ? BARK[2] : BARK[1];
+        let col = y === top ? BARK[0] : y >= h - 2 ? BARK[3] : y >= h - 3 ? BARK[2] : y <= top + 1 && h > 6 ? BARK[0] : BARK[1];
         if (furrows.some(f => f.y === y && x >= f.from && x <= f.to)) col = BARK[2];
-        if (y === top && rnd() < 0.15) col = LOG_MOSS;
+        if (y <= top + (h > 6 ? 1 : 0) && moss.some(m => x >= m.from && x < m.from + m.w) && rnd() < 0.7) col = LOG_MOSS;
+        else if (y === top && rnd() < 0.1) col = LOG_MOSS;
         put(ctx, x, y, col);
       }
     }
-    // The cut end: rings of pale wood.
-    const ring = ['.ab.', 'abba', 'abba', 'abba', '.ab.', '..'];
-    ring.forEach((row, y) => [...row].forEach((ch, k) => {
-      const x = len - 3 + k;
-      if (x >= len) return;
-      if (ch === 'a') put(ctx, x, y, GRAIN[1]);
-      else if (ch === 'b') put(ctx, x, y, GRAIN[0]);
-    }));
+    for (const k of knots) {
+      if (k.x + 1 >= end) continue;
+      put(ctx, k.x, k.y, BARK[3]); put(ctx, k.x + 1, k.y, BARK[2]); put(ctx, k.x, k.y + 1, BARK[2]);
+    }
+    // The cut end: rings of pale wood in an oval as tall as the log.
+    const ew = len - end + 1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < ew; x++) {
+        const nx = (x + 0.5 - ew / 2) / (ew / 2), ny = (y + 0.5 - h / 2) / (h / 2);
+        const r2 = nx * nx + ny * ny;
+        if (r2 > 1) continue;
+        put(ctx, end - 1 + x, y, r2 > 0.6 ? BARK[2] : Math.floor(Math.sqrt(r2) * 4) % 2 ? GRAIN[1] : GRAIN[0]);
+      }
+    }
     return c;
   });
 

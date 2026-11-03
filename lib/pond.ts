@@ -77,6 +77,10 @@ export interface Stone { x: number; z: number; w: number; ht: number; seed: numb
  * on the bank, where frogs and the turtle climb out to bask.
  */
 export interface Log { x: number; z: number; len: number; seed: number; floating: boolean; side: 1 | -1 }
+/** How thick a log is drawn (art pixels): the longer, the stouter. */
+export const logThickness = (len: number) => (len >= 50 ? 10 : len >= 38 ? 8 : 6);
+/** A shallow bar out in the middle of the pond, where reeds stand and lilies root. */
+export interface Shoal { x: number; z: number; rx: number; rz: number }
 /** Roots reaching into the shallows from the bank. */
 export interface Roots { x: number; z: number; side: 1 | -1; seed: number }
 /**
@@ -348,8 +352,8 @@ export const POND_SPECIES: Record<PondSpecies, SpeciesDef> = {
 const LEAP_RANGE = 46;
 const TONGUE_REACH = 16;
 const TONGUE_TICKS = 14;
-/** How high (h) a perch's top is: on a pad its bob, on a log its rounded top. */
-export const LOG_TOP = 7.5;
+/** How high (h) a log's rounded top is, for whatever sits on it. */
+export const logTop = (l: Log) => (logThickness(l.len) - 2) / ELEVATION + 0.3;
 /** A frog floats this far down: only its eyes break the surface. */
 const FLOAT_H = -0.7;
 /** How far a fast cursor startles a frog off its perch (cells). */
@@ -447,6 +451,7 @@ export class Pond {
   weedBeds: WeedBed[] = [];
   stones: Stone[] = [];
   logs: Log[] = [];
+  shoals: Shoal[] = [];
   roots: Roots[] = [];
   boughs: Bough[] = [];
   fronds: Frond[] = [];
@@ -560,8 +565,17 @@ export class Pond {
     this.algae = new Uint8Array(n);
     this.nutrients = new Uint8Array(n);
     const p = this.shorePhase;
+    // A narrower or wider page moves the shores, so everything is planted
+    // afresh; a taller one only plants the new rows at the bottom.
+    const from = w === old.w ? old.h : 0;
+    // Shallow bars out in the middle: kept as they were above, new ones below.
+    this.shoals = from === 0 ? [] : this.shoals.filter(s => s.z < h);
+    for (let z = from + rand(60, 160); z < h - 20; z += rand(130, 260)) {
+      this.shoals.push({ x: rand(w * 0.3, w * 0.7), z, rx: rand(16, 30), rz: rand(10, 18) });
+    }
     for (let z = 0; z < h; z++) {
       const l = this.shoreL[z], r = this.shoreR[z];
+      const bars = this.shoals.filter(s => Math.abs(s.z - z) < s.rz);
       for (let x = 0; x < w; x++) {
         const i = z * w + x;
         // Gentle swells in the bed, and in the banks' turf.
@@ -574,6 +588,13 @@ export class Pond {
           const k = Math.min(1, d / SHELF);
           // A wide sunlit shelf, a slope, then the deep middle; hollows here and there.
           this.depth[i] = MAX_DEPTH * (k * k * (3 - 2 * k)) * (0.82 + 0.18 * tone) + Math.min(1.5, d * 0.5);
+          // Rising gently onto a shoal.
+          let hump = 0;
+          for (const s of bars) {
+            const nx = (x - s.x) / s.rx, nz = (z - s.z) / s.rz;
+            hump = Math.max(hump, 1 - nx * nx - nz * nz);
+          }
+          if (hump > 0) this.depth[i] = Math.max(1.5, this.depth[i] * (1 - 0.8 * Math.min(1, hump * 1.6)));
         }
         if (x < old.w && z < old.h && w === old.w) {
           this.algae[i] = old.algae[z * old.w + x];
@@ -586,9 +607,6 @@ export class Pond {
         }
       }
     }
-    // A narrower or wider page moves the shores, so everything is planted
-    // afresh; a taller one only plants the new rows at the bottom.
-    const from = w === old.w ? old.h : 0;
     if (from === 0) {
       this.pads = []; this.clumps = []; this.weedBeds = []; this.stones = []; this.logs = [];
       this.roots = []; this.fronds = []; this.patches = []; this.boughs = [];
@@ -634,6 +652,26 @@ export class Pond {
   private plant(z0: number, z1: number) {
     const { w } = this;
     const sides: (1 | -1)[] = [1, -1];
+    // Logs first, so the pads grow round them: floating with an end on the
+    // bank, adrift out in the open water, or sunk on the bed.
+    for (let z = z0 + rand(80, 250); z < z1 - 10; z += rand(260, 480)) {
+      const side: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+      const len = randInt(40, 60);
+      // The bank end rests a few cells up the shore.
+      this.logs.push({ x: this.offShore(z, side, len / 2 - 6), z, len, seed: randInt(1, 1e9), floating: true, side });
+    }
+    for (let z = z0 + rand(40, 160); z < z1 - 10; z += rand(170, 320)) {
+      const x = rand(w * 0.3, w * 0.7), len = randInt(34, 56);
+      if (!this.isWater(x - len / 2 - 2, z) || !this.isWater(x + len / 2 + 2, z)) continue;
+      if (this.logs.some(l => Math.abs(l.z - z) < 14 && Math.abs(l.x - x) < (l.len + len) / 2 + 4)) continue;
+      this.logs.push({ x, z, len, seed: randInt(1, 1e9), floating: true, side: Math.random() < 0.5 ? 1 : -1 });
+    }
+    for (let z = z0 + rand(200, 500); z < z1 - 10; z += rand(400, 800)) {
+      const x = rand(w * 0.2, w * 0.8);
+      if (this.isWater(x - 24, z) && this.isWater(x + 24, z) && this.depthAt(x, z) > 10) {
+        this.logs.push({ x, z, len: randInt(36, 54), seed: randInt(1, 1e9), floating: false, side: Math.random() < 0.5 ? 1 : -1 });
+      }
+    }
     // Reeds, cattails and rushes in clumps along both shores, rooted at the
     // waterline; yellow flag irises and purple loosestrife a little up the bank.
     for (const side of sides) {
@@ -660,12 +698,13 @@ export class Pond {
     }
     // Lily pads in rafts: out from both shores across the shallows, and here
     // and there further out, wherever the water is shallow enough to root in.
-    const raft = (cx: number, cz: number, count: number, spreadX: number, spreadZ: number) => {
+    const raft = (cx: number, cz: number, count: number, spreadX: number, spreadZ: number, deep = MAX_DEPTH * 0.92) => {
       for (let k = count, tries = 0; k > 0 && tries < count * 8; tries++) {
         const young = Math.random() < 0.3;
         const r = Math.round((young ? rand(3, 5) : rand(5.5, 10)) * 2) / 2;
         const x = cx + rand(-spreadX, spreadX), pz = cz + rand(-spreadZ, spreadZ);
-        if (!this.isWater(x - r, pz) || !this.isWater(x + r, pz) || this.depthAt(x, pz) > MAX_DEPTH * 0.92) continue;
+        if (!this.isWater(x - r, pz) || !this.isWater(x + r, pz) || this.depthAt(x, pz) > deep) continue;
+        if (this.logs.some(l => l.floating && Math.abs(l.z - pz) < r * 0.6 + 4 && Math.abs(l.x - x) < l.len / 2 + r)) continue;
         if (this.pads.some(o => Math.abs(o.z - pz) < 20 && Math.hypot(o.x - x, (o.z - pz) * 1.6) < o.r + r + 0.5)) continue;
         const flower = r >= 5.5 && Math.random() < 0.5 ? (Math.random() < 0.5 ? 1 : Math.random() < 0.6 ? 2 : 3) : 0;
         this.pads.push({
@@ -678,7 +717,27 @@ export class Pond {
     for (const side of sides) {
       for (let z = z0 + rand(10, 40); z < z1 - 6; z += rand(30, 70)) raft(this.offShore(z, side, rand(6, 30)), z, randInt(5, 12), 14, 16);
     }
-    for (let z = z0 + rand(40, 120); z < z1 - 6; z += rand(80, 170)) raft(rand(w * 0.25, w * 0.75), z, randInt(4, 10), 16, 14);
+    // Out in the middle: rafts all down the pond (the lilies here have long stems).
+    for (let z = z0 + rand(20, 60); z < z1 - 6; z += rand(40, 90)) raft(rand(w * 0.25, w * 0.75), z, randInt(5, 12), 18, 14, Infinity);
+    // The shoals: an island of reeds, rushes or cattails ringed with pads, and crowfoot in the shallows.
+    for (const s of this.shoals) {
+      if (s.z < z0 || s.z >= z1) continue;
+      const r = Math.random();
+      const kind: ReedKind = r < 0.4 ? 'cattail' : r < 0.7 ? 'rush' : 'reed';
+      const stems: Stem[] = [];
+      for (let k = randInt(10, 18); k > 0; k--) {
+        const a = rand(0, Math.PI * 2), d = Math.sqrt(Math.random());
+        const own: ReedKind = kind === 'cattail' && Math.random() < 0.3 ? 'rush' : kind;
+        stems.push({
+          x: s.x + Math.cos(a) * d * s.rx * 0.35, z: s.z + Math.sin(a) * d * s.rz * 0.35,
+          len: own === 'cattail' ? randInt(22, 36) : own === 'reed' ? randInt(18, 32) : randInt(12, 22),
+          kind: own, phase: rand(0, Math.PI * 2), shade: randInt(0, 2), ...upright(),
+        });
+      }
+      stems.sort((a, b) => a.z - b.z);
+      this.clumps.push({ x: s.x, z: s.z, stems });
+      raft(s.x, s.z, randInt(8, 14), s.rx, s.rz, Infinity);
+    }
     // Duckweed in sheltered patches near the shores and adrift further out,
     // and water crowfoot's leaves and white flowers in the shallows.
     for (let z = z0 + rand(20, 80); z < z1 - 6; z += rand(50, 120)) {
@@ -733,18 +792,6 @@ export class Pond {
     for (const side of sides) {
       for (let z = z0 + rand(60, 220); z < z1 - 10; z += rand(170, 380)) {
         this.boughs.push({ x: this.offShore(z, side, -4), z, side, len: randInt(18, 28), seed: randInt(1, 1e9) });
-      }
-    }
-    for (let z = z0 + rand(150, 400); z < z1 - 10; z += rand(380, 700)) {
-      const side: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
-      const len = randInt(24, 38);
-      // The bank end rests a few cells up the shore.
-      this.logs.push({ x: this.offShore(z, side, len / 2 - 5), z, len, seed: randInt(1, 1e9), floating: true, side });
-    }
-    for (let z = z0 + rand(200, 500); z < z1 - 10; z += rand(450, 900)) {
-      const x = rand(w * 0.2, w * 0.8);
-      if (this.isWater(x - 16, z) && this.isWater(x + 16, z) && this.depthAt(x, z) > 10) {
-        this.logs.push({ x, z, len: randInt(20, 32), seed: randInt(1, 1e9), floating: false, side: Math.random() < 0.5 ? 1 : -1 });
       }
     }
   }
@@ -1161,7 +1208,7 @@ export class Pond {
   perchPoint(p: Perch) {
     switch (p.kind) {
       case 'pad': return { x: p.pad.x + p.ox, z: p.pad.z + p.oz, h: this.padTop(p.pad) + 0.3 };
-      case 'log': return { x: p.log.x + p.ox, z: p.log.z - 0.2, h: LOG_TOP };
+      case 'log': return { x: p.log.x + p.ox, z: p.log.z - 0.2, h: logTop(p.log) };
       case 'bank': return { x: p.x, z: p.z, h: 0 };
     }
   }

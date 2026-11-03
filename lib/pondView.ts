@@ -18,7 +18,7 @@
 // drawn into a window around the view, swapped between two canvases.
 
 import {
-  BOUGH_H, ELEVATION, MAX_DEPTH, POND_SPECIES, Pad, Pond, PondCreature, PondSpecies, ReedClump, SPAWN_TICKS, Stem, TADPOLE_TICKS, TAIL_TICKS, WEED_KINDS, WeedBed,
+  BOUGH_H, ELEVATION, MAX_DEPTH, POND_SPECIES, logThickness, Pad, Pond, PondCreature, PondSpecies, ReedClump, SPAWN_TICKS, Stem, TADPOLE_TICKS, TAIL_TICKS, WEED_KINDS, WeedBed,
 } from './pond';
 import {
   CATTAIL_HEAD, CROWFOOT_FLOWER, DUCKWEED, IRIS_FLOWER, LOOSESTRIFE_FLOWER, makeCanvas, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
@@ -542,7 +542,7 @@ export class PondView {
     for (const l of pond.logs) {
       if (l.floating || !visible(l.z)) continue;
       const d = pond.depthAt(l.x, l.z);
-      under.push({ depth: l.z, draw: () => this.sprite(logSprite(l.seed, l.len), l.x + this.wobbleAt(l.z + d * ELEVATION), l.z, -d, { anchor: 'bottom', flipX: l.side < 0, alpha: this.depthAlpha(d) }) });
+      under.push({ depth: l.z, draw: () => this.sprite(logSprite(l.seed, l.len, logThickness(l.len)), l.x + this.wobbleAt(l.z + d * ELEVATION), l.z, -d, { anchor: 'bottom', flipX: l.side < 0, alpha: this.depthAlpha(d) }) });
     }
     for (const b of pond.weedBeds) {
       if (b.z + b.rz >= z0 && b.z - b.rz <= z1) this.addWeeds(b, under);
@@ -598,7 +598,9 @@ export class PondView {
     for (const p of pond.pads) if (visible(p.z)) over.push({ depth: p.z - p.r * 0.6, draw: () => this.drawPad(p) });
     for (const l of pond.logs) {
       if (!l.floating || !visible(l.z)) continue;
-      over.push({ depth: l.z, draw: () => this.sprite(logSprite(l.seed, l.len), l.x, l.z, 0.6, { anchor: 'bottom', flipX: l.side < 0 }) });
+      // Its shadow on the water, and the log riding low in it.
+      this.shadow(l.x, l.z + 1, 0, l.len * 1.05, 0.3);
+      over.push({ depth: l.z, draw: () => this.sprite(logSprite(l.seed, l.len, logThickness(l.len)), l.x, l.z, 0.6, { anchor: 'bottom', flipX: l.side < 0 }) });
     }
     for (const b of pond.boughs) {
       if (!visible(b.z)) continue;
