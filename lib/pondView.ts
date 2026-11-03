@@ -25,7 +25,7 @@ import {
   logSprite, padSprite, pondSprite, rippleTile, rootSprite, spawnSprite, splashSprite, stoneSprite,
   DuckSpriteKind, duckSprite, nestSprite, FishSpriteKind, fishSprite, SILT, ExtraSpriteKind, extraSprite,
   FIREFLY, RAIN, SKY, mayflySprite, nymphSprite, WildSpriteKind, wildSprite, boughSprite,
-  treeSprite, willowSprite, bushSprite, fernSprite, grassSprite, flowerSprite, mushroomSprite,
+  treeSprite, willowSprite, bushSprite, fernSprite, grassSprite, flowerSprite, mushroomSprite, lotusSprite, snagSprite,
 } from './pondArt';
 import { shadowSprite, silhouetteSprite } from './pixelOceanArt';
 import type { ReefLayout } from './pixelOceanView';
@@ -360,7 +360,7 @@ export class PondView {
           else if (banded >= 0.2 && speck > 0.997) c = c.map((v, n) => v + (F.litter[speck > 0.9985 ? 1 : 0][n] - v) * seen * 0.6);
           // The bank's shade on the water just off its edge, fading out over a few cells.
           const lap = Math.max(0, 1 - fromShore / 3.5);
-          const mix = Math.floor(lap * 3 + bayer * 0.999) / 3 * 0.7;
+          const mix = Math.floor(lap * 3 + bayer * 0.999) / 3 * 0.35;
           if (mix > 0) c = c.map((v, n) => v + (F.bankShadow[n] - v) * mix);
         }
         out[i] = rgba(Math.round(c[0]), Math.round(c[1]), Math.round(c[2]));
@@ -801,6 +801,8 @@ export class PondView {
       case 'fern': img = fernSprite(f.seed); break;
       case 'grass': img = grassSprite(f.seed); break;
       case 'flowers': img = flowerSprite(f.seed, f.variant); break;
+      case 'lotus': img = lotusSprite(f.seed, f.variant); break;
+      case 'snag': img = snagSprite(f.seed, f.size); break;
       default: img = mushroomSprite(f.seed);
     }
     return img;

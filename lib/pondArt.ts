@@ -26,7 +26,7 @@ export const POND_FLOOR = {
   /** The deep shade under the bankside trees, toward the page's edges. */
   treeShade: [22, 52, 44] as Rgb,
   /** The shore, from the water up: wet sand, damp earth, then moss before the turf. */
-  shore: [[126, 122, 88], [104, 104, 70], [80, 100, 60], [64, 106, 60]] as Rgb[],
+  shore: [[132, 134, 92], [104, 122, 74], [80, 114, 64], [66, 108, 60]] as Rgb[],
   /** The bank's shadow on the water just below it. */
   bankShadow: [30, 78, 74] as Rgb,
   caustic: [40, 58, 44] as Rgb,
@@ -151,7 +151,8 @@ export const padSprite = (r: number, notch: number, palette: number) =>
         const a = Math.atan2(ny, nx) - notchAngle;
         const spoke = Math.abs(Math.sin(a * 3.5)) < 0.12 && nx * nx + ny * ny > 0.12;
         if (spoke) col = set[3];
-        if (edge) col = ny > 0.5 ? set[0] : set[3];
+        // No outline: only the near (lower) edge darkens, where the rim turns under.
+        if (edge && ny > 0.5) col = set[0];
         put(ctx, x, y, col);
       }
     }
@@ -177,7 +178,6 @@ export const lilySprite = (stage: 'open' | 'half' | 'bud', palette: number) =>
 // --- stones, logs and roots -------------------------------------------------
 
 const STONE_COLORS: Rgb[] = [[150, 146, 128], [118, 116, 102], [90, 88, 78], [66, 64, 58]];
-const STONE_OUTLINE: Rgb = [40, 40, 34];
 const STONE_MOSS: Rgb[] = [[92, 132, 64], [70, 110, 52]];
 
 /** A rounded pond stone lit from the upper left, with moss on top. */
@@ -198,7 +198,8 @@ export const stoneSprite = (seed: number, w: number, h: number) =>
         if (!inside(x, y)) continue;
         const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
         let col: Rgb;
-        if (edge) col = STONE_OUTLINE;
+        // No outline: the edge just takes the shade of its side, darkest underneath.
+        if (edge) col = STONE_COLORS[y > h * 0.55 ? 3 : x > w * 0.6 ? 2 : 1];
         else {
           const light = (y / h) * 0.8 + (x / w) * 0.3 + (rnd() - 0.5) * 0.2;
           col = STONE_COLORS[Math.max(0, Math.min(3, Math.floor(light * 3.4)))];
@@ -714,7 +715,7 @@ export const boughSprite = (seed: number, len: number) =>
 
 // --- plants on the land: trees, bushes, ferns, grass, flowers, mushrooms ------------------
 
-/** Leaf colourways, dark outline to sunlit tips: a fresh green, a deep green, an olive and a blossom tree's. */
+/** Leaf colourways, deep shade to sunlit tips: a fresh green, a deep green, an olive and a blossom tree's. */
 const LEAF_SETS: Rgb[][] = [
   [[24, 56, 40], [40, 88, 50], [60, 120, 60], [92, 154, 72], [138, 190, 92]],
   [[18, 46, 38], [30, 74, 50], [46, 102, 60], [70, 132, 68], [104, 164, 84]],
@@ -728,7 +729,8 @@ const BERRIES: Rgb[] = [[214, 52, 58], [250, 246, 236], [246, 206, 60], [150, 96
 /**
  * A rounded mass of leaves lit from the upper left, as a union of lumps:
  * each pixel shaded by the lump it sits most deeply in, so the mass reads
- * as clusters of leaves, with a dark outline and a scatter of bright tips.
+ * as clusters of leaves, darker underneath, with a scatter of bright tips
+ * and no outline.
  */
 const leafMass = (ctx: CanvasRenderingContext2D, lumps: { x: number; y: number; r: number }[], set: Rgb[], rnd: () => number, w: number, h: number) => {
   const at = (x: number, y: number) => {
@@ -744,10 +746,9 @@ const leafMass = (ctx: CanvasRenderingContext2D, lumps: { x: number; y: number; 
     for (let x = 0; x < w; x++) {
       const p = at(x, y);
       if (!p.inside) continue;
-      const edge = !at(x - 1, y).inside || !at(x + 1, y).inside || !at(x, y - 1).inside || !at(x, y + 1).inside;
-      if (edge) { put(ctx, x, y, set[0]); continue; }
       const light = -p.nx * 0.55 - p.ny * 0.75 + (rnd() - 0.5) * 0.35;
-      const tone = Math.max(1, Math.min(4, Math.round(2.4 + light * 2)));
+      // The underside of the mass falls into the deepest shade.
+      const tone = Math.max(p.ny > 0.7 && p.k < 0.2 ? 0 : 1, Math.min(4, Math.round(2.4 + light * 2)));
       put(ctx, x, y, set[tone]);
     }
   }
@@ -906,6 +907,90 @@ export const mushroomSprite = (seed: number) =>
     const red = seed % 2 === 0;
     const cap: Rgb = red ? [206, 52, 48] : [150, 102, 60], spot: Rgb = red ? [250, 246, 236] : [190, 146, 96];
     return fromRows(['.cc......', 'ccsc..cc.', '.ww..cscc', '.ww...ww.', '......ww.'], { c: cap, s: spot, w: [236, 226, 204] });
+  });
+
+// --- standing out of the water: lotus and the snags of a drowned grove -------------------
+
+const LOTUS_LEAF: Rgb[] = [[20, 66, 56], [36, 104, 80], [58, 138, 96], [102, 178, 120]];
+const LOTUS_PETAL: Rgb[] = [[214, 96, 140], [244, 150, 182], [255, 214, 228]];
+const LOTUS_POD: Rgb[] = [[140, 150, 82], [184, 186, 108], [70, 76, 44]];
+/**
+ * A lotus: a broad round leaf held up on its stalk (variant 0), a pink
+ * flower on a taller one (1), or a seed pod gone over (2). Anchor its foot
+ * at the waterline.
+ */
+export const lotusSprite = (seed: number, variant: number) =>
+  cached(`pond-lotus-${seed}-${variant}`, () => {
+    const rnd = seededRandom(seed * 19 + variant + 1);
+    if (variant === 0) {
+      const w = 11 + Math.floor(rnd() * 3), stalk = 2 + Math.floor(rnd() * 3), h = 5 + stalk;
+      const c = makeCanvas(w, h);
+      const ctx = c.getContext('2d')!;
+      const cx = w / 2, cy = 2.5;
+      for (let y = 0; y < 5; y++) {
+        for (let x = 0; x < w; x++) {
+          const nx = (x + 0.5 - cx) / (w / 2), ny = (y + 0.5 - cy) / 2.5;
+          const r2 = nx * nx + ny * ny;
+          if (r2 > 1) continue;
+          // A shallow cup: the rim dark, the far side lit, a pale dimple at the stalk.
+          let tone = r2 > 0.72 && ny > 0 ? 1 : nx + ny < -0.3 ? 3 : 2;
+          if (Math.abs(nx) < 0.12 && Math.abs(ny) < 0.25) tone = 3;
+          put(ctx, x, y, LOTUS_LEAF[tone]);
+        }
+      }
+      for (let y = 5; y < h; y++) put(ctx, Math.floor(cx), y, LOTUS_LEAF[1]);
+      return c;
+    }
+    const stalk = 6 + Math.floor(rnd() * 5);
+    const rows = variant === 1
+      ? ['..c.c..', '.cbcbc.', 'cbaaabc', '.baYab.', '..aaa..']
+      : ['.ppppp.', 'pqpqpqp', '.ppppp.', '..ppp..'];
+    const head = fromRows(rows, { a: LOTUS_PETAL[0], b: LOTUS_PETAL[1], c: LOTUS_PETAL[2], Y: [246, 206, 60], p: LOTUS_POD[0], q: LOTUS_POD[2] });
+    const c = makeCanvas(7, rows.length + stalk);
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(head, 0, 0);
+    for (let y = rows.length; y < rows.length + stalk; y++) put(ctx, 3, y, LOTUS_LEAF[1]);
+    return c;
+  });
+
+const SNAG: Rgb[] = [[58, 56, 52], [96, 92, 84], [138, 132, 120], [180, 174, 160]];
+const SNAG_MOSS: Rgb = [84, 120, 62];
+/**
+ * The bleached snag of a drowned tree, h tall: a trunk lit down its left
+ * side, broken off at the top, a bare branch or two, moss at the waterline.
+ */
+export const snagSprite = (seed: number, h: number) =>
+  cached(`pond-snag-${seed}-${h}`, () => {
+    const rnd = seededRandom(seed * 23 + h);
+    const w = 13;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const cx = 6;
+    const top = Math.floor(rnd() * 3);
+    for (let y = top; y < h; y++) {
+      // Thickening down the trunk, flaring at the waterline.
+      const thick = y > h - 3 ? 5 : y > h * 0.45 ? 4 : 3;
+      for (let k = 0; k < thick; k++) {
+        const x = cx - Math.floor(thick / 2) + k;
+        const tone = k === 0 ? 3 : k === thick - 1 ? 1 : 2;
+        put(ctx, x, y, y > h - 3 && rnd() < 0.6 ? SNAG_MOSS : SNAG[tone]);
+      }
+    }
+    // A jagged break at the top.
+    put(ctx, cx, top - 1 < 0 ? 0 : top - 1, SNAG[2]);
+    // Bare branches reaching up and out.
+    for (let b = 0; b < 2 + Math.floor(rnd() * 2); b++) {
+      const side = rnd() < 0.5 ? -1 : 1;
+      let x = cx + (side > 0 ? 1 : -1), y = top + 3 + Math.floor(rnd() * (h * 0.45));
+      const len = 3 + Math.floor(rnd() * 4);
+      for (let t = 0; t < len; t++) {
+        x += side;
+        if (t % 2 === 1) y--;
+        if (x < 0 || x >= w || y < 0) break;
+        put(ctx, x, y, SNAG[t < len - 1 ? 2 : 1]);
+      }
+    }
+    return c;
   });
 
 // --- events -------------------------------------------------------------------------

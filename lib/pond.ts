@@ -90,8 +90,20 @@ export const logThickness = (len: number) => (len >= 50 ? 10 : len >= 38 ? 8 : 6
  * in the pond; neighbouring lumps merge smoothly (they are metaballs).
  */
 export interface LandBlob { x: number; z: number; r: number }
-/** What grows on the land, from the banks' long grass to the trees. */
-export type FloraKind = 'tree' | 'willow' | 'bush' | 'fern' | 'grass' | 'flowers' | 'mushrooms';
+/**
+ * Patches of open water with a character of their own, besides the islands
+ * and the lily fields: a reed marsh, a lotus field, a drowned grove of dead
+ * snags, boulder shallows, a duckweed lagoon, and a spring bubbling up
+ * through a sandy hollow.
+ */
+export type BiomeKind = 'marsh' | 'lotus' | 'snags' | 'boulders' | 'lagoon' | 'spring';
+export const BIOME_KINDS: BiomeKind[] = ['marsh', 'lotus', 'snags', 'boulders', 'lagoon', 'spring'];
+export interface Biome { kind: BiomeKind; x: number; z: number; rx: number; rz: number }
+/** How far each kind of patch raises the bed toward the surface at its middle (0 not at all, 1 to the top). */
+const BIOME_RISE: Record<BiomeKind, number> = { marsh: 0.75, lotus: 0.55, snags: 0.35, boulders: 0.8, lagoon: 0, spring: 0.85 };
+
+/** What grows on the land (and the few things standing up out of the water), from the long grass to the trees. */
+export type FloraKind = 'tree' | 'willow' | 'bush' | 'fern' | 'grass' | 'flowers' | 'mushrooms' | 'lotus' | 'snag';
 /** A plant on the land: its kind, which of that kind's looks, and (trees and bushes) its size. */
 export interface Flora { x: number; z: number; kind: FloraKind; seed: number; size: number; variant: number }
 /** A shallow bar out in the middle of the pond, where reeds stand and lilies root. */
@@ -450,7 +462,7 @@ const PAD_PUSH = 0.05;
 /** Duckweed: how far a swimmer parts it, and how hard a patch holds together. */
 const PART_REACH = 7;
 const FROND_COHESION = 0.0006;
-const MAX_FRONDS = 6000;
+const MAX_FRONDS = 9000;
 
 export class Pond {
   w = 0;
@@ -484,6 +496,7 @@ export class Pond {
   roots: Roots[] = [];
   boughs: Bough[] = [];
   flora: Flora[] = [];
+  biomes: Biome[] = [];
   fronds: Frond[] = [];
   patches: DuckweedPatch[] = [];
   /** The breeze across the surface (cells a tick), turning slowly. */
@@ -602,8 +615,15 @@ export class Pond {
     }
     // Shoals that ended up on (or hard by) the new land are dropped.
     this.shoals = this.shoals.filter(s => this.shoreDist[this.cellAt(s.x, s.z)] > 8);
+    this.biomes = from === 0 ? [] : this.biomes.filter(b => b.z < h);
+    this.placeBiomes(from);
+    // What lifts the bed: the shoals, and the patches that are shallow.
+    const lifts = [
+      ...this.shoals.map(s => ({ x: s.x, z: s.z, rx: s.rx, rz: s.rz, k: 0.8 })),
+      ...this.biomes.filter(b => BIOME_RISE[b.kind] > 0).map(b => ({ x: b.x, z: b.z, rx: b.rx, rz: b.rz, k: BIOME_RISE[b.kind] })),
+    ];
     for (let z = 0; z < h; z++) {
-      const bars = this.shoals.filter(s => Math.abs(s.z - z) < s.rz);
+      const bars = lifts.filter(s => Math.abs(s.z - z) < s.rz);
       for (let x = 0; x < w; x++) {
         const i = z * w + x;
         // Gentle swells in the bed, and in the banks' turf.
@@ -620,13 +640,14 @@ export class Pond {
           const k = Math.min(1, near / SHELF) * swell;
           // A wide sunlit shelf, a slope, then the deep middle; hollows here and there.
           this.depth[i] = MAX_DEPTH * (k * k * (3 - 2 * k)) * (0.82 + 0.18 * tone) + Math.min(1.5, d * 0.5);
-          // Rising gently onto a shoal.
-          let hump = 0;
+          // Rising gently onto a shoal or a shallow patch.
+          let lift = 0;
           for (const s of bars) {
             const nx = (x - s.x) / s.rx, nz = (z - s.z) / s.rz;
-            hump = Math.max(hump, 1 - nx * nx - nz * nz);
+            const hump = 1 - nx * nx - nz * nz;
+            if (hump > 0) lift = Math.max(lift, s.k * Math.min(1, hump * 1.6));
           }
-          if (hump > 0) this.depth[i] = Math.max(1.5, this.depth[i] * (1 - 0.8 * Math.min(1, hump * 1.6)));
+          if (lift > 0) this.depth[i] = Math.max(1.5, this.depth[i] * (1 - lift));
         }
         if (x < old.w && z < old.h && w === old.w) {
           this.algae[i] = old.algae[z * old.w + x];
@@ -785,6 +806,8 @@ export class Pond {
         if (this.rocks.some(o => Math.abs(o.z - pz) < r * 0.6 + 3 && Math.abs(o.x - x) < o.w / 2 + r)) continue;
         const gap = packed ? -Math.min(r * 0.4, 3) : 0.5;
         if (this.pads.some(o => Math.abs(o.z - pz) < 20 && Math.hypot(o.x - x, (o.z - pz) * 1.6) < o.r + r + gap)) continue;
+        // Leave the springs, lotus fields, drowned groves and boulders their own water.
+        if (this.biomes.some(b => b.kind !== 'marsh' && b.kind !== 'lagoon' && ((x - b.x) / (b.rx + r)) ** 2 + ((pz - b.z) / (b.rz + r)) ** 2 < 1)) continue;
         const flower = r >= 5.5 && Math.random() < blooms ? (Math.random() < 0.5 ? 1 : Math.random() < 0.6 ? 2 : 3) : 0;
         this.pads.push({
           x, z: pz, ax: x, az: pz, vx: 0, vz: 0, r, notch: randInt(0, 7), palette: randInt(0, 2),
@@ -881,6 +904,7 @@ export class Pond {
       const big = Math.random() < 0.25;
       this.stones.push({ x, z, w: big ? randInt(8, 13) : randInt(4, 7), ht: big ? randInt(5, 7) : randInt(3, 4), seed: randInt(1, 1e9), land: false });
     }
+    this.plantBiomes(z0, z1, rockAt, raft);
     // Boughs from the islands' trees reaching out over the water, for the kingfisher.
     for (const b of this.landBlobs) {
       if (b.z < z0 || b.z >= z1 || b.r < 8 || Math.random() < 0.5) continue;
@@ -888,6 +912,139 @@ export class Pond {
       const x = b.x + side * (b.r - 3);
       if (!this.isWater(x + side * 12, b.z)) continue;
       this.boughs.push({ x, z: b.z + rand(-2, 2), side, len: randInt(16, 22), seed: randInt(1, 1e9) });
+    }
+  }
+
+  /**
+   * The patches for the rows from `from` down: one every so often, never
+   * the same kind twice running, out in the open water clear of the
+   * islands, the shoals and the hero text.
+   */
+  private placeBiomes(from: number) {
+    const { w, h } = this;
+    const scale = Math.max(0.55, Math.min(1, w / 260));
+    let last: BiomeKind | null = this.biomes.length ? this.biomes[this.biomes.length - 1].kind : null;
+    // Dealt like a shuffled deck, so every kind turns up before any comes round again.
+    let deck: BiomeKind[] = [];
+    for (let z = from + rand(50, 120); z < h - 40; z += rand(120, 200)) {
+      if (!deck.length) {
+        deck = [...BIOME_KINDS].sort(() => Math.random() - 0.5);
+        if (deck[deck.length - 1] === last) deck.unshift(deck.pop()!);
+      }
+      const kind = deck.pop()!;
+      const rx = (kind === 'spring' ? rand(12, 18) : rand(22, 38)) * scale, rz = kind === 'spring' ? rand(9, 13) : rand(13, 22);
+      for (let tries = 0; tries < 8; tries++) {
+        const x = rand(w * 0.15, w * 0.85);
+        if (this.clearZones.some(r => x + rx > r.x0 && x - rx < r.x1 && z + rz > r.z0 && z - rz < r.z1)) continue;
+        if (this.shoreDist[this.cellAt(x, z)] < Math.max(rx, rz) * 0.9) continue;
+        if (this.shoals.some(s => Math.abs(s.x - x) < s.rx + rx && Math.abs(s.z - z) < s.rz + rz)) continue;
+        this.biomes.push({ kind, x, z, rx, rz });
+        last = kind;
+        break;
+      }
+    }
+  }
+
+  /** Fills the patches whose middles fall in the rows from z0 to z1. */
+  private plantBiomes(
+    z0: number, z1: number,
+    rockAt: (x: number, z: number, big: boolean) => void,
+    raft: (cx: number, cz: number, count: number, spreadX: number, spreadZ: number, deep?: number, blooms?: number, packed?: boolean) => void,
+  ) {
+    const inside = (b: Biome, spread = 1) => {
+      const a = rand(0, Math.PI * 2), d = Math.sqrt(Math.random()) * spread;
+      return { x: b.x + Math.cos(a) * d * b.rx, z: b.z + Math.sin(a) * d * b.rz };
+    };
+    const carpet = (x: number, z: number, rx: number, rz: number, crowfoot: boolean, density: number) => {
+      const patch = this.patches.length;
+      const target = Math.round(rx * rz * density);
+      this.patches.push({ x, z, rx, rz, target, count: 0, crowfoot });
+      for (let k = 0; k < target && this.fronds.length < MAX_FRONDS; k++) {
+        const a = rand(0, Math.PI * 2), d = Math.random() ** 0.6;
+        this.addFrond(x + Math.cos(a) * d * rx, z + Math.sin(a) * d * rz, patch);
+      }
+    };
+    const clump = (x: number, z: number, n: number, kinds: ReedKind[], spread: number) => {
+      const stems: Stem[] = [];
+      for (let k = n; k > 0; k--) {
+        const sx = x + rand(-spread, spread), sz = z + rand(-spread * 0.6, spread * 0.6);
+        if (!this.isWater(sx, sz)) continue;
+        const kind = kinds[randInt(0, kinds.length - 1)];
+        stems.push({
+          x: sx, z: sz, kind, phase: rand(0, Math.PI * 2), shade: randInt(0, 2), ...upright(),
+          len: kind === 'cattail' ? randInt(22, 36) : kind === 'reed' ? randInt(18, 32) : kind === 'pickerel' ? randInt(12, 20) : kind === 'arrowhead' ? randInt(9, 15) : randInt(12, 22),
+        });
+      }
+      stems.sort((a, b) => a.z - b.z);
+      if (stems.length) this.clumps.push({ x, z, stems });
+    };
+    for (const b of this.biomes) {
+      if (b.z < z0 || b.z >= z1) continue;
+      switch (b.kind) {
+        case 'marsh': {
+          // Stands of reeds with open pockets of water between, pickerelweed
+          // and arrowhead round the edge, a few pads in the pockets.
+          for (let k = randInt(6, 10); k > 0; k--) { const p = inside(b, 0.8); clump(p.x, p.z, randInt(9, 15), ['cattail', 'reed', 'reed', 'rush'], 6); }
+          for (let k = randInt(3, 5); k > 0; k--) {
+            const a = rand(0, Math.PI * 2);
+            clump(b.x + Math.cos(a) * b.rx * 0.95, b.z + Math.sin(a) * b.rz * 0.95, randInt(6, 10), ['pickerel', 'arrowhead'], 4);
+          }
+          raft(b.x, b.z, randInt(6, 10), b.rx, b.rz, Infinity, 0.3);
+          carpet(b.x + rand(-5, 5), b.z + rand(-3, 3), b.rx * 0.4, b.rz * 0.4, false, 1.2);
+          break;
+        }
+        case 'lotus': {
+          // Lotus leaves held up above the water, with flowers and seed pods among them.
+          for (let k = Math.round(b.rx * b.rz * 0.11); k > 0; k--) {
+            const p = inside(b);
+            const r = Math.random();
+            this.flora.push({ x: p.x, z: p.z, kind: 'lotus', seed: randInt(0, 5), size: 0, variant: r < 0.62 ? 0 : r < 0.88 ? 1 : 2 });
+          }
+          break;
+        }
+        case 'snags': {
+          // The dead trunks of a drowned grove, with a sunken log and duckweed gathered round them.
+          for (let k = randInt(4, 7); k > 0; k--) {
+            const p = inside(b, 0.85);
+            this.flora.push({ x: p.x, z: p.z, kind: 'snag', seed: randInt(0, 5), size: randInt(14, 26), variant: 0 });
+          }
+          this.logs.push({ x: b.x + rand(-8, 8), z: b.z + rand(-4, 4), len: randInt(34, 50), seed: randInt(1, 1e9), floating: false, side: Math.random() < 0.5 ? 1 : -1 });
+          carpet(b.x, b.z, b.rx * 0.7, b.rz * 0.7, false, 0.9);
+          break;
+        }
+        case 'boulders': {
+          // A cluster of boulders in pale shallows, crowfoot flowering among them.
+          for (let k = randInt(6, 10); k > 0; k--) { const p = inside(b, 0.85); rockAt(p.x, p.z, Math.random() < 0.4); }
+          for (let k = randInt(8, 14); k > 0; k--) {
+            const p = inside(b);
+            this.stones.push({ x: p.x, z: p.z, w: randInt(4, 8), ht: randInt(3, 4), seed: randInt(1, 1e9), land: false });
+          }
+          carpet(b.x + rand(-6, 6), b.z + rand(-4, 4), b.rx * 0.45, b.rz * 0.45, true, 1);
+          break;
+        }
+        case 'lagoon':
+          // A sheltered lagoon carpeted in duckweed, a few lilies pushing through.
+          carpet(b.x, b.z, b.rx, b.rz, false, 2);
+          raft(b.x, b.z, randInt(4, 7), b.rx * 0.7, b.rz * 0.7, Infinity, 0.8);
+          break;
+        case 'spring':
+          // A sandy hollow where a spring bubbles up (see updateSprings), ringed with crowfoot.
+          carpet(b.x + b.rx * 0.9, b.z + rand(-3, 3), 6, 4, true, 1);
+          carpet(b.x - b.rx * 0.9, b.z + rand(-3, 3), 5, 3, true, 1);
+          break;
+      }
+    }
+    this.flora.sort((a, b) => a.z - b.z);
+  }
+
+  /** Springs bubble up through their sandy hollows: rings rising here and there near the middle. */
+  private updateSprings() {
+    if (this.tick % 6) return;
+    const { z0, z1 } = this.viewZ;
+    for (const b of this.biomes) {
+      if (b.kind !== 'spring' || b.z < z0 - 40 || b.z > z1 + 40 || Math.random() < 0.4) continue;
+      const a = rand(0, Math.PI * 2), d = Math.random() * 0.35;
+      this.ring(b.x + Math.cos(a) * d * b.rx, b.z + Math.sin(a) * d * b.rz, 0.5, rand(0.15, 0.25), randInt(30, 50));
     }
   }
 
@@ -1145,6 +1302,7 @@ export class Pond {
     this.updateDroplets();
     this.updateHeron();
     this.updateHappening();
+    this.updateSprings();
     this.pointerSpeed *= 0.8;
     compact(this.creatures);
     compact(this.midges);
