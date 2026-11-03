@@ -52,6 +52,7 @@ const MOOD_LABEL: Record<PondMood, string> = {
   basking: 'Basking in the sun', stalking: 'Stalking the shallows', leaving: 'Leaving',
   spinning: 'Spinning in circles', perched: 'Perched, watching', fluttering: 'Fluttering', feeding: 'Sipping nectar',
   pecking: 'Picking over a lily pad', surfacing: 'Coming up for air', sinking: 'Sinking back down', skimming: 'Skimming for a sip',
+  gnawing: 'Gnawing off a branch', towing: 'Hauling timber home', building: 'Working on the dam', slapping: 'Tail slap!', grooming: 'Grooming on the lodge',
 };
 const STAGE_LABEL: Record<FrogStage, string> = {
   spawn: 'Frogspawn', tadpole: 'Tadpole', backLegs: 'Tadpole, back legs', fourLegs: 'Tadpole, four legs', froglet: 'Froglet', adult: 'Frog',

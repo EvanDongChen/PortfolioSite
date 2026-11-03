@@ -102,6 +102,41 @@ export interface Biome { kind: BiomeKind; x: number; z: number; rx: number; rz: 
 /** How far each kind of patch raises the bed toward the surface at its middle (0 not at all, 1 to the top). */
 const BIOME_RISE: Record<BiomeKind, number> = { marsh: 0.75, lotus: 0.55, snags: 0.35, boulders: 0.8, lagoon: 0, spring: 0.85 };
 
+/** A stick (or a whole log, towed in) the beavers have laid in their dam: x, z its middle, sloping a row up or down along it. */
+export interface DamPiece { x: number; z: number; len: number; slope: -1 | 0 | 1; seed: number; log: boolean }
+/**
+ * A beaver dam: sticks and towed logs piled in a long, low bank running
+ * out from an island's shore (along `side`, drifting `drift` rows a cell),
+ * built out as far as `built` toward `reach`, with the family's lodge at
+ * its root.
+ */
+export interface Dam { x: number; z: number; side: 1 | -1; drift: number; reach: number; built: number; pieces: DamPiece[]; seed: number }
+/** How many pieces a dam holds; past that, the oldest sticks rot away as new ones go on. */
+const DAM_PIECES = 100;
+/** The lodge's width (art pixels), growing as the dam does; it is about half as tall. */
+export const lodgeWidth = (d: Dam) => 16 + 2 * Math.min(6, Math.floor(d.pieces.length / 8));
+/** Where the lodge stands: at the dam's root, half on the island's shore. */
+export const lodgeAt = (d: Dam) => ({ x: d.x - d.side * 3, z: d.z - 1 });
+/** The height (h) of the lodge's top, where a beaver sits to groom. */
+export const lodgeTop = (d: Dam) => (Math.round(lodgeWidth(d) * 0.5) - 2) / ELEVATION;
+/** A beaver's errand: out to a tree, a log or the bed, and back to the dam with what it got. */
+interface BeaverJob {
+  by: PondCreature;
+  stage: 'out' | 'ashore' | 'gnaw' | 'back' | 'dive' | 'home' | 'tow' | 'build';
+  /** Where it is making for now. */
+  to: { x: number; z: number };
+  /** The water's edge where it climbs out to a tree, and the tree. */
+  shore: { x: number; z: number } | null;
+  plant: { x: number; z: number } | null;
+  /** The floating log it is towing home. */
+  log: Log | null;
+  /** The stick in its mouth. */
+  load: { len: number; seed: number; leafy: boolean } | null;
+  /** How far along the dam the piece will go. */
+  along: number;
+  ticks: number;
+}
+
 /** What grows on the land (and the few things standing up out of the water), from the long grass to the trees. */
 export type FloraKind = 'tree' | 'willow' | 'bush' | 'fern' | 'grass' | 'flowers' | 'mushrooms' | 'lotus' | 'snag';
 /** A plant on the land: its kind, which of that kind's looks, and (trees and bushes) its size. */
@@ -126,10 +161,10 @@ const BOUGH_SEAT = 9.1;
 
 export type PondSpecies = 'spawn' | 'tadpole' | 'frog' | 'mallard' | 'tufted' | 'minnow' | 'koi' | 'catfish' | 'pike'
   | 'dragonfly' | 'strider' | 'snail' | 'turtle' | 'heron'
-  | 'whirligig' | 'damselfly' | 'kingfisher' | 'moorhen' | 'butterfly' | 'newt' | 'swallow';
+  | 'whirligig' | 'damselfly' | 'kingfisher' | 'moorhen' | 'butterfly' | 'newt' | 'swallow' | 'beaver';
 export const POND_SPECIES_LIST: PondSpecies[] = [
   'frog', 'spawn', 'tadpole', 'mallard', 'tufted', 'moorhen', 'minnow', 'koi', 'catfish', 'pike', 'newt',
-  'dragonfly', 'damselfly', 'butterfly', 'strider', 'whirligig', 'snail', 'turtle', 'swallow', 'kingfisher', 'heron',
+  'dragonfly', 'damselfly', 'butterfly', 'strider', 'whirligig', 'snail', 'turtle', 'beaver', 'swallow', 'kingfisher', 'heron',
 ];
 /** Species that are a big, frightening shape to a frog, and steer clear of the page's hero text. */
 const BIG: Partial<Record<PondSpecies, boolean>> = { mallard: true, tufted: true, heron: true, turtle: true };
@@ -139,7 +174,7 @@ const GROUP: Partial<Record<PondSpecies, number>> = { minnow: 9, whirligig: 8, s
 /** The newer arrivals, placed by spawnWild. */
 /** Light enough to skate on the surface without pushing anything aside. */
 const SKATER: Partial<Record<PondSpecies, boolean>> = { strider: true, whirligig: true };
-const WILD: Partial<Record<PondSpecies, boolean>> = { whirligig: true, damselfly: true, kingfisher: true, moorhen: true, butterfly: true, newt: true, swallow: true };
+const WILD: Partial<Record<PondSpecies, boolean>> = { whirligig: true, damselfly: true, kingfisher: true, moorhen: true, butterfly: true, newt: true, swallow: true, beaver: true };
 /** What the pike will take. */
 const PIKE_PREY: Partial<Record<PondSpecies, number>> = { minnow: 1, tadpole: 0.7, koi: 0.15, frog: 0.35, mallard: 0.25 };
 /** A frog's life, stage by stage, for the census. */
@@ -153,7 +188,8 @@ export type PondMood =
   | 'paddling' | 'dabbling' | 'preening' | 'quacking' | 'takingOff' | 'flying' | 'landing' | 'nesting' | 'following' | 'walking'
   | 'cruising' | 'rising' | 'rooting' | 'lurking' | 'striking' | 'resting'
   | 'hovering' | 'darting' | 'skating' | 'creeping' | 'basking' | 'stalking' | 'leaving'
-  | 'spinning' | 'perched' | 'fluttering' | 'feeding' | 'pecking' | 'surfacing' | 'sinking' | 'skimming';
+  | 'spinning' | 'perched' | 'fluttering' | 'feeding' | 'pecking' | 'surfacing' | 'sinking' | 'skimming'
+  | 'gnawing' | 'towing' | 'building' | 'slapping' | 'grooming';
 
 /** Something a frog can sit on: a lily pad, a floating log, or a spot on the bank. */
 export type Perch =
@@ -379,6 +415,11 @@ export const POND_SPECIES: Record<PondSpecies, SpeciesDef> = {
     cruise: 0.07, burst: 0.2, vision: 8, metabolism: 0.00004, maxAge: [40000, 60000], mature: 0, hungerLine: 0.6,
     cap: [10000, 3, 14], palettes: 1,
   },
+  beaver: {
+    label: 'Beaver', names: ['Bucky', 'Timber', 'Chomp', 'Paddle', 'Castor', 'Woody', 'Dam', 'Bramble', 'Hazel', 'Willow'],
+    cruise: 0.13, burst: 0.3, vision: 30, metabolism: 0.00003, maxAge: [200000, 300000], mature: 0, hungerLine: 0.5,
+    cap: [1e9, 0, 12], palettes: 1,
+  },
 };
 
 /** How far a frog can leap, and how far its tongue reaches (cells). */
@@ -497,6 +538,12 @@ export class Pond {
   boughs: Bough[] = [];
   flora: Flora[] = [];
   biomes: Biome[] = [];
+  dams: Dam[] = [];
+  /** How many logs float on the pond as it was planted, which driftwood keeps up as the beavers take them. */
+  private driftwood = 0;
+  /** Each beaver's dam, and the errand it is on, by its id. */
+  private beaverHome = new Map<number, Dam>();
+  private beaverJobs = new Map<number, BeaverJob>();
   fronds: Frond[] = [];
   patches: DuckweedPatch[] = [];
   /** The breeze across the surface (cells a tick), turning slowly. */
@@ -552,6 +599,11 @@ export class Pond {
       if (species === 'mallard' || species === 'heron') continue;
       if (species === 'turtle' && !this.logs.some(l => l.floating)) continue;
       if (species === 'kingfisher' && !this.boughs.length) continue;
+      // A pair of beavers to each dam, often with a kit.
+      if (species === 'beaver') {
+        for (let n = this.dams.length * 2 + (this.dams.length && Math.random() < 0.5 ? 1 : 0); n > 0; n--) this.spawn('beaver');
+        continue;
+      }
       // Minnows arrive in schools, whirligigs in crowds.
       // Frogs start at full strength, all of them grown.
       const n0 = Math.max(species === 'tufted' ? 0 : 1, Math.round(this.cap(species) * (species === 'frog' ? 1 : 0.75)));
@@ -662,8 +714,11 @@ export class Pond {
     }
     if (from === 0) {
       this.pads = []; this.clumps = []; this.weedBeds = []; this.stones = []; this.logs = [];
-      this.roots = []; this.fronds = []; this.patches = []; this.boughs = []; this.rocks = []; this.flora = [];
+      this.roots = []; this.fronds = []; this.patches = []; this.boughs = []; this.rocks = []; this.flora = []; this.dams = [];
+      // Off their errands: the dams they were building are gone.
+      this.beaverHome.clear(); this.beaverJobs.clear();
     } else {
+      this.dams = this.dams.filter(d => d.z < h);
       const inside = (o: { z: number }) => o.z < h;
       this.pads = this.pads.filter(inside);
       this.clumps = this.clumps.filter(inside);
@@ -692,6 +747,7 @@ export class Pond {
       else if (c.layer !== 'air' && !this.isWater(c.x, c.z)) this.toNearestWater(c);
     }
     for (const f of this.fronds) if (f.alive && !this.isWater(f.x, f.z)) f.alive = false;
+    this.driftwood = this.logs.filter(l => l.floating).length;
     this.gridCols = Math.ceil(w / BUCKET);
     this.gridRows = Math.ceil(h / BUCKET);
     this.grid = [];
@@ -713,13 +769,7 @@ export class Pond {
     // Logs first, so the pads grow round them: adrift on the open water, or sunk on the bed.
     for (let z = z0 + rand(30, 120); z < z1 - 10; z += rand(100, 200)) {
       const x = rand(w * 0.15, w * 0.85), len = randInt(30, 56);
-      if (!this.isWater(x - len / 2 - 2, z) || !this.isWater(x + len / 2 + 2, z)) continue;
-      // Clear of the land all along it, with room to drift.
-      let clear = true;
-      for (let t = -len / 2 - 3; t <= len / 2 + 3; t += 4) if (this.shoreDist[this.cellAt(x + t, z)] < 6 || this.shoreDist[this.cellAt(x + t, z - 6)] < 3) clear = false;
-      if (!clear) continue;
-      if (this.logs.some(l => Math.abs(l.z - z) < 14 && Math.abs(l.x - x) < (l.len + len) / 2 + 4)) continue;
-      this.logs.push({ x, z, len, seed: randInt(1, 1e9), floating: true, side: Math.random() < 0.5 ? 1 : -1 });
+      if (this.logFits(x, z, len)) this.logs.push({ x, z, len, seed: randInt(1, 1e9), floating: true, side: Math.random() < 0.5 ? 1 : -1 });
     }
     for (let z = z0 + rand(200, 500); z < z1 - 10; z += rand(400, 800)) {
       const x = rand(w * 0.2, w * 0.8);
@@ -791,6 +841,29 @@ export class Pond {
         if (st) this.stones.push({ x: st.x, z: st.z, w: randInt(5, 11), ht: randInt(3, 6), seed: randInt(1, 1e9), land: true });
       }
     }
+    // Beaver dams running out from the islands' shores, part built: the
+    // first island always has one, so there are beavers to see.
+    for (const b of this.landBlobs) {
+      if (b.z < z0 || b.z >= z1 || b.r < 4) continue;
+      if (this.dams.some(d => Math.abs(d.z - b.z) < 160)) continue;
+      if (this.dams.length && Math.random() < 0.45) continue;
+      const dam = this.foundDam(b);
+      if (!dam) continue;
+      this.dams.push(dam);
+      for (let k = randInt(28, 44); k > 0; k--) {
+        const spot = this.damSpot(dam);
+        this.addDamPiece(dam, spot.along, randInt(8, 14), randInt(1, 1e9), false);
+      }
+      // Cleared of whatever stood in the way.
+      const onDam = (x: number, z: number, r: number) => {
+        const t = (x - dam.x) * dam.side;
+        return t > -10 - r && t < dam.reach + 6 + r && Math.abs(z - (dam.z + dam.drift * Math.max(0, t))) < 6 + r * 0.5;
+      };
+      this.rocks = this.rocks.filter(r => !onDam(r.x, r.z, r.w / 2));
+      this.logs = this.logs.filter(l => !l.floating || !onDam(l.x, l.z, l.len / 2));
+      for (const c of this.clumps) c.stems = c.stems.filter(st => !onDam(st.x, st.z, 0));
+      this.clumps = this.clumps.filter(c => c.stems.length);
+    }
     // Lily pads in rafts: out from both shores across the shallows, and here
     // and there further out, wherever the water is shallow enough to root in.
     // `packed` lets pads crowd and overlap at their edges, as in a lily field.
@@ -808,6 +881,8 @@ export class Pond {
         if (this.pads.some(o => Math.abs(o.z - pz) < 20 && Math.hypot(o.x - x, (o.z - pz) * 1.6) < o.r + r + gap)) continue;
         // Leave the springs, lotus fields, drowned groves and boulders their own water.
         if (this.biomes.some(b => b.kind !== 'marsh' && b.kind !== 'lagoon' && ((x - b.x) / (b.rx + r)) ** 2 + ((pz - b.z) / (b.rz + r)) ** 2 < 1)) continue;
+        // And the beavers' dams theirs.
+        if (this.nearDam(x, pz, r + 3)) continue;
         const flower = r >= 5.5 && Math.random() < blooms ? (Math.random() < 0.5 ? 1 : Math.random() < 0.6 ? 2 : 3) : 0;
         this.pads.push({
           x, z: pz, ax: x, az: pz, vx: 0, vz: 0, r, notch: randInt(0, 7), palette: randInt(0, 2),
@@ -824,8 +899,11 @@ export class Pond {
     // Lily fields: broad meadows of pads packed edge to edge and full of flowers.
     const fieldScale = Math.max(0.5, Math.min(1, w / 260));
     for (let z = z0 + rand(40, 110); z < z1 - 10; z += rand(120, 200)) {
-      const rx = rand(26, 48) * fieldScale, rz = rand(14, 24);
-      raft(rand(w * 0.15, w * 0.85), z, Math.round(rx * rz * 0.09), rx, rz, Infinity, 0.6, true);
+      // Now and then one sprawls across half the pond.
+      const grand = Math.random() < 0.25 ? rand(1.7, 2.3) : 1;
+      const rx = Math.min(w * 0.42, rand(26, 48) * fieldScale * grand), rz = rand(14, 24) * grand;
+      raft(grand > 1 ? rand(w * 0.3, w * 0.7) : rand(w * 0.15, w * 0.85), z, Math.min(420, Math.round(rx * rz * 0.09)), rx, rz, Infinity, 0.6, true);
+      if (grand > 1) z += rz;
     }
     // Pickerelweed and arrowhead standing in the shallows a little way out from the shore.
     for (const side of sides) {
@@ -867,7 +945,8 @@ export class Pond {
     for (let z = z0 + rand(20, 80); z < z1 - 6; z += rand(50, 120)) {
       const side: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
       const crowfoot = Math.random() < 0.3;
-      const rx = crowfoot ? rand(6, 12) : rand(7, 18), rz = crowfoot ? rand(4, 7) : rand(4, 9);
+      const grand = Math.random() < 0.15 ? rand(1.6, 2.2) : 1;
+      const rx = (crowfoot ? rand(6, 12) : rand(7, 18)) * grand, rz = (crowfoot ? rand(4, 7) : rand(4, 9)) * grand;
       const x = !crowfoot && Math.random() < 0.3 ? rand(w * 0.3, w * 0.7) : this.offShore(z, side, rx * 0.6 + rand(1, 10));
       const patch = this.patches.length;
       // Dense enough to read as a carpet, thinning toward its edges.
@@ -915,6 +994,26 @@ export class Pond {
     }
   }
 
+  /** Whether a floating log fits here: in open water clear of the land all along it, with room to drift. */
+  private logFits(x: number, z: number, len: number) {
+    if (!this.isWater(x - len / 2 - 2, z) || !this.isWater(x + len / 2 + 2, z)) return false;
+    for (let t = -len / 2 - 3; t <= len / 2 + 3; t += 4) if (this.shoreDist[this.cellAt(x + t, z)] < 6 || this.shoreDist[this.cellAt(x + t, z - 6)] < 3) return false;
+    return !this.logs.some(l => Math.abs(l.z - z) < 14 && Math.abs(l.x - x) < (l.len + len) / 2 + 4);
+  }
+
+  /** A log drifts in somewhere the visitor isn't looking, clear of the pads, the dams and the hero text. */
+  private washInLog() {
+    const { z0, z1 } = this.viewZ;
+    for (let tries = 0; tries < 12; tries++) {
+      const z = rand(10, this.h - 10), x = rand(this.w * 0.15, this.w * 0.85), len = randInt(30, Math.max(30, Math.min(52, Math.floor(this.w * 0.45))));
+      if (z > z0 - 80 && z < z1 + 80) continue;
+      if (!this.logFits(x, z, len) || this.nearDam(x, z, len / 2) || this.isClear(x, z)) continue;
+      if (this.pads.some(p => Math.abs(p.z - z) < p.r + 4 && Math.abs(p.x - x) < len / 2 + p.r)) continue;
+      this.logs.push({ x, z, len, seed: randInt(1, 1e9), floating: true, side: Math.random() < 0.5 ? 1 : -1 });
+      return;
+    }
+  }
+
   /**
    * The patches for the rows from `from` down: one every so often, never
    * the same kind twice running, out in the open water clear of the
@@ -932,16 +1031,21 @@ export class Pond {
         if (deck[deck.length - 1] === last) deck.unshift(deck.pop()!);
       }
       const kind = deck.pop()!;
-      const rx = (kind === 'spring' ? rand(12, 18) : rand(22, 38)) * scale, rz = kind === 'spring' ? rand(9, 13) : rand(13, 22);
+      // About one in three sprawls to twice the size or more (a spring stays a hollow).
+      const grand = kind !== 'spring' && Math.random() < 0.32 ? rand(1.7, 2.4) : 1;
+      const rx = Math.min(w * 0.45, (kind === 'spring' ? rand(12, 18) : rand(22, 38)) * scale * grand);
+      const rz = (kind === 'spring' ? rand(9, 13) : rand(13, 22)) * grand;
       for (let tries = 0; tries < 8; tries++) {
-        const x = rand(w * 0.15, w * 0.85);
+        const x = grand > 1 ? rand(w * 0.3, w * 0.7) : rand(w * 0.15, w * 0.85);
         if (this.clearZones.some(r => x + rx > r.x0 && x - rx < r.x1 && z + rz > r.z0 && z - rz < r.z1)) continue;
-        if (this.shoreDist[this.cellAt(x, z)] < Math.max(rx, rz) * 0.9) continue;
+        // A big one may wash round an island; its plants keep to the water.
+        if (this.shoreDist[this.cellAt(x, z)] < Math.min(Math.max(rx, rz) * 0.9, 30)) continue;
         if (this.shoals.some(s => Math.abs(s.x - x) < s.rx + rx && Math.abs(s.z - z) < s.rz + rz)) continue;
         this.biomes.push({ kind, x, z, rx, rz });
         last = kind;
         break;
       }
+      if (grand > 1) z += rz;
     }
   }
 
@@ -951,9 +1055,11 @@ export class Pond {
     rockAt: (x: number, z: number, big: boolean) => void,
     raft: (cx: number, cz: number, count: number, spreadX: number, spreadZ: number, deep?: number, blooms?: number, packed?: boolean) => void,
   ) {
+    // A spot in a patch's open water (a big patch can wash round an island or a dam), or null.
     const inside = (b: Biome, spread = 1) => {
       const a = rand(0, Math.PI * 2), d = Math.sqrt(Math.random()) * spread;
-      return { x: b.x + Math.cos(a) * d * b.rx, z: b.z + Math.sin(a) * d * b.rz };
+      const x = b.x + Math.cos(a) * d * b.rx, z = b.z + Math.sin(a) * d * b.rz;
+      return this.shoreDist[this.cellAt(x, z)] > 3 && !this.nearDam(x, z, 4) ? { x, z } : null;
     };
     const carpet = (x: number, z: number, rx: number, rz: number, crowfoot: boolean, density: number) => {
       const patch = this.patches.length;
@@ -980,16 +1086,20 @@ export class Pond {
     };
     for (const b of this.biomes) {
       if (b.z < z0 || b.z >= z1) continue;
+      // How many times the usual patch's area it covers, to plant it as thickly.
+      const big = Math.max(1, (b.rx * b.rz) / 520);
+      const times = (n: number) => Math.round(n * big);
       switch (b.kind) {
         case 'marsh': {
           // Stands of reeds with open pockets of water between, pickerelweed
           // and arrowhead round the edge, a few pads in the pockets.
-          for (let k = randInt(6, 10); k > 0; k--) { const p = inside(b, 0.8); clump(p.x, p.z, randInt(9, 15), ['cattail', 'reed', 'reed', 'rush'], 6); }
-          for (let k = randInt(3, 5); k > 0; k--) {
+          for (let k = times(randInt(6, 10)); k > 0; k--) { const p = inside(b, 0.8); if (p) clump(p.x, p.z, randInt(9, 15), ['cattail', 'reed', 'reed', 'rush'], 6); }
+          for (let k = times(randInt(3, 5)); k > 0; k--) {
             const a = rand(0, Math.PI * 2);
-            clump(b.x + Math.cos(a) * b.rx * 0.95, b.z + Math.sin(a) * b.rz * 0.95, randInt(6, 10), ['pickerel', 'arrowhead'], 4);
+            const x = b.x + Math.cos(a) * b.rx * 0.95, z = b.z + Math.sin(a) * b.rz * 0.95;
+            if (this.shoreDist[this.cellAt(x, z)] > 2) clump(x, z, randInt(6, 10), ['pickerel', 'arrowhead'], 4);
           }
-          raft(b.x, b.z, randInt(6, 10), b.rx, b.rz, Infinity, 0.3);
+          raft(b.x, b.z, times(randInt(6, 10)), b.rx, b.rz, Infinity, 0.3);
           carpet(b.x + rand(-5, 5), b.z + rand(-3, 3), b.rx * 0.4, b.rz * 0.4, false, 1.2);
           break;
         }
@@ -997,6 +1107,7 @@ export class Pond {
           // Lotus leaves held up above the water, with flowers and seed pods among them.
           for (let k = Math.round(b.rx * b.rz * 0.11); k > 0; k--) {
             const p = inside(b);
+            if (!p) continue;
             const r = Math.random();
             this.flora.push({ x: p.x, z: p.z, kind: 'lotus', seed: randInt(0, 5), size: 0, variant: r < 0.62 ? 0 : r < 0.88 ? 1 : 2 });
           }
@@ -1004,28 +1115,31 @@ export class Pond {
         }
         case 'snags': {
           // The dead trunks of a drowned grove, with a sunken log and duckweed gathered round them.
-          for (let k = randInt(4, 7); k > 0; k--) {
+          for (let k = times(randInt(4, 7)); k > 0; k--) {
             const p = inside(b, 0.85);
-            this.flora.push({ x: p.x, z: p.z, kind: 'snag', seed: randInt(0, 5), size: randInt(14, 26), variant: 0 });
+            if (p) this.flora.push({ x: p.x, z: p.z, kind: 'snag', seed: randInt(0, 5), size: randInt(14, 26), variant: 0 });
           }
-          this.logs.push({ x: b.x + rand(-8, 8), z: b.z + rand(-4, 4), len: randInt(34, 50), seed: randInt(1, 1e9), floating: false, side: Math.random() < 0.5 ? 1 : -1 });
-          carpet(b.x, b.z, b.rx * 0.7, b.rz * 0.7, false, 0.9);
+          for (let k = Math.ceil(big * 0.6); k > 0; k--) {
+            const p = k === 1 ? { x: b.x + rand(-8, 8), z: b.z + rand(-4, 4) } : inside(b, 0.7);
+            if (p && this.isWater(p.x, p.z)) this.logs.push({ x: p.x, z: p.z, len: randInt(34, 50), seed: randInt(1, 1e9), floating: false, side: Math.random() < 0.5 ? 1 : -1 });
+          }
+          carpet(b.x, b.z, b.rx * 0.7, b.rz * 0.7, false, Math.min(0.9, 1800 / (b.rx * b.rz)));
           break;
         }
         case 'boulders': {
           // A cluster of boulders in pale shallows, crowfoot flowering among them.
-          for (let k = randInt(6, 10); k > 0; k--) { const p = inside(b, 0.85); rockAt(p.x, p.z, Math.random() < 0.4); }
-          for (let k = randInt(8, 14); k > 0; k--) {
+          for (let k = times(randInt(6, 10)); k > 0; k--) { const p = inside(b, 0.85); if (p) rockAt(p.x, p.z, Math.random() < 0.4); }
+          for (let k = times(randInt(8, 14)); k > 0; k--) {
             const p = inside(b);
-            this.stones.push({ x: p.x, z: p.z, w: randInt(4, 8), ht: randInt(3, 4), seed: randInt(1, 1e9), land: false });
+            if (p) this.stones.push({ x: p.x, z: p.z, w: randInt(4, 8), ht: randInt(3, 4), seed: randInt(1, 1e9), land: false });
           }
           carpet(b.x + rand(-6, 6), b.z + rand(-4, 4), b.rx * 0.45, b.rz * 0.45, true, 1);
           break;
         }
         case 'lagoon':
-          // A sheltered lagoon carpeted in duckweed, a few lilies pushing through.
-          carpet(b.x, b.z, b.rx, b.rz, false, 2);
-          raft(b.x, b.z, randInt(4, 7), b.rx * 0.7, b.rz * 0.7, Infinity, 0.8);
+          // A sheltered lagoon carpeted in duckweed (thinner when it is a big one), a few lilies pushing through.
+          carpet(b.x, b.z, b.rx, b.rz, false, Math.min(2, 2600 / (b.rx * b.rz)));
+          raft(b.x, b.z, times(randInt(4, 7)), b.rx * 0.7, b.rz * 0.7, Infinity, 0.8);
           break;
         case 'spring':
           // A sandy hollow where a spring bubbles up (see updateSprings), ringed with crowfoot.
@@ -1045,6 +1159,64 @@ export class Pond {
       if (b.kind !== 'spring' || b.z < z0 - 40 || b.z > z1 + 40 || Math.random() < 0.4) continue;
       const a = rand(0, Math.PI * 2), d = Math.random() * 0.35;
       this.ring(b.x + Math.cos(a) * d * b.rx, b.z + Math.sin(a) * d * b.rz, 0.5, rand(0.15, 0.25), randInt(30, 50));
+    }
+  }
+
+  // --- beaver dams ------------------------------------------------------------
+
+  /**
+   * A dam for one lump of an island: its root at the shore, running out
+   * along the row (to whichever side has open water enough) as far as it
+   * can before it nears other land, the page's edge or the hero text.
+   */
+  private foundDam(b: LandBlob): Dam | null {
+    const sides: (1 | -1)[] = Math.random() < 0.5 ? [1, -1] : [-1, 1];
+    for (const side of sides) {
+      const z = b.z + rand(-0.3, 0.3) * b.r;
+      let x = b.x;
+      for (let k = 0; k < 80 && !this.isWater(x, z); k++) x += side;
+      if (!this.isWater(x, z)) continue;
+      const drift = rand(-0.22, 0.22);
+      let reach = 0;
+      for (let t = 2; t < 72; t += 2) {
+        const px = x + side * t, pz = z + drift * t;
+        if (px < 6 || px > this.w - 6 || this.shoreDist[this.cellAt(px, pz)] < Math.min(5, t)) break;
+        if (this.clearZones.some(r => px > r.x0 - 12 && px < r.x1 + 12 && pz > r.z0 - 10 && pz < r.z1 + 14)) break;
+        reach = t;
+      }
+      // Shorter on a narrow (phone) page.
+      if (reach < Math.min(26, this.w * 0.2)) continue;
+      return { x: x + side, z, side, drift, reach: Math.min(reach, randInt(38, 62), Math.round(this.w * 0.4)), built: 0, pieces: [], seed: randInt(1, 1e9) };
+    }
+    return null;
+  }
+
+  /** Whether a point is on (or within `r` of) a dam or its lodge. */
+  nearDam(x: number, z: number, r: number) {
+    for (const d of this.dams) {
+      const t = (x - d.x) * d.side;
+      if (t < -12 - r || t > d.reach + 6 + r) continue;
+      if (Math.abs(z - (d.z + d.drift * Math.max(0, t))) < 4 + r) return true;
+    }
+    return false;
+  }
+
+  /** Where the next piece goes: mostly out at the end, lengthening the dam, otherwise thickening it. */
+  private damSpot(d: Dam) {
+    const along = d.built < d.reach && Math.random() < 0.65 ? Math.min(d.reach, d.built + rand(0, 5)) : rand(0, Math.max(4, d.built));
+    return { along, x: d.x + d.side * along, z: d.z + d.drift * along };
+  }
+
+  private addDamPiece(d: Dam, along: number, len: number, seed: number, log: boolean) {
+    d.pieces.push({
+      x: d.x + d.side * along + rand(-3, 3), z: d.z + d.drift * along + rand(-2.4, 2.4),
+      len, slope: log ? 0 : (randInt(-1, 1) as -1 | 0 | 1), seed, log,
+    });
+    d.built = Math.max(d.built, along);
+    // The oldest stick rots away.
+    if (d.pieces.length > DAM_PIECES) {
+      const k = d.pieces.findIndex(p => !p.log);
+      d.pieces.splice(k < 0 ? 0 : k, 1);
     }
   }
 
@@ -1272,6 +1444,7 @@ export class Pond {
     this.clumps = this.clumps.filter(c => c.stems.length);
     this.logs = this.logs.filter(l => !blocks(l.x, l.z, l.len / 2, 4, l.floating ? 0 : MAX_DEPTH * ELEVATION));
     this.rocks = this.rocks.filter(r => !blocks(r.x, r.z, r.w / 2, r.ht));
+    this.dams = this.dams.filter(d => !blocks(d.x + (d.side * d.reach) / 2, d.z + (d.drift * d.reach) / 2, d.reach / 2 + 10, 12));
     this.boughs = this.boughs.filter(b => !blocks(b.x + b.side * b.len / 2, b.z, b.len / 2, (BOUGH_H + 12) * ELEVATION));
     this.flora = this.flora.filter(f => !blocks(f.x, f.z, f.kind === 'tree' || f.kind === 'willow' ? f.size + 2 : 5, f.kind === 'tree' || f.kind === 'willow' ? f.size * 2.6 : 8));
     this.stones = this.stones.filter(st => !blocks(st.x, st.z, st.w / 2, st.ht, st.land ? 0 : this.depthAt(st.x, st.z) * ELEVATION));
@@ -1783,6 +1956,12 @@ export class Pond {
       }
       // A pair of mallards flies in now and then if the pond has none.
       if (counts.mallard < 2 && Math.random() < 0.15) this.flyIn(this.spawnDuckPair());
+      // Driftwood washes in, out of sight, to make up for the logs the beavers take.
+      if (this.tick % 600 === 0 && this.logs.filter(l => l.floating).length < this.driftwood && Math.random() < 0.3) this.washInLog();
+      // A beaver comes up the pond to a dam that is short of builders.
+      if (counts.beaver < this.dams.length * 2 && Math.random() < 0.04) this.logEvent('visit', this.spawn('beaver'));
+      // Errands of beavers that are gone.
+      for (const [id, job] of this.beaverJobs) if (!job.by.alive) { this.beaverJobs.delete(id); this.beaverHome.delete(id); }
     }
   }
 
@@ -1818,6 +1997,7 @@ export class Pond {
       case 'butterfly': this.thinkButterfly(c); break;
       case 'newt': this.thinkNewt(c); break;
       case 'swallow': this.thinkSwallow(c); break;
+      case 'beaver': this.thinkBeaver(c); break;
     }
     if (!c.alive) return;
     c.energy -= sp.metabolism * (c.mood === 'swimming' || c.mood === 'leaping' ? 2 : 1);
@@ -2506,6 +2686,13 @@ export class Pond {
       if (dx > reach || dx < -reach || dz > reach || dz < -reach) continue;
       const d = Math.hypot(dx, dz) || 1;
       if (d < reach) { sx += (dx / d) * 0.03 * (1 - d / reach); sz += (dz / d) * 0.02 * (1 - d / reach); }
+    }
+    // And round the beavers' dams.
+    for (const d of this.dams) {
+      const t = (c.x - d.x) * d.side;
+      if (t < -14 || t > d.built + 10) continue;
+      const dz = c.z - (d.z + d.drift * Math.max(0, t));
+      if (dz > -7 && dz < 7) sz += (dz < 0 ? -1 : 1) * 0.03 * (1 - Math.abs(dz) / 7);
     }
     // Big birds steer clear of the hero text.
     const away = this.awayFromZones(c.x, c.z, 20);
@@ -3333,6 +3520,18 @@ export class Pond {
         c.h = rand(4, 9);
         break;
       }
+      case 'beaver': {
+        c.layer = 'surface'; c.mood = 'swimming';
+        // At the dam that has the fewest builders, by its lodge.
+        const dam = this.damFor(c);
+        if (dam) {
+          this.beaverHome.set(c.id, dam);
+          c.x = dam.x + dam.side * rand(4, 18); c.z = dam.z + rand(3, 8);
+        } else c.x = this.waterX(row, rand(this.w * 0.2, this.w * 0.8));
+        if (!this.isWater(c.x, c.z)) this.toNearestWater(c);
+        c.timer = randInt(30, 500);
+        break;
+      }
       case 'newt':
         c.layer = 'bed'; c.mood = 'creeping';
         for (let tries = 0; tries < 20; tries++) {
@@ -3809,6 +4008,347 @@ export class Pond {
     }
   }
 
+  // --- beavers ------------------------------------------------------------------------
+
+  /** The dam with the fewest beavers to it (the nearest of those), for a newcomer. */
+  private damFor(c: PondCreature) {
+    let best: Dam | null = null, bestN = Infinity, bestD = Infinity;
+    for (const d of this.dams) {
+      let n = 0;
+      for (const o of this.creatures) if (o.alive && o !== c && this.beaverHome.get(o.id) === d) n++;
+      const dist = Math.abs(d.z - c.z);
+      if (n < bestN || (n === bestN && dist < bestD)) { best = d; bestN = n; bestD = dist; }
+    }
+    return best;
+  }
+
+  /** The stick in a beaver's mouth, if it has one, for drawing. */
+  beaverLoad(c: PondCreature) {
+    return this.beaverJobs.get(c.id)?.load ?? null;
+  }
+
+  /**
+   * Beavers build. Each trip out, one fetches timber for its dam: it
+   * climbs out onto an island to gnaw a branch off a tree, dives for a
+   * sunken branch, or now and then tows a whole floating log home behind
+   * it; then it works the piece into the dam. Between trips it potters
+   * about by the lodge or grooms on top of it. A fright (the visitor's
+   * cursor, a heron) brings a crack of its tail on the water, and down it
+   * goes, the rest of the family with it.
+   */
+  private thinkBeaver(c: PondCreature) {
+    let dam = this.beaverHome.get(c.id);
+    if (!dam || !this.dams.includes(dam)) {
+      dam = this.damFor(c) ?? undefined;
+      // Nowhere to build: it moves on.
+      if (!dam) { c.alive = false; return; }
+      this.beaverHome.set(c.id, dam);
+    }
+    // Bark, and the water plants.
+    c.energy = Math.min(1, c.energy + 0.00005);
+    if (c.mood === 'slapping') {
+      if (--c.timer <= 0) { c.mood = 'diving'; c.layer = 'under'; c.timer = randInt(150, 260); c.heading = rand(0, Math.PI * 2); }
+      return;
+    }
+    const job = this.beaverJobs.get(c.id);
+    if (!job && c.mood === 'diving') {
+      // Gone under in a fright, swimming off a way before it comes up.
+      this.beaverUnder(c);
+      if (--c.timer <= 0) { c.layer = 'surface'; c.h = 0; c.mood = 'swimming'; c.timer = randInt(200, 500); this.ring(c.x, c.z, 1, 0.25, 36); }
+      return;
+    }
+    if (c.layer === 'surface' && c.breedCooldown === 0 && (this.tick + c.id) % 10 === 0 && this.beaverAlarmed(c)) {
+      this.tailSlap(c);
+      // The family hears it and goes under too.
+      this.near(c.x, c.z, 70, o => {
+        if (o === c || !o.alive || o.species !== 'beaver' || o.layer !== 'surface' || o.mood === 'slapping' || o.mood === 'diving') return;
+        this.dropJob(o);
+        o.mood = 'diving'; o.layer = 'under'; o.timer = randInt(120, 220); o.breedCooldown = 900; o.heading = rand(0, Math.PI * 2);
+      });
+      return;
+    }
+    const lodge = lodgeAt(dam);
+    if (!job) {
+      if (c.mood === 'grooming') {
+        c.x = lodge.x; c.z = lodge.z + 0.1; c.h = lodgeTop(dam); c.layer = 'air';
+        c.vx = c.vz = 0;
+        // A scratch, a comb of the fur.
+        if ((this.tick + c.id) % 45 === 0) c.squashV += 0.12;
+        if (--c.timer <= 0) {
+          // Down the side of the lodge and into the water.
+          c.mood = 'swimming'; c.layer = 'surface'; c.h = 0;
+          c.x = dam.x + dam.side * 5; c.z = dam.z + 3;
+          if (!this.isWater(c.x, c.z)) this.toNearestWater(c);
+          this.ring(c.x, c.z, 1, 0.25, 36);
+          c.timer = randInt(20, 200);
+        }
+        return;
+      }
+      if (c.layer === 'air') this.toNearestWater(c);
+      c.layer = 'surface'; c.h = 0; c.mood = 'swimming';
+      // Pottering in front of the dam till the next trip.
+      const g = c.goal ?? (c.goal = { x: dam.x + dam.side * rand(4, Math.max(8, dam.built)), z: dam.z + rand(4, 10) });
+      if (this.beaverSwim(c, g.x, g.z, 0.06)) c.goal = null;
+      if (--c.timer <= 0) { c.goal = null; this.planTrip(c, dam); }
+      return;
+    }
+    job.ticks++;
+    // Given up on (stuck behind an island, say): a long tow gets longer.
+    if (job.ticks > (job.log ? 9000 : 5000)) { this.dropJob(c); c.timer = randInt(100, 300); return; }
+    switch (job.stage) {
+      case 'out': {
+        c.layer = 'surface'; c.h = 0; c.mood = 'swimming';
+        const L = job.log;
+        if (L) {
+          if (!L.floating || !this.logs.includes(L)) { this.dropJob(c); return; }
+          const e = c.x < L.x ? -1 : 1;
+          job.to = { x: L.x + e * (L.len / 2 + 3), z: L.z + 1 };
+        }
+        if (!this.beaverSwim(c, job.to.x, job.to.z, POND_SPECIES.beaver.cruise)) return;
+        if (L) { job.stage = 'tow'; c.squashV += 0.3; job.to = this.damApproach(dam, job.along); }
+        else if (job.plant) { job.stage = 'ashore'; c.layer = 'air'; c.mood = 'walking'; this.ring(c.x, c.z, 1, 0.25, 30); }
+        else { job.stage = 'dive'; c.mood = 'diving'; c.layer = 'under'; c.timer = randInt(120, 220); this.ring(c.x, c.z, 1.5, 0.3, 40); c.squashV += 0.3; }
+        return;
+      }
+      case 'ashore':
+        c.layer = 'air'; c.h = 0; c.mood = 'walking';
+        if (this.beaverWalk(c, job.plant!.x, job.plant!.z)) { job.stage = 'gnaw'; c.timer = randInt(200, 380); }
+        return;
+      case 'gnaw':
+        c.layer = 'air'; c.mood = 'gnawing';
+        c.vx = c.vz = 0;
+        // Chewing away at a branch.
+        if ((this.tick + c.id) % 6 === 0) c.squashV += 0.12;
+        if (--c.timer <= 0) { job.load = { len: randInt(10, 15), seed: randInt(1, 1e9), leafy: true }; job.stage = 'back'; }
+        return;
+      case 'back':
+        c.layer = 'air'; c.mood = 'walking';
+        if (this.beaverWalk(c, job.shore!.x, job.shore!.z)) {
+          c.layer = 'surface'; c.mood = 'towing';
+          this.ring(c.x, c.z, 1.2, 0.25, 36);
+          this.splash(c.x, c.z, 3);
+          job.stage = 'home';
+          job.to = this.damApproach(dam, job.along);
+        }
+        return;
+      case 'dive':
+        c.mood = 'diving';
+        this.beaverUnder(c);
+        if (--c.timer <= 0) {
+          // Up again with a waterlogged branch off the bed.
+          c.layer = 'surface'; c.h = 0;
+          this.ring(c.x, c.z, 1, 0.25, 36);
+          job.load = { len: randInt(8, 13), seed: randInt(1, 1e9), leafy: false };
+          job.stage = 'home';
+          job.to = this.damApproach(dam, job.along);
+        }
+        return;
+      case 'home': case 'tow': {
+        c.layer = 'surface'; c.h = 0; c.mood = 'towing';
+        const L = job.log;
+        if (L) {
+          if (!this.logs.includes(L)) { this.dropJob(c); return; }
+          // The log trails behind, its end in the beaver's teeth.
+          L.x += (c.x - c.facing * (L.len / 2 + 4) - L.x) * 0.06;
+          L.z += (c.z - 0.6 - L.z) * 0.06;
+        }
+        if (!this.beaverSwim(c, job.to.x, job.to.z, L ? 0.085 : 0.11)) return;
+        job.stage = 'build';
+        c.mood = 'building';
+        c.timer = randInt(80, 140);
+        return;
+      }
+      case 'build': {
+        c.layer = 'surface'; c.h = 0; c.mood = 'building';
+        c.vx *= 0.8; c.vz *= 0.8;
+        const at = { x: dam.x + dam.side * job.along, z: dam.z + dam.drift * job.along };
+        // Pushing and tucking it into place.
+        if ((this.tick + c.id) % 9 === 0) c.squashV += 0.15;
+        if (job.log) { job.log.x += (at.x - job.log.x) * 0.04; job.log.z += (at.z - job.log.z) * 0.04; }
+        if (--c.timer > 0) return;
+        if (job.log) this.logIntoDam(dam, job.log, job.along);
+        else if (job.load) this.addDamPiece(dam, job.along, job.load.len, job.load.seed, false);
+        this.ring(at.x, at.z + 1, 1.5, 0.25, 40);
+        this.beaverJobs.delete(c.id);
+        // A rest on the lodge, or another trip before long.
+        if (Math.random() < 0.35) { c.mood = 'grooming'; c.timer = randInt(400, 1100); this.ring(c.x, c.z, 1, 0.2, 30); }
+        else { c.mood = 'swimming'; c.timer = randInt(60, 400); }
+        return;
+      }
+    }
+  }
+
+  /** Where a beaver comes to lay a piece, in the water just in front of the dam. */
+  private damApproach(d: Dam, along: number) {
+    const p = { x: d.x + d.side * along, z: d.z + d.drift * along + 3.5 };
+    if (!this.isWater(p.x, p.z)) this.toNearestWater(p);
+    return p;
+  }
+
+  /** Off on the next errand: a log to tow, a tree to gnaw at, or a dive for a sunken branch. */
+  private planTrip(c: PondCreature, dam: Dam) {
+    const job: BeaverJob = { by: c, stage: 'out', to: { x: c.x, z: c.z }, shore: null, plant: null, log: null, load: null, along: this.damSpot(dam).along, ticks: 0 };
+    const r = Math.random();
+    if (r < 0.22) {
+      // A floating log not far off, so long as a couple are left for the turtle and the frogs to bask on.
+      const floating = this.logs.filter(l => l.floating);
+      if (floating.length > 2) {
+        const towing = new Set([...this.beaverJobs.values()].map(j => j.log));
+        let best: Log | null = null, bestD = 200;
+        for (const l of floating) {
+          const d = Math.hypot(l.x - dam.x, l.z - dam.z);
+          if (d >= bestD || towing.has(l) || this.isClear(l.x, l.z)) continue;
+          if (this.creatures.some(o => o.alive && o.perch?.kind === 'log' && o.perch.log === l)) continue;
+          best = l; bestD = d;
+        }
+        if (best) {
+          job.log = best;
+          job.along = Math.min(dam.reach, Math.max(job.along, best.len * 0.45));
+          this.beaverJobs.set(c.id, job);
+          return;
+        }
+      }
+    }
+    if (r < 0.8) {
+      // A branch off a tree or a bush near an island's shore.
+      const near: { f: Flora; d: number }[] = [];
+      for (const f of this.flora) {
+        if (f.kind !== 'tree' && f.kind !== 'willow' && f.kind !== 'bush') continue;
+        if (Math.abs(f.z - dam.z) > 220 || Math.abs(f.x - dam.x) > 260 || -this.shoreDist[this.cellAt(f.x, f.z)] > 9) continue;
+        near.push({ f, d: Math.hypot(f.x - dam.x, f.z - dam.z) });
+      }
+      near.sort((a, b) => a.d - b.d);
+      for (let tries = 0; tries < 4 && near.length; tries++) {
+        const f = near[Math.floor(Math.random() ** 2 * Math.min(near.length, 10))].f;
+        // The water's edge on the side of the island it is coming from.
+        let sx = NaN, sz = NaN, best = Infinity;
+        for (let k = 0; k < 16; k++) {
+          const a = (k / 16) * Math.PI * 2;
+          let x = f.x, z = f.z;
+          for (let t = 0; t < 30 && this.shoreDist[this.cellAt(x, z)] < 1.5; t++) { x += Math.cos(a); z += Math.sin(a); }
+          const d = Math.hypot(x - c.x, z - c.z) + Math.hypot(x - f.x, z - f.z) * 3;
+          if (this.isWater(x, z) && x > 4 && x < this.w - 4 && d < best) { best = d; sx = x; sz = z; }
+        }
+        if (!(best < Infinity)) continue;
+        // It stands at the trunk on the side it came up from.
+        const s = sx < f.x ? -1 : 1;
+        job.shore = { x: sx, z: sz };
+        job.plant = { x: f.x + s * 4, z: f.z + 1 };
+        job.to = job.shore;
+        this.beaverJobs.set(c.id, job);
+        return;
+      }
+    }
+    // Down to the bed for a sunken branch, out in the water not far off.
+    for (let tries = 0; tries < 10; tries++) {
+      const a = rand(0, Math.PI * 2), d = rand(25, 80);
+      const x = dam.x + dam.side * 20 + Math.cos(a) * d, z = dam.z + Math.sin(a) * d * 0.7;
+      if (x < 8 || x > this.w - 8 || z < 8 || z > this.h - 8) continue;
+      if (this.shoreDist[this.cellAt(x, z)] > 4 && !this.nearDam(x, z, 4) && !this.isClear(x, z)) {
+        job.to = { x, z };
+        this.beaverJobs.set(c.id, job);
+        return;
+      }
+    }
+    c.timer = randInt(100, 300);
+  }
+
+  /** Lets go of whatever it was fetching (a towed log stays floating where it is). */
+  private dropJob(c: PondCreature) {
+    this.beaverJobs.delete(c.id);
+    c.goal = null;
+  }
+
+  /** The towed log goes into the dam: anyone sitting on it is tipped off into the water. */
+  private logIntoDam(d: Dam, L: Log, along: number) {
+    for (const o of this.creatures) {
+      if (!o.alive) continue;
+      if (o.perch?.kind === 'log' && o.perch.log === L) { o.leap = null; this.dropIn(o); }
+      else if (o.leap?.onto?.kind === 'log' && o.leap.onto.log === L) o.leap.onto = null;
+    }
+    this.logs = this.logs.filter(l => l !== L);
+    this.addDamPiece(d, along, Math.min(L.len, 44), L.seed, true);
+  }
+
+  /** Swims at the surface toward a point, sliding round any island in the way; true once there. */
+  private beaverSwim(c: PondCreature, x: number, z: number, speed: number) {
+    const dx = x - c.x, dz = z - c.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 1.5) { c.vx *= 0.8; c.vz *= 0.8; return true; }
+    let hx = dx / d, hz = dz / d;
+    const look = Math.min(9, d);
+    if (!this.isWater(c.x + hx * look, c.z + hz * look)) {
+      // Along the shore, whichever way is nearer the goal, and a little out from it.
+      const n = this.toWater(c.x + hx * look, c.z + hz * look);
+      const along = -n.z * hx + n.x * hz >= 0 ? 1 : -1;
+      hx = -n.z * along + n.x * 0.4;
+      hz = n.x * along + n.z * 0.4;
+      const m = Math.hypot(hx, hz) || 1;
+      hx /= m; hz /= m;
+    }
+    // Slowing to a stop at the end.
+    const v = Math.min(speed, d * 0.05 + 0.02);
+    c.vx += (hx * v - c.vx) * 0.08;
+    c.vz += (hz * v * 0.8 - c.vz) * 0.08;
+    const nx = c.x + c.vx, nz = c.z + c.vz;
+    if (this.isWater(nx, nz)) { c.x = nx; c.z = nz; } else {
+      const n = this.toWater(c.x, c.z);
+      c.x += n.x * 0.3; c.z += n.z * 0.3;
+      c.vx *= 0.5; c.vz *= 0.5;
+    }
+    if (Math.abs(c.vx) > 0.02) this.turn(c, c.vx);
+    return false;
+  }
+
+  /** Lumbers over the land toward a point, a step and a pause; true once there. */
+  private beaverWalk(c: PondCreature, x: number, z: number) {
+    const dx = x - c.x, dz = z - c.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 1) { c.vx = c.vz = 0; return true; }
+    const step = (this.tick + c.id * 3) % 20 < 13 ? 0.1 : 0.02;
+    c.vx = (dx / d) * step; c.vz = (dz / d) * step;
+    c.x += c.vx; c.z += c.vz;
+    if (Math.abs(dx) > 0.3) c.facing = dx > 0 ? 1 : -1;
+    return false;
+  }
+
+  /** Swimming along under the water, a little above the bed. */
+  private beaverUnder(c: PondCreature) {
+    c.layer = 'under';
+    const depth = this.depthAt(c.x, c.z);
+    c.h += (-Math.max(1, Math.min(4, depth - 1)) - c.h) * 0.08;
+    c.heading += rand(-0.04, 0.04);
+    const nx = c.x + Math.cos(c.heading) * 0.13, nz = c.z + Math.sin(c.heading) * 0.09;
+    if (this.isWater(nx, nz) && this.shoreDist[this.cellAt(nx, nz)] > 1.5) { c.x = nx; c.z = nz; } else c.heading += 0.6;
+    c.vx = Math.cos(c.heading) * 0.13;
+    c.vz = Math.sin(c.heading) * 0.09;
+    if (Math.abs(c.vx) > 0.02) this.turn(c, c.vx);
+  }
+
+  /** The visitor's fast cursor close by, or a heron (or its shadow passing over). */
+  private beaverAlarmed(c: PondCreature) {
+    const p = this.pointer;
+    if (p && this.pointerSpeed > 2.5 && Math.hypot(p.x - c.x, p.z - c.z) < STARTLE_REACH + 4) return true;
+    const hp = this.heronPass;
+    if (hp && Math.abs(hp.x - c.x) < HERON_FRIGHT && Math.abs(hp.z - c.z) < HERON_FRIGHT * 0.7) return true;
+    let heron = false;
+    this.near(c.x, c.z, HERON_FRIGHT, o => { if (o.species === 'heron' && o.alive && o.layer !== 'air') heron = true; });
+    return heron;
+  }
+
+  /** Crack: the flat tail brought down hard on the water, then under. */
+  private tailSlap(c: PondCreature) {
+    this.dropJob(c);
+    c.mood = 'slapping';
+    c.timer = 16;
+    c.breedCooldown = 900;
+    const tx = c.x - c.facing * 8;
+    this.splash(tx, c.z, 8);
+    this.ring(tx, c.z, 2, 0.4, 60);
+    this.ring(tx, c.z, 1, 0.25, 50);
+    c.squashV -= 0.4;
+  }
+
   // --- the census, the visitor's creature, and debugging -------------------------------
 
   /** Algae cover of the water's bed, as a percentage, counted every few seconds. */
@@ -3897,6 +4437,25 @@ export class Pond {
         return;
       }
       case 'heron': this.heronLands({ x, z }); return;
+      case 'beaver': {
+        // A pair, for the nearest dam; if none is near, they start one on the nearest island.
+        let dam = this.dams.reduce<Dam | null>((a, d) => (!a || Math.hypot(d.x - x, d.z - z) < Math.hypot(a.x - x, a.z - z) ? d : a), null);
+        if (!dam || Math.hypot(dam.x - x, dam.z - z) > 250) {
+          const blobs = this.landBlobs.filter(b => b.r >= 4).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z));
+          for (const b of blobs.slice(0, 4)) {
+            const d = this.foundDam(b);
+            if (d) { this.dams.push(d); dam = d; break; }
+          }
+        }
+        if (!dam) return;
+        for (let k = 0; k < 2; k++) {
+          const c = this.spawn('beaver');
+          this.beaverHome.set(c.id, dam);
+          place(c);
+          c.timer = randInt(20, 120);
+        }
+        return;
+      }
       case 'turtle': {
         const c = this.spawn('turtle');
         if (!c.perch) { place(c); c.layer = 'under'; c.mood = 'swimming'; c.h = -2; c.timer = 600; }

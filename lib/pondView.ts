@@ -18,7 +18,7 @@
 // drawn into a window around the view, swapped between two canvases.
 
 import {
-  BOUGH_H, ELEVATION, Flora, MAX_DEPTH, POND_SPECIES, logThickness, rockAbove, Pad, Pond, PondCreature, PondSpecies, ReedClump, SPAWN_TICKS, Stem, TADPOLE_TICKS, TAIL_TICKS, WEED_KINDS, WeedBed,
+  BOUGH_H, Dam, ELEVATION, Flora, MAX_DEPTH, lodgeAt, lodgeWidth, POND_SPECIES, logThickness, rockAbove, Pad, Pond, PondCreature, PondSpecies, ReedClump, SPAWN_TICKS, Stem, TADPOLE_TICKS, TAIL_TICKS, WEED_KINDS, WeedBed,
 } from './pond';
 import {
   CATTAIL_HEAD, CROWFOOT_FLOWER, DUCKWEED, IRIS_FLOWER, LOOSESTRIFE_FLOWER, PICKEREL_FLOWER, makeCanvas, rockSprite, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
@@ -26,6 +26,7 @@ import {
   DuckSpriteKind, duckSprite, nestSprite, FishSpriteKind, fishSprite, SILT, ExtraSpriteKind, extraSprite,
   FIREFLY, RAIN, SKY, mayflySprite, nymphSprite, WildSpriteKind, wildSprite, boughSprite,
   treeSprite, willowSprite, bushSprite, fernSprite, grassSprite, flowerSprite, mushroomSprite, lotusSprite, snagSprite,
+  lodgeSprite, stickSprite,
 } from './pondArt';
 import { shadowSprite, silhouetteSprite } from './pixelOceanArt';
 import type { ReefLayout } from './pixelOceanView';
@@ -77,7 +78,7 @@ const SIZE: Partial<Record<PondSpecies, number>> = { frog: 0.75, heron: 1.5, pik
 /** Sprite widths in art pixels as drawn, for shadows and the inspection reticle. */
 export const BODY_WIDTH: Record<PondSpecies, number> = { frog: 9, spawn: 11, tadpole: 6, mallard: 24, tufted: 20, minnow: 9, koi: 20, catfish: 20, pike: 31,
   dragonfly: 11, strider: 7, snail: 5, turtle: 18, heron: 24,
-  whirligig: 3, damselfly: 9, kingfisher: 10, moorhen: 14, butterfly: 5, newt: 10, swallow: 11,
+  whirligig: 3, damselfly: 9, kingfisher: 10, moorhen: 14, butterfly: 5, newt: 10, swallow: 11, beaver: 18,
 };
 
 /** Reed clumps and weed beds are drawn in bands this many rows deep, each sorted with whatever is among them. */
@@ -672,7 +673,7 @@ export class PondView {
     this.drawDuckweed(z0, z1);
     this.drawRings(z0, z1);
     for (const c of pond.creatures) {
-      if (c.layer === 'surface' && (c.species === 'mallard' || c.species === 'tufted') && visible(c.z)) this.drawWake(c);
+      if (c.layer === 'surface' && (c.species === 'mallard' || c.species === 'tufted' || c.species === 'beaver') && visible(c.z)) this.drawWake(c);
     }
     // Shadows of things in the air, on the water or the ground beneath them.
     for (const c of pond.creatures) {
@@ -698,6 +699,7 @@ export class PondView {
       this.shadow(l.x, l.z + 1, 0, l.len * 1.05, 0.3);
       over.push({ depth: l.z, draw: () => this.sprite(logSprite(l.seed, l.len, logThickness(l.len)), l.x, l.z, 0.6, { anchor: 'bottom', flipX: l.side < 0 }) });
     }
+    for (const d of pond.dams) if (d.z + 30 >= z0 && d.z - 30 <= z1) this.addDam(d, over);
     for (const r of pond.rocks) {
       if (!visible(r.z)) continue;
       const above = rockAbove(r);
@@ -789,6 +791,21 @@ export class PondView {
     }
     this.floraBands.set(k, c);
     return c;
+  }
+
+  /**
+   * A beaver dam: its shade on the water, the lodge at its root, and every
+   * stick and log in it, each depth-sorted with everything else.
+   */
+  private addDam(d: Dam, over: Drawable[]) {
+    const lodge = lodgeAt(d), lw = lodgeWidth(d);
+    this.shadow(d.x + (d.side * d.built) / 2, d.z + (d.drift * d.built) / 2 + 1.5, 0, d.built + 8, 0.28);
+    this.shadow(lodge.x, lodge.z + 1, 0, lw * 1.2, 0.3);
+    over.push({ depth: lodge.z, draw: () => this.sprite(lodgeSprite(d.seed, lw), lodge.x, lodge.z + 1, 0, { anchor: 'bottom', flipX: d.side < 0 }) });
+    for (const p of d.pieces) {
+      const img = p.log ? logSprite(p.seed, p.len, logThickness(p.len) - 2) : stickSprite(p.seed, p.len, p.slope, false);
+      over.push({ depth: p.z, draw: () => this.sprite(img, p.x, p.z, p.log ? 0.2 : 0.4, { anchor: 'bottom', flipX: (p.seed & 1) === 1 }) });
+    }
   }
 
   /** A plant's sprite. */
@@ -958,6 +975,24 @@ export class PondView {
         const kind: WildSpriteKind = onPad ? (nod ? 'moorhenBob' : 'moorhenWalk') : nod ? 'moorhenBob' : 'moorhen';
         const bob = onPad ? 0 : ((tick + c.id * 11) >> 4 & 1) * 0.5 - 1.5;
         this.sprite(wildSprite(kind, 0, c.energy < 0.15), c.x, c.z, c.h + bob, { flipX: c.facing < 0, alpha, anchor: 'bottom', stretch: c.squash });
+        return;
+      }
+      case 'beaver': {
+        const tick2 = tick + c.id * 5;
+        let kind: WildSpriteKind = 'beaverSwim';
+        if (c.mood === 'slapping') kind = 'beaverSlap';
+        else if (c.mood === 'grooming') kind = 'beaverSit';
+        else if (c.mood === 'gnawing') kind = 'beaverGnaw';
+        else if (c.layer === 'air') kind = Math.hypot(c.vx, c.vz) > 0.05 && (tick2 >> 3) & 1 ? 'beaverWalk1' : 'beaverWalk0';
+        // Swimming, the water cuts it at the back, and it rides the ripples.
+        const bob = c.layer === 'surface' && kind === 'beaverSwim' ? ((tick2 >> 4) & 1) * 0.4 - 1.2 : c.layer === 'surface' ? -1.5 : 0;
+        this.sprite(wildSprite(kind, 0, c.energy < 0.15), c.x, c.z, c.h + bob, { flipX: c.facing < 0, alpha, anchor: c.layer === 'under' ? 'center' : 'bottom', stretch: c.squash });
+        // The stick in its teeth, trailing back along its side.
+        const load = this.pond.beaverLoad(c);
+        if (load) {
+          const up = c.layer === 'air' ? 1.5 : c.layer === 'under' ? 0 : -0.3;
+          this.sprite(stickSprite(load.seed, load.len, 0, load.leafy), c.x + c.facing * (8 - load.len / 2), c.z + 0.4, c.h + up, { flipX: c.facing < 0, alpha, anchor: 'bottom' });
+        }
         return;
       }
       case 'butterfly': {
