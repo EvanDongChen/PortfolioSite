@@ -18,13 +18,14 @@
 // drawn into a window around the view, swapped between two canvases.
 
 import {
-  BOUGH_H, ELEVATION, MAX_DEPTH, POND_SPECIES, logThickness, rockAbove, Pad, Pond, PondCreature, PondSpecies, ReedClump, SPAWN_TICKS, Stem, TADPOLE_TICKS, TAIL_TICKS, WEED_KINDS, WeedBed,
+  BOUGH_H, ELEVATION, Flora, MAX_DEPTH, POND_SPECIES, logThickness, rockAbove, Pad, Pond, PondCreature, PondSpecies, ReedClump, SPAWN_TICKS, Stem, TADPOLE_TICKS, TAIL_TICKS, WEED_KINDS, WeedBed,
 } from './pond';
 import {
   CATTAIL_HEAD, CROWFOOT_FLOWER, DUCKWEED, IRIS_FLOWER, LOOSESTRIFE_FLOWER, PICKEREL_FLOWER, makeCanvas, rockSprite, MIDGE, POND_FLOOR, PondSpriteKind, REED_COLORS, RING, TONGUE, WATER, WEED_COLORS, buildRipples, lilySprite,
   logSprite, padSprite, pondSprite, rippleTile, rootSprite, spawnSprite, splashSprite, stoneSprite,
   DuckSpriteKind, duckSprite, nestSprite, FishSpriteKind, fishSprite, SILT, ExtraSpriteKind, extraSprite,
   FIREFLY, RAIN, SKY, mayflySprite, nymphSprite, WildSpriteKind, wildSprite, boughSprite,
+  treeSprite, willowSprite, bushSprite, fernSprite, grassSprite, flowerSprite, mushroomSprite,
 } from './pondArt';
 import { shadowSprite, silhouetteSprite } from './pixelOceanArt';
 import type { ReefLayout } from './pixelOceanView';
@@ -49,6 +50,9 @@ const GLINT_LIFE = 110;
 const SHAFTS = 3;
 const SHAFT_PERIOD = 240;
 const SHAFT_SLANT = 0.45;
+/** The land's plants are painted in strips this many rows deep, with this much room above for the tallest tree. */
+const FLORA_BAND = 16;
+const FLORA_MARGIN = 44;
 
 export type PondLayout = ReefLayout;
 
@@ -142,6 +146,9 @@ export class PondView {
   /** Stem squares by colour (left, top, width, height each), reused from clump to clump. */
   private stemRuns: number[][] = Array.from({ length: HEAD + 8 }, () => []);
   private weedRuns: number[][] = Array.from({ length: WEED_KINDS.length * 9 }, () => []);
+  private floraBands = new Map<number, HTMLCanvasElement | null>();
+  private floraOf: Flora[] | null = null;
+  private floraCount = 0;
   private frondRuns: number[][] = Array.from({ length: DUCKWEED.length + 2 }, () => []);
 
   constructor(
@@ -698,6 +705,21 @@ export class PondView {
       this.shadow(r.x, r.z, -pond.depthAt(r.x, r.z), r.w * 1.3, 0.3);
       over.push({ depth: r.z, draw: () => this.sprite(rockSprite(r.seed, r.w, r.ht, above, (pond.tick + r.seed) >> 4 & 1), r.x, r.z, -(r.ht + 1 - above) / ELEVATION, { anchor: 'bottom' }) });
     }
+    // The plants on the land: painted once into strips (see floraBand), each
+    // strip depth-sorted with everything else as one image.
+    for (let k = Math.max(0, Math.floor(z0 / FLORA_BAND)); k <= Math.floor((z1 + FLORA_MARGIN) / FLORA_BAND); k++) {
+      const band = this.floraBand(k);
+      if (!band) continue;
+      const top = k * FLORA_BAND - FLORA_MARGIN;
+      over.push({
+        depth: (k + 0.5) * FLORA_BAND,
+        draw: () => {
+          const { spriteCtx: c2 } = this;
+          c2.globalAlpha = 1;
+          c2.drawImage(band, 0, Math.round(top * px - this.regionTop), band.width * px, band.height * px);
+        },
+      });
+    }
     for (const b of pond.boughs) {
       if (!visible(b.z)) continue;
       const cx = b.x + (b.side * b.len) / 2;
@@ -721,6 +743,67 @@ export class PondView {
     for (const c of pond.creatures) if (c.adopted && visible(c.z)) this.drawAdoptedMarker(c);
     const target = this.highlighted;
     if (target?.alive && visible(target.z)) this.drawReticle(target);
+  }
+
+  /**
+   * A strip of the land's plants, FLORA_BAND rows of their feet with room
+   * above for the tallest tree, painted once at a canvas pixel per cell
+   * (as the plants' art is) with trees' and bushes' shade under them;
+   * null if nothing grows there. Rebuilt when the plants change.
+   */
+  private floraBand(k: number) {
+    const { pond } = this;
+    if (pond.flora !== this.floraOf || pond.flora.length !== this.floraCount) {
+      this.floraBands.clear();
+      this.floraOf = pond.flora;
+      this.floraCount = pond.flora.length;
+    }
+    const cached = this.floraBands.get(k);
+    if (cached !== undefined) return cached;
+    const z0 = k * FLORA_BAND, z1 = z0 + FLORA_BAND;
+    const mine = pond.flora.filter(f => f.z >= z0 && f.z < z1);
+    if (!mine.length) { this.floraBands.set(k, null); return null; }
+    const top = z0 - FLORA_MARGIN;
+    const c = makeCanvas(pond.w, FLORA_BAND + FLORA_MARGIN + 4);
+    const ctx = c.getContext('2d') as CanvasRenderingContext2D;
+    ctx.imageSmoothingEnabled = false;
+    for (const f of mine) {
+      const tall = f.kind === 'tree' || f.kind === 'willow';
+      if (!tall && f.kind !== 'bush') continue;
+      const sw = Math.max(3, Math.round(tall ? f.size * 2.4 : f.size * 2.2));
+      const img = shadowSprite(sw);
+      ctx.globalAlpha = tall ? 0.3 : 0.25;
+      ctx.drawImage(img, Math.round(f.x + (tall ? f.size * 0.4 : 1) - sw / 2), Math.round(f.z + (tall ? 1 : 0.5) - top - img.height / 2));
+    }
+    ctx.globalAlpha = 1;
+    for (const f of mine) {
+      const img = this.floraSprite(f);
+      const x = Math.round(f.x - img.width / 2), y = Math.round(f.z - top - img.height);
+      if (f.seed & 1) {
+        ctx.save();
+        ctx.translate(x + img.width, y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, 0);
+        ctx.restore();
+      } else ctx.drawImage(img, x, y);
+    }
+    this.floraBands.set(k, c);
+    return c;
+  }
+
+  /** A plant's sprite. */
+  private floraSprite(f: Flora) {
+    let img: HTMLCanvasElement;
+    switch (f.kind) {
+      case 'tree': img = treeSprite(f.seed, f.size, f.variant); break;
+      case 'willow': img = willowSprite(f.seed, f.size); break;
+      case 'bush': img = bushSprite(f.seed, f.size, f.variant); break;
+      case 'fern': img = fernSprite(f.seed); break;
+      case 'grass': img = grassSprite(f.seed); break;
+      case 'flowers': img = flowerSprite(f.seed, f.variant); break;
+      default: img = mushroomSprite(f.seed);
+    }
+    return img;
   }
 
   /** A small bobbing arrow over the visitor's own creature (as on the reef), in lily pink. */
@@ -1326,41 +1409,26 @@ export class PondView {
   }
 
   /**
-   * The banks' trees and the sky mirrored in the water, a canvas pixel per
-   * cell: the dark crowns of the bankside trees reaching out from each
-   * shore, pale sky and drifting clouds over the open water, and gaps where
-   * ripples break it up. Static, built once per world size; drawReflections
+   * The sky mirrored in the water, a canvas pixel per cell: pale sky and
+   * drifting clouds, with gaps where ripples break it up. Static, built once per world size; drawReflections
    * sets it moving.
    */
   private reflection() {
     const { pond } = this;
     const key = `${pond.w}x${pond.h}`;
     if (this.reflectCanvas && key === this.reflectKey) return this.reflectCanvas;
-    const { w, h, shoreL, shoreR } = pond;
+    const { w, h } = pond;
     const c = makeCanvas(w, h);
     const ctx = c.getContext('2d') as CanvasRenderingContext2D;
     const img = ctx.createImageData(w, h);
     const out = new Uint32Array(img.data.buffer);
     for (let z = 0; z < h; z++) {
-      const l = shoreL[z], r = shoreR[z];
-      // Each shore's trees: crowns of different sizes along the bank.
-      const crown = (side: number) => 6 + 10 * (0.5 + 0.5 * Math.sin(z * 0.045 + side * 2.1)) * (0.6 + 0.4 * Math.sin(z * 0.13 + side * 5.3));
-      const reachL = crown(0), reachR = crown(1);
       const jitter = hash(z * 977) * 40;
-      for (let x = Math.ceil(l) + 1; x < r - 1; x++) {
+      for (let x = 1; x < w - 1; x++) {
         if (pond.land[z * w + x]) continue;
-        const fromL = x - l, fromR = r - x;
-        const trees = fromL < fromR ? reachL - fromL : reachR - fromR;
-        let a: number, rr: number, gg: number, bb: number;
-        if (trees > 0) {
-          // Ragged at the crowns' edge.
-          if (trees < 2 && hash(z * w + x) < 0.5) continue;
-          a = 0.3 * Math.min(1, trees / 3); rr = 10; gg = 46; bb = 50;
-        } else {
-          const cloud = Math.sin(x * 0.035 + z * 0.012) * Math.sin(z * 0.019 - x * 0.008 + 1.3);
-          a = cloud > 0.3 ? 0.06 + (cloud - 0.3) * 0.22 : 0.03;
-          rr = cloud > 0.3 ? 236 : 170; gg = cloud > 0.3 ? 248 : 226; bb = cloud > 0.3 ? 250 : 240;
-        }
+        const cloud = Math.sin(x * 0.035 + z * 0.012) * Math.sin(z * 0.019 - x * 0.008 + 1.3);
+        let a = cloud > 0.3 ? 0.06 + (cloud - 0.3) * 0.22 : 0.03;
+        const rr = cloud > 0.3 ? 236 : 170, gg = cloud > 0.3 ? 248 : 226, bb = cloud > 0.3 ? 250 : 240;
         // Ripples break it into dashes along each row.
         if (hash(z * 131 + Math.floor((x + jitter) / 5)) < 0.22) a *= 0.35;
         out[z * w + x] = (Math.round(a * 255) << 24) | (bb << 16) | (gg << 8) | rr;

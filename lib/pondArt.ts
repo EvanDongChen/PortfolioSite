@@ -712,6 +712,202 @@ export const boughSprite = (seed: number, len: number) =>
     return c;
   });
 
+// --- plants on the land: trees, bushes, ferns, grass, flowers, mushrooms ------------------
+
+/** Leaf colourways, dark outline to sunlit tips: a fresh green, a deep green, an olive and a blossom tree's. */
+const LEAF_SETS: Rgb[][] = [
+  [[24, 56, 40], [40, 88, 50], [60, 120, 60], [92, 154, 72], [138, 190, 92]],
+  [[18, 46, 38], [30, 74, 50], [46, 102, 60], [70, 132, 68], [104, 164, 84]],
+  [[34, 58, 34], [58, 90, 46], [86, 122, 56], [118, 152, 68], [160, 184, 90]],
+  [[24, 56, 40], [40, 88, 50], [60, 120, 60], [92, 154, 72], [138, 190, 92]],
+];
+const BLOSSOM: Rgb[] = [[244, 176, 200], [255, 222, 232]];
+const TRUNK: Rgb[] = [[64, 46, 32], [94, 68, 44], [124, 94, 62]];
+const BERRIES: Rgb[] = [[214, 52, 58], [250, 246, 236], [246, 206, 60], [150, 96, 200]];
+
+/**
+ * A rounded mass of leaves lit from the upper left, as a union of lumps:
+ * each pixel shaded by the lump it sits most deeply in, so the mass reads
+ * as clusters of leaves, with a dark outline and a scatter of bright tips.
+ */
+const leafMass = (ctx: CanvasRenderingContext2D, lumps: { x: number; y: number; r: number }[], set: Rgb[], rnd: () => number, w: number, h: number) => {
+  const at = (x: number, y: number) => {
+    let best = -1, bx = 0, by = 0;
+    for (const l of lumps) {
+      const dx = (x + 0.5 - l.x) / l.r, dy = (y + 0.5 - l.y) / l.r;
+      const k = 1 - Math.hypot(dx, dy);
+      if (k > best) { best = k; bx = dx; by = dy; }
+    }
+    return { inside: best > 0, k: best, nx: bx, ny: by };
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = at(x, y);
+      if (!p.inside) continue;
+      const edge = !at(x - 1, y).inside || !at(x + 1, y).inside || !at(x, y - 1).inside || !at(x, y + 1).inside;
+      if (edge) { put(ctx, x, y, set[0]); continue; }
+      const light = -p.nx * 0.55 - p.ny * 0.75 + (rnd() - 0.5) * 0.35;
+      const tone = Math.max(1, Math.min(4, Math.round(2.4 + light * 2)));
+      put(ctx, x, y, set[tone]);
+    }
+  }
+};
+
+/** A tree from slightly above: its crown of leaf clusters over a short trunk (anchor its trunk's foot). Kind 3 is in blossom. */
+export const treeSprite = (seed: number, r: number, kind: number) =>
+  cached(`pond-tree-${seed}-${r}-${kind}`, () => {
+    const rnd = seededRandom(seed * 7 + r);
+    const trunkH = Math.round(r * 0.55) + 2;
+    const w = r * 2 + 6, h = r * 2 + trunkH + 2;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const cx = w / 2, cy = r + 2;
+    // The trunk, a little of it showing below the crown, with a root flare.
+    for (let y = cy + r * 0.5; y < h; y++) {
+      const flare = y >= h - 1 ? 1 : 0;
+      for (let x = Math.floor(cx - 1 - flare); x <= Math.floor(cx + 1 + flare); x++) put(ctx, x, Math.floor(y), x < cx - 0.5 ? TRUNK[2] : x > cx + 0.5 ? TRUNK[0] : TRUNK[1]);
+    }
+    const lumps = [{ x: cx, y: cy, r: r * 0.82 }];
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI * 2 + rnd() * 0.8;
+      lumps.push({ x: cx + Math.cos(a) * r * 0.48, y: cy + Math.sin(a) * r * 0.42, r: r * (0.42 + rnd() * 0.16) });
+    }
+    leafMass(ctx, lumps, LEAF_SETS[kind % LEAF_SETS.length], rnd, w, h);
+    if (kind === 3) {
+      // Blossom over the sunlit side.
+      for (let n = Math.round(r * r * 0.5); n > 0; n--) {
+        const x = Math.floor(cx + (rnd() - 0.6) * r * 1.6), y = Math.floor(cy + (rnd() - 0.6) * r * 1.5);
+        const d = ctx.getImageData(x, y, 1, 1).data;
+        if (d[3] && d[1] > 70) put(ctx, x, y, BLOSSOM[rnd() < 0.6 ? 0 : 1]);
+      }
+    }
+    return c;
+  });
+
+/** A weeping willow: a crown with curtains of pale streamers hanging to the ground. */
+export const willowSprite = (seed: number, r: number) =>
+  cached(`pond-willow-${seed}-${r}`, () => {
+    const rnd = seededRandom(seed * 13 + r);
+    const w = r * 2 + 6, h = Math.round(r * 2.4) + 4;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const cx = w / 2, cy = r + 1;
+    const set: Rgb[] = [[40, 74, 40], [70, 112, 52], [104, 148, 64], [140, 178, 80], [184, 206, 112]];
+    for (let y = cy; y < h; y++) for (let x = Math.floor(cx - 1); x <= Math.floor(cx); x++) put(ctx, x, y, TRUNK[x < cx - 0.5 ? 2 : 1]);
+    leafMass(ctx, [{ x: cx, y: cy, r: r * 0.9 }, { x: cx - r * 0.45, y: cy + 1, r: r * 0.55 }, { x: cx + r * 0.45, y: cy + 1, r: r * 0.55 }], set, rnd, w, Math.round(cy + r));
+    // Streamers falling from the crown's lower half, every other column.
+    for (let x = Math.floor(cx - r * 0.95); x <= cx + r * 0.95; x += 1 + (rnd() < 0.3 ? 1 : 0)) {
+      const top = cy + Math.sqrt(Math.max(0, (r * 0.9) ** 2 - (x - cx) ** 2)) * 0.6;
+      const len = 2 + rnd() * (h - top - 2);
+      for (let y = Math.floor(top); y < Math.min(h - 1, top + len); y++) put(ctx, x, y, set[y > top + len * 0.6 ? 4 : 3]);
+    }
+    return c;
+  });
+
+/** A bush: a low mound of leaves, sometimes with berries or flowers dotted over it (variant 0 is plain). */
+export const bushSprite = (seed: number, r: number, variant: number) =>
+  cached(`pond-bush-${seed}-${r}-${variant}`, () => {
+    const rnd = seededRandom(seed * 31 + r);
+    const w = r * 2 + 4, h = Math.round(r * 1.6) + 3;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const lumps = [{ x: w / 2, y: h - r * 0.8, r: r * 0.85 }];
+    for (let k = 0; k < 3; k++) lumps.push({ x: w / 2 + (rnd() - 0.5) * r * 1.2, y: h - r * (0.7 + rnd() * 0.5), r: r * (0.5 + rnd() * 0.2) });
+    leafMass(ctx, lumps, LEAF_SETS[seed % 3], rnd, w, h);
+    if (variant > 0) {
+      for (let n = Math.round(r * 2.2); n > 0; n--) {
+        const x = Math.floor(rnd() * w), y = Math.floor(rnd() * h * 0.8);
+        const d = ctx.getImageData(x, y, 1, 1).data;
+        if (d[3] && d[1] > 60) put(ctx, x, y, BERRIES[(variant - 1) % BERRIES.length]);
+      }
+    }
+    return c;
+  });
+
+const FERN: Rgb[] = [[38, 90, 48], [70, 138, 64], [116, 182, 82]];
+/** A fern: fronds arching out from the middle, leaflets along each. */
+export const fernSprite = (seed: number) =>
+  cached(`pond-fern-${seed}`, () => {
+    const rnd = seededRandom(seed * 5 + 3);
+    const w = 15, h = 9;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const fronds = 5 + Math.floor(rnd() * 3);
+    for (let f = 0; f < fronds; f++) {
+      const a = Math.PI * (0.08 + 0.84 * (f / (fronds - 1))) + (rnd() - 0.5) * 0.2;
+      const len = 5 + rnd() * 3;
+      for (let t = 0; t <= len; t += 0.5) {
+        const x = 7 + Math.cos(Math.PI - a) * t, y = h - 1 - Math.sin(a) * t * 0.9 + (t / len) ** 2 * 2.2;
+        const xi = Math.round(x), yi = Math.round(y);
+        put(ctx, xi, yi, FERN[t < len * 0.3 ? 0 : 1]);
+        // Leaflets either side, brighter toward the tip.
+        if (Math.round(t * 2) % 2 === 0 && t > 1) { put(ctx, xi, yi - 1, FERN[t > len * 0.6 ? 2 : 1]); }
+      }
+    }
+    return c;
+  });
+
+const BLADE: Rgb[] = [[52, 102, 50], [86, 146, 66], [142, 186, 92]];
+const SEED_HEAD: Rgb = [196, 178, 112];
+/** A tuft of long grass: blades leaning this way and that, a seed head or two. */
+export const grassSprite = (seed: number) =>
+  cached(`pond-grass-${seed}`, () => {
+    const rnd = seededRandom(seed * 3 + 11);
+    const w = 9, h = 10;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    for (let b = 0; b < 6; b++) {
+      const lean = (rnd() - 0.5) * 0.9, len = 4 + rnd() * 5;
+      const heads = rnd() < 0.3;
+      for (let t = 0; t < len; t++) {
+        const x = Math.round(4 + (b - 2.5) * 0.6 + lean * t), y = h - 1 - t;
+        put(ctx, x, y, heads && t >= len - 2 ? SEED_HEAD : BLADE[t < 2 ? 0 : t > len - 2 ? 2 : 1]);
+      }
+    }
+    return c;
+  });
+
+/** Flower clumps: [petal, centre or shade] for foxgloves, ox-eye daisies, poppies, bluebells and buttercups. */
+const FLOWER_SETS: Rgb[][] = [
+  [[214, 112, 176], [244, 170, 214]],
+  [[250, 250, 244], [246, 206, 60]],
+  [[226, 64, 52], [40, 30, 30]],
+  [[110, 120, 222], [160, 170, 244]],
+  [[248, 214, 52], [255, 240, 140]],
+];
+/** A clump of flowers on green stems; foxgloves (kind 0) as tall spikes. */
+export const flowerSprite = (seed: number, kind: number) =>
+  cached(`pond-flowers-${seed}-${kind}`, () => {
+    const rnd = seededRandom(seed * 17 + kind);
+    const tall = kind === 0;
+    const w = 9, h = tall ? 12 : 7;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const [petal, heart] = FLOWER_SETS[kind % FLOWER_SETS.length];
+    for (let s = 0; s < (tall ? 3 : 5); s++) {
+      const x = 1 + Math.floor(rnd() * (w - 2)), top = tall ? 1 + Math.floor(rnd() * 3) : 1 + Math.floor(rnd() * 3);
+      for (let y = top; y < h; y++) put(ctx, x, y, BLADE[y > h - 3 ? 0 : 1]);
+      if (tall) {
+        // A spike of bells, down one side.
+        for (let y = top; y < top + 6; y++) put(ctx, x + (y & 1 ? 1 : -1), y, y & 1 ? petal : heart);
+        put(ctx, x, top - 1, BLADE[2]);
+      } else if (kind === 3) {
+        put(ctx, x, top, petal); put(ctx, x + 1, top + 1, petal); put(ctx, x + 1, top + 2, heart);
+      } else {
+        put(ctx, x - 1, top, petal); put(ctx, x + 1, top, petal); put(ctx, x, top - 1, petal); put(ctx, x, top, heart);
+      }
+    }
+    return c;
+  });
+
+/** A few mushrooms: red with white spots, or brown. */
+export const mushroomSprite = (seed: number) =>
+  cached(`pond-mushrooms-${seed}`, () => {
+    const red = seed % 2 === 0;
+    const cap: Rgb = red ? [206, 52, 48] : [150, 102, 60], spot: Rgb = red ? [250, 246, 236] : [190, 146, 96];
+    return fromRows(['.cc......', 'ccsc..cc.', '.ww..cscc', '.ww...ww.', '......ww.'], { c: cap, s: spot, w: [236, 226, 204] });
+  });
+
 // --- events -------------------------------------------------------------------------
 
 /** A mayfly nymph on a stem, and a mayfly splitting out of it (pale wings up). */

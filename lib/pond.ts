@@ -90,6 +90,10 @@ export const logThickness = (len: number) => (len >= 50 ? 10 : len >= 38 ? 8 : 6
  * in the pond; neighbouring lumps merge smoothly (they are metaballs).
  */
 export interface LandBlob { x: number; z: number; r: number }
+/** What grows on the land, from the banks' long grass to the trees. */
+export type FloraKind = 'tree' | 'willow' | 'bush' | 'fern' | 'grass' | 'flowers' | 'mushrooms';
+/** A plant on the land: its kind, which of that kind's looks, and (trees and bushes) its size. */
+export interface Flora { x: number; z: number; kind: FloraKind; seed: number; size: number; variant: number }
 /** A shallow bar out in the middle of the pond, where reeds stand and lilies root. */
 export interface Shoal { x: number; z: number; rx: number; rz: number }
 /** Roots reaching into the shallows from the bank. */
@@ -479,6 +483,7 @@ export class Pond {
   shoals: Shoal[] = [];
   roots: Roots[] = [];
   boughs: Bough[] = [];
+  flora: Flora[] = [];
   fronds: Frond[] = [];
   patches: DuckweedPatch[] = [];
   /** The breeze across the surface (cells a tick), turning slowly. */
@@ -557,21 +562,6 @@ export class Pond {
 
   // --- the shape of the pond ------------------------------------------------
 
-  /** How wide each bank is, before its wobble. */
-  bankWidth() {
-    return Math.max(7, Math.min(46, this.w * 0.065));
-  }
-
-  /** A shoreline's distance in from the edge at a row: slow bays, smaller coves, little kinks. */
-  private shoreAt(z: number, side: 0 | 1) {
-    const p = this.shorePhase;
-    const base = this.bankWidth();
-    const o = side * 4;
-    const wobble = Math.sin(z * 0.011 + p[o]) * 0.5 + Math.sin(z * 0.031 + p[o + 1]) * 0.28
-      + Math.sin(z * 0.087 + p[o + 2]) * 0.1 + Math.sin(z * 0.23 + p[o + 3]) * 0.04;
-    return Math.max(3, base * (1 + wobble));
-  }
-
   /** Grows or shrinks the world: the shores, depths and bed are worked out afresh. */
   resize(w: number, h: number) {
     if (w === this.w && h === this.h) return;
@@ -581,9 +571,10 @@ export class Pond {
     const n = w * h;
     this.shoreL = new Float32Array(h);
     this.shoreR = new Float32Array(h);
+    // No banks: the water runs off both edges of the page.
     for (let z = 0; z < h; z++) {
-      this.shoreL[z] = this.shoreAt(z, 0);
-      this.shoreR[z] = w - this.shoreAt(z, 1);
+      this.shoreL[z] = -1;
+      this.shoreR[z] = w;
     }
     this.depth = new Float32Array(n);
     this.terrain = new Uint8Array(n);
@@ -622,7 +613,11 @@ export class Pond {
         this.grain[i] = (Math.random() * 256) | 0;
         const d = this.shoreDist[i];
         if (d > 0) {
-          const k = Math.min(1, d / SHELF);
+          // Shelving up round the islands, and toward the page's edges into
+          // golden shallows; broad swells of shallower water elsewhere.
+          const near = Math.min(d, Math.min(x + 1, w - x) * 2.2 + 3);
+          const swell = 0.88 + 0.12 * Math.sin(z * 0.013 + p[0]) * Math.sin(x * 0.021 + p[3]);
+          const k = Math.min(1, near / SHELF) * swell;
           // A wide sunlit shelf, a slope, then the deep middle; hollows here and there.
           this.depth[i] = MAX_DEPTH * (k * k * (3 - 2 * k)) * (0.82 + 0.18 * tone) + Math.min(1.5, d * 0.5);
           // Rising gently onto a shoal.
@@ -646,7 +641,7 @@ export class Pond {
     }
     if (from === 0) {
       this.pads = []; this.clumps = []; this.weedBeds = []; this.stones = []; this.logs = [];
-      this.roots = []; this.fronds = []; this.patches = []; this.boughs = []; this.rocks = [];
+      this.roots = []; this.fronds = []; this.patches = []; this.boughs = []; this.rocks = []; this.flora = [];
     } else {
       const inside = (o: { z: number }) => o.z < h;
       this.pads = this.pads.filter(inside);
@@ -656,6 +651,7 @@ export class Pond {
       this.logs = this.logs.filter(inside);
       this.roots = this.roots.filter(inside);
       this.boughs = this.boughs.filter(inside);
+      this.flora = this.flora.filter(inside);
       this.rocks = this.rocks.filter(inside);
       for (const f of this.fronds) if (!inside(f)) f.alive = false;
     }
@@ -693,18 +689,9 @@ export class Pond {
   private plant(z0: number, z1: number) {
     const { w } = this;
     const sides: (1 | -1)[] = [1, -1];
-    // Logs first, so the pads grow round them: floating with an end on the
-    // bank, adrift out in the open water, or sunk on the bed.
-    for (let z = z0 + rand(60, 180); z < z1 - 10; z += rand(170, 330)) {
-      const side: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
-      const len = randInt(40, 60);
-      // The bank end rests a few cells up the shore (not where a peninsula juts out).
-      const lx = this.offShore(z, side, len / 2 - 6);
-      if (!this.isWater(lx, z) || !this.isWater(lx + side * (len / 2 - 2), z)) continue;
-      this.logs.push({ x: lx, z, len, seed: randInt(1, 1e9), floating: true, side });
-    }
+    // Logs first, so the pads grow round them: adrift on the open water, or sunk on the bed.
     for (let z = z0 + rand(30, 120); z < z1 - 10; z += rand(100, 200)) {
-      const x = rand(w * 0.25, w * 0.75), len = randInt(30, 56);
+      const x = rand(w * 0.15, w * 0.85), len = randInt(30, 56);
       if (!this.isWater(x - len / 2 - 2, z) || !this.isWater(x + len / 2 + 2, z)) continue;
       // Clear of the land all along it, with room to drift.
       let clear = true;
@@ -737,32 +724,30 @@ export class Pond {
     for (const s of this.shoals) {
       if (s.z >= z0 && s.z < z1 && Math.random() < 0.6) rockAt(s.x + rand(-s.rx, s.rx) * 0.7, s.z + rand(-s.rz, s.rz) * 0.7, Math.random() < 0.5);
     }
-    // Reeds, cattails and rushes in clumps along both shores, rooted at the
-    // waterline; yellow flag irises and purple loosestrife a little up the bank.
+    // Reeds, cattails and rushes standing in the shallows along the page's edges.
     for (const side of sides) {
-      for (let z = z0 + rand(6, 30); z < z1 - 4; z += rand(26, 64)) {
+      for (let z = z0 + rand(10, 50); z < z1 - 4; z += rand(45, 100)) {
         const r = Math.random();
-        const kind: ReedKind = r < 0.3 ? 'cattail' : r < 0.52 ? 'reed' : r < 0.7 ? 'rush' : r < 0.87 ? 'iris' : 'loosestrife';
-        const flowering = kind === 'iris' || kind === 'loosestrife';
-        const x = this.offShore(z, side, flowering ? rand(-7, -1) : rand(-3, 2));
+        const kind: ReedKind = r < 0.4 ? 'cattail' : r < 0.7 ? 'reed' : 'rush';
+        const x = this.offShore(z, side, rand(3, 9));
         const stems: Stem[] = [];
-        for (let k = randInt(6, 12); k > 0; k--) {
-          const sz = z + rand(-5, 5);
-          // A few rushes among the flowers, and the odd reed among the cattails.
-          const own: ReedKind = flowering && Math.random() < 0.3 ? 'rush' : kind === 'cattail' && Math.random() < 0.25 ? 'reed' : kind;
+        for (let k = randInt(6, 11); k > 0; k--) {
+          const sx = x + rand(-3, 3) * (1 + Math.random()), sz = z + rand(-5, 5);
+          if (!this.isWater(sx, sz)) continue;
+          // The odd reed among the cattails.
+          const own: ReedKind = kind === 'cattail' && Math.random() < 0.25 ? 'reed' : kind;
           stems.push({
-            x: x + rand(-3, 3) * (1 + Math.random()), z: sz,
-            len: own === 'cattail' ? randInt(22, 36) : own === 'reed' ? randInt(18, 32) : own === 'iris' ? randInt(14, 22)
-              : own === 'loosestrife' ? randInt(16, 26) : randInt(12, 22),
+            x: sx, z: sz, len: own === 'cattail' ? randInt(22, 36) : own === 'reed' ? randInt(18, 32) : randInt(12, 22),
             kind: own, phase: rand(0, Math.PI * 2), shade: randInt(0, 2), ...upright(),
           });
         }
         stems.sort((a, b) => a.z - b.z);
-        this.clumps.push({ x, z, stems });
+        if (stems.length) this.clumps.push({ x, z, stems });
       }
     }
-    // The peninsulas' and islands' own shores: reeds, rushes, cattails and
-    // irises round their edges, and stones on them.
+    this.plantLand(z0, z1);
+    // The islands' own shores: reeds, rushes, cattails and irises round
+    // their edges, and stones on them.
     for (const b of this.landBlobs) {
       if (b.z < z0 || b.z >= z1 || Math.random() < 0.35) continue;
       const at = this.innerShore(b.x, b.z, b.r + 4, 0.5, 3);
@@ -787,16 +772,20 @@ export class Pond {
     }
     // Lily pads in rafts: out from both shores across the shallows, and here
     // and there further out, wherever the water is shallow enough to root in.
-    const raft = (cx: number, cz: number, count: number, spreadX: number, spreadZ: number, deep = MAX_DEPTH * 0.92) => {
+    // `packed` lets pads crowd and overlap at their edges, as in a lily field.
+    const raft = (cx: number, cz: number, count: number, spreadX: number, spreadZ: number, deep = MAX_DEPTH * 0.92, blooms = 0.5, packed = false) => {
       for (let k = count, tries = 0; k > 0 && tries < count * 8; tries++) {
         const young = Math.random() < 0.3;
-        const r = Math.round((young ? rand(3, 5) : rand(5.5, 10)) * 2) / 2;
-        const x = cx + rand(-spreadX, spreadX), pz = cz + rand(-spreadZ, spreadZ);
+        const r = Math.round((young ? rand(3, 5) : packed ? rand(5, 8) : rand(5.5, 10)) * 2) / 2;
+        // Thicker toward the middle of the raft.
+        const a = rand(0, Math.PI * 2), d = Math.sqrt(Math.random());
+        const x = cx + Math.cos(a) * d * spreadX, pz = cz + Math.sin(a) * d * spreadZ;
         if (!this.isWater(x - r, pz) || !this.isWater(x + r, pz) || this.depthAt(x, pz) > deep) continue;
         if (this.logs.some(l => l.floating && Math.abs(l.z - pz) < r * 0.6 + 4 && Math.abs(l.x - x) < l.len / 2 + r)) continue;
         if (this.rocks.some(o => Math.abs(o.z - pz) < r * 0.6 + 3 && Math.abs(o.x - x) < o.w / 2 + r)) continue;
-        if (this.pads.some(o => Math.abs(o.z - pz) < 20 && Math.hypot(o.x - x, (o.z - pz) * 1.6) < o.r + r + 0.5)) continue;
-        const flower = r >= 5.5 && Math.random() < 0.5 ? (Math.random() < 0.5 ? 1 : Math.random() < 0.6 ? 2 : 3) : 0;
+        const gap = packed ? -Math.min(r * 0.4, 3) : 0.5;
+        if (this.pads.some(o => Math.abs(o.z - pz) < 20 && Math.hypot(o.x - x, (o.z - pz) * 1.6) < o.r + r + gap)) continue;
+        const flower = r >= 5.5 && Math.random() < blooms ? (Math.random() < 0.5 ? 1 : Math.random() < 0.6 ? 2 : 3) : 0;
         this.pads.push({
           x, z: pz, ax: x, az: pz, vx: 0, vz: 0, r, notch: randInt(0, 7), palette: randInt(0, 2),
           flower, bloom: 1, phase: rand(0, Math.PI * 2), dip: 0, dipV: 0, tilt: 0, load: 0,
@@ -808,7 +797,13 @@ export class Pond {
       for (let z = z0 + rand(10, 40); z < z1 - 6; z += rand(30, 70)) raft(this.offShore(z, side, rand(6, 30)), z, randInt(5, 12), 14, 16);
     }
     // Out in the middle: rafts all down the pond (the lilies here have long stems).
-    for (let z = z0 + rand(20, 60); z < z1 - 6; z += rand(40, 90)) raft(rand(w * 0.25, w * 0.75), z, randInt(5, 12), 18, 14, Infinity);
+    for (let z = z0 + rand(20, 60); z < z1 - 6; z += rand(50, 100)) raft(rand(w * 0.2, w * 0.8), z, randInt(5, 10), 18, 14, Infinity);
+    // Lily fields: broad meadows of pads packed edge to edge and full of flowers.
+    const fieldScale = Math.max(0.5, Math.min(1, w / 260));
+    for (let z = z0 + rand(40, 110); z < z1 - 10; z += rand(120, 200)) {
+      const rx = rand(26, 48) * fieldScale, rz = rand(14, 24);
+      raft(rand(w * 0.15, w * 0.85), z, Math.round(rx * rz * 0.09), rx, rz, Infinity, 0.6, true);
+    }
     // Pickerelweed and arrowhead standing in the shallows a little way out from the shore.
     for (const side of sides) {
       for (let z = z0 + rand(20, 80); z < z1 - 6; z += rand(55, 130)) {
@@ -877,28 +872,22 @@ export class Pond {
       weeds.sort((a, b) => a.z - b.z);
       if (weeds.length) this.weedBeds.push({ x, z, rx, rz, kind, weeds });
     }
-    // Stones: mostly in the shallows, a few on the banks.
+    // Stones on the bed in the shallows.
     const area = w * (z1 - z0);
-    for (let k = Math.round(area / 2600); k > 0; k--) {
+    for (let k = Math.round(area / 3200); k > 0; k--) {
       const z = rand(z0 + 2, z1 - 2);
-      const side: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
-      const land = Math.random() < 0.25;
-      const x = land ? this.offShore(z, side, -rand(3, 10)) : Math.random() < 0.7 ? this.offShore(z, side, rand(2, 24)) : rand(0, w);
-      if (x < 2 || x > w - 2 || this.isWater(x, z) === land) continue;
+      const x = Math.random() < 0.7 ? this.offShore(z, Math.random() < 0.5 ? 1 : -1, rand(2, 24)) : rand(0, w);
+      if (x < 2 || x > w - 2 || !this.isWater(x, z)) continue;
       const big = Math.random() < 0.25;
-      this.stones.push({ x, z, w: big ? randInt(8, 13) : randInt(4, 7), ht: big ? randInt(5, 7) : randInt(3, 4), seed: randInt(1, 1e9), land });
+      this.stones.push({ x, z, w: big ? randInt(8, 13) : randInt(4, 7), ht: big ? randInt(5, 7) : randInt(3, 4), seed: randInt(1, 1e9), land: false });
     }
-    // Roots reaching in from the banks, and logs: sunk, or floating with an end on the bank.
-    for (const side of sides) {
-      for (let z = z0 + rand(40, 120); z < z1 - 6; z += rand(120, 260)) {
-        this.roots.push({ x: this.offShore(z, side, -1), z, side, seed: randInt(1, 1e9) });
-      }
-    }
-    // Boughs from the bankside trees reaching out over the water.
-    for (const side of sides) {
-      for (let z = z0 + rand(60, 220); z < z1 - 10; z += rand(170, 380)) {
-        this.boughs.push({ x: this.offShore(z, side, -4), z, side, len: randInt(18, 28), seed: randInt(1, 1e9) });
-      }
+    // Boughs from the islands' trees reaching out over the water, for the kingfisher.
+    for (const b of this.landBlobs) {
+      if (b.z < z0 || b.z >= z1 || b.r < 8 || Math.random() < 0.5) continue;
+      const side: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
+      const x = b.x + side * (b.r - 3);
+      if (!this.isWater(x + side * 12, b.z)) continue;
+      this.boughs.push({ x, z: b.z + rand(-2, 2), side, len: randInt(16, 22), seed: randInt(1, 1e9) });
     }
   }
 
@@ -948,56 +937,24 @@ export class Pond {
   }
 
   /**
-   * Peninsulas and islands for the rows from `from` down, keeping most of
-   * the page water: a peninsula reaching in from one bank; a pair from
-   * opposite banks, one below the other, that pinch the water into two
-   * ponds joined by a channel; or an island out in the middle. Each is a
-   * chain of round lumps, wider at the bank and tapering, and none goes
-   * behind the hero text.
+   * A few islands for the rows from `from` down, here and there across the
+   * open water: a handful of round lumps each, sometimes with a little
+   * islet beside it. Never behind the hero text.
    */
   private growLand(from: number) {
     const { w, h } = this;
     const clear = (b: LandBlob) => !this.clearZones.some(r => b.x + b.r + 12 > r.x0 && b.x - b.r - 12 < r.x1 && b.z + b.r + 12 > r.z0 && b.z - b.r - 12 < r.z1);
-    const reach = (side: 1 | -1, z: number, frac: number, r0: number, r1: number) => {
-      const row = Math.max(0, Math.min(h - 1, Math.round(z)));
-      const start = side > 0 ? this.shoreL[row] - 4 : this.shoreR[row] + 4;
-      const end = side > 0 ? w * frac : w * (1 - frac);
-      const len = Math.abs(end - start);
-      const drift = rand(-0.18, 0.18), phase = rand(0, Math.PI * 2), bend = rand(3, 7);
-      const out: LandBlob[] = [];
-      for (let t = 0; t <= len; t += 5) {
-        const k = t / len;
-        // Tapering, bulging and narrowing as it goes, and curving a little.
-        const r = (r0 + (r1 - r0) * k * k) * (1 + 0.28 * Math.sin(t * 0.07 + phase)) + rand(-1.5, 1.5);
-        const cz = z + drift * t + Math.sin(t * 0.05 + phase) * bend;
-        out.push({ x: start + side * t, z: cz, r });
-        // Now and then a lobe off one side: a little bay beside it.
-        if (k > 0.15 && k < 0.8 && Math.random() < 0.12) out.push({ x: start + side * t, z: cz + (Math.random() < 0.5 ? -1 : 1) * r * 0.8, r: r * rand(0.45, 0.65) });
+    // Smaller on a narrow (phone) page.
+    const scale = Math.max(0.55, Math.min(1, w / 260));
+    for (let z = from + rand(120, 220); z < h - 60; z += rand(260, 420)) {
+      const cx = rand(w * 0.2, w * 0.8);
+      const island: LandBlob[] = [];
+      for (let k = randInt(2, 4); k > 0; k--) island.push({ x: cx + rand(-10, 10) * scale, z: z + rand(-6, 6), r: rand(8, 14) * scale });
+      if (w >= 180 && Math.random() < 0.35) {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        island.push({ x: cx + side * rand(28, 40), z: z + rand(-12, 12), r: rand(5, 8) });
       }
-      return out;
-    };
-    // Sized for a desktop-wide pond; on a narrow (phone) page the land is
-    // smaller and further apart, and pairs, which would wall it off, are left out.
-    const scale = Math.max(0.5, Math.min(1, w / 260));
-    const narrow = w < 180;
-    for (let z = from + rand(110, 200); z < h - 70; z += rand(210, 340) / scale) {
-      const roll = Math.random();
-      let feature: LandBlob[];
-      if (roll < (narrow ? 0.5 : 0.38)) {
-        const reachFrac = narrow ? rand(0.22, 0.34) : rand(0.3, 0.52);
-        feature = reach(Math.random() < 0.5 ? 1 : -1, z, reachFrac, rand(13, 20) * scale, rand(5, 8) * scale);
-      } else if (roll < 0.72 && !narrow) {
-        // Two from opposite banks, far enough apart for a channel between them.
-        const ra = rand(12, 18) * scale, rb = rand(12, 18) * scale;
-        const side: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
-        feature = [...reach(side, z, rand(0.42, 0.6), ra, rand(5, 7) * scale), ...reach(side > 0 ? -1 : 1, z + ra + rb + rand(18, 28), rand(0.42, 0.6), rb, rand(5, 7) * scale)];
-        z += ra + rb + 30;
-      } else {
-        const cx = rand(w * 0.32, w * 0.68);
-        feature = [];
-        for (let k = randInt(2, 4); k > 0; k--) feature.push({ x: cx + rand(-12, 12) * scale, z: z + rand(-7, 7), r: rand(7, 13) * scale });
-      }
-      if (feature.every(clear)) this.landBlobs.push(...feature);
+      if (island.every(clear)) this.landBlobs.push(...island);
     }
   }
 
@@ -1065,6 +1022,54 @@ export class Pond {
     this.shoreDist = dist;
   }
 
+  /**
+   * Plants on the land, on the banks and the peninsulas and islands alike:
+   * trees well back from the water (more toward the page's edges), and on
+   * a loose grid long grass, flowers, ferns, bushes and mushrooms, the
+   * taller and bushier the further from the water.
+   */
+  private plantLand(z0: number, z1: number) {
+    const { w } = this;
+    const up = (x: number, z: number) => -this.shoreDist[this.cellAt(x, z)];
+    const spacing = (x: number, z: number, r: number) => !this.flora.some(f => (f.kind === 'tree' || f.kind === 'willow') && Math.abs(f.z - z) < r + f.size && Math.hypot(f.x - x, f.z - z) < (r + f.size) * 0.8);
+    // Trees.
+    for (let z = z0 + 4; z < z1 - 2; z += 11) {
+      for (let x = 2; x < w - 2; x += 11) {
+        const tx = x + rand(-4, 4), tz = z + rand(-4, 4);
+        const d = up(tx, tz);
+        if (d < 5) continue;
+        const edge = Math.min(tx, w - tx);
+        if (Math.random() > (edge < 30 ? 0.55 : 0.3)) continue;
+        const willow = d < 10 && Math.random() < 0.3;
+        const size = willow ? randInt(8, 11) : randInt(Math.min(13, Math.max(6, Math.floor(d))) - 2, Math.min(14, Math.max(7, Math.floor(d) + 3)));
+        if (!spacing(tx, tz, size)) continue;
+        this.flora.push({ x: tx, z: tz, kind: willow ? 'willow' : 'tree', seed: randInt(0, 5), size, variant: Math.random() < 0.15 ? 3 : randInt(0, 2) });
+      }
+    }
+    // Everything else, under and between them.
+    for (let z = z0 + 2; z < z1 - 1; z += 6) {
+      for (let x = 1; x < w - 1; x += 6) {
+        const fx = x + rand(-2.5, 2.5), fz = z + rand(-2.5, 2.5);
+        const d = up(fx, fz);
+        if (d < 1.2) continue;
+        const r = Math.random();
+        let kind: FloraKind | null = null;
+        if (d < 4) kind = r < 0.45 ? 'grass' : r < 0.62 ? 'flowers' : r < 0.72 ? 'fern' : null;
+        else kind = r < 0.22 ? 'grass' : r < 0.36 ? 'flowers' : r < 0.52 ? 'fern' : r < 0.7 ? 'bush' : r < 0.73 ? 'mushrooms' : null;
+        if (!kind) continue;
+        // Little grows right under a tree's crown but ferns and mushrooms.
+        if (kind !== 'fern' && kind !== 'mushrooms' && !spacing(fx, fz, -2)) continue;
+        this.flora.push({
+          x: fx, z: fz, kind, seed: randInt(0, 5), size: kind === 'bush' ? randInt(4, 7) : 0,
+          // Flowers in drifts of one kind; bushes plain or berried.
+          variant: kind === 'flowers' ? Math.floor(Math.abs(Math.sin(Math.floor(fx / 24) * 12.9 + Math.floor(fz / 20) * 78.2)) * 5)
+            : kind === 'bush' ? (Math.random() < 0.35 ? randInt(1, 4) : 0) : 0,
+        });
+      }
+    }
+    this.flora.sort((a, b) => a.z - b.z);
+  }
+
   /** A spot on land just up from the water near a point, or null: for reeds and perches on the inner shores. */
   private innerShore(x: number, z: number, reach: number, upFrom = 1, upTo = 4) {
     for (let k = 0; k < 10; k++) {
@@ -1111,6 +1116,7 @@ export class Pond {
     this.logs = this.logs.filter(l => !blocks(l.x, l.z, l.len / 2, 4, l.floating ? 0 : MAX_DEPTH * ELEVATION));
     this.rocks = this.rocks.filter(r => !blocks(r.x, r.z, r.w / 2, r.ht));
     this.boughs = this.boughs.filter(b => !blocks(b.x + b.side * b.len / 2, b.z, b.len / 2, (BOUGH_H + 12) * ELEVATION));
+    this.flora = this.flora.filter(f => !blocks(f.x, f.z, f.kind === 'tree' || f.kind === 'willow' ? f.size + 2 : 5, f.kind === 'tree' || f.kind === 'willow' ? f.size * 2.6 : 8));
     this.stones = this.stones.filter(st => !blocks(st.x, st.z, st.w / 2, st.ht, st.land ? 0 : this.depthAt(st.x, st.z) * ELEVATION));
     for (const f of this.fronds) if (blocks(f.x, f.z, 1, 1)) f.alive = false;
     for (const p of this.patches) if (blocks(p.x, p.z, p.rx, p.rz)) p.target = 0;
@@ -1522,14 +1528,7 @@ export class Pond {
       const perch: Perch = { kind: 'rock', rock, ox };
       if (!this.perchTaken(perch, by)) options.push({ perch, d });
     }
-    // The bank, a few cells up from the water's edge.
-    for (const side of [1, -1] as const) {
-      const bz = Math.max(3, Math.min(this.h - 3, z + rand(-20, 20)));
-      const bx = this.offShore(bz, side, -rand(2, 6));
-      const d = Math.hypot(bx - x, bz - z);
-      if (d <= reach && d >= minDist && bx > 2 && bx < this.w - 2 && !this.isClear(bx, bz) && !this.isWater(bx, bz)) options.push({ perch: { kind: 'bank', x: bx, z: bz }, d: d * 1.4 });
-    }
-    // Or the shore of a peninsula or island nearby.
+    // Or the shore of an island nearby.
     const inner = this.innerShore(x, z, Math.min(reach, 40), 1.5, 5);
     if (inner) {
       const d = Math.hypot(inner.x - x, inner.z - z);
@@ -1638,6 +1637,8 @@ export class Pond {
       c.squash += c.squashV;
       if (Math.abs(c.squash) + Math.abs(c.squashV) < 0.015) c.squash = c.squashV = 0;
     }
+    // Anything in the water that has strayed onto land somehow goes back to it.
+    if ((this.tick + c.id) % 30 === 0 && c.layer !== 'air' && !c.leap && c.mood !== 'walking' && !this.isWater(c.x, c.z)) this.toNearestWater(c);
     if (c.energy < sp.hungerLine) c.hungry = true;
     else if (c.energy > 0.95) c.hungry = false;
     switch (c.species) {
@@ -1852,10 +1853,12 @@ export class Pond {
 
   /** Off a perch and into the nearest water, in a leap. */
   private leapIntoWater(c: PondCreature) {
-    const side = c.perch?.kind === 'bank' ? (c.x < this.w / 2 ? 1 : -1) : c.facing;
-    let tx = c.perch?.kind === 'bank' ? this.offShore(c.z, side, rand(5, 10)) : c.x + side * rand(6, 12);
-    if (!this.isWater(tx, c.z)) tx = this.offShore(c.z, c.x < this.w / 2 ? 1 : -1, rand(5, 10));
-    this.leapTo(c, tx, c.z + rand(-3, 3), null, 0.7);
+    // Off an island's shore, out toward open water; off anything else, ahead.
+    const to = c.perch?.kind === 'bank' ? this.toWater(c.x, c.z) : { x: c.facing, z: 0 };
+    const reach = rand(6, 12);
+    let tx = c.x + to.x * reach, tz = c.z + to.z * reach * 0.7 + rand(-2, 2);
+    if (!this.isWater(tx, tz)) { const open = this.toWater(c.x, c.z); tx = c.x + open.x * reach; tz = c.z + open.z * reach; }
+    this.leapTo(c, tx, tz, null, 0.7);
   }
 
   private frogPairing(c: PondCreature) {
@@ -2125,11 +2128,14 @@ export class Pond {
     const nx = c.x + c.vx, nz = c.z + c.vz;
     if (this.isWater(nx, nz)) { c.x = nx; c.z = nz; }
     else if (c.timer < 0) {
-      // Bumped into the bank: climb straight out onto it.
-      const side = c.x < this.w / 2 ? 1 : -1;
-      this.leapTo(c, this.offShore(c.z, side, -rand(2, 5)), c.z, { kind: 'bank', x: this.offShore(c.z, side, -rand(2, 5)), z: c.z }, 0.4);
-      c.mood = 'climbing';
-      return;
+      // Bumped into an island: climb straight out onto it.
+      const spot = this.innerShore(c.x, c.z, 8, 1.5, 4);
+      if (spot) {
+        this.leapTo(c, spot.x, spot.z, { kind: 'bank', x: spot.x, z: spot.z }, 0.4);
+        c.mood = 'climbing';
+        return;
+      }
+      c.vx = -c.vx; c.vz = -c.vz;
     }
     if (Math.abs(c.vx) > 0.02) c.facing = c.vx > 0 ? 1 : -1;
     if (c.timer < -600) { this.climbTarget.delete(c.id); this.dropIn(c); }
@@ -2469,12 +2475,17 @@ export class Pond {
     return this.counts().mallard < this.cap('mallard');
   }
 
-  /** Off to the bank to make a nest: swims to the shore, then waddles up it. */
+  /** Off to an island to make a nest: swims to its shore, then waddles up it. */
   private goNest(c: PondCreature) {
-    const side: 1 | -1 = c.x < this.w / 2 ? 1 : -1;
-    let z = c.z;
-    for (let tries = 0; tries < 10 && this.isClear(this.offShore(z, side, -6), z); tries++) z += 40;
-    c.goal = { x: this.offShore(z, side, -6), z };
+    // The nearest island, a little way up from its shore.
+    let best: LandBlob | null = null, bestD = 400;
+    for (const b of this.landBlobs) {
+      const d = Math.hypot(b.x - c.x, b.z - c.z);
+      if (d < bestD && !this.isClear(b.x, b.z)) { bestD = d; best = b; }
+    }
+    const spot = best && (this.innerShore(best.x, best.z, best.r + 2, 3, 8) ?? { x: best.x, z: best.z });
+    if (!spot) { c.breedCooldown = 3000; c.timer = randInt(100, 300); return; }
+    c.goal = spot;
     c.mood = 'walking';
     c.timer = 1200;
   }
@@ -2519,14 +2530,15 @@ export class Pond {
     }
     this.logEvent('hatch', c, null, `${c.name.replace(/ #\d+$/, '')}'s ducklings hatched`);
     c.breedCooldown = DUCK_BREED_COOLDOWN;
-    // Back down the bank and into the water, the ducklings in a line behind.
-    const side = c.x < this.w / 2 ? 1 : -1;
-    c.goal = { x: this.offShore(c.z, side, 14), z: c.z + 6 };
+    // Back down the shore and into the water, the ducklings in a line behind.
+    const out = this.toWater(c.x, c.z);
+    c.goal = { x: c.x + out.x * 18, z: c.z + out.z * 14 };
     c.mood = 'paddling';
     c.layer = 'surface';
     c.timer = 400;
-    c.heading = side > 0 ? 0 : Math.PI;
-    c.x = this.offShore(c.z, side, 2);
+    c.heading = Math.atan2(out.z, out.x);
+    // Straight into the shallows at the shore's foot.
+    this.toNearestWater(c);
   }
 
   /** A duckling follows the one ahead of it, keeping a little gap: a line behind its mother. */
@@ -3145,7 +3157,7 @@ export class Pond {
         break;
       case 'butterfly':
         c.layer = 'air'; c.mood = 'fluttering';
-        c.x = Math.max(1, Math.min(this.w - 1, this.offShore(c.z, side, -rand(3, this.bankWidth()))));
+        c.x = rand(this.w * 0.1, this.w * 0.9);
         c.h = rand(5, 12);
         break;
       case 'swallow': {
@@ -3424,7 +3436,7 @@ export class Pond {
     if (!c.goal) c.goal = this.flowerSpot(c);
     const g = c.goal;
     if (c.mood === 'feeding') {
-      c.h = 0.5;
+      c.h = c.cruise || 0.5;
       c.vx = c.vz = 0;
       if (--c.timer <= 0 || ((this.tick + c.id) % 10 === 0 && this.threatened(c))) { c.goal = this.flowerSpot(c); c.mood = 'fluttering'; }
       return;
@@ -3438,19 +3450,38 @@ export class Pond {
     c.x = Math.max(1, Math.min(this.w - 1, c.x + c.vx));
     c.z = Math.max(1, Math.min(this.h - 1, c.z + c.vz));
     // Rising and falling with its wingbeats, and down to the flower at the end.
-    c.h += ((d < 4 ? 0.5 : 8 + Math.sin(this.tick * 0.2 + c.id) * 3) - c.h) * 0.12;
+    c.h += ((d < 4 ? c.cruise || 0.5 : Math.max(8, (c.cruise || 0) + 4) + Math.sin(this.tick * 0.2 + c.id) * 3) - c.h) * 0.12;
     if (Math.abs(c.vx) > 0.03) c.facing = c.vx > 0 ? 1 : -1;
     if (d < 1.2) { c.mood = 'feeding'; c.timer = randInt(150, 500); c.energy = Math.min(1, c.energy + 0.25); }
   }
 
-  /** A wildflower on a bank: this one mostly, now and then the other. */
+  /** A clump of flowers near it to sip from, or else a wildflower on a bank. */
   private flowerSpot(c: PondCreature) {
-    const crossing = Math.random() < 0.1;
-    const side: 1 | -1 = (c.x < this.w / 2) !== crossing ? 1 : -1;
-    const z = Math.max(4, Math.min(this.h - 4, c.z + rand(-50, 50)));
-    const x = this.offShore(z, side, -rand(3, Math.max(4, this.bankWidth() * 0.9)));
-    return { x: Math.max(1, Math.min(this.w - 1, x)), z };
+    const near: Flora[] = [];
+    for (const f of this.flora) {
+      if (f.kind === 'flowers' && Math.abs(f.z - c.z) < 60 && Math.abs(f.x - c.x) < 90) near.push(f);
+    }
+    if (near.length && Math.random() < 0.85) {
+      const f = near[randInt(0, near.length - 1)];
+      // Down onto the flower heads, not the ground.
+      c.cruise = (f.variant === 0 ? 10 : 5) / ELEVATION;
+      return { x: f.x + rand(-2, 2), z: f.z };
+    }
+    c.cruise = 0.5;
+    return this.flowerSpotOnBank(c);
   }
+
+  /** A lily in flower near it (or failing that, anywhere over the water). */
+  private flowerSpotOnBank(c: PondCreature) {
+    const near = this.pads.filter(p => p.flower && Math.abs(p.z - c.z) < 80 && Math.abs(p.x - c.x) < 120);
+    if (near.length) {
+      const p = near[randInt(0, near.length - 1)];
+      c.cruise = 3 / ELEVATION;
+      return { x: p.x, z: p.z };
+    }
+    return { x: rand(4, this.w - 4), z: Math.max(4, Math.min(this.h - 4, c.z + rand(-50, 50))) };
+  }
+
 
   /**
    * A newt walks the bed of the shallows in short bursts, snapping up any
@@ -3850,8 +3881,9 @@ export class Pond {
     if (night > 0.6 && this.fireflies.length < MAX_FIREFLIES && this.tick % 3 === 0) {
       const { z0, z1 } = this.viewZ;
       const z = rand(z0 - 20, z1 + 20);
-      const side: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
-      const x = this.offShore(z, side, rand(-14, 6));
+      // Round the reeds and the islands.
+      const clump = this.clumps.length ? this.clumps[randInt(0, this.clumps.length - 1)] : null;
+      const x = clump && Math.abs(clump.z - z) < 200 ? clump.x + rand(-12, 12) : rand(0, this.w);
       this.fireflies.push({ x, z, h: rand(4, 16), vx: 0, vz: 0, phase: rand(0, 200), alive: true });
     }
     for (const f of this.fireflies) {
