@@ -16,19 +16,19 @@ export { makeCanvas };
  */
 export const POND_FLOOR = {
   /** The bed seen through the water, shallow to deep, in flat steps. */
-  bed: [[196, 186, 132], [160, 168, 114], [110, 154, 110], [70, 134, 108], [44, 110, 100], [30, 88, 88], [22, 68, 74]] as Rgb[],
+  bed: [[150, 150, 104], [126, 146, 100], [98, 140, 102], [68, 128, 104], [44, 108, 98], [30, 88, 88], [22, 68, 74]] as Rgb[],
   algae: [92, 150, 84] as Rgb,
   algaeDense: [70, 132, 76] as Rgb,
-  /** Turf on the banks in three flat tones, with sunlit tufts and dark roots. */
-  grass: [[66, 122, 56], [88, 148, 64], [116, 172, 74]] as Rgb[],
-  grassTip: [162, 202, 98] as Rgb,
-  grassRoot: [50, 98, 50] as Rgb,
-  /** Damp earth near the water, the wet sand at its edge, and the dark lip where the bank drops in. */
-  earth: [138, 104, 66] as Rgb,
-  wetMud: [104, 80, 54] as Rgb,
-  lip: [46, 40, 32] as Rgb,
+  /** Turf on the banks in three soft tones, with sunlit tufts and dark roots. */
+  grass: [[54, 104, 60], [70, 124, 66], [92, 146, 74]] as Rgb[],
+  grassTip: [132, 178, 92] as Rgb,
+  grassRoot: [42, 86, 52] as Rgb,
+  /** The deep shade under the bankside trees, toward the page's edges. */
+  treeShade: [22, 52, 44] as Rgb,
+  /** The shore, from the water up: wet sand, damp earth, then moss before the turf. */
+  shore: [[128, 120, 86], [104, 92, 64], [74, 92, 56], [62, 104, 60]] as Rgb[],
   /** The bank's shadow on the water just below it. */
-  bankShadow: [24, 70, 70] as Rgb,
+  bankShadow: [30, 78, 74] as Rgb,
   caustic: [40, 58, 44] as Rgb,
   /** Shafts of sunlight slanting down through the water. */
   ray: [30, 40, 26] as Rgb,

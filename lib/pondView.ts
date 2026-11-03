@@ -83,6 +83,11 @@ const STEM_KINDS = ['reed', 'cattail', 'rush', 'iris', 'loosestrife', 'pickerel'
 /** Where the flower colours' runs sit, after every kind's three shades of three parts. */
 const HEAD = STEM_KINDS.length * 9;
 
+/** A 4x4 ordered-dither matrix, as thresholds from 0 to just under 1. */
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+/** How far in from the page's edges (cells) the banks darken into the trees' shade. */
+const BANK_SHADE = 30;
+
 const hash = (n: number) => {
   let x = n | 0;
   x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
@@ -302,43 +307,53 @@ export class PondView {
         const t = Math.max(0, Math.min(255, terrain[i] + ((g & 15) - 8)));
         const fromShore = Math.min(x - l, r - x);
         let c: number[];
+        // An ordered dither (a 4x4 Bayer matrix): where two tones meet they
+        // interleave in a regular pattern, as pixel art shades, not as noise.
+        const bayer = BAYER[(z & 3) * 4 + (x & 3)];
         if (fromShore <= 0) {
-          // On the bank: how far up it from the water.
-          const up = -fromShore;
-          if (up < 1) c = F.lip;
-          else if (up < 2.2) c = F.wetMud;
-          else if (up < 3.5 + (g & 1)) c = F.earth;
+          // On the bank: wet sand at the water, then damp earth, moss, and
+          // turf, each blending into the next over a cell or two.
+          const up = -fromShore + (t / 255 - 0.5) * 1.5;
+          const shore = F.shore;
+          const band = up + bayer * 1.2 - 0.6;
+          if (band < 3.2) c = shore[Math.max(0, Math.min(shore.length - 1, Math.floor(band)))];
           else {
             const k = t / 255;
-            // Three flat tones of turf, dithered a cell deep where they meet.
-            const tone = Math.min(2, Math.floor(k * 3 + ((g >> 4) & 7) / 16 - 0.2));
-            c = F.grass[Math.max(0, tone)];
+            // Turf in three soft tones, dithered where they meet.
+            const tone = Math.max(0, Math.min(2, Math.floor(k * 3 + bayer - 0.5)));
+            c = F.grass[tone];
             // Tufts: a sunlit blade over a dark root, here and there.
-            const tuft = hash(i * 7 + 1);
-            if (tuft < 0.035) c = F.grassTip;
-            else if (hash((i - w) * 7 + 1) < 0.035) c = F.grassRoot;
+            if (hash(i * 7 + 1) < 0.02) c = F.grassTip;
+            else if (hash((i - w) * 7 + 1) < 0.02) c = F.grassRoot;
             // Wildflowers in drifts, each drift one colour, thickest where the turf swells.
-            else if (up > 4.5 && hash(i * 31 + 7) < (k > 0.8 ? 0.16 : 0.003)) {
+            else if (up > 6 && hash(i * 31 + 7) < (k > 0.8 ? 0.1 : 0.002)) {
               c = F.flowers[Math.floor(hash(Math.floor(x / 9) + Math.floor(z / 7) * 1013) * F.flowers.length)];
             }
+            // The turf darkens into the shade of the trees toward the page's
+            // edges, so the banks frame the pond rather than compete with it.
+            const edge = Math.min(x, w - 1 - x);
+            const shade = Math.max(0, Math.min(1, 1 - edge / BANK_SHADE)) * 0.55;
+            const steps = Math.floor(shade * 4 + bayer * 0.999) / 4;
+            if (steps > 0) c = c.map((v, n) => v + (F.treeShade[n] - v) * steps);
           }
         } else {
           const d = depth[i] / MAX_DEPTH;
           // Depth in flat steps, sand to deep teal, dithered where they meet
           // as pixel art shades a slope; the bed's swells nudge a step up or down.
           const steps = F.bed.length - 1;
-          const step = Math.max(0, Math.min(steps, Math.floor(d * steps * 1.15 + (t / 255 - 0.5) * 0.5 + ((g >> 4) & 15) / 16)));
+          const step = Math.max(0, Math.min(steps, Math.floor(d * steps * 1.15 + (t / 255 - 0.5) * 0.5 + bayer)));
           const banded = step / steps;
           const murk = banded * 0.85;
           c = F.bed[step];
           // Pebbles in the shallows and fallen leaves further out, seen through the water.
           const speck = hash(i * 17 + 3);
           const seen = 1 - murk;
-          if (banded < 0.4 && speck < 0.03) c = c.map((v, n) => v + (F.pebble[speck < 0.012 ? 0 : 1][n] - v) * seen);
+          if (banded < 0.4 && speck < 0.008) c = c.map((v, n) => v + (F.pebble[speck < 0.003 ? 0 : 1][n] - v) * seen * 0.6);
           else if (banded >= 0.2 && speck > 0.997) c = c.map((v, n) => v + (F.litter[speck > 0.9985 ? 1 : 0][n] - v) * seen * 0.6);
-          // The bank's shadow just off its edge.
-          if (fromShore < 1.6) c = F.bankShadow;
-          else if (fromShore < 2.6) c = c.map((v, n) => (v + F.bankShadow[n]) / 2);
+          // The bank's shade on the water just off its edge, fading out over a few cells.
+          const lap = Math.max(0, 1 - fromShore / 3.5);
+          const mix = Math.floor(lap * 3 + bayer * 0.999) / 3 * 0.7;
+          if (mix > 0) c = c.map((v, n) => v + (F.bankShadow[n] - v) * mix);
         }
         out[i] = rgba(Math.round(c[0]), Math.round(c[1]), Math.round(c[2]));
       }
