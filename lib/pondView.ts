@@ -680,7 +680,7 @@ export class PondView {
     }
     // Shadows of things in the air, on the water or the ground beneath them.
     for (const c of pond.creatures) {
-      if (c.layer !== 'air' || c.perch || !visible(c.z)) continue;
+      if (c.layer !== 'air' || c.perch || (c.species === 'swallow' && c.mood === 'perched') || !visible(c.z)) continue;
       this.shadow(c.x, c.z, 0, BODY_WIDTH[c.species] * 0.75, 0.3 * Math.max(0.15, 1 - c.h / 40));
     }
     const over: Drawable[] = [];
@@ -1007,6 +1007,11 @@ export class PondView {
       case 'swallow': {
         // Quick wingbeats, then a glide on swept-back wings.
         const beat = (tick + c.id * 5) % 40;
+        if (c.mood === 'perched') {
+          // Sitting with the rest of the flock, now and then a twitch of the head.
+          this.sprite(wildSprite('swallowPerch'), c.x, c.z, c.h, { flipX: (c.facing < 0) !== ((tick + c.id * 97) % 400 < 30), alpha, anchor: 'bottom' });
+          return;
+        }
         const kind: WildSpriteKind = beat > 24 ? 'swallowGlide' : (beat >> 2) & 1 ? 'swallow1' : 'swallow0';
         this.sprite(wildSprite(kind), c.x, c.z, c.h, { flipX: c.facing < 0, alpha });
         return;

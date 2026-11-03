@@ -86,6 +86,8 @@ export interface Log {
   x: number; z: number; len: number; seed: number; floating: boolean; side: 1 | -1;
   /** While a beaver tows it: which way it points (radians, toward the beaver), trailing behind along its path. */
   angle?: number;
+  /** Driftwood still floating in from the page's edge: where it will come to rest. */
+  drift?: { x: number; z: number };
 }
 /** How thick a log is drawn (art pixels): the longer, the stouter. */
 export const logThickness = (len: number) => (len >= 50 ? 10 : len >= 38 ? 8 : 6);
@@ -121,6 +123,8 @@ const LODGE_LOGS = 10;
 export const lodgeWidth = (d: Dam) => 20 + 2 * Math.min(LODGE_LOGS, d.logs);
 /** Where the lodge stands: on the island's shore at the dam's root, a little in front of it. */
 export const lodgeAt = (d: Dam) => ({ x: d.x - d.side * 2, z: d.z + 1 });
+/** The height (h) of a dam's crest, for whatever sits on it (see damSprite: a bank 11 rows tall). */
+const DAM_CREST = 9 / ELEVATION;
 /** Where the dam leaves the lodge's side; it runs `built` on from there. */
 export const damRoot = (d: Dam) => d.x + d.side * (lodgeWidth(d) / 2 - 6);
 /** How far past the shore the biggest lodge reaches, before the dam starts. */
@@ -136,6 +140,46 @@ interface BeaverJob {
   log: Log;
   ticks: number;
 }
+
+/** Where a perched bird sits (x, z of its feet, h above the water), or null once the spot is gone (a log towed off). */
+type Seat = () => { x: number; z: number; h: number } | null;
+/** A swallow flock settled for a while: the spots it has, which bird has which, and when they all lift off. */
+interface Roost { seats: Seat[]; taken: Map<number, number>; until: number }
+
+/**
+ * The shape of a drowned tree's snag, h rows tall and 13 wide with its
+ * trunk down column 6: how far down its broken top is, and each bare
+ * branch as the cells it runs through, out to its tip (see snagSprite;
+ * swallows perch on the tips).
+ */
+export const SNAG_W = 13;
+export const snagShape = (seed: number, h: number) => {
+  let a = (seed * 31 + h * 7 + 1) >>> 0;
+  const rnd = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const cx = 6;
+  const top = Math.floor(rnd() * 3);
+  const branches: [number, number][][] = [];
+  for (let b = 0, n = 2 + Math.floor(rnd() * 2); b < n; b++) {
+    const side = rnd() < 0.5 ? -1 : 1;
+    let x = cx + side, y = top + 3 + Math.floor(rnd() * (h * 0.45));
+    const len = 3 + Math.floor(rnd() * 4);
+    const cells: [number, number][] = [];
+    for (let t = 0; t < len; t++) {
+      x += side;
+      if (t % 2 === 1) y--;
+      if (x < 0 || x >= SNAG_W || y < 0) break;
+      cells.push([x, y]);
+    }
+    if (cells.length) branches.push(cells);
+  }
+  return { top, branches };
+};
 
 /** What grows on the land (and the few things standing up out of the water), from the long grass to the trees. */
 export type FloraKind = 'tree' | 'willow' | 'bush' | 'fern' | 'grass' | 'flowers' | 'mushrooms' | 'lotus' | 'snag';
@@ -198,7 +242,9 @@ export type Perch =
   | { kind: 'pad'; pad: Pad; ox: number; oz: number }
   | { kind: 'log'; log: Log; ox: number }
   | { kind: 'rock'; rock: Rock; ox: number }
-  | { kind: 'bank'; x: number; z: number };
+  | { kind: 'bank'; x: number; z: number }
+  /** On a beaver dam's crest (ox along it from its root), or up on the lodge (ox across it from its middle). */
+  | { kind: 'dam'; dam: Dam; ox: number; lodge: boolean };
 
 export interface PondCreature {
   id: number;
@@ -491,6 +537,7 @@ const samePerch = (a: Perch, b: Perch) =>
   a.kind === b.kind && (a.kind === 'pad' ? a.pad === (b as { pad: Pad }).pad
     : a.kind === 'rock' ? a.rock === (b as { rock: Rock }).rock && Math.abs(a.ox - (b as { ox: number }).ox) < 5
     : a.kind === 'log' ? a.log === (b as { log: Log }).log && Math.abs(a.ox - (b as { ox: number }).ox) < 7
+    : a.kind === 'dam' ? a.dam === (b as { dam: Dam }).dam && a.lodge === (b as { lodge: boolean }).lodge && Math.abs(a.ox - (b as { ox: number }).ox) < 6
       : Math.hypot(a.x - (b as { x: number }).x, a.z - (b as { z: number }).z) < 6);
 
 const BEND_FORCE = 0.25;
@@ -546,6 +593,11 @@ export class Pond {
   /** Each beaver's dam, and the errand it is on, by its id. */
   private beaverHome = new Map<number, Dam>();
   private beaverJobs = new Map<number, BeaverJob>();
+  /** Where each turtle is swimming to bask, by its id. */
+  private turtleGoals = new Map<number, Perch>();
+  /** Each swallow flock's roost while it is settled (by the flock's lineId), and when it will next settle. */
+  private roosts = new Map<number, Roost>();
+  private nextRoost = new Map<number, number>();
   fronds: Frond[] = [];
   patches: DuckweedPatch[] = [];
   /** The breeze across the surface (cells a tick), turning slowly. */
@@ -599,7 +651,7 @@ export class Pond {
     this.seeding = true;
     for (const species of POND_SPECIES_LIST) {
       if (species === 'mallard' || species === 'heron') continue;
-      if (species === 'turtle' && !this.logs.some(l => l.floating)) continue;
+      if (species === 'turtle' && !this.logs.some(l => this.settled(l)) && !this.dams.length) continue;
       if (species === 'kingfisher' && !this.boughs.length) continue;
       // A pair of beavers to each dam, often with a kit.
       if (species === 'beaver') {
@@ -1004,16 +1056,41 @@ export class Pond {
     return !this.logs.some(l => Math.abs(l.z - z) < 14 && Math.abs(l.x - x) < (l.len + len) / 2 + 4);
   }
 
-  /** A log drifts in somewhere the visitor isn't looking, clear of the pads, the dams and the hero text. */
-  private washInLog() {
+  /**
+   * Driftwood floats in from one edge of the page (as often as not where
+   * the visitor is looking) to a spot in open water clear of the pads, the
+   * dams and the hero text, along a row with nothing in its way.
+   */
+  private driftIn() {
     const { z0, z1 } = this.viewZ;
-    for (let tries = 0; tries < 12; tries++) {
-      const z = rand(10, this.h - 10), x = rand(this.w * 0.15, this.w * 0.85), len = randInt(30, Math.max(30, Math.min(52, Math.floor(this.w * 0.45))));
-      if (z > z0 - 80 && z < z1 + 80) continue;
+    for (let tries = 0; tries < 16; tries++) {
+      const z = Math.random() < 0.5 ? rand(Math.max(10, z0 + 20), Math.min(this.h - 10, z1 - 20)) : rand(10, this.h - 10);
+      const len = randInt(30, Math.max(30, Math.min(52, Math.floor(this.w * 0.45))));
+      const x = rand(this.w * 0.2, this.w * 0.8);
       if (!this.logFits(x, z, len) || this.nearDam(x, z, len / 2) || this.isClear(x, z)) continue;
       if (this.pads.some(p => Math.abs(p.z - z) < p.r + 4 && Math.abs(p.x - x) < len / 2 + p.r)) continue;
-      this.logs.push({ x, z, len, seed: randInt(1, 1e9), floating: true, side: Math.random() < 0.5 ? 1 : -1 });
+      // In from whichever edge it has a clear run from.
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const edge = side < 0 ? -len / 2 - 4 : this.w + len / 2 + 4;
+      let clear = true;
+      for (let t = Math.min(edge, x); t <= Math.max(edge, x); t += 3) {
+        if (t > 0 && t < this.w - 1 && this.shoreDist[this.cellAt(t, z)] < 5) { clear = false; break; }
+        if (this.nearDam(t, z, 4)) { clear = false; break; }
+      }
+      if (!clear) continue;
+      this.logs.push({ x: edge, z, len, seed: randInt(1, 1e9), floating: true, side: Math.random() < 0.5 ? 1 : -1, drift: { x, z } });
       return;
+    }
+  }
+
+  /** Driftwood floating slowly in, bobbing a little, until it comes to rest. */
+  private updateDriftwood() {
+    for (const l of this.logs) {
+      if (!l.drift) continue;
+      const dx = l.drift.x - l.x;
+      l.x += Math.sign(dx) * Math.min(Math.abs(dx), 0.06 + Math.min(0.04, Math.abs(dx) * 0.002));
+      l.z = l.drift.z + Math.sin(this.tick * 0.02 + l.seed) * 0.3;
+      if (Math.abs(dx) < 0.05) { l.z = l.drift.z; l.drift = undefined; }
     }
   }
 
@@ -1461,6 +1538,7 @@ export class Pond {
     this.updateWind();
     this.updateFloor();
     this.updatePads();
+    this.updateDriftwood();
     this.updateReeds();
     this.updateDuckweed();
     this.buildGrid();
@@ -1743,7 +1821,7 @@ export class Pond {
       else if (species === 'strider') { c.layer = 'surface'; c.mood = 'skating'; c.h = 0; }
       else if (species === 'snail') { c.layer = 'under'; c.mood = 'creeping'; this.placeSnail(c); }
       else if (species === 'turtle') {
-        const log = this.logs.find(l => l.floating && l.angle === undefined);
+        const log = this.logs.find(l => this.settled(l));
         if (log) { c.perch = { kind: 'log', log, ox: rand(-0.2, 0.2) * log.len }; const p = this.perchPoint(c.perch); c.x = p.x; c.z = p.z; c.h = p.h; }
         c.layer = 'air'; c.mood = 'basking'; c.timer = randInt(1200, 3000);
       } else { c.layer = 'air'; c.mood = 'flying'; c.h = 40; }
@@ -1814,6 +1892,13 @@ export class Pond {
       case 'pad': return { x: p.pad.x + p.ox, z: p.pad.z + p.oz, h: this.padTop(p.pad) + 0.3 };
       case 'log': return { x: p.log.x + p.ox, z: p.log.z - 0.2, h: logTop(p.log) };
       case 'rock': return { x: p.rock.x + p.ox, z: p.rock.z - 0.3, h: rockTop(p.rock) };
+      case 'dam': {
+        const d = p.dam;
+        if (!p.lodge) return { x: damRoot(d) + d.side * p.ox, z: d.z + 1.4, h: DAM_CREST };
+        // Lower down the lodge's flank, the further from its middle.
+        const l = lodgeAt(d), half = lodgeWidth(d) / 2;
+        return { x: l.x + p.ox, z: l.z + 0.6, h: lodgeTop(d) * Math.max(0.2, 1 - Math.pow(Math.min(1, Math.abs(p.ox) / half), 1.67)) };
+      }
       case 'bank': return { x: p.x, z: p.z, h: 0 };
     }
   }
@@ -1840,7 +1925,7 @@ export class Pond {
       if (!this.perchTaken(perch, by)) options.push({ perch, d });
     }
     for (const log of this.logs) {
-      if (!log.floating || log.angle !== undefined) continue;
+      if (!this.settled(log)) continue;
       const ox = rand(-0.3, 0.3) * log.len;
       const d = Math.hypot(log.x + ox - x, log.z - z);
       if (d > reach || d < minDist) continue;
@@ -1853,6 +1938,18 @@ export class Pond {
       if (d > reach || d < minDist || rock.w < 8) continue;
       const perch: Perch = { kind: 'rock', rock, ox };
       if (!this.perchTaken(perch, by)) options.push({ perch, d });
+    }
+    // A beaver dam's crest, or up on the lodge.
+    for (const dam of this.dams) {
+      if (Math.abs(dam.z - z) > reach + 20) continue;
+      for (const lodge of [true, false]) {
+        if (!lodge && dam.built < 14) continue;
+        const perch: Perch = { kind: 'dam', dam, lodge, ox: lodge ? rand(-0.3, 0.3) * lodgeWidth(dam) : rand(3, dam.built - 8) };
+        const at = this.perchPoint(perch);
+        const d = Math.hypot(at.x - x, at.z - z);
+        if (d > reach || d < minDist || this.isClear(at.x, at.z)) continue;
+        if (!this.perchTaken(perch, by)) options.push({ perch, d });
+      }
     }
     // Or the shore of an island nearby.
     const inner = this.innerShore(x, z, Math.min(reach, 40), 1.5, 5);
@@ -1952,7 +2049,7 @@ export class Pond {
       // A pair of mallards flies in now and then if the pond has none.
       if (counts.mallard < 2 && Math.random() < 0.15) this.flyIn(this.spawnDuckPair());
       // Driftwood washes in, out of sight, to make up for the logs the beavers take.
-      if (this.tick % 300 === 0 && this.logs.filter(l => l.floating).length < this.driftwood && Math.random() < 0.6) this.washInLog();
+      if (this.tick % 300 === 0 && this.logs.filter(l => l.floating).length < this.driftwood && Math.random() < 0.6) this.driftIn();
       // A beaver comes up the pond to a dam that is short of builders.
       if (counts.beaver < this.dams.length * 2 && Math.random() < 0.04) this.logEvent('visit', this.spawn('beaver'));
       // Errands of beavers that are gone.
@@ -3310,13 +3407,18 @@ export class Pond {
     }
     c.layer = 'under';
     const depth = this.depthAt(c.x, c.z);
-    const log = this.logs.find(l => l.floating && l.angle === undefined);
-    if (--c.timer <= 0 && log) {
-      // Back to the log, and up onto it.
-      const perch: Perch = { kind: 'log', log, ox: rand(-0.2, 0.2) * log.len };
+    if (--c.timer <= 0) {
+      // Back to a log, or a beaver dam or lodge, and up onto it.
+      let perch = this.turtleGoals.get(c.id);
+      if (perch && (perch.kind === 'log' ? !this.settled(perch.log) || !this.logs.includes(perch.log) : perch.kind === 'dam' && !this.dams.includes(perch.dam))) perch = undefined;
+      if (!perch) {
+        perch = this.baskingSpot(c) ?? undefined;
+        if (!perch) { c.timer = randInt(300, 600); return; }
+        this.turtleGoals.set(c.id, perch);
+      }
       const p = this.perchPoint(perch);
       c.mood = 'swimming';
-      if (Math.hypot(p.x - c.x, p.z - c.z) < 6) { this.leapTo(c, p.x, p.z, perch, 0.25); return; }
+      if (Math.hypot(p.x - c.x, p.z - c.z) < 6) { this.turtleGoals.delete(c.id); this.leapTo(c, p.x, p.z, perch, 0.25); return; }
       this.swimToward(c, p.x, p.z, -1.5);
       return;
     }
@@ -3332,6 +3434,32 @@ export class Pond {
     this.swimMove(c, depth);
     if (Math.abs(c.vx) > 0.01) c.facing = c.vx > 0 ? 1 : -1;
     if (c.timer > 2400) c.timer = randInt(600, 1200);
+  }
+
+  /** A log that is just floating: not under tow, nor still drifting in. */
+  settled(l: Log) {
+    return l.floating && l.angle === undefined && !l.drift;
+  }
+
+  /** Somewhere for the turtle to haul out and bask: a free floating log, or a beaver dam or lodge, the nearer likelier. */
+  private baskingSpot(c: PondCreature): Perch | null {
+    const options: { perch: Perch; d: number }[] = [];
+    for (const log of this.logs) {
+      if (!this.settled(log)) continue;
+      const perch: Perch = { kind: 'log', log, ox: rand(-0.2, 0.2) * log.len };
+      if (!this.perchTaken(perch, c)) options.push({ perch, d: Math.hypot(log.x - c.x, log.z - c.z) });
+    }
+    for (const dam of this.dams) {
+      const perch: Perch = Math.random() < 0.5 || dam.built < 14
+        ? { kind: 'dam', dam, lodge: true, ox: rand(-0.25, 0.25) * lodgeWidth(dam) }
+        : { kind: 'dam', dam, lodge: false, ox: rand(4, dam.built - 8) };
+      const at = this.perchPoint(perch);
+      // A dam or lodge, out of the water in the sun, is a favourite.
+      if (!this.perchTaken(perch, c)) options.push({ perch, d: Math.hypot(at.x - c.x, at.z - c.z) * 0.4 });
+    }
+    if (!options.length) return null;
+    options.sort((a, b) => a.d - b.d);
+    return options[Math.floor(Math.random() ** 2 * Math.min(options.length, 4))].perch;
   }
 
   /**
@@ -3881,6 +4009,7 @@ export class Pond {
    */
   private thinkSwallow(c: PondCreature) {
     c.layer = 'air';
+    if (this.roosting(c)) return;
     const home = c.goal ?? (c.goal = { x: c.x, z: c.z });
     // The flock's stretch of pond, shared, eases toward the view.
     const viewMid = (this.viewZ.z0 + this.viewZ.z1) / 2;
@@ -3923,6 +4052,136 @@ export class Pond {
       const m = this.nearestMidgeAt(c.x, c.z, 3);
       if (m) { m.alive = false; this.meals++; c.energy = Math.min(1, c.energy + 0.05); }
     }
+  }
+
+  /**
+   * Now and then a swallow flock settles together for a rest: along the
+   * bare branches of a drowned grove's snags, on the tips of the tallest
+   * reeds (riding them as they sway), along a floating log, or on a
+   * beaver dam or lodge. A while later, or the moment anything frightens
+   * one of them, they all lift off together. True while this one is
+   * settling or settled.
+   */
+  private roosting(c: PondCreature) {
+    let roost = this.roosts.get(c.lineId);
+    if (!roost) {
+      const next = this.nextRoost.get(c.lineId);
+      if (next === undefined) { this.nextRoost.set(c.lineId, this.tick + randInt(600, 2400)); return false; }
+      if (this.tick < next) return false;
+      roost = this.planRoost(c) ?? undefined;
+      if (!roost) { this.nextRoost.set(c.lineId, this.tick + randInt(600, 1200)); return false; }
+      this.roosts.set(c.lineId, roost);
+    }
+    // Startled, or rested: up they all go.
+    if (this.tick >= roost.until || (c.mood === 'perched' && (this.tick + c.id) % 10 === 0 && this.threatened(c))) {
+      this.roosts.delete(c.lineId);
+      this.nextRoost.set(c.lineId, this.tick + randInt(1800, 4500));
+      for (const o of this.creatures) if (o.alive && o.species === 'swallow' && o.lineId === c.lineId && o.mood === 'perched') {
+        o.mood = 'flying'; o.timer = randInt(200, 500); o.heading = rand(0, Math.PI * 2); o.h += 1;
+      }
+      return false;
+    }
+    const n = roost.taken.get(c.id);
+    const at = n === undefined ? null : roost.seats[n]();
+    if (!at) { roost.taken.delete(c.id); if (c.mood === 'perched') c.mood = 'flying'; return false; }
+    if (c.mood === 'perched') {
+      c.x = at.x; c.z = at.z; c.h = at.h;
+      c.vx = c.vz = 0;
+      return true;
+    }
+    // Swooping in, slowing and rising to the spot at the end.
+    const dx = at.x - c.x, dz = at.z - c.z;
+    const d = Math.hypot(dx, dz);
+    const speed = Math.min(c.cruise, d * 0.08 + 0.12);
+    c.vx = (dx / (d || 1)) * speed;
+    c.vz = (dz / (d || 1)) * speed;
+    c.x += c.vx; c.z += c.vz;
+    c.heading = Math.atan2(c.vz, c.vx / 0.7);
+    c.h += ((d < 16 ? at.h : Math.max(at.h, 5)) - c.h) * (d < 16 ? 0.2 : 0.08);
+    if (Math.abs(c.vx) > 0.05) c.facing = c.vx > 0 ? 1 : -1;
+    c.mood = 'flying';
+    if (d < 0.8 && Math.abs(c.h - at.h) < 0.6) { c.mood = 'perched'; c.x = at.x; c.z = at.z; c.h = at.h; }
+    return true;
+  }
+
+  /** A stretch of perches for the flock near where it is hawking, and a seat on it for as many as it holds. */
+  private planRoost(c: PondCreature): Roost | null {
+    const home = c.goal ?? { x: c.x, z: c.z };
+    const flock = this.creatures.filter(o => o.alive && o.species === 'swallow' && o.lineId === c.lineId);
+    const groups: { x: number; z: number; seats: Seat[] }[] = [];
+    const near = (x: number, z: number) => Math.abs(x - home.x) < 160 && Math.abs(z - home.z) < 140;
+    // The bare branch tips and broken tops of a stand of snags.
+    const snagSeats = (f: Flora) => {
+      const shape = snagShape(f.seed, f.size);
+      const left = Math.round(f.x - SNAG_W / 2);
+      const flip = (f.seed & 1) === 1;
+      const seatAt = (sx: number, sy: number): Seat => {
+        // Drawn after the snag's strip of plants, and lifted to where its branch is.
+        const x = left + (flip ? SNAG_W - 1 - sx : sx) + 0.5, z = f.z + 9, row = f.z - f.size + sy;
+        return () => ({ x, z, h: (z - row) / ELEVATION });
+      };
+      return [seatAt(6, shape.top), ...shape.branches.map(b => seatAt(b[b.length - 1][0], b[b.length - 1][1]))];
+    };
+    const snags = this.flora.filter(f => f.kind === 'snag' && near(f.x, f.z));
+    for (const f of snags) groups.push({ x: f.x, z: f.z, seats: snags.filter(o => Math.abs(o.x - f.x) < 34 && Math.abs(o.z - f.z) < 24).flatMap(snagSeats) });
+    // The tips of the tallest reeds and cattails in a clump.
+    for (const cl of this.clumps) {
+      if (!near(cl.x, cl.z)) continue;
+      // One bird to a stem, and room for its wings between them.
+      const tall: Stem[] = [];
+      for (const st of cl.stems) {
+        if ((st.kind === 'reed' || st.kind === 'cattail') && st.len >= 22 && tall.every(o => Math.abs(o.x - st.x) >= 6)) tall.push(st);
+      }
+      const seats = tall.slice(0, 8).map(st => () => this.stemSeat(st));
+      if (seats.length >= 2) groups.push({ x: cl.x, z: cl.z, seats });
+    }
+    // Along a floating log.
+    for (const log of this.logs) {
+      if (!this.settled(log) || !near(log.x, log.z)) continue;
+      const seats: Seat[] = [];
+      for (let ox = -log.len * 0.4; ox <= log.len * 0.4; ox += 6) {
+        const perch: Perch = { kind: 'log', log, ox };
+        seats.push(() => (this.settled(log) && this.logs.includes(log) ? this.perchPoint(perch) : null));
+      }
+      groups.push({ x: log.x, z: log.z, seats });
+    }
+    // Along a beaver dam's crest, and on top of the lodge.
+    for (const dam of this.dams) {
+      if (!near(dam.x, dam.z) || dam.built < 14) continue;
+      const seats: Seat[] = [];
+      for (let ox = 4; ox < dam.built - 6; ox += 6) {
+        const perch: Perch = { kind: 'dam', dam, lodge: false, ox };
+        seats.push(() => (this.dams.includes(dam) ? this.perchPoint(perch) : null));
+      }
+      groups.push({ x: dam.x, z: dam.z, seats });
+    }
+    // No two birds so close they overlap.
+    for (const g of groups) {
+      const kept: { x: number; y: number }[] = [];
+      g.seats = g.seats.filter(seat => {
+        const at = seat();
+        if (!at) return false;
+        const y = at.z - at.h * ELEVATION;
+        if (kept.some(k => Math.abs(k.x - at.x) < 7 && Math.abs(k.y - y) < 6)) return false;
+        kept.push({ x: at.x, y });
+        return true;
+      });
+    }
+    const options = groups.filter(g => g.seats.length >= 2 && g.x > 14 && g.x < this.w - 14 && !this.isClear(g.x, g.z));
+    if (!options.length) return null;
+    options.sort((a, b) => Math.hypot(a.x - home.x, a.z - home.z) - Math.hypot(b.x - home.x, b.z - home.z));
+    const g = options[Math.floor(Math.random() ** 2 * Math.min(options.length, 5))];
+    const taken = new Map<number, number>();
+    const free = g.seats.map((_, k) => k).sort(() => Math.random() - 0.5);
+    for (const o of flock) if (free.length) taken.set(o.id, free.pop()!);
+    return { seats: g.seats, taken, until: this.tick + randInt(1500, 3000) };
+  }
+
+  /** Where a bird sits on a reed's tip as it sways (see the view's drawStems), drawn after the reed. */
+  private stemSeat(st: Stem) {
+    const wave = Math.sin(this.tick * 0.035 + st.phase + st.x * 0.05) * 0.9 + this.wind.x * 120;
+    const z = st.z + 4, row = st.z + st.bz * 0.5 - st.len * ELEVATION;
+    return { x: st.x + wave + st.bx, z, h: (z - row) / ELEVATION };
   }
 
   private newtWalk(c: PondCreature, speed: number) {
@@ -4172,7 +4431,7 @@ export class Pond {
 
   /** Off on the next trip: a floating log a good way off (two are always left for the turtle and the frogs to bask on). */
   private planTrip(c: PondCreature, dam: Dam) {
-    const free = this.logs.filter(l => l.floating && l.angle === undefined);
+    const free = this.logs.filter(l => this.settled(l));
     if (free.length <= 2) { c.timer = randInt(300, 700); return; }
     const taken = new Set([...this.beaverJobs.values()].map(j => j.log));
     let best: Log | null = null, bestScore = Infinity;
@@ -4229,6 +4488,8 @@ export class Pond {
       c.x += n.x * 0.3; c.z += n.z * 0.3;
       c.vx *= 0.5; c.vz *= 0.5;
     }
+    // Never off the page's edge.
+    c.x = Math.max(3, Math.min(this.w - 4, c.x));
     if (Math.abs(c.vx) > 0.02) this.turn(c, c.vx);
     return false;
   }

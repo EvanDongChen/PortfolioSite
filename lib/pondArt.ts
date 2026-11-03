@@ -5,6 +5,7 @@
 // with the pxl pixel-art tool, then brought across by hand.
 
 import { Rgb, cached, fromRows, makeCanvas } from './pixelOceanArt';
+import { SNAG_W, snagShape } from './pond';
 
 export { makeCanvas };
 
@@ -600,7 +601,7 @@ export type WildSpriteKind =
   | 'kfPerch' | 'kfFly0' | 'kfFly1' | 'kfDive'
   | 'moorhen' | 'moorhenBob' | 'moorhenWalk'
   | 'flyOpen' | 'flyHalf' | 'newt0' | 'newt1'
-  | 'swallow0' | 'swallow1' | 'swallowGlide'
+  | 'swallow0' | 'swallow1' | 'swallowGlide' | 'swallowPerch'
   | 'beaverTop' | 'beaverBelow' | 'beaverSit' | 'beaverSlap';
 const WILD_ROWS: Record<WildSpriteKind, string[]> = {
   // A whirligig beetle: a glossy black oval.
@@ -628,6 +629,8 @@ const WILD_ROWS: Record<WildSpriteKind, string[]> = {
   swallow0: ['....B......', '...BB......', 'TT.SSSSSRK.', '.T..WWWW...'],
   swallow1: ['...........', 'TT.SSSSSRK.', '.T.BWWWW...', '...BB......', '....B......'],
   swallowGlide: ['....BB.....', 'TT.SSSSSRK.', '.T.BWWWWB..', '....BB.....'],
+  // Perched, wings folded over its back, the long tail streamers hanging behind.
+  swallowPerch: ['....SBB..', '...BBBRK.', '..SBBWR..', '.SSBWWW..', 'TTSWWWW..', 'T...KK...'],
   // A beaver, swimming: only its head (a small round ear, a bright eye, a
   // blunt dark nose) and the low curve of its back break the water...
   beaverTop: [
@@ -1009,11 +1012,12 @@ const SNAG_MOSS: Rgb = [84, 120, 62];
 export const snagSprite = (seed: number, h: number) =>
   cached(`pond-snag-${seed}-${h}`, () => {
     const rnd = seededRandom(seed * 23 + h);
-    const w = 13;
+    const w = SNAG_W;
     const c = makeCanvas(w, h);
     const ctx = c.getContext('2d')!;
     const cx = 6;
-    const top = Math.floor(rnd() * 3);
+    // Its shape is the pond's (swallows perch on the branch tips).
+    const { top, branches } = snagShape(seed, h);
     for (let y = top; y < h; y++) {
       // Thickening down the trunk, flaring at the waterline.
       const thick = y > h - 3 ? 5 : y > h * 0.45 ? 4 : 3;
@@ -1026,17 +1030,7 @@ export const snagSprite = (seed: number, h: number) =>
     // A jagged break at the top.
     put(ctx, cx, top - 1 < 0 ? 0 : top - 1, SNAG[2]);
     // Bare branches reaching up and out.
-    for (let b = 0; b < 2 + Math.floor(rnd() * 2); b++) {
-      const side = rnd() < 0.5 ? -1 : 1;
-      let x = cx + (side > 0 ? 1 : -1), y = top + 3 + Math.floor(rnd() * (h * 0.45));
-      const len = 3 + Math.floor(rnd() * 4);
-      for (let t = 0; t < len; t++) {
-        x += side;
-        if (t % 2 === 1) y--;
-        if (x < 0 || x >= w || y < 0) break;
-        put(ctx, x, y, SNAG[t < len - 1 ? 2 : 1]);
-      }
-    }
+    for (const cells of branches) cells.forEach(([x, y], t) => put(ctx, x, y, SNAG[t < cells.length - 1 ? 2 : 1]));
     return c;
   });
 
