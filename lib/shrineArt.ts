@@ -6,6 +6,7 @@
 // are shaded in each thing's own colours, never outlined.
 
 import { Rgb, cached, fromRows, makeCanvas } from './pixelOceanArt';
+import { bridgeDeck, bridgeRise } from './shrine';
 
 export { makeCanvas };
 
@@ -1081,34 +1082,45 @@ export const pagodaSprite = () =>
     return c;
   });
 
-/** A red arched bridge across the water: a solid curved span, a handrail on a few posts, two piers. */
+/**
+ * A red arched bridge, bank to bank: its deck climbs off stone footings at
+ * each end, with a handrail on a few posts and two piers standing in the water.
+ * The bottom row of the sprite is the ground and the waterline.
+ */
 export const bridgeSprite = (w: number) =>
   cached(`bridge-${w}`, () => {
-    const rise = Math.round(w * 0.2);
+    const rise = bridgeRise(w);
     const h = rise + 16;
     const c = makeCanvas(w, h);
     const ctx = c.getContext('2d')!;
-    const arch = (x: number) => { const t = (x + 0.5 - w / 2) / (w / 2); return Math.round((1 - t * t) * rise); };
-    // Two piers down into the water, well apart.
-    for (const x of [Math.round(w * 0.24), Math.round(w * 0.72)]) {
-      const top = h - 9 - arch(x);
-      box(ctx, x, top + 5, 3, h - top - 5, V.dark);
-      box(ctx, x, top + 5, 1, h - top - 5, V.mid);
+    const deck = (x: number) => h - 1 - Math.round(bridgeDeck(w, x + 0.5 - w / 2));
+    // Piers from under the deck down into the water.
+    for (const x of [Math.round(w * 0.3), Math.round(w * 0.67)]) {
+      box(ctx, x, deck(x), 3, h - deck(x), V.dark);
+      box(ctx, x, deck(x), 1, h - deck(x), V.mid);
     }
     for (let x = 0; x < w; x++) {
-      const top = h - 9 - arch(x);
+      const top = deck(x);
+      // Planks, the red side beam below them, and the rail above.
       box(ctx, x, top, 1, 1, [188, 150, 112]);
       box(ctx, x, top + 1, 1, 1, [136, 100, 78]);
-      box(ctx, x, top + 2, 1, 3, V.red);
-      box(ctx, x, top + 5, 1, 1, V.dark);
+      box(ctx, x, top + 2, 1, 2, V.red);
+      box(ctx, x, top + 4, 1, 1, V.dark);
       box(ctx, x, top - 6, 1, 1, V.lit);
       box(ctx, x, top - 5, 1, 1, V.mid);
     }
     for (let x = 1; x < w; x += Math.max(8, Math.round(w / 7))) {
-      const top = h - 9 - arch(x);
+      const top = deck(x);
       box(ctx, x, top - 6, 2, 6, V.red);
       box(ctx, x, top - 6, 1, 6, V.lit);
       box(ctx, x, top - 8, 2, 2, V.gold);
+    }
+    // Stone footings the ends rest on, down at the ground.
+    for (const x of [0, w - 7]) {
+      box(ctx, x, h - 5, 7, 5, [112, 118, 134]);
+      box(ctx, x, h - 5, 7, 1, [150, 156, 170]);
+      box(ctx, x, h - 1, 7, 1, [76, 82, 100]);
+      box(ctx, x + 2, h - 3, 1, 1, [76, 82, 100]);
     }
     return c;
   });

@@ -47,6 +47,11 @@ const SHAFTS = 2;
 const SHAFT_PERIOD = 300;
 const SHAFT_SLANT = 0.5;
 const MARCHER_SCALE = 1.5;
+/** How far (cells) a tree's crown leans at most, and how many slices it bends in. */
+const CEDAR_SWAY = 2.2;
+const CEDAR_SLICES = 10;
+const MAPLE_SWAY = 1.4;
+const MAPLE_SLICES = 6;
 /** How dark the night lies over the ground and over everything standing on it (0 to 1), and its colour. */
 const NIGHT_FLOOR = 0.8;
 const NIGHT_SPRITES = 0.56;
@@ -404,7 +409,7 @@ export class ShrineView {
       ctx.globalAlpha = 0.9;
       for (let k = 0; k < 7; k++) {
         const dx = Math.round(Math.sin(shrine.tick * 0.03 + k * 1.4) * (1 + k * 0.5));
-        ctx.drawImage(m, 0, k * slice, m.width, slice, Math.round(w.moonX - m.width / 2 + dx), Math.round(w.z - w.rz * 0.3 + k * slice), m.width, slice);
+        ctx.drawImage(m, 0, k * slice, m.width, slice, Math.round(w.moonX - m.width / 2 + dx), Math.round(w.moonZ - m.height / 2 + k * slice), m.width, slice);
       }
     }
 
@@ -520,6 +525,7 @@ export class ShrineView {
     for (const c of shrine.creatures) {
       if (c.species === 'kappa' && c.h < 0 && visible(c.z)) this.drawKappaSwimming(c);
     }
+    for (const b of shrine.bridges) if (visible(b.z)) this.drawBridgeReflection(b.x, b.z + 2, Math.round(b.w));
     this.drawRings(z0, z1);
 
     // Then the shadows, and everything standing, in order down the page.
@@ -532,7 +538,7 @@ export class ShrineView {
       if (c.z >= z0 && c.z <= z1 + (c.kind === 'bamboo' ? 120 : 40)) over.push({ depth: c.z, draw: () => this.drawCane(c) });
     }
     for (const b of shrine.bridges) {
-      if (visible(b.z)) over.push({ depth: b.z + 5, draw: () => this.sprite(bridgeSprite(Math.round(b.w)), b.x, b.z + 6, 0) });
+      if (visible(b.z)) over.push({ depth: b.z + 4, draw: () => this.sprite(bridgeSprite(Math.round(b.w)), b.x, b.z + 2, 0) });
     }
     for (const a of shrine.altars) {
       if (!visible(a.z)) continue;
@@ -591,9 +597,9 @@ export class ShrineView {
 
   private propDrawable(p: Prop): Drawable {
     switch (p.kind) {
-      case 'cedar': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z, p.size * 1.5, 0.26); this.sprite(cedarSprite(p.seed % 9, p.size), p.x, p.z + 1, 0); } };
-      case 'sacred': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z, p.size * 1.6, 0.3); this.sprite(sacredCedarSprite(p.seed % 3), p.x, p.z + 1, 0); } };
-      case 'maple': case 'goldMaple': return { depth: p.z, draw: () => { this.shadow(p.x + 1, p.z, p.size * 1.7, 0.26); this.sprite(mapleSprite(p.seed % 6, p.size, p.kind === 'goldMaple'), p.x, p.z + 1, 0, { flipX: p.flip }); } };
+      case 'cedar': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z, p.size * 1.5, 0.26); this.drawSwaying(cedarSprite(p.seed % 9, p.size), p.x, p.z + 1, CEDAR_SWAY, CEDAR_SLICES, false); } };
+      case 'sacred': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z, p.size * 1.6, 0.3); this.drawSwaying(sacredCedarSprite(p.seed % 3), p.x, p.z + 1, CEDAR_SWAY, CEDAR_SLICES + 4, false); } };
+      case 'maple': case 'goldMaple': return { depth: p.z, draw: () => { this.shadow(p.x + 1, p.z, p.size * 1.7, 0.26); this.drawSwaying(mapleSprite(p.seed % 6, p.size, p.kind === 'goldMaple'), p.x, p.z + 1, MAPLE_SWAY, MAPLE_SLICES, p.flip); } };
       case 'torii': return { depth: p.z, draw: () => this.sprite(toriiSprite(p.size), p.x, p.z + 1, 0) };
       case 'honden': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z - 2, 90, 0.3); this.sprite(hondenSprite(), p.x, p.z + 2, 0); } };
       case 'pagoda': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z, 50, 0.3); this.sprite(pagodaSprite(), p.x, p.z + 1, 0); } };
@@ -622,6 +628,50 @@ export class ShrineView {
       const dx = Math.round(sway * t * t) * px;
       const height = Math.min(sh, img.height - sy);
       ctx.drawImage(img, 0, sy, img.width, height, Math.round(p.x - (img.width * px) / 2 + dx), Math.round(p.y - (img.height - sy) * px), img.width * px, height * px);
+    }
+  }
+
+  /** The arch upside down on the water beneath it, dim and rippling, which is what seats it there. */
+  private drawBridgeReflection(x: number, z: number, w: number) {
+    const { spriteCtx: ctx, px, shrine } = this;
+    const img = bridgeSprite(w);
+    const p = this.project(x, z, 0);
+    const rows = img.height - 2;
+    ctx.globalAlpha = 0.26;
+    for (let k = 0; k < rows; k += 2) {
+      const dx = Math.round(Math.sin(shrine.tick * 0.05 + k * 0.7) * (k / rows) * 1.5) * px;
+      ctx.drawImage(img, 0, img.height - 3 - k - 1, img.width, 2, Math.round(p.x - (img.width * px) / 2 + dx), Math.round(p.y + k * px), img.width * px, 2 * px);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * A tree stirring in the air: its picture slid sideways slice by slice, not
+   * at all at the root and most at the crown, a slow swell passing down the
+   * page from tree to tree.
+   */
+  private drawSwaying(img: HTMLCanvasElement, x: number, z: number, reach: number, slices: number, flip: boolean) {
+    const { spriteCtx: ctx, px, shrine } = this;
+    const swell = Math.sin(shrine.tick * 0.016 + x * 0.03 + z * 0.012) + Math.sin(shrine.tick * 0.037 + x * 0.05) * 0.35;
+    const p = this.project(x, z, 0);
+    const sh = Math.ceil(img.height / slices);
+    const left = Math.round(p.x - (img.width * px) / 2);
+    const foot = Math.round(p.y);
+    ctx.globalAlpha = 1;
+    for (let k = 0; k < slices; k++) {
+      const sy = k * sh;
+      const height = Math.min(sh, img.height - sy);
+      const t = 1 - (sy + height / 2) / img.height;
+      const dx = Math.round(swell * reach * t * t) * px;
+      const y = foot - (img.height - sy) * px;
+      if (!flip) ctx.drawImage(img, 0, sy, img.width, height, left + dx, y, img.width * px, height * px);
+      else {
+        ctx.save();
+        ctx.translate(left + dx + img.width * px, y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, sy, img.width, height, 0, 0, img.width * px, height * px);
+        ctx.restore();
+      }
     }
   }
 

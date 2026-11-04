@@ -77,6 +77,8 @@ export interface ShrineCreature {
   /** A speech mark over its head: '!', '?', 'z', a note or a heart, and for how long. */
   emote: Emote | null; emoteT: number;
   carrying: OfferingKind | null;
+  /** Up on a bridge's arch, its height set by the deck. */
+  onBridge: boolean;
   /** Which cedar or pond it belongs to. */
   home: { x: number; z: number; h: number } | null;
   pond: Water | null;
@@ -95,7 +97,7 @@ export interface Lantern { x: number; z: number; phase: number; mossy: number }
 /** A rope strung across the approach for the festival, hung with paper lanterns. */
 export interface Festoon { x0: number; x1: number; z: number; seed: number }
 export interface Altar { x: number; z: number; item: OfferingKind | null; favourite: OfferingKind; bites: number; wait: number; shrine: boolean }
-export interface Water { x: number; z: number; rx: number; rz: number; moonX: number }
+export interface Water { x: number; z: number; rx: number; rz: number; moonX: number; moonZ: number }
 export interface Bridge { x: number; z: number; w: number }
 export interface Pad { x: number; z: number; r: number; tone: number; flower: number; phase: number; load: number }
 export type MoteKind = 'smoke' | 'dust' | 'star' | 'note' | 'heart' | 'leaf' | 'crumb' | 'blood' | 'tuft' | 'ring' | 'ember' | 'petal' | 'splash' | 'greenLeaf';
@@ -461,39 +463,59 @@ export class Shrine {
         break;
       }
       case 'koi': {
-        const rx = 46 * k, rz = 26 * k;
-        const pond: Water = { x, z, rx, rz, moonX: x + (r() - 0.5) * rx };
+        // A gourd-shaped garden pond: two lobes, and a narrow waist where the bridge crosses.
+        const lobes = [
+          { x: x - 10 * k, z: z - 19 * k, rx: 36 * k, rz: 20 * k },
+          { x: x + 10 * k, z: z + 19 * k, rx: 40 * k, rz: 21 * k },
+        ];
+        const rx = 50 * k, rz = 41 * k;
+        const pond: Water = { x, z, rx, rz, moonX: lobes[0].x + (r() - 0.5) * 20 * k, moonZ: lobes[0].z };
         this.waters.push(pond);
-        for (let zz = Math.max(0, Math.floor(z - rz - 4)); zz < Math.min(this.h, z + rz + 4); zz++) {
-          for (let xx = Math.max(0, Math.floor(x - rx - 4)); xx < Math.min(this.w, x + rx + 4); xx++) {
-            const nx = (xx - x) / rx, nz = (zz - z) / rz;
-            const d = Math.sqrt(nx * nx + nz * nz) + (noise(xx * 0.09, zz * 0.09) - 0.5) * 0.28;
+        for (let zz = Math.max(0, Math.floor(z - rz - 5)); zz < Math.min(this.h, z + rz + 5); zz++) {
+          for (let xx = Math.max(0, Math.floor(x - rx - 5)); xx < Math.min(this.w, x + rx + 5); xx++) {
+            const wob = (noise(xx * 0.09, zz * 0.09) - 0.5) * 0.24;
+            let d = Infinity;
+            for (const l of lobes) d = Math.min(d, Math.hypot((xx - l.x) / l.rx, (zz - l.z) / l.rz));
+            d += wob;
             const i = zz * this.w + xx;
             if (d < 1) { this.ground[i] = GROUND.water; this.solid[i] = 1; }
             else if (d < 1.09) this.ground[i] = GROUND.rim;
           }
         }
-        const bw = Math.round(rx * 0.85) + 10;
-        this.bridges.push({ x, z: z + rz * 0.1, w: bw });
-        // Pads in rafts, some flowering.
-        for (let g = 0; g < 9 * k * k; g++) {
-          const a = r() * 6.28, d = 0.25 + r() * 0.62;
-          const px = x + Math.cos(a) * d * rx, pz = z + Math.sin(a) * d * rz;
-          if (Math.abs(pz - (z + rz * 0.1)) < 5) continue;
-          this.pads.push({ x: px, z: pz, r: 4 + Math.floor(r() * 4), tone: r() < 0.5 ? 0 : 1, flower: r() < 0.28 ? 1 + Math.floor(r() * 2) : 0, phase: r() * 6.28, load: 0 });
+        // The bridge spans the waist from bank to bank, as wide as the water there and a little over.
+        const row = clamp(Math.round(z), 0, this.h - 1);
+        let left = Math.round(x), right = Math.round(x);
+        while (left > 0 && this.ground[row * this.w + left - 1] === GROUND.water) left--;
+        while (right < this.w - 1 && this.ground[row * this.w + right + 1] === GROUND.water) right++;
+        const bw = Math.max(26, right - left + 15);
+        this.bridges.push({ x: (left + right) / 2, z: row, w: bw });
+        // A few rafts of pads, each lobe to itself, a flower here and there.
+        for (const l of lobes) {
+          const rafts = 2;
+          for (let f = 0; f < rafts; f++) {
+            const a = r() * 6.28;
+            const cx = l.x + Math.cos(a) * l.rx * 0.5, cz = l.z + Math.sin(a) * l.rz * 0.5;
+            for (let g = 0; g < 3; g++) {
+              const px = cx + (r() - 0.5) * 16, pz = cz + (r() - 0.5) * 8;
+              const xi = Math.round(px), zi = Math.round(pz);
+              if (xi < 0 || xi >= this.w || zi < 0 || zi >= this.h || this.ground[zi * this.w + xi] !== GROUND.water || Math.abs(pz - row) < 8) continue;
+              this.pads.push({ x: px, z: pz, r: 4 + Math.floor(r() * 3), tone: r() < 0.5 ? 0 : 1, flower: r() < 0.25 ? 1 + Math.floor(r() * 2) : 0, phase: r() * 6.28, load: 0 });
+            }
+          }
         }
-        this.addAltar(x + rx + 10, z + 4, 'cucumber', false);
-        this.addLantern(x - rx - 7, z - 4, r);
-        this.addLantern(x + rx + 6, z - 10, r);
-        this.addLantern(x - rx * 0.5, z + rz + 5, r);
-        this.addLantern(x + rx * 0.45, z + rz + 5, r);
-        for (let g = 0; g < 7 * k; g++) { const a = r() * 6.28; this.addProp('rock', x + Math.cos(a) * rx * 1.08, z + Math.sin(a) * rz * 1.1, 3 + Math.floor(r() * 4), r); }
-        for (let g = 0; g < 6; g++) {
-          const a = 3.14 + r() * 3.14;
-          this.canes.push({ kind: 'susuki', x: x + Math.cos(a) * rx * 1.18, z: z + Math.sin(a) * rz * 1.26, len: 24, seed: Math.floor(r() * 100), phase: r() * 6.28, bx: 0, bv: 0 });
+        this.addAltar(lobes[1].x + lobes[1].rx + 8, lobes[1].z - 6, 'cucumber', false);
+        this.addLantern(lobes[0].x - lobes[0].rx - 6, lobes[0].z, r);
+        this.addLantern(left - 10, row + 4, r);
+        this.addLantern(right + 10, row + 4, r);
+        for (const l of lobes) {
+          for (let g = 0; g < 2; g++) { const a = r() * 6.28; this.addProp('rock', l.x + Math.cos(a) * l.rx * 1.08, l.z + Math.sin(a) * l.rz * 1.1, 3 + Math.floor(r() * 3), r); }
         }
-        this.drift('hydrangea', x, z - rz, rx + 16, 14, 4, r, () => 0);
-        this.addProp('spout', x - rx - 3, z + 8, 1, r);
+        for (let g = 0; g < 5; g++) {
+          const a = 3.3 + r() * 2.8;
+          this.canes.push({ kind: 'susuki', x: lobes[0].x + Math.cos(a) * lobes[0].rx * 1.14, z: lobes[0].z + Math.sin(a) * lobes[0].rz * 1.24, len: 24, seed: Math.floor(r() * 100), phase: r() * 6.28, bx: 0, bv: 0 });
+        }
+        this.drift('hydrangea', lobes[0].x, lobes[0].z - lobes[0].rz, lobes[0].rx, 8, 3, r, () => 0);
+        this.addProp('spout', lobes[1].x - lobes[1].rx - 3, lobes[1].z + 4, 1, r);
         break;
       }
       case 'bamboo': {
@@ -581,6 +603,8 @@ export class Shrine {
       if (this.inZone(x, z, size, tall, 8)) continue;
       if (Math.abs(x - this.pathX[clamp(Math.round(z), 0, h - 1)]) < PATH_HALF + 8) continue;
       if (nearSite(x, z, 1.35) || onGround(x, z) !== GROUND.moss) continue;
+      // Nor standing in front of a building or the water, hiding it with its crown.
+      if (this.sites.some(q => Math.abs(x - q.x) < q.rx + size && z > q.z && z - tall < q.z + q.rz)) continue;
       this.addProp('cedar', x, z, size, r);
     }
     // Maple accents out in the forest, a jewel every so often.
@@ -687,7 +711,7 @@ export class Shrine {
       palette: parent ? parent.palette : Math.floor(Math.random() * info.palettes), mood: 'wandering',
       state: 'roam', timer: Math.floor(Math.random() * 60), tx: px, tz: pz,
       parent, foe: null, prey: null, altar: null, hidden: false, disguise: null, sneakLeft: 0, scuttling: false, tailOut: 0,
-      emote: null, emoteT: 0, carrying: null, home: null, pond: null,
+      emote: null, emoteT: 0, carrying: null, onBridge: false, home: null, pond: null,
     };
     if (!c.lineId) c.lineId = c.id;
     const waterFolk = species === 'koi' || species === 'frog' || species === 'kappa';
@@ -703,9 +727,18 @@ export class Shrine {
       const w = this.waters.length ? this.waters.reduce((b, q) => (dist(c, q) < dist(c, b) ? q : b)) : null;
       if (!w) { c.alive = false; continue; }
       c.pond = w;
-      const a = Math.random() * 6.28, d = Math.random() * 0.7;
-      c.x = w.x + Math.cos(a) * w.rx * d; c.z = w.z + Math.sin(a) * w.rz * d;
+      const p = this.waterSpot(w);
+      c.x = p.x; c.z = p.z;
     }
+  }
+
+  /** Somewhere on a pond: its shape isn't a simple ellipse. */
+  private waterSpot(w: Water) {
+    for (let k = 0; k < 40; k++) {
+      const x = w.x + between(-w.rx, w.rx), z = w.z + between(-w.rz, w.rz);
+      if (this.isWater(x, z)) return { x, z };
+    }
+    return { x: w.x, z: w.z };
   }
 
   private populationCap(s: ShrineSpecies) {
@@ -753,18 +786,23 @@ export class Shrine {
   }
 
   private stockWater(w: Water) {
-    for (let k = 0; k < 7 + w.rx / 12; k++) {
-      const a = Math.random() * 6.28, d = Math.random() * 0.7;
-      const c = this.spawn('koi', w.x + Math.cos(a) * w.rx * d, w.z + Math.sin(a) * w.rz * d);
+    for (let k = 0; k < 4; k++) {
+      const p = this.waterSpot(w);
+      const c = this.spawn('koi', p.x, p.z);
       c.pond = w; c.h = -1;
     }
-    for (let k = 0; k < 6; k++) {
-      const a = Math.random() * 6.28;
-      const c = this.spawn('frog', w.x + Math.cos(a) * w.rx * 0.86, w.z + Math.sin(a) * w.rz * 0.86);
-      c.pond = w; c.state = 'sit';
-    }
-    const k = this.spawn('kappa', w.x, w.z + w.rz * 0.5);
+    for (let k = 0; k < 2; k++) this.addFrog(w);
+    const p = this.waterSpot(w);
+    const k = this.spawn('kappa', p.x, p.z);
     k.pond = w; k.state = 'swim';
+  }
+
+  /** A frog on one of the pond's pads. */
+  private addFrog(w: Water) {
+    const mine = this.pads.filter(p => Math.abs(p.x - w.x) <= w.rx && Math.abs(p.z - w.z) <= w.rz);
+    const at = mine.length ? pick(mine) : this.waterSpot(w);
+    const c = this.spawn('frog', at.x, at.z);
+    c.pond = w; c.state = 'sit';
   }
 
   private settleOnCedar(c: ShrineCreature) {
@@ -827,10 +865,7 @@ export class Shrine {
       if (s === 'tanuki' || s === 'kitsune') this.log('visit', `A ${SHRINE_SPECIES[s].label.toLowerCase()} comes down from the hills`, c);
     }
     for (const w of this.waters) {
-      if (this.creatures.filter(c => c.alive && c.species === 'frog' && c.pond === w).length >= 4) continue;
-      const a = Math.random() * 6.28;
-      const c = this.spawn('frog', w.x + Math.cos(a) * w.rx * 0.86, w.z + Math.sin(a) * w.rz * 0.86);
-      c.pond = w; c.state = 'sit';
+      if (this.creatures.filter(c => c.alive && c.species === 'frog' && c.pond === w).length < 2) this.addFrog(w);
     }
   }
 
@@ -902,7 +937,19 @@ export class Shrine {
     if (!this.blocked(c, c.x, nz)) c.z = nz; else c.vz *= -0.2;
     c.x = clamp(c.x, 2, this.w - 3);
     c.z = clamp(c.z, 2, this.h - 3);
+    const lift = this.bridgeLift(c.x, c.z);
+    if (lift > 0) { c.h = lift; c.onBridge = true; }
+    else if (c.onBridge) { c.h = 0; c.onBridge = false; }
     this.setFacing(c, c.vx);
+  }
+
+  /** How high a walker stands at this spot if it's on a bridge's deck (0 if not). */
+  private bridgeLift(x: number, z: number) {
+    for (const b of this.bridges) {
+      if (Math.abs(z - b.z) > 4 || Math.abs(x - b.x) > b.w / 2) continue;
+      return bridgeDeck(b.w, x - b.x) / ELEVATION;
+    }
+    return 0;
   }
 
   private halt(c: ShrineCreature) {
@@ -1614,8 +1661,8 @@ export class Shrine {
       // To another pad, or back to the shore.
       const pads = this.pads.filter(p => Math.abs(p.x - c.x) < 34 && Math.abs(p.z - c.z) < 22);
       const pad = pads.length ? pick(pads) : null;
-      const tx = pad ? pad.x : c.pond.x + between(-c.pond.rx, c.pond.rx) * 0.7;
-      const tz = pad ? pad.z : c.pond.z + between(-c.pond.rz, c.pond.rz) * 0.7;
+      const spot = pad ?? this.waterSpot(c.pond);
+      const tx = spot.x, tz = spot.z;
       const steps = 26;
       c.vx = (tx - c.x) / steps; c.vz = (tz - c.z) / steps;
       c.vh = 1.1;
@@ -1638,8 +1685,8 @@ export class Shrine {
       return;
     }
     if (--c.timer <= 0 || Math.hypot(c.tx - c.x, c.tz - c.z) < 4) {
-      const a = Math.random() * 6.28, d = Math.sqrt(Math.random()) * 0.82;
-      c.tx = w.x + Math.cos(a) * w.rx * d; c.tz = w.z + Math.sin(a) * w.rz * d;
+      const p = this.waterSpot(w);
+      c.tx = p.x; c.tz = p.z;
       c.timer = Math.floor(between(120, 400));
       // Now and then it leaps for something over the water.
       if (Math.random() < 0.12) {
@@ -1653,7 +1700,8 @@ export class Shrine {
     const speed = SHRINE_SPECIES.koi.speed;
     c.vx += ((dx / d) * speed - c.vx) * 0.05;
     c.vz += ((dz / d) * speed - c.vz) * 0.05;
-    c.x += c.vx; c.z += c.vz;
+    if (this.isWater(c.x + c.vx * 6, c.z + c.vz * 6)) { c.x += c.vx; c.z += c.vz; }
+    else { c.vx *= -0.3; c.vz *= -0.3; c.timer = 0; }
     this.setFacing(c, c.vx);
     if (this.pointer && Math.hypot(this.pointer.x - c.x, this.pointer.z - c.z) < 14 && Math.random() < 0.05) {
       c.tx = c.x + (c.x - this.pointer.x) * 3; c.tz = c.z + (c.z - this.pointer.z) * 3;
@@ -1693,8 +1741,8 @@ export class Shrine {
     c.mood = 'swimming';
     c.h = -3;
     if (Math.hypot(c.tx - c.x, c.tz - c.z) < 4) {
-      const a = Math.random() * 6.28, d = Math.random() * 0.8;
-      c.tx = w.x + Math.cos(a) * w.rx * d; c.tz = w.z + Math.sin(a) * w.rz * d;
+      const p = this.waterSpot(w);
+      c.tx = p.x; c.tz = p.z;
     }
     const dx = c.tx - c.x, dz = c.tz - c.z, d = Math.hypot(dx, dz) || 1;
     c.x += (dx / d) * 0.1; c.z += (dz / d) * 0.1;
@@ -1892,9 +1940,9 @@ export class Shrine {
       // Every stand heaped up, and paper lanterns afloat on every pond.
       for (const a of this.altars) { a.item = a.favourite; a.bites = 5; a.wait = 0; }
       for (const w of this.waters) {
-        for (let k = 0; k < 14; k++) {
-          const a = Math.random() * 6.28, d = Math.random() * 0.75;
-          this.skies.push({ x: w.x + Math.cos(a) * w.rx * d, z: w.z + Math.sin(a) * w.rz * d, h: 0, drift: between(-0.03, 0.03), life: HAPPENING_LENGTH.festival - Math.floor(between(0, 400)), floating: w, phase: Math.random() * 6.28 });
+        for (let k = 0; k < 7; k++) {
+          const at = this.waterSpot(w);
+          this.skies.push({ x: at.x, z: at.z, h: 0, drift: between(-0.03, 0.03), life: HAPPENING_LENGTH.festival - Math.floor(between(0, 400)), floating: w, phase: Math.random() * 6.28 });
         }
       }
       this.log('visit', 'The lantern festival begins', null);
@@ -2039,6 +2087,13 @@ export class Shrine {
     if (kind === 'kodama') c.home = { x, z, h: 0 };
   }
 }
+
+/** How high (rows) a bridge's deck stands at an offset from its middle: its arch, climbing off the ground at each end. */
+export const bridgeRise = (w: number) => Math.round(w * 0.2);
+export const bridgeDeck = (w: number, offset: number) => {
+  const t = Math.min(1, Math.abs(offset) / (w / 2));
+  return (1 - t * t) * bridgeRise(w) + Math.min(5, (w / 2 - Math.abs(offset)) * 0.8);
+};
 
 const DISGUISE_ROTATION: DisguiseKind[] = ['teapot', 'lantern', 'statue'];
 const OFFERING_NAME: Record<string, string> = { rice: 'rice balls', inari: 'inari sushi', sake: 'sake', mikan: 'mikan', fish: 'fish', cucumber: 'cucumber' };
