@@ -2,7 +2,7 @@
 // Screenshots the running dev server in headless Chrome, with no dependencies.
 // Needs `npm run dev` on http://localhost:3000 and Node 22+.
 //
-//   node shot.mjs --out <prefix> [--page reef|pond|aquarium] [--scroll 0,900,1800]
+//   node shot.mjs --out <prefix> [--page reef|pond|shrine|aquarium] [--scroll 0,900,1800]
 //     [--size 1440x900] [--phone] [--wait 3000] [--query pond-main] [--eval <js>]
 //     [--zoom x,y,w,h,scale]
 //

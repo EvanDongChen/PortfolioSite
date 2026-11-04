@@ -1,6 +1,6 @@
 # How the simulations are built
 
-The reef and the pond share one design. Reuse it rather than inventing another: it is what keeps them smooth while filling a full page.
+The reef, the pond and the shrine forest (`lib/shrine*`, `ShrineApp.tsx`) share one design. Reuse it rather than inventing another: it is what keeps them smooth while filling a full page.
 
 | Layer | Reef | Pond | Rule |
 |---|---|---|---|

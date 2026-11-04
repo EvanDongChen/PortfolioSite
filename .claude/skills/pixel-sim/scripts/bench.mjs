@@ -2,7 +2,7 @@
 // Measures a simulation's step time and draw time, optionally against a git ref.
 // Needs Node 22+; the draw half also needs `npm run dev` on http://localhost:3000.
 //
-//   node bench.mjs <reef|pond> [--base HEAD] [--steps 6000] [--no-draw]
+//   node bench.mjs <reef|pond|shrine> [--base HEAD] [--steps 6000] [--no-draw]
 //
 // Step time runs the simulation in Node on a settled world, so it needs no
 // browser. Draw time builds the real view in headless Chrome and reports ms per
@@ -18,9 +18,10 @@ import { pathToFileURL } from 'node:url';
 const SIMS = {
   reef: { file: 'pixelOcean', sim: 'PixelOcean', viewFile: 'pixelOceanView', view: 'OceanView', make: 'new S(360, 2000)' },
   pond: { file: 'pond', sim: 'Pond', viewFile: 'pondView', view: 'PondView', make: 'new S(320, 2000, { z0: 0, z1: 200 }, [])' },
+  shrine: { file: 'shrine', sim: 'Shrine', viewFile: 'shrineView', view: 'ShrineView', make: 'new S(360, 1600, { z0: 0, z1: 225 }, [])' },
 };
 const sim = SIMS[process.argv[2]];
-if (!sim) { console.error('usage: bench.mjs <reef|pond> [--base <ref>] [--steps n] [--no-draw]'); process.exit(1); }
+if (!sim) { console.error('usage: bench.mjs <reef|pond|shrine> [--base <ref>] [--steps n] [--no-draw]'); process.exit(1); }
 const opt = key => { const i = process.argv.indexOf(key); return i < 0 ? null : process.argv[i + 1]; };
 const steps = Number(opt('--steps') || 6000);
 const base = opt('--base');
