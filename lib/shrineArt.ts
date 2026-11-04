@@ -1,0 +1,1596 @@
+// Pixel art for the shrine forest, in the same flat-colour style as the reef's
+// and the pond's: every sprite is a small canvas at one canvas pixel per art
+// pixel, drawn from a character map or generated, and scaled up by the
+// renderer without smoothing. It is always night here, so colours run cool in
+// the moonlight, with warm lantern light and vermilion as the jewels. Edges
+// are shaded in each thing's own colours, never outlined.
+
+import { Rgb, cached, fromRows, makeCanvas } from './pixelOceanArt';
+
+export { makeCanvas };
+
+/** The forest floor, the water and the light. */
+export const SHRINE_FLOOR = {
+  /** Moss in soft steps, shaded hollows to moonlit hummocks. */
+  moss: [[20, 56, 58], [26, 68, 62], [34, 82, 68], [46, 98, 72], [62, 114, 76]] as Rgb[],
+  mossGlow: [104, 150, 88] as Rgb,
+  /** The deep shade under the cedars. */
+  shade: [12, 34, 46] as Rgb,
+  /** Cedar needles and fallen maple leaves lying on the moss. */
+  needle: [[120, 72, 48], [92, 62, 50]] as Rgb[],
+  leaf: [[208, 58, 54], [236, 104, 62], [178, 44, 66]] as Rgb[],
+  leafGold: [[226, 170, 62], [246, 206, 94], [186, 124, 46]] as Rgb[],
+  /** Flagstones on the approach, and the moss in their joints. */
+  stone: [[116, 122, 138], [100, 108, 126], [86, 94, 114], [132, 136, 150]] as Rgb[],
+  joint: [34, 70, 66] as Rgb,
+  /** Raked gravel in the shrine courts, pale under the moon, and its furrows. */
+  gravel: [[168, 174, 186], [146, 154, 172]] as Rgb[],
+  furrow: [118, 128, 152] as Rgb,
+  /** Stones round the water, and the water from the shallows to the deep. */
+  rim: [[92, 100, 112], [66, 76, 92]] as Rgb[],
+  water: [[34, 96, 112], [24, 78, 104], [16, 60, 92], [12, 46, 78]] as Rgb[],
+  caustic: [34, 62, 84] as Rgb,
+  /** Moonlight dappling down through the canopy, and its shafts. */
+  moon: [34, 46, 66] as Rgb,
+  ray: [26, 34, 54] as Rgb,
+};
+
+const put = (ctx: CanvasRenderingContext2D, x: number, y: number, col: Rgb) => {
+  ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+  ctx.fillRect(x, y, 1, 1);
+};
+const box = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, col: Rgb) => {
+  ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+  ctx.fillRect(x, y, w, h);
+};
+
+const seededRandom = (seed: number) => {
+  let s = seed >>> 0 || 1;
+  return () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >> 17;
+    s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+};
+
+/** Moves every colour a fraction of the way to another, for a sprite's lit or spectral versions. */
+const mix = (a: Rgb, b: Rgb, k: number): Rgb => [Math.round(a[0] + (b[0] - a[0]) * k), Math.round(a[1] + (b[1] - a[1]) * k), Math.round(a[2] + (b[2] - a[2]) * k)];
+
+// --- the rivals -----------------------------------------------------------
+
+/** Tanuki and kitsune drawn facing right. Roles are in the colour tables below. */
+const TANUKI: Record<string, string[]> = {
+  stand: [
+    '...........aa..aa.',
+    '...........aBaaBa.',
+    '..........aBBBBBBa',
+    '.tTt......BDEBBDEB',
+    'TTtTT.....BDDWWDDB',
+    'TtTTT.aaaaaBWWNWWa',
+    '.TTtTaBBBBBBBWWWB.',
+    '..TTaBBBBBBBBBBBD.',
+    '...BBBBBccccBBBBD.',
+    '...BBBBccccccBBD..',
+    '...DBBBcccccBBBD..',
+    '....DD.DD..DD.DD..',
+    '....KK.KK..KK.KK..',
+  ],
+  walk: [
+    '...........aa..aa.',
+    '...........aBaaBa.',
+    '..........aBBBBBBa',
+    '.tTt......BDEBBDEB',
+    'TTtTT.....BDDWWDDB',
+    'TtTTT.aaaaaBWWNWWa',
+    '.TTtTaBBBBBBBWWWB.',
+    '..TTaBBBBBBBBBBBD.',
+    '...BBBBBccccBBBBD.',
+    '...BBBBccccccBBD..',
+    '...DBBBcccccBBBD..',
+    '...DD...DD.DD..DD.',
+    '...KK...KK.KK..KK.',
+  ],
+  // Sitting up on its haunches with its round belly out: for drumming.
+  sit: [
+    '.......aa..aa.',
+    '.......aBaaBa.',
+    '......aBBBBBBa',
+    '......BDEBBDEB',
+    '......BDDWWDDB',
+    '.......BWWNWW.',
+    '.tTt..aaBBWWB.',
+    'TTtTTaBBBcccDB',
+    'TtTTTBBBcccccD',
+    '.TTtTBBcccccccD',
+    '..TTBBBcccccccD',
+    '....BBBBcccccD.',
+    '....DBBBBBBBBD.',
+    '....KKKK..KKKK.',
+  ],
+  // The paws raised, for the off beat.
+  drum: [
+    '.......aa..aa.',
+    '.......aBaaBa.',
+    '......aBBBBBBa',
+    '......BDEBBDEB',
+    '......BDDWWDDB',
+    '.......BWWNWW.BK',
+    '.tTt..aaBBWWBBD.',
+    'TTtTTaBBBcccDD..',
+    'TtTTTBBBccccc...',
+    '.TTtTBBccccccc..',
+    '..TTBBBccccccc..',
+    '....BBBBccccc...',
+    '....DBBBBBBBBD.',
+    '....KKKK..KKKK.',
+  ],
+  // Curled up asleep, nose under its tail.
+  sleep: [
+    '.....aaaaaaa.....',
+    '...aaBBBBBBBaa...',
+    '..aBBBBBBBBBBBa..',
+    '.aBBBBBBBBaa.aBa.',
+    '.BBBBBBBBBBaBBBBa',
+    'TtTTtTTBBDDEDDWWB',
+    'TtTTtTTtTTBWWNWD.',
+    '.DDBBBBBBBBBBBD..',
+  ],
+};
+const TANUKI_SETS: Record<string, Rgb>[] = [
+  { a: [186, 148, 104], B: [142, 106, 76], c: [216, 192, 150] },
+  { a: [172, 140, 116], B: [124, 98, 84], c: [204, 186, 158] },
+  { a: [198, 160, 96], B: [156, 116, 66], c: [226, 204, 150] },
+].map(s => ({ ...s, D: [66, 46, 44], E: [255, 232, 150], W: [236, 226, 206], N: [24, 18, 22], T: [128, 94, 68], t: [60, 44, 42], K: [46, 34, 34] } as unknown as Record<string, Rgb>));
+
+const KITSUNE: Record<string, string[]> = {
+  stand: [
+    '...............OD.OD.',
+    '...............OODOO.',
+    '..............aOOOOOO.',
+    '.Wa...........OOEOOWWW',
+    'WWa...........aOOWWWWN',
+    'WWaO...........OOWWW..',
+    'WaOOO...aaaaaaaOOWW...',
+    '.OOOOaaaOOOOOOOOOWW...',
+    '..OOOOOOOOOOOOOOOW....',
+    '...oooOOOOOOOOOOOW....',
+    '......ooOoooooOOO.....',
+    '.......oK.K....oK.K...',
+    '.......KK.K....KK.K...',
+  ],
+  walk: [
+    '...............OD.OD.',
+    '...............OODOO.',
+    '..............aOOOOOO.',
+    '.Wa...........OOEOOWWW',
+    'WWa...........aOOWWWWN',
+    'WWaO...........OOWWW..',
+    'WaOOO...aaaaaaaOOWW...',
+    '.OOOOaaaOOOOOOOOOWW...',
+    '..OOOOOOOOOOOOOOOW....',
+    '...oooOOOOOOOOOOOW....',
+    '......ooOoooooOOO.....',
+    '.....oK...K..oK...K...',
+    '.....KK...K..KK...K...',
+  ],
+  // Sitting neatly, tail curled round its feet: a shrine fox's pose.
+  sit: [
+    '........OD.OD.',
+    '........OODOO.',
+    '.......aOOOOOO',
+    '.......OOEOOWWW',
+    '.......aOOWWWWN',
+    '........OOWWW.',
+    '.......aOOWW..',
+    '.......OOOWW..',
+    '......aOOOWW..',
+    '......OOOOWW..',
+    '.Wa...OOOOOW..',
+    'WWaOOOOOOOOW..',
+    'WaOOOOOoOKoK..',
+  ],
+  // Throwing its head back to bark at the moon.
+  howl: [
+    '...........WN.',
+    '.........WWWW.',
+    '.......OOOWW..',
+    '......OEOOW...',
+    '.....OD.OOW...',
+    '.....O.OOWW...',
+    '.......aOOWW..',
+    '.......OOOWW..',
+    '......aOOOWW..',
+    '......OOOOWW..',
+    '.Wa...OOOOOW..',
+    'WWaOOOOOOOOW..',
+    'WaOOOOOoOKoK..',
+  ],
+  sleep: [
+    '.....aaaaaaa.....',
+    '...aaOOOOOOOaa...',
+    '..aOOOOOOOOOOOa..',
+    '.aOOOOOOOOODO.OD.',
+    '.OOOOOOOOOOOOOOOO',
+    'WWaOOaOOOOOEOOWWW',
+    'WWWaOOaOOOOOWWWWN',
+    '.oooOOOOOOOOoooo.',
+  ],
+};
+const KITSUNE_SETS: Record<string, Rgb>[] = [
+  { a: [250, 170, 84], O: [228, 114, 44], o: [168, 72, 36] },
+  { a: [252, 206, 118], O: [234, 164, 70], o: [182, 112, 46] },
+  { a: [255, 250, 240], O: [226, 230, 240], o: [160, 172, 204] },
+].map(s => ({ ...s, W: [252, 244, 228], D: [56, 30, 36], E: [255, 240, 150], N: [28, 20, 24], K: [44, 26, 32] } as unknown as Record<string, Rgb>));
+
+export type RivalPose = 'stand' | 'walk' | 'sit' | 'drum' | 'howl' | 'sleep';
+export const tanukiSprite = (pose: RivalPose, palette: number) =>
+  cached(`tanuki-${pose}-${palette}`, () => fromRows(TANUKI[pose === 'howl' ? 'sit' : pose], TANUKI_SETS[palette % TANUKI_SETS.length]));
+export const kitsuneSprite = (pose: RivalPose, palette: number) =>
+  cached(`kitsune-${pose}-${palette}`, () => fromRows(KITSUNE[pose === 'drum' ? 'sit' : pose], KITSUNE_SETS[palette % KITSUNE_SETS.length]));
+
+/** The leaf a rival sets on its head to change. */
+export const leafSprite = () => cached('shrine-leaf', () => fromRows(['..gG', '.gGG', 'gGG.', 'k...'], { g: [150, 214, 96], G: [88, 170, 76], k: [70, 110, 60] }));
+
+// --- what they turn into ----------------------------------------------------
+
+const DISGUISES: Record<string, { rows: string[]; colours: Record<string, Rgb> }> = {
+  // A round iron kettle of a teapot, with a lid and a bamboo handle.
+  teapot: {
+    rows: [
+      '....hHHHHHh....',
+      '...h.......h...',
+      '...h..lLl..h...',
+      '...h.lLLLl.h...',
+      '....BaaaaaB....',
+      '...BaaAAaaaB..s',
+      '..BaAAAaaaaaBss',
+      '.hBaAAaaaaaaBs.',
+      'h.BaaaaaaaaaB..',
+      'h.BaaaaaaaabB..',
+      '.hBBaaaaabbB...',
+      '...BBBBBBBB....',
+    ],
+    colours: { h: [176, 150, 92], H: [212, 186, 116], l: [78, 92, 116], L: [114, 130, 150], B: [44, 56, 80], a: [72, 88, 116], A: [132, 152, 178], b: [54, 66, 92], s: [64, 78, 104] },
+  },
+  // A stone lantern, its window glowing just like the real ones'.
+  lantern: {
+    rows: [
+      '.....ss.....',
+      '....sSSs....',
+      '..ssSSSSss..',
+      'sSSSSSSSSSSs',
+      'ddddddddddd.',
+      '...sLLLLd...',
+      '...sLYYLd...',
+      '...sLYYLd...',
+      '...sLLLLd...',
+      '..sSSSSSSd..',
+      '....sSSd....',
+      '....sSSd....',
+      '....sSSd....',
+      '....sSSd....',
+      '...sSSSSd...',
+      '..sSSSSSSd..',
+    ],
+    colours: { s: [176, 182, 192], S: [136, 142, 160], d: [92, 98, 118], L: [250, 184, 88], Y: [255, 238, 164] },
+  },
+  // A wayside statue in a red bib, looking very calm.
+  statue: {
+    rows: [
+      '...sSSSd...',
+      '..sSSSSSd..',
+      '..sSSSSSd..',
+      '..sEESEEd..',
+      '..sSSSSSd..',
+      '...sSSSd...',
+      '..RRRRRRr..',
+      '.sRRRRRRrd.',
+      '.sSRRRRrSd.',
+      '.sSSRRrSSd.',
+      '.sSSSSSSSd.',
+      '.sSSSSSSSd.',
+      '.sSSSSSSSd.',
+      'sSSSSSSSSSd',
+      'dddddddddd.',
+    ],
+    colours: { s: [172, 178, 190], S: [132, 140, 158], d: [88, 94, 116], E: [70, 76, 96], R: [226, 62, 48], r: [168, 38, 44] },
+  },
+};
+export type DisguiseKind = 'teapot' | 'lantern' | 'statue';
+export const disguiseSprite = (kind: DisguiseKind) => cached(`disguise-${kind}`, () => fromRows(DISGUISES[kind].rows, DISGUISES[kind].colours));
+
+/** Little feet the disguise grows when it thinks nobody is looking, and the tail that gives it away. */
+export const feetSprite = (rival: 'tanuki' | 'kitsune', frame: number) =>
+  cached(`disguise-feet-${rival}-${frame}`, () => {
+    const k: Rgb = rival === 'tanuki' ? [120, 90, 66] : [228, 114, 44];
+    return fromRows(frame ? ['.b...b.', 'bb...bb'] : ['..b.b..', '.bb.bb.'], { b: k });
+  });
+export const tailSprite = (rival: 'tanuki' | 'kitsune') =>
+  cached(`disguise-tail-${rival}`, () => (rival === 'tanuki'
+    ? fromRows(['.tT.', 'TTtT', 'TtTT', '.TTt'], { T: [128, 94, 68], t: [60, 44, 42] })
+    : fromRows(['.w..', 'wwO.', '.OOO', '..OO'], { w: [252, 244, 228], O: [232, 118, 46] })));
+
+// --- the rest of the forest's animals ---------------------------------------
+
+const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> = (() => {
+  const DEER: Record<string, Rgb> = { a: [196, 148, 104], B: [158, 112, 76], b: [116, 80, 62], W: [244, 234, 214], s: [244, 236, 220], D: [78, 56, 52], E: [16, 14, 18], N: [30, 24, 28], A: [214, 196, 158] };
+  const HARE: Record<string, Rgb> = { a: [226, 226, 234], B: [188, 192, 208], b: [144, 150, 176], P: [238, 158, 176], E: [226, 58, 72] };
+  const MOUSE: Record<string, Rgb> = { a: [208, 166, 122], B: [158, 116, 88], P: [240, 170, 170], E: [16, 10, 14] };
+  const OWL: Record<string, Rgb> = { a: [188, 170, 142], B: [138, 118, 98], b: [92, 78, 74], W: [232, 222, 200], Y: [255, 212, 92], E: [16, 12, 16], N: [70, 56, 50] };
+  const BAT: Record<string, Rgb> = { a: [92, 84, 116], B: [60, 56, 88], E: [255, 200, 110] };
+  const CROW: Record<string, Rgb> = { a: [86, 92, 128], B: [50, 52, 82], b: [32, 32, 56], N: [46, 42, 50], E: [230, 230, 240] };
+  const FROG: Record<string, Rgb> = { a: [160, 216, 110], B: [98, 176, 92], b: [58, 128, 86], W: [230, 240, 190], E: [16, 18, 20] };
+  const KAPPA: Record<string, Rgb> = { a: [140, 206, 150], B: [86, 170, 128], b: [50, 124, 108], S: [176, 138, 74], s: [128, 94, 58], W: [176, 226, 240], H: [32, 52, 66], Y: [240, 204, 92], E: [14, 16, 20] };
+  const KODAMA: Record<string, Rgb> = { a: [242, 248, 240], B: [206, 222, 214], b: [160, 184, 186], E: [28, 40, 48] };
+  const KASA: Record<string, Rgb> = { R: [212, 66, 76], r: [160, 44, 72], P: [236, 214, 164], p: [196, 168, 124], S: [108, 76, 56], W: [252, 244, 228], E: [18, 14, 18], T: [244, 110, 130], F: [226, 190, 150] };
+  const CHOCHIN: Record<string, Rgb> = { p: [255, 226, 150], P: [250, 190, 92], q: [224, 136, 66], K: [52, 36, 44], E: [24, 14, 20], T: [232, 66, 84], W: [255, 248, 224] };
+  const KEEPER: Record<string, Rgb> = { H: [38, 34, 50], h: [68, 62, 84], F: [232, 198, 160], f: [190, 150, 124], W: [240, 240, 244], w: [188, 196, 216], T: [78, 170, 164], t: [50, 122, 128], E: [20, 16, 20], S: [224, 220, 210], B: [146, 114, 72], b: [204, 180, 112], G: [176, 176, 176] };
+  return {
+    deer: { rows: [
+      '.................A..A..',
+      '.................A.AA..',
+      '................AA.A...',
+      '.................AAA...',
+      '................BaaB...',
+      '...............aBaEBNN.',
+      '...............BBBBBBN.',
+      '................aBBb...',
+      '................aBB....',
+      '.WW.............aBB....',
+      '.WBaaaaaaaaaaaaaaBB....',
+      '..BBBsBBBsBBBBsBBBb....',
+      '..BBBBBsBBBBsBBBBBb....',
+      '..BBBBBBBBBBBBBBBWW....',
+      '..bbBBBbbbbbbbBBbWW....',
+      '..bb.bb.......bb.bb....',
+      '..bb.bb.......bb.bb....',
+      '..bb.bb.......bb.bb....',
+      '..DD.DD.......DD.DD....',
+    ], colours: DEER },
+    deerWalk: { rows: [
+      '.................A..A..',
+      '.................A.AA..',
+      '................AA.A...',
+      '.................AAA...',
+      '................BaaB...',
+      '...............aBaEBNN.',
+      '...............BBBBBBN.',
+      '................aBBb...',
+      '................aBB....',
+      '.WW.............aBB....',
+      '.WBaaaaaaaaaaaaaaBB....',
+      '..BBBsBBBsBBBBsBBBb....',
+      '..BBBBBsBBBBsBBBBBb....',
+      '..BBBBBBBBBBBBBBBWW....',
+      '..bbBBBbbbbbbbBBbWW....',
+      '.bb...bb.....bb...bb...',
+      '.bb...bb.....bb...bb...',
+      'bb.....bb...bb.....bb..',
+      'DD.....DD...DD.....DD..',
+    ], colours: DEER },
+    // Head down: grazing moss, or bowing as Nara's deer do.
+    deerBow: { rows: [
+      '.WW....................',
+      '.WBaaaaaaaaaaaaa.......',
+      '..BBBsBBBsBBBBsBBa.....',
+      '..BBBBBsBBBBsBBBBBa....',
+      '..BBBBBBBBBBBBBBBWBa...',
+      '..bbBBBbbbbbbbBBbWWBa.A',
+      '..bb.bb.......bb.bbaBA.',
+      '..bb.bb.......bb.bbBaBA',
+      '..bb.bb.......bb.bbBEBB',
+      '..DD.DD.......DD.DD.BBN',
+    ], colours: DEER },
+    hare: { rows: [
+      '.....aP.aP.',
+      '.....aP.aP.',
+      '.....aP.aP.',
+      '.....aaaaa.',
+      '.a..aaaEaBa',
+      'aaaaaaaaaaP',
+      'aBaaaaaaaB.',
+      'BBBBBBBBB..',
+      '.bb..b.bb..',
+    ], colours: HARE },
+    hareHop: { rows: [
+      '.........aP.aP',
+      '........aP.aP.',
+      '.......aP.aP..',
+      '.......aaaaa..',
+      '.a....aaaEaBa.',
+      'aaaaaaaaaaaaP.',
+      'aBaaaaaaaaaB..',
+      '.BBBBBBBBBB...',
+      'bb.........bb.',
+    ], colours: HARE },
+    mouse: { rows: ['......PP..', '.....aPPa.', '..aaaaaaEa', 'PaaBBBBaaP', 'P..B..B...'], colours: MOUSE },
+    mouse2: { rows: ['......PP..', '.....aPPa.', '..aaaaaaEa', 'PaaBBBBaaP', '.P..BB....'], colours: MOUSE },
+    owl: { rows: [
+      '.a......a.',
+      '.aaaaaaaa.',
+      'aBWWWaWWWB',
+      'aWYEWNWEYW',
+      'aBWWWNWWWB',
+      'BaaWaWaWaB',
+      'BbaaWaWaBb',
+      'BbaWaWaaBb',
+      'BbaaWaWaBb',
+      '.bBaaWaBb.',
+      '..bBBBBb..',
+      '..YY..YY..',
+    ], colours: OWL },
+    owlFly0: { rows: [
+      'bb..............bb',
+      'BBba..........abBB',
+      '.BBBaaa.aa.aaaBBB.',
+      '..BBBaaaYEaaaBBB..',
+      '....BBaWNWaBB.....',
+      '.....bBaaaBb......',
+      '......bBBb........',
+    ], colours: OWL },
+    owlFly1: { rows: [
+      '.......aa.........',
+      '....baaYEaab......',
+      '..bBBaWNWaBBb.....',
+      '.BBBBBaaaBBBBB....',
+      'BBBb.bBBBb.bBBB...',
+      'bb.....b.....bb...',
+    ], colours: OWL },
+    bat0: { rows: ['a.......a', 'Ba.a.a.aB', 'BBBaEaBBB', '.BB.a.BB.'], colours: BAT },
+    bat1: { rows: ['...a.a...', '.BBaEaBB.', 'BBB.a.BBB', 'B.......B'], colours: BAT },
+    crow: { rows: [
+      '........aaa..',
+      '.......aBEBNN',
+      '.......aBBB..',
+      'b...aaaBBB...',
+      'bbaaBBBBBB...',
+      '.bbBBBBBBB...',
+      '...bbbBBB....',
+      '.....N.N.....',
+      '....NN.NN....',
+    ], colours: CROW },
+    crowFly0: { rows: [
+      '...aaa........',
+      '...BBaa.......',
+      '...bBBBa...aa.',
+      'b...bBBBaaBEBN',
+      'bbaaBBBBBBBB..',
+      '.bbbBBBBBB....',
+    ], colours: CROW },
+    crowFly1: { rows: [
+      '...........aa.',
+      'b....aaaaaBEBN',
+      'bbaaBBBBBBBB..',
+      '.bbbBBBBBBB...',
+      '...bBBBb......',
+      '..bBBb........',
+      '..bb..........',
+    ], colours: CROW },
+    frog: { rows: ['.EE...EE.', '.aEa.aEa.', 'aaBaaaBaa', 'BBWWWWWBB', 'bB.BBB.Bb'], colours: FROG },
+    frogLeap: { rows: ['..EE.EE..', 'aaEaaEaaB', 'bBBWWWBBb', 'b.......b', 'b.......b'], colours: FROG },
+    kappa: { rows: [
+      '...WWWWW....',
+      '..HWWWWWH...',
+      '..HaaaaaaH..',
+      '..aaEaaEaa..',
+      '..aaaaaaYY..',
+      '..BaaaaYYY..',
+      '...BBBBB....',
+      '.SSSaaaBa...',
+      'SSSsaaBBBa..',
+      'SsSsaaaaBa..',
+      'SSsSaaaaB...',
+      '.SSsaaaa....',
+      '..aa..aa....',
+      '.BBb..BBb...',
+    ], colours: KAPPA },
+    kappaWalk: { rows: [
+      '...WWWWW....',
+      '..HWWWWWH...',
+      '..HaaaaaaH..',
+      '..aaEaaEaa..',
+      '..aaaaaaYY..',
+      '..BaaaaYYY..',
+      '...BBBBB....',
+      '.SSSaaaBa...',
+      'SSSsaaBBBa..',
+      'SsSsaaaaBa..',
+      'SSsSaaaaB...',
+      '.SSsaaaa....',
+      '.aa....aa...',
+      'BBb....BBb..',
+    ], colours: KAPPA },
+    // Bowing politely, the water spilling from the dish on its head.
+    kappaBow: { rows: [
+      '.......HWW..',
+      '.....HaaWW..',
+      '.SSSaaaaaWW.',
+      'SSSsaaaaEaW.',
+      'SsSsaaBaaYY.',
+      'SSsSaaaBBYY.',
+      '.SSsaaaBB...',
+      '..aaaaaa....',
+      '..aa..aa....',
+      '.BBb..BBb...',
+    ], colours: KAPPA },
+    // Small pale tree spirits, heads tilting.
+    kodama: { rows: ['..aaaaa..', '.aaaaaaa.', 'aaEaaaEaa', 'aaaaaaaBa', '.aaaEaaB.', '..aBBBb..', '...aab...', '..aaabb..', '..a.a.b..'], colours: KODAMA },
+    kodama1: { rows: ['...aaaaa.', '..aaaaaaa', '.aaEaaaEa', '.aaaaaaaB', '..aaaEaB.', '..aBBBb..', '...aab...', '..aaabb..', '..a.a.b..'], colours: KODAMA },
+    // A one-eyed old paper umbrella on one hopping sandalled leg.
+    kasa: { rows: [
+      '......SS......',
+      '.....RRRr.....',
+      '....RRPRrr....',
+      '...RRPRRRrr...',
+      '..RRPRWWRRrr..',
+      '.RRPRWWEWRrrr.',
+      '.RPRRWEEWRRrr.',
+      'RRPRRRWWRRrrrr',
+      'RPRRRRRRTTRrrr',
+      'p.p.p.pSTTp.p.',
+      '.......ST.....',
+      '.......S......',
+      '.......S......',
+      '.......S......',
+      '.......F......',
+      '.....SSFSS....',
+    ], colours: KASA },
+    kasaHop: { rows: [
+      '......SS......',
+      '.....RRRr.....',
+      '....RRPRrr....',
+      '...RRPRRRrr...',
+      '..RRPRWWRRrr..',
+      '.RRPRWWEWRrrr.',
+      '.RPRRWEEWRRrr.',
+      'RRPRRRWWRRrrrr',
+      'RPRRRRRRRRRrrr',
+      'p.p.p.pSTp.p..',
+      '.......ST.....',
+      '.......S......',
+      '......FF......',
+      '....SSFSS.....',
+    ], colours: KASA },
+    // A torn paper lantern with a face, a floating ghost of one.
+    chochin: { rows: [
+      '...KKKKK...',
+      '..qPPPPPq..',
+      '.PppppppPq.',
+      '.qqqqqqqqq.',
+      'PppEpppEppq',
+      'PpWEpppWEpq',
+      'qqqqqqqqqqq',
+      'PppqTTTTppq',
+      'PpppTWTTppq',
+      '.qqqqTTTqq.',
+      '.PpppTTppq.',
+      '..qPPPPPq..',
+      '...KKKKK...',
+    ], colours: CHOCHIN },
+    keeper: { rows: [
+      '....HHHH....',
+      '....HhhH....',
+      '...HHhhHH...',
+      '...HHHHHH...',
+      '...fFFFFF...',
+      '...fFEFEF...',
+      '...fFFFFF...',
+      '....fFFF....',
+      '..wWWWWWWW..',
+      '.wWWWWWWWWW.',
+      '.wWWwWWWwWW.',
+      '.wWFwWWWwFW.',
+      '..w.TTTTT.W.',
+      '....TTTTt...',
+      '...TTTTTTt..',
+      '...TTtTTtt..',
+      '...TTtTTtt..',
+      '...TTtTtTt..',
+      '...TtTTtTt..',
+      '...SS...SS..',
+    ], colours: KEEPER },
+    keeperWalk: { rows: [
+      '....HHHH....',
+      '....HhhH....',
+      '...HHhhHH...',
+      '...HHHHHH...',
+      '...fFFFFF...',
+      '...fFEFEF...',
+      '...fFFFFF...',
+      '....fFFF....',
+      '..wWWWWWWW..',
+      '.wWWWWWWWWW.',
+      '.wWWwWWWwWW.',
+      '.wWFwWWWwFW.',
+      '..w.TTTTT.W.',
+      '....TTTTt...',
+      '...TTTTTTt..',
+      '...TTtTTtt..',
+      '..TTtTTTTtt.',
+      '..TTtTtTTtt.',
+      '..TtTTtTTTt.',
+      '..SS.....SS.',
+    ], colours: KEEPER },
+    // Bent from the waist in a bow to the shrine.
+    keeperBow: { rows: [
+      '.......HHH..',
+      '......HhhHHH',
+      '.wWWWWWHHHHH',
+      'wWWWWWWWfFFF',
+      'wWWwWWWWfFEF',
+      'wWWWwWWWwfFF',
+      '..TTTwWWw...',
+      '..TTTTTWF...',
+      '..TTTTTtt...',
+      '..TTtTTtt...',
+      '..TTtTTtt...',
+      '..TTtTtTt...',
+      '..TtTTtTt...',
+      '..SS...SS...',
+    ], colours: KEEPER },
+    broom: { rows: ['.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', 'bbb', 'bbbb', 'b.bb'], colours: KEEPER },
+  };
+})();
+export type AnimalKind = 'deer' | 'deerWalk' | 'deerBow' | 'hare' | 'hareHop' | 'mouse' | 'mouse2' | 'owl' | 'owlFly0' | 'owlFly1' | 'bat0' | 'bat1' | 'crow' | 'crowFly0' | 'crowFly1' | 'frog' | 'frogLeap' | 'kappa' | 'kappaWalk' | 'kappaBow' | 'kodama' | 'kodama1' | 'kasa' | 'kasaHop' | 'chochin' | 'keeper' | 'keeperWalk' | 'keeperBow' | 'broom';
+export const animalSprite = (kind: AnimalKind) => cached(`shrine-animal-${kind}`, () => fromRows(ANIMALS[kind].rows, ANIMALS[kind].colours));
+
+/** Koi seen from above through the water: kohaku, showa, ogon, shiro, in two tail swings. */
+const KOI_SETS: Rgb[][] = [
+  [[250, 244, 236], [232, 72, 44], [40, 36, 44]],
+  [[244, 128, 44], [250, 240, 224], [36, 32, 42]],
+  [[250, 214, 96], [255, 240, 170], [196, 150, 60]],
+  [[242, 244, 250], [190, 206, 228], [226, 72, 66]],
+  [[42, 44, 58], [232, 88, 46], [248, 244, 232]],
+];
+const KOI = [
+  ['..........aa...', 'tt.aaabbaaaaa..', 'ttaabbbbaaabEa.', 'ttaaaabbbaaaaa.', 'tt.aaaaaabbaa..', '.....aa........'],
+  ['t.........aa...', 'tt.aaabbaaaaa..', '.taabbbbaaabEa.', '.taaaabbbaaaaa.', 'tt.aaaaaabbaa..', 't....aa........'],
+];
+export const koiSprite = (frame: number, palette: number) =>
+  cached(`koi-${frame}-${palette}`, () => {
+    const s = KOI_SETS[palette % KOI_SETS.length];
+    return fromRows(KOI[frame & 1], { a: s[0], b: s[1], t: mix(s[0], s[1], 0.3), E: [16, 16, 24] });
+  });
+
+/** A hitodama: a soul-flame, blue-white, trailing up. */
+const HITODAMA = [
+  ['...w...', '..wW...', '..WW.w.', '.wWWwW.', '.WWbWW.', 'wWbbbWw', 'WbbcbbW', 'WbcccbW', '.bcccb.', '..bbb..'],
+  ['....w..', '...Ww..', '.w.WW..', '.WwWWw.', '.WWbWW.', 'wWbbbWw', 'WbbcbbW', 'WbcccbW', '.bcccb.', '..bbb..'],
+  ['..w....', '..Ww...', '..WWw..', '.wWWWw.', '.WWbWW.', 'wWbbbWw', 'WbbcbbW', 'WbcccbW', '.bcccb.', '..bbb..'],
+];
+export const hitodamaSprite = (frame: number, hue = 0) =>
+  cached(`hitodama-${frame}-${hue}`, () => fromRows(HITODAMA[frame % 3], hue
+    ? { w: [255, 214, 140], W: [255, 172, 90], b: [250, 232, 170], c: [255, 252, 232] }
+    : { w: [110, 170, 255], W: [96, 196, 255], b: [170, 234, 255], c: [240, 254, 255] }));
+
+// --- the parade --------------------------------------------------------------
+
+const PARADE_ART: Record<string, { rows: string[]; colours: Record<string, Rgb> }> = (() => {
+  const ONI: Record<string, Rgb> = { H: [244, 232, 184], D: [44, 34, 50], R: [226, 62, 56], r: [168, 38, 52], l: [250, 110, 84], W: [252, 244, 228], E: [255, 226, 96], B: [36, 28, 44], Y: [240, 200, 70], y: [190, 140, 50], C: [70, 56, 66], c: [120, 104, 110], T: [236, 232, 240] };
+  const TENGU: Record<string, Rgb> = { R: [226, 58, 54], r: [176, 40, 50], W: [248, 244, 234], w: [196, 204, 222], K: [42, 40, 66], k: [76, 72, 110], B: [32, 28, 42], E: [20, 16, 20], G: [244, 204, 96], F: [106, 170, 110], H: [240, 240, 244] };
+  const ROKU: Record<string, Rgb> = { H: [26, 24, 44], h: [52, 48, 80], F: [244, 226, 214], f: [214, 186, 182], E: [24, 16, 24], L: [226, 62, 76], K: [130, 74, 150], k: [92, 54, 124], P: [236, 150, 186], S: [244, 232, 220] };
+  const WALL: Record<string, Rgb> = { a: [188, 190, 196], B: [150, 154, 166], b: [118, 122, 138], m: [90, 124, 96], E: [18, 14, 18], W: [244, 240, 228], L: [226, 72, 84] };
+  const MOMEN: Record<string, Rgb> = { a: [250, 250, 244], B: [212, 220, 232], b: [168, 182, 208], E: [16, 16, 24] };
+  const BIWA: Record<string, Rgb> = { a: [190, 124, 66], B: [146, 88, 50], b: [100, 60, 44], s: [240, 226, 170], E: [255, 236, 150], M: [28, 18, 24], K: [240, 234, 220], k: [204, 54, 66], F: [120, 84, 60] };
+  return {
+    oni: { rows: [
+      '...H......H.....',
+      '...HD....DH.....',
+      '...DDDDDDDD...T.',
+      '...RRRRRRRR...TT',
+      '..lRRERRERRr..cT',
+      '..lRRRRRRRRr..cc',
+      '..lRRWRRWRRr.cC.',
+      '...RRRRRRRr..cC.',
+      '...rRRRRRr..cC..',
+      '.lRRRRRRRRRrcC..',
+      'lRRRRRRRRRRRRR..',
+      'lRRlRRRRRRRrRR..',
+      'RRrlRRRRRRRr....',
+      'RR.YyYyYyYyY....',
+      '...yYyYyYyYy....',
+      '...YyYyYyYyY....',
+      '...RRRr.RRRr....',
+      '...RRr...RRr....',
+      '...BBB...BBB....',
+    ], colours: ONI },
+    oniWalk: { rows: [
+      '...H......H.....',
+      '...HD....DH.....',
+      '...DDDDDDDD...T.',
+      '...RRRRRRRR...TT',
+      '..lRRERRERRr..cT',
+      '..lRRRRRRRRr..cc',
+      '..lRRWRRWRRr.cC.',
+      '...RRRRRRRr..cC.',
+      '...rRRRRRr..cC..',
+      '.lRRRRRRRRRrcC..',
+      'lRRRRRRRRRRRRR..',
+      'lRRlRRRRRRRrRR..',
+      'RRrlRRRRRRRr....',
+      'RR.YyYyYyYyY....',
+      '...yYyYyYyYy....',
+      '...YyYyYyYyY....',
+      '..RRRr...RRRr...',
+      '..RRr.....RRr...',
+      '..BBB.....BBB...',
+    ], colours: ONI },
+    tengu: { rows: [
+      '.....BB.......',
+      '....BBBB......',
+      '.k..HHHH......',
+      'kKk.RRRRRRR...',
+      'kKKkRERRERRRRR',
+      'KKKkRRRRRrRRRR',
+      'KKKKRRRRRr....',
+      'kKKKHHHHHH....',
+      '.KKWWWWWWWw...',
+      '.KKWWGWGWWwRF.',
+      '.kKWWWGWWWwFFF',
+      '..KWWWWWWWw.FF',
+      '..kwwwwwwww.F.',
+      '...KKKKKKk....',
+      '...KKkKKkk....',
+      '...KKkKKkk....',
+      '...BB...BB....',
+      '..BBBB.BBBB...',
+      '..B..B.B..B...',
+    ], colours: TENGU },
+    roku: { rows: [
+      '...HHHHH....',
+      '..HHhHHHH...',
+      '..HFFFFFH...',
+      '..HFEFEFH...',
+      '..HFFFFFH...',
+      '..HfFLFfH...',
+      '....FFf.....',
+      '.....FF.....',
+      '......FF....',
+      '.......FF...',
+      '.......FF...',
+      '......FF....',
+      '.....FF.....',
+      '....FF......',
+      '....FF......',
+      '.....FF.....',
+      '......FF....',
+      '......FF....',
+      '.....FF.....',
+      '...KKFFKK...',
+      '..KKKSSKKK..',
+      '.KKPKKKKPKk.',
+      '.KKKKPKKKKk.',
+      '.FKKKKKKKkF.',
+      '..PPPPPPPP..',
+      '..KKKPKKKk..',
+      '..KKKKKKPk..',
+      '..KPKKKKKk..',
+      '..KKKKKPKk..',
+      '..kkkkkkkk..',
+      '...SS..SS...',
+    ], colours: ROKU },
+    nurikabe: { rows: [
+      '...aaaaaaaaaaaaB..',
+      '.aaaaaaaaaaaaaaaBb',
+      'aaaaaaaaaaaaaaaaBb',
+      'aaaaaaaaaaaaBaaaBb',
+      'aaaBaaaaaaaaaBaaBm',
+      'aaBaWWWaaaaWWWaaBb',
+      'aaaaWEEaaaaWEEaaBb',
+      'aaaaWEEaaaaWEEaaBb',
+      'aaaaaaaaaaaaaaaaBb',
+      'aaaaaaaaaaaaaaaaBm',
+      'aaaaaaLLLLLLaaaaBb',
+      'aaaaaLLLLLLLLaaaBb',
+      'aaBaaaaaaaaaaaaaBb',
+      'aaaBaaaaaaaaBaaaBb',
+      'aaaaBaaaaaaaaBaaBb',
+      'aaaaaaaaaaaaaaaaBb',
+      'mmmaaaaaaaaaaammmb',
+      'mmmmmbbbbbbbbmmmmm',
+    ], colours: WALL },
+    momen0: { rows: [
+      'a.aaBaaaaaaaaaaaaa..',
+      '.aaBaaaaaaaaaaaaBaa.',
+      '...bbBBaaaaaaBBbaEaa',
+      '......bbBBBBbb.aaEa.',
+    ], colours: MOMEN },
+    momen1: { rows: [
+      '.......aaaaaaaa.....',
+      '.a..aaBaaaaaaaaBaaa.',
+      'a.aaBBbbbbBBaaaaaEaa',
+      '.aBb........bbBaaEa.',
+    ], colours: MOMEN },
+    biwa: { rows: [
+      '..........KK....',
+      '.........KssK...',
+      '........KKsKKF..',
+      '.......BBa..F...',
+      '......aBa.......',
+      '...aaaaBa.......',
+      '..aaaaaas.......',
+      '.aaaEaaEs.......',
+      'aaaaaaasaa......',
+      'aMMMaaasaaa.....',
+      'aaMaaasaaaB.....',
+      'aaaaasaaaaB.....',
+      '.aaasaaaaB......',
+      '..BBaaaBB.......',
+      '...b...b........',
+      '..bb...bb.......',
+    ], colours: BIWA },
+  };
+})();
+export type ParadeKind = 'oni' | 'oniBlue' | 'tengu' | 'roku' | 'nurikabe' | 'momen' | 'biwa' | 'nine';
+const ONI_BLUE: Record<string, Rgb> = { R: [70, 120, 220], r: [44, 74, 170], l: [120, 176, 244] };
+export const paradeSprite = (kind: ParadeKind, frame: number) =>
+  cached(`parade-${kind}-${frame}`, () => {
+    if (kind === 'oni' || kind === 'oniBlue') {
+      const art = frame & 1 ? PARADE_ART.oniWalk : PARADE_ART.oni;
+      return fromRows(art.rows, kind === 'oni' ? art.colours : { ...art.colours, ...ONI_BLUE });
+    }
+    if (kind === 'momen') { const a = PARADE_ART[frame & 1 ? 'momen1' : 'momen0']; return fromRows(a.rows, a.colours); }
+    if (kind === 'nine') return nineTails(frame);
+    const a = PARADE_ART[kind];
+    return fromRows(a.rows, a.colours);
+  });
+
+/** The great white fox of the parade, with nine tails spread in a fan behind it. */
+const nineTails = (frame: number) => {
+  const base = kitsuneSprite(frame & 1 ? 'walk' : 'stand', 2);
+  const w = base.width + 26, h = base.height + 22;
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  const hipX = 30, hipY = h - 8;
+  for (let k = 0; k < 9; k++) {
+    const a = Math.PI * (0.42 + (k / 8) * 0.68) + Math.sin(frame * 0.8 + k) * 0.02;
+    const len = 22 + (k & 1) * 4;
+    for (let s = 0; s < len; s++) {
+      const t = s / len;
+      const r = Math.round(0.5 + Math.sin(t * Math.PI) * 1);
+      const x = Math.round(hipX + Math.cos(a) * s * 1.1), y = Math.round(hipY - Math.sin(a) * s);
+      box(ctx, x - r, y - r, r * 2, r * 2, t > 0.84 ? [150, 210, 255] : k & 1 ? [206, 212, 232] : [248, 248, 252]);
+    }
+  }
+  ctx.drawImage(base, 26, 20);
+  return c;
+};
+
+// --- the scenery ------------------------------------------------------------
+
+const V = { lit: [250, 96, 58] as Rgb, red: [224, 58, 40] as Rgb, mid: [176, 40, 38] as Rgb, dark: [118, 28, 40] as Rgb, cap: [40, 34, 52] as Rgb, capLit: [74, 72, 96] as Rgb, foot: [32, 28, 40] as Rgb, gold: [244, 204, 100] as Rgb };
+
+/** A vermilion torii gate, as wide as `w`, the roof beam swept up at its ends. */
+export const toriiSprite = (w: number) =>
+  cached(`torii-${w}`, () => {
+    const h = Math.round(w * 0.85);
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const postW = Math.max(2, Math.round(w * 0.09));
+    const inset = Math.round(w * 0.16);
+    const beamT = Math.max(2, Math.round(w * 0.07));
+    for (const left of [inset, w - inset - postW]) {
+      box(ctx, left, beamT + 1, postW, h - beamT - 1, V.red);
+      box(ctx, left, beamT + 1, 1, h - beamT - 1, V.lit);
+      box(ctx, left + postW - 1, beamT + 1, 1, h - beamT - 1, V.mid);
+      box(ctx, left - 1, h - Math.max(2, Math.round(h * 0.09)), postW + 2, Math.max(2, Math.round(h * 0.09)), V.foot);
+    }
+    // The swept lintel: a shallow curve, thickest in the middle.
+    for (let x = 0; x < w; x++) {
+      const t = (x - w / 2 + 0.5) / (w / 2);
+      const lift = Math.round(t * t * t * t * beamT * 1.2);
+      const y0 = beamT - lift;
+      box(ctx, x, y0, 1, 1, V.capLit);
+      box(ctx, x, y0 + 1, 1, Math.max(1, Math.round(beamT * 0.4)), V.cap);
+      box(ctx, x, y0 + 1 + Math.max(1, Math.round(beamT * 0.4)), 1, Math.max(1, Math.round(beamT * 0.55)), V.red);
+      box(ctx, x, y0 + beamT, 1, 1, V.mid);
+    }
+    // The lower tie beam and the small tablet between the two.
+    const tie = Math.round(h * 0.3);
+    const tieT = Math.max(2, Math.round(beamT * 0.7));
+    box(ctx, inset - Math.round(w * 0.05), tie, w - (inset - Math.round(w * 0.05)) * 2, tieT, V.red);
+    box(ctx, inset - Math.round(w * 0.05), tie, w - (inset - Math.round(w * 0.05)) * 2, 1, V.lit);
+    box(ctx, inset - Math.round(w * 0.05), tie + tieT - 1, w - (inset - Math.round(w * 0.05)) * 2, 1, V.dark);
+    if (w >= 28) {
+      const tw = Math.max(3, Math.round(w * 0.1));
+      box(ctx, Math.round(w / 2 - tw / 2), beamT + 2, tw, tie - beamT - 2, V.dark);
+      box(ctx, Math.round(w / 2 - tw / 2) + 1, beamT + 3, tw - 2, tie - beamT - 4, V.gold);
+    }
+    return c;
+  });
+
+/** A stone lantern, its window lit or dark (or burning ghost blue, while the parade passes). */
+export const toroSprite = (state: 'lit' | 'lit2' | 'dark' | 'ghost', mossy: number) =>
+  cached(`toro-${state}-${mossy}`, () => {
+    const moss: Rgb = [84, 138, 92];
+    const window: [Rgb, Rgb] = state === 'dark' ? [[48, 48, 66], [34, 36, 52]]
+      : state === 'ghost' ? [[110, 190, 255], [220, 248, 255]]
+      : state === 'lit' ? [[250, 178, 80], [255, 236, 160]] : [[244, 158, 70], [255, 222, 130]];
+    const c = fromRows(DISGUISES.lantern.rows, { ...DISGUISES.lantern.colours, L: window[0], Y: window[1] });
+    if (mossy) {
+      const ctx = c.getContext('2d')!;
+      box(ctx, 2, 2, 2, 1, moss); box(ctx, 7, 1, 2, 2, moss); box(ctx, 3, 14, 2, 1, moss); box(ctx, 7, 15, 3, 1, moss);
+    }
+    return c;
+  });
+
+/** A paper festival lantern, red and white. */
+export const paperLanternSprite = (kind: number, lit: boolean) =>
+  cached(`paper-lantern-${kind}-${lit}`, () => {
+    const body: Rgb[] = kind % 2 === 0 ? [[255, 90, 66], [230, 56, 52], [255, 196, 120]] : [[255, 236, 190], [250, 206, 130], [255, 250, 226]];
+    const dim = (r: Rgb) => mix(r, [40, 36, 60], lit ? 0 : 0.55);
+    return fromRows(['..kk..', '.aaaa.', 'abccba', 'bbccbb', 'abccba', '.aaaa.', '..kk..', '..t...'], { k: dim([40, 34, 44]), a: dim(body[1]), b: dim(body[0]), c: dim(body[2]), t: dim([244, 214, 120]) });
+  });
+
+/** A little floating lantern for the water, or a paper sky lantern. */
+export const floatLanternSprite = () =>
+  cached('float-lantern', () => fromRows(['.pppp.', 'pPYYPp', 'pPYYPp', '.pppp.', 'wwwwww'], { p: [250, 190, 96], P: [255, 214, 130], Y: [255, 246, 196], w: [120, 86, 62] }));
+export const skyLanternSprite = () =>
+  cached('sky-lantern', () => fromRows(['.pppp.', 'pPPPPp', 'pPYYPp', 'pPYYPp', '.pYYp.', '..qq..'], { p: [240, 156, 80], P: [255, 200, 110], Y: [255, 244, 190], q: [255, 120, 60] }));
+
+/** Curved tiled roof, the eaves swept up: shared by the hall, the small shrines and the pagoda. */
+const roof = (ctx: CanvasRenderingContext2D, cx: number, top: number, halfW: number, height: number, colours: { lit: Rgb; body: Rgb; low: Rgb; eave: Rgb }, tiles = 3) => {
+  for (let y = 0; y < height; y++) {
+    const t = y / (height - 1 || 1);
+    // Steep near the ridge and flattening out to the eaves.
+    const half = Math.round(halfW * (0.2 + 0.8 * Math.pow(t, 1.8)));
+    const col = t < 0.2 ? colours.lit : colours.body;
+    box(ctx, Math.round(cx - half), top + y, half * 2, 1, col);
+    // Rows of tiles running down the slope.
+    if (tiles > 0) {
+      for (let x = -half; x < half; x += tiles) {
+        if ((x + half) % (tiles * 2) === 0 && y > 0) box(ctx, Math.round(cx + x), top + y, 1, 1, colours.low);
+      }
+    }
+  }
+  // The eave's underside, with its corners flicking up.
+  for (let x = -halfW; x < halfW; x++) {
+    const t = Math.abs(x + 0.5) / halfW;
+    const lift = Math.round(Math.pow(t, 5) * Math.max(2, height * 0.4));
+    box(ctx, Math.round(cx + x), top + height - 1 - lift, 1, 2, colours.eave);
+  }
+};
+const PATINA = { lit: [132, 192, 172] as Rgb, body: [76, 142, 132] as Rgb, low: [54, 112, 112] as Rgb, eave: [34, 62, 76] as Rgb };
+const BARK_ROOF = { lit: [96, 84, 88] as Rgb, body: [66, 58, 70] as Rgb, low: [48, 42, 56] as Rgb, eave: [26, 24, 36] as Rgb };
+const WOOD = { lit: [126, 84, 62] as Rgb, body: [88, 58, 52] as Rgb, dark: [54, 38, 44] as Rgb };
+const SHOJI: [Rgb, Rgb] = [[255, 226, 150], [244, 176, 88]];
+
+/** A strung sacred rope with its white paper streamers. */
+const rope = (ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, sag: number) => {
+  const w = x1 - x0;
+  for (let x = x0; x < x1; x++) {
+    const t = (x - x0) / w;
+    const yy = Math.round(y + Math.sin(t * Math.PI) * sag);
+    box(ctx, x, yy, 1, 2, (x & 3) < 2 ? [226, 206, 150] : [176, 150, 100]);
+  }
+  for (let k = 1; k < 5; k++) {
+    const x = Math.round(x0 + (w * k) / 5);
+    const yy = Math.round(y + Math.sin((k / 5) * Math.PI) * sag) + 2;
+    box(ctx, x, yy, 2, 2, [250, 250, 246]);
+    box(ctx, x + 1, yy + 2, 2, 2, [224, 230, 240]);
+    box(ctx, x, yy + 4, 2, 2, [250, 250, 246]);
+  }
+};
+
+/** The main hall: stone plinth, red posts, warm paper walls, a great patina roof with crossed rafters. */
+export const hondenSprite = () =>
+  cached('honden', () => {
+    const w = 92, h = 72;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    // Plinth and steps.
+    box(ctx, 8, h - 8, w - 16, 8, [116, 122, 138]);
+    box(ctx, 8, h - 8, w - 16, 1, [156, 162, 176]);
+    box(ctx, 8, h - 2, w - 16, 2, [84, 90, 108]);
+    for (let s = 0; s < 3; s++) box(ctx, 34 - s * 2, h - 8 + s * 3, 24 + s * 4, 2, [172, 176, 188]);
+    // The hall's front: a dark veranda, paper walls glowing between red posts.
+    box(ctx, 14, 36, w - 28, h - 44, WOOD.dark);
+    for (let x = 16; x < w - 16; x += 12) {
+      box(ctx, x + 2, 40, 9, h - 50, SHOJI[1]);
+      box(ctx, x + 3, 41, 7, h - 52, SHOJI[0]);
+      for (let g = 44; g < h - 12; g += 4) box(ctx, x + 2, g, 9, 1, SHOJI[1]);
+      box(ctx, x + 6, 41, 1, h - 52, SHOJI[1]);
+    }
+    for (let x = 14; x <= w - 16; x += 12) {
+      box(ctx, x, 34, 3, h - 42, V.red);
+      box(ctx, x, 34, 1, h - 42, V.lit);
+      box(ctx, x + 2, 34, 1, h - 42, V.mid);
+    }
+    box(ctx, 12, 34, w - 24, 3, V.red);
+    box(ctx, 12, 34, w - 24, 1, V.lit);
+    // The roof, and its crossed rafters and ridge logs.
+    roof(ctx, w / 2, 8, 46, 28, PATINA, 4);
+    box(ctx, 28, 7, w - 56, 3, PATINA.eave);
+    box(ctx, 28, 6, w - 56, 1, [170, 216, 196]);
+    for (let x = 34; x < w - 34; x += 7) { box(ctx, x, 4, 3, 2, V.gold); box(ctx, x, 3, 3, 1, [255, 232, 160]); }
+    for (const [x, d] of [[28, -1], [w - 28, 1]] as [number, number][]) {
+      for (let k = 0; k < 8; k++) { box(ctx, x + d * k, 6 - k, 2, 1, [176, 196, 186]); box(ctx, x - d * k, 6 - k, 2, 1, [130, 158, 150]); }
+    }
+    // The rope and streamers, and the bell's rope.
+    rope(ctx, 24, w - 24, 37, 3);
+    box(ctx, w / 2 - 1, 40, 3, 3, [244, 204, 100]);
+    box(ctx, w / 2, 43, 1, 12, [226, 80, 70]);
+    return c;
+  });
+
+/** A small roadside shrine on a post or stone base, with a lit paper front. */
+export const hokoraSprite = (kind: number) =>
+  cached(`hokora-${kind}`, () => {
+    const w = 24, h = 26;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    box(ctx, 4, h - 4, 16, 4, [132, 138, 154]);
+    box(ctx, 4, h - 4, 16, 1, [168, 172, 186]);
+    box(ctx, 5, h - 1, 14, 1, [90, 96, 114]);
+    box(ctx, 6, 11, 12, h - 15, kind ? WOOD.body : V.mid);
+    box(ctx, 6, 11, 1, h - 15, kind ? WOOD.lit : V.red);
+    box(ctx, 8, 13, 8, h - 18, SHOJI[1]);
+    box(ctx, 9, 14, 6, h - 20, SHOJI[0]);
+    box(ctx, 11, 14, 2, h - 20, SHOJI[1]);
+    roof(ctx, w / 2, 2, 12, 11, kind ? BARK_ROOF : PATINA, 3);
+    rope(ctx, 6, 18, 13, 1);
+    return c;
+  });
+
+/** A five-storey pagoda, vermilion under dark roofs, a finial on top. */
+export const pagodaSprite = () =>
+  cached('pagoda', () => {
+    const w = 62, h = 128;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const cx = w / 2;
+    box(ctx, 8, h - 5, w - 16, 5, [116, 122, 138]);
+    box(ctx, 8, h - 5, w - 16, 1, [156, 162, 176]);
+    let y = h - 5;
+    for (let f = 0; f < 5; f++) {
+      const half = 17 - f * 2;
+      const wall = 12 - f;
+      y -= wall;
+      box(ctx, cx - half, y, half * 2, wall, V.red);
+      box(ctx, cx - half, y, 2, wall, V.lit);
+      box(ctx, cx + half - 2, y, 2, wall, V.mid);
+      box(ctx, cx - 3, y + 2, 6, wall - 2, SHOJI[1]);
+      box(ctx, cx - 2, y + 3, 4, wall - 4, SHOJI[0]);
+      const rh = 11 - f;
+      y -= rh - 3;
+      roof(ctx, cx, y, half + 12, rh, BARK_ROOF, 3);
+      y += 0;
+    }
+    // The finial: a tapering spire of gold rings.
+    for (let k = 0; k < 9; k++) box(ctx, cx - 1 + (k % 3 === 0 ? -1 : 0), y - k * 2 - 2, 2 + (k % 3 === 0 ? 2 : 0), 2, k % 3 === 0 ? V.gold : [190, 146, 70]);
+    return c;
+  });
+
+/** A red arched bridge across the water, seen from the side. */
+export const bridgeSprite = (w: number) =>
+  cached(`bridge-${w}`, () => {
+    const rise = Math.round(w * 0.24);
+    const h = rise + 12;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const arch = (x: number) => { const t = (x + 0.5 - w / 2) / (w / 2); return Math.round((1 - t * t) * rise); };
+    for (let x = 0; x < w; x++) {
+      const top = h - 8 - arch(x);
+      // The planks, the side beam, and the railing above.
+      box(ctx, x, top, 1, 2, [156, 118, 88]);
+      box(ctx, x, top + 2, 1, 3, V.red);
+      box(ctx, x, top + 5, 1, 1, V.dark);
+      box(ctx, x, top - 6, 1, 1, V.lit);
+    }
+    for (let x = 2; x < w; x += 7) {
+      const top = h - 8 - arch(x);
+      box(ctx, x, top - 6, 2, 6, V.red);
+      box(ctx, x, top - 7, 2, 1, V.gold);
+      box(ctx, x, top + 6, 2, Math.max(0, h - top - 6), V.dark);
+    }
+    return c;
+  });
+
+/** Offering stand: a square tray on a small box. */
+export const altarSprite = () =>
+  cached('altar', () => fromRows([
+    'wwwwwwwwwwwwww',
+    'WWWWWWWWWWWWWW',
+    'dddddddddddddd',
+    '..WwWWWWWWwW..',
+    '..WwWRRRWWwW..',
+    '..WwWRWRWWwW..',
+    '..WwWWWWWWwW..',
+    '..dddddddddd..',
+  ], { w: [244, 232, 198], W: [214, 192, 148], d: [146, 122, 96], R: [190, 60, 54] }));
+
+/** What is left on the stands. */
+const OFFERINGS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> = {
+  rice: { rows: ['...ww...', '..wwWw..', '.wwWWww.', 'wwKKKKwW', 'wWKKKKWW'], colours: { w: [252, 252, 246], W: [214, 220, 232], K: [34, 56, 56] } },
+  inari: { rows: ['.oOOOOo.', 'oOOOOOOo', 'OOaOOaOO', 'oOOOOOOo'], colours: { o: [176, 110, 46], O: [226, 158, 68], a: [244, 196, 106] } },
+  sake: { rows: ['..RR..', '..WW..', '.WWWW.', '.WWWW.', 'WWwwWW', 'WwBBwW', 'WwBBwW', '.WWWW.'], colours: { R: [224, 58, 52], W: [240, 236, 224], w: [200, 202, 208], B: [56, 72, 130] } },
+  mikan: { rows: ['..g...', '.OOOo.', 'OaOOOo', 'OOOOOo', '.OOoo.'], colours: { g: [110, 186, 90], O: [248, 148, 44], o: [212, 104, 34], a: [255, 204, 110] } },
+  fish: { rows: ['.....ww.', 't.wwwwww', 'twwwEww.', 't..www..'], colours: { t: [150, 170, 200], w: [214, 226, 240], E: [20, 20, 30] } },
+  cucumber: { rows: ['.....gGg', '...gGGg.', '.gGGg...', 'gGg.....'], colours: { g: [76, 164, 92], G: [128, 212, 112] } },
+};
+export type OfferingKind = keyof typeof OFFERINGS;
+export const OFFERING_KINDS = Object.keys(OFFERINGS) as OfferingKind[];
+export const offeringSprite = (kind: OfferingKind) => cached(`offering-${kind}`, () => fromRows(OFFERINGS[kind].rows, OFFERINGS[kind].colours));
+
+/** A pale stone rock in the moss or the raked gravel, with a cap of moss. */
+export const rockSprite = (seed: number, r: number) =>
+  cached(`shrine-rock-${seed}-${r}`, () => {
+    const w = r * 2 + 1, h = Math.round(r * 1.5) + 1;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const rnd = seededRandom(seed * 3 + 11);
+    const bumps = [rnd(), rnd(), rnd()];
+    for (let x = 0; x < w; x++) {
+      const t = (x + 0.5 - w / 2) / (w / 2);
+      const top = Math.round((1 - Math.sqrt(1 - t * t)) * h * 0.7 + Math.sin(t * 5 + bumps[0] * 6) * 0.8);
+      for (let y = Math.max(0, top); y < h; y++) {
+        const d = y - top;
+        const lit = t < 0.1 && d < 4;
+        const col: Rgb = d < 2 ? (t < 0.4 ? [92, 148, 96] : [66, 118, 88]) : lit ? [150, 156, 172] : t > 0.45 || y > h - 3 ? [84, 90, 110] : [118, 124, 142];
+        put(ctx, x, y, col);
+      }
+    }
+    return c;
+  });
+
+/** A row of old Jizo in red bibs. */
+export const jizoSprite = () => disguiseSprite('statue');
+
+/** A stone guardian fox or lion-dog on a plinth, facing inward. */
+export const guardianSprite = (kind: 'fox' | 'tanuki' | 'lion') =>
+  cached(`guardian-${kind}`, () => {
+    const S: Record<string, Rgb> = { s: [176, 182, 194], S: [138, 146, 164], d: [92, 98, 120], R: [226, 62, 48], r: [168, 38, 44], K: [66, 72, 92], Y: [228, 196, 110] };
+    if (kind === 'fox') return fromRows([
+      '.....sd.sd..',
+      '.....sSdSS..',
+      '....sSSSSSS.',
+      '....SSKSSsss',
+      '....sSSSssSK',
+      '.....RRRRr..',
+      '....sRRRRr..',
+      '.s..SSSRrd..',
+      'sSs.SSSSSd..',
+      'sSSSSSSSSd..',
+      '.SSSSSSSSd..',
+      '.ddddSdSdd..',
+      'ssssssssssss',
+      'SSSSSSSSSSSS',
+      'dddddddddddd',
+    ], S);
+    if (kind === 'tanuki') return fromRows([
+      '...sYYYYYs...',
+      '..YYYYYYYYY..',
+      'YYYYYYYYYYYYY',
+      '..ssSSSSSss..',
+      '..sKKSSSKKs..',
+      '..ssSSKSSss..',
+      '...sSSSSSd...',
+      'R.sSSSSSSSd..',
+      'RrSSsssssSd..',
+      'RrSsssssssSd.',
+      'rrSsssssssSd.',
+      '..SSsssssSSd.',
+      '..ddd...ddd..',
+    ], S);
+    return fromRows([
+      '..ssSSs...',
+      '.sSSSSSs..',
+      '.sKSSKSd..',
+      '.SSSSSSd..',
+      '.sdKKKd...',
+      '..RRRRr...',
+      '.sSSSSSs..',
+      'sSSSSSSSd.',
+      'SSSsSSSSd.',
+      'SSdSSdSSd.',
+      'ssssssssss',
+      'dddddddddd',
+    ], S);
+  });
+
+// --- plants --------------------------------------------------------------
+
+const CEDAR_SETS: Rgb[][] = [
+  [[12, 44, 54], [20, 62, 62], [32, 84, 72], [52, 112, 86], [108, 164, 136]],
+  [[12, 40, 58], [18, 56, 68], [28, 76, 80], [46, 104, 96], [104, 158, 150]],
+];
+const BARK: Rgb[] = [[148, 92, 68], [106, 66, 56], [68, 44, 48], [44, 32, 42]];
+
+/** A great cedar: a fibrous red trunk bare a long way up, then tiers of drooping dark boughs rimmed by the moon. */
+export const cedarSprite = (seed: number, size: number) =>
+  cached(`cedar-${seed}-${size}`, () => {
+    const rnd = seededRandom(seed * 29 + size);
+    const w = size * 2 + 4;
+    const h = Math.round(size * 3.6);
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const cx = w / 2;
+    const set = CEDAR_SETS[seed & 1];
+    const tw = Math.max(3, Math.round(size * 0.24));
+    // The trunk, flaring into roots at the foot, its bark in long stripes.
+    for (let y = Math.round(h * 0.1); y < h; y++) {
+      const flare = Math.max(0, y - (h - 7));
+      const half = tw / 2 + flare * 0.7;
+      for (let x = Math.floor(cx - half); x < cx + half; x++) {
+        const across = (x + 0.5 - (cx - half)) / (half * 2);
+        const tone = across < 0.22 ? 0 : across > 0.72 ? 2 : (Math.floor(x * 1.7 + (y >> 3)) & 3) === 0 ? 2 : 1;
+        put(ctx, x, y, BARK[tone]);
+      }
+    }
+    // Tiers of boughs from the bottom up, each a droopy skirt of lumps.
+    const tiers = Math.round(4 + size / 9);
+    const top = 2;
+    const bottom = Math.round(h * 0.62);
+    for (let k = tiers - 1; k >= 0; k--) {
+      const t = (k + 0.5) / tiers;
+      const y = Math.round(top + (bottom - top) * t);
+      const half = Math.max(3, size * (0.26 + 0.74 * Math.pow(t, 0.8)));
+      const skirt = Math.max(3, Math.round(((bottom - top) / tiers) * 1.45));
+      for (let x = -half; x < half; x++) {
+        const across = x / half;
+        // The bough's edge scallops, hanging lowest at each lump.
+        const sc = Math.abs(Math.sin((x + seed + k * 3) * 0.55)) * 2.4;
+        const down = (1 - across * across) * skirt + sc;
+        const up = (1 - Math.abs(across)) * skirt * 0.5;
+        const yTop = Math.round(y - up);
+        const yEnd = Math.round(y + down);
+        for (let yy = yTop; yy <= yEnd; yy++) {
+          const f = (yy - yTop) / Math.max(1, yEnd - yTop);
+          const lit = across < 0.1 ? 1 : 0;
+          let tone = f < 0.2 ? 3 : f < 0.55 ? 2 : f < 0.85 ? 1 : 0;
+          if (!lit && tone > 1) tone--;
+          if (rnd() < 0.07 && tone > 0) tone--;
+          put(ctx, Math.round(cx + x), yy, set[tone]);
+        }
+        // A rim of moonlight along the upper-left of each tier.
+        if (across < -0.08 && rnd() < 0.72) put(ctx, Math.round(cx + x), yTop, set[4]);
+      }
+    }
+    return c;
+  });
+
+const MAPLE: Rgb[] = [[108, 24, 54], [168, 36, 56], [218, 60, 54], [244, 104, 62], [255, 168, 96]];
+/** A maple in its autumn fire: cloud-layered crown on a dark twisting trunk. */
+export const mapleSprite = (seed: number, r: number, gold = false) =>
+  cached(`maple-${seed}-${r}-${gold}`, () => {
+    const rnd = seededRandom(seed * 13 + r);
+    const trunkH = Math.round(r * 0.9);
+    const w = r * 2 + 8, h = Math.round(r * 1.5) + trunkH + 2;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const cx = w / 2;
+    const set: Rgb[] = gold ? [[126, 72, 36], [190, 120, 44], [236, 170, 60], [252, 208, 92], [255, 238, 150]] : MAPLE;
+    // The trunk, leaning a little as it climbs.
+    const lean = rnd() < 0.5 ? -1 : 1;
+    for (let y = h - 1; y > h - trunkH - 6; y--) {
+      const x = Math.round(cx + lean * Math.sin(((h - y) / trunkH) * 2.2) * 2);
+      box(ctx, x - 2, y, 5, 1, [62, 42, 50]);
+      box(ctx, x - 2, y, 2, 1, [108, 72, 66]);
+    }
+    const lumps: { x: number; y: number; r: number }[] = [];
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * Math.PI * 2 + rnd();
+      lumps.push({ x: cx + Math.cos(a) * r * 0.6, y: r * 0.72 + Math.sin(a) * r * 0.32, r: r * (0.34 + rnd() * 0.16) });
+    }
+    lumps.push({ x: cx, y: r * 0.55, r: r * 0.55 });
+    lumps.sort((a, b) => a.y - b.y);
+    for (const l of lumps) {
+      for (let y = Math.floor(l.y - l.r); y <= l.y + l.r; y++) {
+        for (let x = Math.floor(l.x - l.r); x <= l.x + l.r; x++) {
+          const dx = (x + 0.5 - l.x) / l.r, dy = (y + 0.5 - l.y) / (l.r * 0.82);
+          const d = dx * dx + dy * dy;
+          if (d > 1 + (rnd() - 0.5) * 0.28) continue;
+          // Lit from the upper left; flecks of leaf instead of a smooth blob.
+          const light = 0.55 - dx * 0.3 - dy * 0.55 + (rnd() - 0.5) * 0.3;
+          put(ctx, x, y, set[Math.max(0, Math.min(4, Math.floor(light * 4.6)))]);
+        }
+      }
+    }
+    return c;
+  });
+
+const HYDRANGEA: Rgb[][] = [
+  [[60, 72, 158], [98, 118, 226], [150, 176, 250], [210, 224, 255]],
+  [[112, 58, 158], [168, 92, 214], [214, 150, 244], [244, 212, 255]],
+  [[160, 54, 112], [224, 92, 150], [248, 150, 188], [255, 214, 228]],
+];
+/** A hydrangea: dark leaves under round heads of jewel-blue, violet or pink. */
+export const hydrangeaSprite = (seed: number, kind: number) =>
+  cached(`hydrangea-${seed}-${kind}`, () => {
+    const rnd = seededRandom(seed * 19 + kind);
+    const w = 24, h = 16;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    for (let y = 2; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = (x + 0.5 - w / 2) / (w / 2), dy = (y + 0.5 - h) / (h - 2);
+        if (dx * dx + dy * dy > 1) continue;
+        put(ctx, x, y, dy < -0.6 ? [44, 112, 88] : (x + y * 3) % 7 === 0 ? [44, 112, 88] : [22, 74, 72]);
+      }
+    }
+    const heads = 11;
+    const set = HYDRANGEA[kind % HYDRANGEA.length];
+    for (let k = 0; k < heads; k++) {
+      const hx = 4 + rnd() * (w - 8), hy = 3 + rnd() * (h - 8);
+      const r = 1.5 + rnd() * 0.9;
+      for (let y = Math.floor(hy - r); y <= hy + r; y++) {
+        for (let x = Math.floor(hx - r); x <= hx + r; x++) {
+          const dx = x + 0.5 - hx, dy = y + 0.5 - hy;
+          if (dx * dx + dy * dy > r * r) continue;
+          const tone = dx + dy < -0.9 ? 2 : dx + dy > 0.9 ? 0 : 1;
+          put(ctx, x, y, set[tone]);
+        }
+      }
+    }
+    return c;
+  });
+
+/** A cluster of red spider lilies, thin curling petals on bare stems. */
+export const spiderLilySprite = (seed: number) =>
+  cached(`spider-lily-${seed}`, () => {
+    const rnd = seededRandom(seed * 7 + 3);
+    const w = 16, h = 16;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    for (let k = 0; k < 3; k++) {
+      const x = 3 + k * 5 + Math.floor(rnd() * 2);
+      const top = 3 + Math.floor(rnd() * 5);
+      for (let y = top; y < h; y++) put(ctx, x, y, y > h - 5 ? [46, 122, 80] : [78, 162, 90]);
+      for (const [dx, dy, col] of [
+        [0, 0, [255, 110, 78]], [-1, -1, [244, 56, 58]], [1, -1, [244, 56, 58]], [-2, -2, [214, 34, 54]], [2, -2, [214, 34, 54]],
+        [-2, 0, [244, 56, 58]], [2, 0, [244, 56, 58]], [-3, -1, [255, 96, 86]], [3, -1, [255, 96, 86]], [0, -2, [255, 150, 112]], [-1, 1, [214, 34, 54]], [1, 1, [214, 34, 54]],
+      ] as [number, number, Rgb][]) {
+        if (x + dx >= 0 && x + dx < w && top + dy >= 0) put(ctx, x + dx, top + dy, col);
+      }
+    }
+    return c;
+  });
+
+/** Ferns, grass tufts, and glowing mushrooms for the understorey. */
+export const fernSprite = (seed: number) =>
+  cached(`shrine-fern-${seed % 4}`, () => {
+    const rnd = seededRandom((seed % 4) * 41 + 9);
+    const w = 18, h = 10;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    for (let k = 0; k < 7; k++) {
+      const a = Math.PI * (0.12 + (k / 6) * 0.76);
+      const len = 6 + rnd() * 4;
+      for (let s = 0; s < len; s++) {
+        const x = Math.round(w / 2 + Math.cos(a) * s * 1.1);
+        const y = Math.round(h - 1 - Math.sin(a) * s * 0.9 + (s * s) / 18);
+        if (y < 0 || y >= h) continue;
+        put(ctx, x, y, s > len * 0.7 ? [116, 186, 112] : k % 2 ? [54, 134, 92] : [76, 158, 100]);
+        if (s % 2 === 0 && s > 1) put(ctx, x, y + 1, [34, 96, 80]);
+      }
+    }
+    return c;
+  });
+export const grassSprite = (seed: number) =>
+  cached(`shrine-grass-${seed % 3}`, () => fromRows(
+    [['g...g..g', '.g..G.g.', '.G.gG.G.', '..GGdGG.', '..dGdd..'], ['..g...g.', 'g.G..g..', '.GG.GG.g', '.dGGdGG.', '..dGdd..'], ['...g....', '.g.G..g.', '.G.G.gG.', '..GGGG..', '..dddd..']][seed % 3],
+    { g: [120, 196, 118], G: [68, 150, 96], d: [36, 104, 84] },
+  ));
+export const glowshroomSprite = (seed: number) =>
+  cached(`glowshroom-${seed % 3}`, () => fromRows(
+    [['..cCCc...', '.cCCCCc..', 'CCCwCCCC.', '..ss..cCc', '..ss.cCCC', '..ss..ss.', '.sss..ss.'], ['.cCCc....', 'cCCwCc.c.', '..ss..cCc', '..ss...s.', '.sss...s.'], ['...cCCc..', '.cCCCCCCc', '...sss...', '....s....', '...ss....']][seed % 3],
+    { c: [140, 244, 220], C: [74, 214, 200], w: [230, 255, 240], s: [190, 224, 206] },
+  ));
+export const persimmonSprite = () =>
+  cached('persimmon', () => fromRows(['.gg.', 'OOOo', 'OaOo', '.oo.'], { g: [84, 140, 84], O: [250, 132, 40], o: [206, 88, 34], a: [255, 196, 110] }));
+
+/** A sacred cedar, far bigger than its neighbours, with a rope and paper streamers round its trunk. */
+export const sacredCedarSprite = (seed: number) =>
+  cached(`sacred-cedar-${seed}`, () => {
+    const inner = cedarSprite(seed, 50);
+    const c = makeCanvas(inner.width, inner.height);
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(inner, 0, 0);
+    const y = inner.height - 28;
+    const cx = inner.width / 2;
+    rope(ctx, Math.round(cx - 9), Math.round(cx + 9), y, 2);
+    box(ctx, Math.round(cx - 9), y - 1, 18, 1, [244, 226, 170]);
+    return c;
+  });
+
+/** A piece of bamboo: tall jointed cane, a burst of leaves near its top. One image, slid sideways slice by slice to bend. */
+export const bambooSprite = (seed: number, len: number) =>
+  cached(`bamboo-${seed % 5}-${len}`, () => {
+    const rnd = seededRandom((seed % 5) * 37 + len);
+    const w = 22, h = len + 6;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const cx = Math.floor(w / 2);
+    const tone = seed % 2;
+    const COL: Rgb[] = tone ? [[122, 214, 122], [72, 176, 112], [40, 128, 96], [188, 240, 158]] : [[150, 222, 112], [92, 188, 100], [52, 140, 92], [208, 244, 150]];
+    for (let y = 6; y < h; y++) {
+      const node = (y + (seed & 7)) % 11 === 0;
+      put(ctx, cx - 1, y, node ? COL[3] : COL[0]);
+      put(ctx, cx, y, node ? COL[3] : COL[1]);
+      put(ctx, cx + 1, y, node ? COL[0] : COL[2]);
+    }
+    // Sprays of leaves, thicker near the top.
+    for (let k = 0; k < 9; k++) {
+      const y0 = 3 + Math.floor(rnd() * len * 0.42);
+      const side = rnd() < 0.5 ? -1 : 1;
+      const l = 4 + Math.floor(rnd() * 5);
+      for (let s = 0; s < l; s++) {
+        const x = cx + side * (1 + s);
+        const y = y0 + Math.round((s * s) / 8);
+        if (x >= 0 && x < w && y < h) put(ctx, x, y, s < l / 2 ? COL[1] : k % 2 ? COL[0] : COL[2]);
+        if (s > 1 && s < l - 1 && x >= 0 && x < w && y + 1 < h) put(ctx, x, y + 1, COL[2]);
+      }
+    }
+    for (let x = cx - 2; x <= cx + 2; x++) for (let y = 0; y < 6; y++) if (rnd() < 0.55 - Math.abs(x - cx) * 0.08) put(ctx, x, y, COL[y < 3 ? 0 : 1]);
+    return c;
+  });
+
+/** Pampas grass with silvery plumes. */
+export const susukiSprite = (seed: number) =>
+  cached(`susuki-${seed % 3}`, () => {
+    const rnd = seededRandom((seed % 3) * 53 + 17);
+    const w = 18, h = 24;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    for (let k = 0; k < 5; k++) {
+      const x0 = 5 + Math.floor(rnd() * 8);
+      const lean = (rnd() - 0.5) * 7;
+      const tall = 13 + Math.floor(rnd() * 10);
+      for (let s = 0; s < tall; s++) {
+        const t = s / tall;
+        const x = Math.round(x0 + lean * t * t), y = h - 1 - s;
+        if (y < 0 || x < 0 || x >= w) continue;
+        if (t > 0.62) {
+          put(ctx, x, y, t > 0.86 ? [204, 206, 200] : [170, 176, 170]);
+          if (x + 1 < w && s % 3 === 0) put(ctx, x + 1, y, [136, 148, 146]);
+        } else put(ctx, x, y, t < 0.3 ? [46, 118, 88] : [84, 160, 100]);
+      }
+    }
+    return c;
+  });
+
+/** A lotus pad and a pink flower for the koi ponds. */
+export const lotusPadSprite = (r: number, tone: number) =>
+  cached(`shrine-pad-${r}-${tone}`, () => {
+    const set: Rgb[] = tone ? [[24, 90, 86], [52, 136, 104], [100, 180, 126]] : [[20, 84, 76], [42, 124, 88], [84, 168, 104]];
+    const w = r * 2 + 1, h = Math.round(r * 1.2) + 2;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const cx = w / 2, cy = (h - 1) / 2;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const nx = (x + 0.5 - cx) / r, ny = (y + 0.5 - cy) / (r * 0.6);
+        const d = nx * nx + ny * ny;
+        if (d > 1) continue;
+        // The notch to one side.
+        if (nx > 0.1 && Math.abs(ny) < 0.12 + nx * 0.1) continue;
+        put(ctx, x, y, d > 0.74 && ny > 0 ? set[0] : nx + ny < -0.5 ? set[2] : set[1]);
+      }
+    }
+    return c;
+  });
+export const lotusSprite = (kind: number) =>
+  cached(`shrine-lotus-${kind}`, () => {
+    const pal: Record<string, Rgb> = kind ? { a: [255, 252, 240], b: [240, 220, 232], c: [214, 170, 200], y: [255, 220, 110] } : { a: [255, 200, 220], b: [244, 132, 178], c: [200, 76, 140], y: [255, 220, 110] };
+    return fromRows(['...a...', '.a.a.a.', 'abbabba', 'abbybba', '.cbbbc.', '..ccc..'], pal);
+  });
+
+/** The stones of a bamboo water spout on its pivot (the deer-scarer), tipped or level. */
+export const spoutSprite = (tipped: boolean) =>
+  cached(`spout-${tipped}`, () => fromRows(tipped
+    ? ['......gG.', '.....gGG.', '....gGg..', '..gGGg...', '.gGGg.b..', 'gGg..bb..', 'sSSSSSSSs', 'dddddddd.']
+    : ['gGGg.....', '.gGGGg...', '...gGGGg.', '.....gGGg', '....b....', '...bb....', 'sSSSSSSSs', 'dddddddd.'],
+  { g: [110, 196, 110], G: [68, 156, 96], b: [116, 84, 62], s: [160, 166, 180], S: [122, 128, 148], d: [84, 90, 110] }));
+
+// --- particles -----------------------------------------------------------
+
+const SMOKE = [
+  ['..aaaa..', '.aaAAaa.', 'aaAAAAaa', 'aAAAAAAa', 'aaAAAAaa', '.bAAAab.', '..bbbb..'],
+  ['.aaa.aa.', 'aaAAaaAa', 'aAAAAAAa', '.aAAAAa.', 'bbaAAab.', '.bb.bb..'],
+  ['.a....a.', 'aAa..aAa', '.a.aa.a.', '...AA...', '.b....b.'],
+  ['........', '...a....', '.a....a.', '...b....'],
+];
+export const smokeSprite = (frame: number) =>
+  cached(`shrine-smoke-${frame}`, () => fromRows(SMOKE[Math.min(SMOKE.length - 1, frame)], { a: [236, 238, 248], A: [255, 255, 255], b: [176, 186, 216] }));
+
+const DUST = [['..aa..', '.aAAa.', 'aAAAAa', '.aAAa.', '..aa..'], ['.a..a.', 'a.AA.a', '.AAAA.', 'a.AA.a', '.a..a.'], ['.a....', '...a..', 'a....a', '..a...']];
+export const dustSprite = (frame: number) =>
+  cached(`shrine-dust-${frame}`, () => fromRows(DUST[Math.min(DUST.length - 1, frame)], { a: [178, 170, 170], A: [216, 206, 194] }));
+
+export const STAR = ['..y..', '.yYy.', 'yYWYy', '.yYy.', '..y..'];
+export const starSprite = () => cached('shrine-star', () => fromRows(STAR, { y: [252, 196, 70], Y: [255, 224, 110], W: [255, 250, 210] }));
+export const noteSprite = () => cached('shrine-note', () => fromRows(['..nn', '..n.', '..n.', 'nnn.', 'nn..'], { n: [255, 226, 130] }));
+export const heartSprite = () => cached('shrine-heart', () => fromRows(['.pp.pp.', 'pPPpPPp', 'pPPPPPp', '.pPPPp.', '..pPp..', '...p...'], { p: [240, 96, 130], P: [255, 170, 190] }));
+export const bangSprite = () => cached('shrine-bang', () => fromRows(['.yy.', '.yy.', '.yy.', '.y..', '....', '.yy.'], { y: [255, 224, 110] }));
+export const whatSprite = () => cached('shrine-what', () => fromRows(['.www.', 'w...w', '...w.', '..w..', '.....', '..w..'], { w: [230, 240, 255] }));
+export const zedSprite = () => cached('shrine-zed', () => fromRows(['zzzz', '..z.', '.z..', 'zzzz'], { z: [190, 206, 244] }));
+export const fallingLeafSprite = (kind: number, frame: number) =>
+  cached(`shrine-fall-${kind}-${frame}`, () => {
+    const col = SHRINE_FLOOR.leaf[kind % SHRINE_FLOOR.leaf.length];
+    return fromRows(frame % 2 ? ['.a.', 'aaa', '.a.'] : ['a.', '.a'], { a: col });
+  });
+export const fireflySprite = () => cached('shrine-firefly', () => fromRows(['..a..', '.bcb.', 'acdca', '.bcb.', '..a..'], { a: [44, 62, 20], b: [78, 106, 32], c: [170, 210, 72], d: [246, 255, 176] }));
+export const crumbSprite = () => cached('shrine-crumb', () => fromRows(['a'], { a: [244, 236, 214] }));
+export const bloodSprite = () => cached('shrine-blood', () => fromRows(['r'], { r: [200, 40, 50] }));
+export const tuftSprite = () => cached('shrine-tuft', () => fromRows(['a'], { a: [214, 196, 170] }));
+
+/**
+ * The pool of light a lantern throws: dithered bands fading out from the
+ * middle, squashed to lie flat on the ground, as a canvas of one colour on
+ * black so it can be added over the floor or laid over sprites.
+ */
+export const pool = (r: number, colour: Rgb, transparent: boolean) =>
+  cached(`shrine-pool-${r}-${colour.join(',')}-${transparent}`, () => {
+    const w = r * 2, h = Math.round(r * 1.3);
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const img = ctx.createImageData(w, h);
+    const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = (x + 0.5 - w / 2) / (w / 2), dy = (y + 0.5 - h / 2) / (h / 2);
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d >= 1) continue;
+        // Four flat steps, dithered where they meet.
+        const v = (1 - d) * (1 - d) * 4 + (BAYER[(y & 3) * 4 + (x & 3)] / 16 - 0.5) * 0.5;
+        const step = Math.max(0, Math.min(4, Math.round(v))) / 4;
+        if (step <= 0) continue;
+        const i = (y * w + x) * 4;
+        if (transparent) {
+          img.data[i] = colour[0]; img.data[i + 1] = colour[1]; img.data[i + 2] = colour[2]; img.data[i + 3] = Math.round(step * 255);
+        } else {
+          img.data[i] = colour[0] * step; img.data[i + 1] = colour[1] * step; img.data[i + 2] = colour[2] * step; img.data[i + 3] = 255;
+        }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  });
+
+/** A tile of soft moonlight falling through the boughs: blobs in a few flat levels, dithered at their edges. */
+export const dappleTile = (size: number, colour: Rgb) =>
+  cached(`shrine-dapple-${size}-${colour.join(',')}`, () => {
+    const c = makeCanvas(size, size);
+    const ctx = c.getContext('2d')!;
+    const img = ctx.createImageData(size, size);
+    const k = (Math.PI * 2) / size;
+    const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        // Crossed waves, wrapping at the tile's edges.
+        const a = Math.sin(k * (2 * x + y) + 1.3 * Math.sin(k * (y - x))) + Math.sin(k * (3 * y - x) + 0.9 * Math.sin(k * 2 * x)) + 0.7 * Math.sin(k * (5 * x + 2 * y));
+        const v = Math.max(0, (a - 0.35) / 1.9) * 3 + (BAYER[(y & 3) * 4 + (x & 3)] / 16 - 0.5) * 0.6;
+        const step = Math.max(0, Math.min(3, Math.round(v))) / 3;
+        const i = (y * size + x) * 4;
+        img.data[i] = colour[0] * step; img.data[i + 1] = colour[1] * step; img.data[i + 2] = colour[2] * step; img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  });
+
+// --- icons for the panels ----------------------------------------------------
+
+export const shrineIcon = (kind: string): HTMLCanvasElement => {
+  switch (kind) {
+    case 'tanuki': return tanukiSprite('stand', 0);
+    case 'kitsune': return kitsuneSprite('stand', 0);
+    case 'keeper': return animalSprite('keeper');
+    case 'mouse': return animalSprite('mouse');
+    case 'deer': return animalSprite('deer');
+    case 'hare': return animalSprite('hare');
+    case 'owl': return animalSprite('owl');
+    case 'bat': return animalSprite('bat0');
+    case 'crow': return animalSprite('crow');
+    case 'frog': return animalSprite('frog');
+    case 'koi': return koiSprite(0, 0);
+    case 'kappa': return animalSprite('kappa');
+    case 'kodama': return animalSprite('kodama');
+    case 'hitodama': return hitodamaSprite(0);
+    case 'kasa': return animalSprite('kasa');
+    case 'chochin': return animalSprite('chochin');
+    default: return animalSprite('hare');
+  }
+};
