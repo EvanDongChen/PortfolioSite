@@ -680,7 +680,9 @@ export class Shrine {
       emote: null, emoteT: 0, carrying: null, home: null, pond: null,
     };
     if (!c.lineId) c.lineId = c.id;
-    if (species !== 'bat' && species !== 'owl' && species !== 'crow' && species !== 'hitodama' && species !== 'chochin' && species !== 'koi' && species !== 'frog' && species !== 'kappa' && (this.isSolid(c.x, c.z) || this.inClearZone(c.x, c.z))) this.freeSpot(c);
+    const waterFolk = species === 'koi' || species === 'frog' || species === 'kappa';
+    const flies = species === 'bat' || species === 'owl' || species === 'crow' || species === 'hitodama' || species === 'chochin';
+    if (!waterFolk && (this.inClearZone(c.x, c.z) || (!flies && this.isSolid(c.x, c.z)))) this.freeSpot(c);
     this.creatures.push(c);
     return c;
   }
