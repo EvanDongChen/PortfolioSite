@@ -36,22 +36,22 @@ interface SpeciesInfo {
 const MIN = TICKS_PER_SECOND * 60;
 /** Cells of forest that hold one of each `perArea`. */
 export const SHRINE_SPECIES: Record<ShrineSpecies, SpeciesInfo> = {
-  tanuki: { label: 'Tanuki', names: ['Ponta', 'Bunbuku', 'Mameta', 'Danzaburo', 'Shibaemon', 'Kincho', 'Rokuemon', 'Tarobo'], speed: 0.24, palettes: 3, mature: 3 * MIN, old: 24 * MIN, hunger: 0.00006, perArea: 34000, min: 6 },
-  kitsune: { label: 'Kitsune', names: ['Kuzunoha', 'Tamamo', 'Akane', 'Kon', 'Yuki', 'Otora', 'Hatsu', 'Shiro'], speed: 0.31, palettes: 3, mature: 3 * MIN, old: 24 * MIN, hunger: 0.00007, perArea: 34000, min: 6 },
-  keeper: { label: 'Shrine keeper', names: ['Old Sato', 'Old Hara', 'Old Mori', 'Old Kaji'], speed: 0.26, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 150000, min: 4 },
-  mouse: { label: 'Field mouse', names: ['Mouse'], speed: 0.3, palettes: 1, mature: MIN / 2, old: 8 * MIN, hunger: 0.00005, perArea: 22000, min: 10 },
-  hare: { label: 'Hare', names: ['Hare'], speed: 0.34, palettes: 1, mature: MIN, old: 14 * MIN, hunger: 0.00004, perArea: 40000, min: 5 },
-  deer: { label: 'Sika deer', names: ['Shika', 'Momiji', 'Nara', 'Kasuga'], speed: 0.16, palettes: 1, mature: 3 * MIN, old: 30 * MIN, hunger: 0.00002, perArea: 60000, min: 4 },
+  tanuki: { label: 'Tanuki', names: ['Ponta', 'Bunbuku', 'Mameta', 'Danzaburo', 'Shibaemon', 'Kincho', 'Rokuemon', 'Tarobo'], speed: 0.24, palettes: 3, mature: 3 * MIN, old: 24 * MIN, hunger: 0.00006, perArea: 75000, min: 4 },
+  kitsune: { label: 'Kitsune', names: ['Kuzunoha', 'Tamamo', 'Akane', 'Kon', 'Yuki', 'Otora', 'Hatsu', 'Shiro'], speed: 0.31, palettes: 3, mature: 3 * MIN, old: 24 * MIN, hunger: 0.00007, perArea: 75000, min: 4 },
+  keeper: { label: 'Shrine keeper', names: ['Old Sato', 'Old Hara', 'Old Mori', 'Old Kaji'], speed: 0.26, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 200000, min: 3 },
+  mouse: { label: 'Field mouse', names: ['Mouse'], speed: 0.3, palettes: 1, mature: MIN / 2, old: 8 * MIN, hunger: 0.00005, perArea: 60000, min: 6 },
+  hare: { label: 'Hare', names: ['Hare'], speed: 0.34, palettes: 1, mature: MIN, old: 14 * MIN, hunger: 0.00004, perArea: 110000, min: 3 },
+  deer: { label: 'Sika deer', names: ['Shika', 'Momiji', 'Nara', 'Kasuga'], speed: 0.16, palettes: 1, mature: 3 * MIN, old: 30 * MIN, hunger: 0.00002, perArea: 160000, min: 3 },
   owl: { label: 'Ural owl', names: ['Owl'], speed: 0.8, palettes: 1, mature: MIN, old: 30 * MIN, hunger: 0.00008, perArea: 150000, min: 2 },
-  bat: { label: 'Bat', names: ['Bat'], speed: 0.8, palettes: 1, mature: 0, old: 20 * MIN, hunger: 0.0001, perArea: 50000, min: 5 },
-  crow: { label: 'Crow', names: ['Crow'], speed: 0.7, palettes: 1, mature: 0, old: 30 * MIN, hunger: 0.00005, perArea: 110000, min: 3 },
+  bat: { label: 'Bat', names: ['Bat'], speed: 0.8, palettes: 1, mature: 0, old: 20 * MIN, hunger: 0.0001, perArea: 150000, min: 3 },
+  crow: { label: 'Crow', names: ['Crow'], speed: 0.7, palettes: 1, mature: 0, old: 30 * MIN, hunger: 0.00005, perArea: 300000, min: 2 },
   frog: { label: 'Frog', names: ['Frog'], speed: 0.1, palettes: 1, mature: 0, old: 20 * MIN, hunger: 0.00003, perArea: Infinity, min: 0 },
   koi: { label: 'Koi', names: ['Benigoi', 'Kohaku', 'Ogon', 'Showa', 'Tancho', 'Hikari'], speed: 0.16, palettes: 5, mature: 0, old: Infinity, hunger: 0, perArea: Infinity, min: 0 },
   kappa: { label: 'Kappa', names: ['Kawataro', 'Gataro', 'Sara'], speed: 0.15, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: Infinity, min: 0 },
   kodama: { label: 'Kodama', names: ['Kodama'], speed: 0.06, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: Infinity, min: 0 },
-  hitodama: { label: 'Hitodama', names: ['Soul-flame'], speed: 0.1, palettes: 2, mature: 0, old: Infinity, hunger: 0, perArea: 45000, min: 6 },
-  kasa: { label: 'Kasa-obake', names: ['Old Umbrella'], speed: 0.2, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 90000, min: 3 },
-  chochin: { label: 'Chochin-obake', names: ['Old Lantern'], speed: 0.1, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 90000, min: 3 },
+  hitodama: { label: 'Hitodama', names: ['Soul-flame'], speed: 0.1, palettes: 2, mature: 0, old: Infinity, hunger: 0, perArea: 130000, min: 3 },
+  kasa: { label: 'Kasa-obake', names: ['Old Umbrella'], speed: 0.2, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 280000, min: 1 },
+  chochin: { label: 'Chochin-obake', names: ['Old Lantern'], speed: 0.1, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 280000, min: 1 },
 };
 
 export interface ShrineCreature {
@@ -204,7 +204,7 @@ export class Shrine {
   festivalLight = 0;
   /** How far the fireflies' flashes have fallen into step. */
   syncFlash = 0;
-  nextHappening = 25 * TICKS_PER_SECOND;
+  nextHappening = 50 * TICKS_PER_SECOND;
   private happeningOrder: ShrineHappening[] = ['fireflies', 'parade', 'festival'];
   spout = { tip: 0, t: 0 };
 
@@ -281,17 +281,21 @@ export class Shrine {
     const hero = this.zones[0];
     let z = hero ? Math.min(h - 1, hero.z1 + 30) : 80;
     // Something beside the hero, in the opening view.
-    const opening: SiteKind[] = ['koi', 'hall'];
+    const opening: SiteKind[] = ['koi', 'hall', 'sacred'];
+    const used = new Set<SiteKind>();
     while (z < h - 30) {
       if (!queue.length) queue = SITE_KINDS.slice().sort(() => r() - 0.5);
-      const kind = opening.shift() ?? (queue.pop() as SiteKind);
-      if (opening.length === 1 && queue.includes(kind)) queue.splice(queue.indexOf(kind), 1);
-      if (!opening.length && kind === 'hall' && queue.includes(kind)) queue.splice(queue.indexOf(kind), 1);
+      let kind = opening.shift();
+      if (kind) used.add(kind);
+      else {
+        do kind = queue.pop() as SiteKind; while (used.has(kind) && queue.length);
+        used.clear();
+      }
       const sprawl = r() < 0.3 ? 1.5 : 1;
       const gutter = Math.min(w * 0.16, 62);
       const x = clamp(side < 0 ? gutter : w - gutter, 40, w - 40);
       this.placeSite(kind, x + (r() - 0.5) * 18, z, sprawl, r);
-      z += 76 + r() * 44;
+      z += 118 + r() * 60;
       side = -side;
     }
 
@@ -303,6 +307,12 @@ export class Shrine {
         const c = this.pathX[row];
         this.festoons.push({ x0: c - PATH_HALF - 8, x1: c + PATH_HALF + 8, z: row, seed: Math.floor(r() * 1000) });
       }
+    }
+    const gutter = Math.min(w * 0.11, 42);
+    for (let row = 40, k = 0; row < h - 4; row += 58 + Math.floor(r() * 30), k++) {
+      const x = k & 1 ? gutter + r() * 22 : w - gutter - r() * 22;
+      if (this.inZone(x, row, 4, 6) || this.ground[row * w + Math.round(x)] !== GROUND.moss) continue;
+      this.lanterns.push({ x, z: row, phase: r() * 100, mossy: r() < 0.5 ? 1 : 0 });
     }
     for (let row = 70; row < h - 10; row += 210 + Math.floor(r() * 90)) {
       if (this.inZone(this.pathX[row], row, 25, 40)) continue;
@@ -329,7 +339,7 @@ export class Shrine {
       if (half > 0) this.markSolid(p.x, p.z - depth * 0.5, half, depth);
     }
     this.moths = [];
-    for (const l of this.lanterns) if (hash2(Math.round(l.x), Math.round(l.z)) < 0.55) {
+    for (const l of this.lanterns) if (hash2(Math.round(l.x), Math.round(l.z)) < 0.3) {
       for (let k = 0; k < 2; k++) this.moths.push({ lantern: l, a: Math.random() * 6.28, r: 4 + Math.random() * 4, h: 8 + Math.random() * 14, x: l.x, z: l.z, alive: true, wait: 0 });
     }
   }
@@ -428,7 +438,7 @@ export class Shrine {
         this.addLantern(x + 18, z + 14, r);
         this.dens.push({ kind: 'kitsune', x: x + 24, z: z + 2 });
         this.dens.push({ kind: 'kitsune', x: x - 24, z: z + 2 });
-        this.drift('lily', x, z + 22, 40, 22, 26, r);
+        this.drift('lily', x, z + 22, 40, 22, 10, r);
         break;
       }
       case 'den': {
@@ -442,12 +452,12 @@ export class Shrine {
         this.addLantern(x + 34, z + 10, r);
         this.dens.push({ kind: 'tanuki', x: x - 16, z: z + 18 });
         this.dens.push({ kind: 'tanuki', x: x + 16, z: z + 18 });
-        for (let g = 0; g < 28 * k; g++) {
+        for (let g = 0; g < 14 * k; g++) {
           const a = r() * 6.28, d = 34 + r() * 22;
           this.canes.push({ kind: 'bamboo', x: x + Math.cos(a) * d, z: z - 6 + Math.sin(a) * d * 0.55, len: 46 + Math.floor(r() * 26), seed: Math.floor(r() * 100), phase: r() * 6.28, bx: 0, bv: 0 });
         }
-        this.drift('persimmon', x, z + 10, 26, 16, 12, r);
-        this.drift('shroom', x, z + 8, 40, 20, 10, r);
+        this.drift('persimmon', x, z + 10, 26, 16, 6, r);
+        this.drift('shroom', x, z + 8, 40, 20, 4, r);
         break;
       }
       case 'koi': {
@@ -466,7 +476,7 @@ export class Shrine {
         const bw = Math.round(rx * 0.85) + 10;
         this.bridges.push({ x, z: z + rz * 0.1, w: bw });
         // Pads in rafts, some flowering.
-        for (let g = 0; g < 16 * k * k; g++) {
+        for (let g = 0; g < 9 * k * k; g++) {
           const a = r() * 6.28, d = 0.25 + r() * 0.62;
           const px = x + Math.cos(a) * d * rx, pz = z + Math.sin(a) * d * rz;
           if (Math.abs(pz - (z + rz * 0.1)) < 5) continue;
@@ -478,27 +488,27 @@ export class Shrine {
         this.addLantern(x - rx * 0.5, z + rz + 5, r);
         this.addLantern(x + rx * 0.45, z + rz + 5, r);
         for (let g = 0; g < 7 * k; g++) { const a = r() * 6.28; this.addProp('rock', x + Math.cos(a) * rx * 1.08, z + Math.sin(a) * rz * 1.1, 3 + Math.floor(r() * 4), r); }
-        for (let g = 0; g < 12; g++) {
+        for (let g = 0; g < 6; g++) {
           const a = 3.14 + r() * 3.14;
           this.canes.push({ kind: 'susuki', x: x + Math.cos(a) * rx * 1.18, z: z + Math.sin(a) * rz * 1.26, len: 24, seed: Math.floor(r() * 100), phase: r() * 6.28, bx: 0, bv: 0 });
         }
-        this.drift('hydrangea', x, z - rz, rx + 16, 14, 12, r, () => Math.floor(r() * 3));
+        this.drift('hydrangea', x, z - rz, rx + 16, 14, 4, r, () => 0);
         this.addProp('spout', x - rx - 3, z + 8, 1, r);
         break;
       }
       case 'bamboo': {
-        for (let g = 0; g < 70 * k * k; g++) {
+        for (let g = 0; g < 34 * k * k; g++) {
           const a = r() * 6.28, d = Math.sqrt(r());
           this.canes.push({ kind: 'bamboo', x: x + Math.cos(a) * d * 58 * k, z: z + Math.sin(a) * d * 38 * k, len: 52 + Math.floor(r() * 34), seed: Math.floor(r() * 100), phase: r() * 6.28, bx: 0, bv: 0 });
         }
         this.addLantern(x, z + 8, r);
-        this.drift('fern', x, z, 56 * k, 36 * k, 26, r);
-        this.drift('shroom', x, z, 40 * k, 30 * k, 14, r);
+        this.drift('fern', x, z, 56 * k, 36 * k, 12, r);
+        this.drift('shroom', x, z, 40 * k, 30 * k, 5, r);
         break;
       }
       case 'lilies': {
-        this.drift('lily', x, z, 74 * k, 44 * k, Math.round(110 * k * k), r);
-        this.drift('hydrangea', x + 30 * k, z - 26 * k, 40, 16, 12, r, () => Math.floor(r() * 3));
+        this.drift('lily', x, z, 66 * k, 38 * k, Math.round(38 * k * k), r);
+        { const tone = Math.floor(r() * 3); this.drift('hydrangea', x + 30 * k, z - 26 * k, 36, 14, 5, r, () => tone); }
         this.addProp('jizo', x - 8, z, 1, r);
         this.addProp('jizo', x + 4, z + 2, 1, r);
         this.addAltar(x - 2, z + 10, 'mikan', false);
@@ -514,7 +524,7 @@ export class Shrine {
         this.addLantern(x + 8, z + 16, r);
         this.addLantern(x - 18, z + 18, r);
         this.addAltar(x - 4, z + 22, 'mikan', false);
-        this.drift('persimmon', x, z + 10, 40, 24, 14, r);
+        this.drift('persimmon', x, z + 10, 40, 24, 6, r);
         this.dens.push({ kind: 'kitsune', x: x + 34, z: z + 22 });
         break;
       }
@@ -524,8 +534,8 @@ export class Shrine {
         for (let g = -2; g <= 2; g++) this.addProp('jizo', x + g * 12, z + 24, 1, r);
         this.addLantern(x - 34, z + 18, r);
         this.addLantern(x + 34, z + 18, r);
-        this.drift('shroom', x, z + 6, 34, 20, 18, r);
-        this.drift('fern', x, z + 4, 44, 24, 18, r);
+        this.drift('shroom', x, z + 6, 34, 20, 7, r);
+        this.drift('fern', x, z + 4, 44, 24, 8, r);
         this.dens.push({ kind: 'tanuki', x: x - 26, z: z + 8 });
         break;
       }
@@ -560,7 +570,7 @@ export class Shrine {
       const xi = Math.round(x), zi = Math.round(z);
       return xi >= 0 && xi < w && zi >= 0 && zi < h ? this.ground[zi * w + xi] : GROUND.moss;
     };
-    const cedars = Math.round(area / 1900);
+    const cedars = Math.round(area / 2800);
     for (let k = 0; k < cedars; k++) {
       // Thickest toward the page's edges; thinner across the middle.
       const u = r();
@@ -574,18 +584,18 @@ export class Shrine {
       this.addProp('cedar', x, z, size, r);
     }
     // Maple accents out in the forest, a jewel every so often.
-    for (let k = 0; k < area / 18000; k++) {
+    for (let k = 0; k < area / 70000; k++) {
       const x = r() * w, z = r() * h;
       if (this.inZone(x, z, 16, 30, 6) || nearSite(x, z, 1) || onGround(x, z) !== GROUND.moss) continue;
       if (Math.abs(x - this.pathX[clamp(Math.round(z), 0, h - 1)]) < PATH_HALF + 10) continue;
       this.addProp(r() < 0.25 ? 'goldMaple' : 'maple', x, z, 12 + Math.floor(r() * 7), r);
     }
     // Ferns, grasses, mushrooms and the odd flower underfoot, in drifts.
-    for (let k = 0; k < area / 240; k++) {
+    for (let k = 0; k < area / 800; k++) {
       const x = r() * w, z = r() * h;
       if (this.zones.some(q => x > q.x0 && x < q.x1 && z > q.z0 && z < q.z1)) continue;
       const v = noise(x * 0.03 + 9, z * 0.03);
-      const kind: LowPlant = v < 0.3 ? 'fern' : v < 0.72 ? 'grass' : v < 0.76 ? 'lily' : v < 0.8 ? 'hydrangea' : v < 0.84 ? 'shroom' : 'grass';
+      const kind: LowPlant = v < 0.4 ? 'fern' : v > 0.82 ? 'shroom' : 'grass';
       this.addLow(kind, x, z, r, Math.floor(r() * 3));
     }
     // Clear what was planted over the clear zones.
@@ -714,25 +724,24 @@ export class Shrine {
     // Rivals by the opening view's offerings, and a few already in disguise.
     const gutter = Math.min(this.w * 0.17, 66);
     const crowd = Math.min(1, this.w / 300);
-    for (let k = 0; k < Math.round(14 * crowd); k++) {
+    for (let k = 0; k < Math.round(5 * crowd); k++) {
       const left = k % 2 === 0;
       const x = left ? between(6, gutter) : between(this.w - gutter, this.w - 12);
       const z = between(this.viewZ.z0 + 18, this.viewZ.z1 - 6);
       const c = this.spawn(RIVALS[(k >> 1) % 2], x, z);
-      if (k % 3 === 0) this.startDisguise(c, DISGUISE_ROTATION[(k / 3) % 3]);
-      else if (k % 7 === 1) { c.state = 'perform'; c.timer = Math.floor(between(200, 500)); }
+      if (k === 0 || k === 3) this.startDisguise(c, DISGUISE_ROTATION[k ? 1 : 0]);
     }
     // A deer or two, a few hares and mice about the same place, since it's what a visitor sees first.
-    for (let k = 0; k < Math.round(8 * crowd); k++) {
+    for (let k = 0; k < Math.round(3 * crowd); k++) {
       const left = k % 2 === 1;
       const x = left ? between(6, gutter) : between(this.w - gutter, this.w - 12);
-      this.spawn((['deer', 'hare', 'mouse', 'mouse', 'hare', 'kasa', 'chochin', 'hitodama'] as ShrineSpecies[])[k], x, between(this.viewZ.z0 + 14, this.viewZ.z1 - 6));
+      this.spawn((['deer', 'hare', 'hitodama'] as ShrineSpecies[])[k], x, between(this.viewZ.z0 + 14, this.viewZ.z1 - 6));
     }
     for (const w of this.waters) this.stockWater(w);
     // Kodama round the sacred cedars, and on any cedars in the opening view.
     for (const p of this.cedars) {
       const sacred = p.kind === 'sacred';
-      const count = sacred ? 8 : p.z > this.viewZ.z0 && p.z < this.viewZ.z1 + 60 && Math.random() < 0.3 ? 2 : Math.random() < 0.05 ? 2 : 0;
+      const count = sacred ? 4 : 0;
       for (let k = 0; k < count; k++) {
         const c = this.spawn('kodama', p.x + between(-p.size * 0.6, p.size * 0.6), p.z + between(-6, 14));
         c.home = { x: p.x, z: p.z, h: 0 };
@@ -1032,7 +1041,7 @@ export class Shrine {
     // A rival in the open: nose to nose.
     if (this.tick % 7 === c.id % 7) {
       const foe = this.near(c, 16, o => o.species === this.rivalOf(c) && !o.disguise && !o.hidden && (o.state === 'roam' || o.state === 'approach') && !this.isYoung(o));
-      if (foe && !this.isYoung(c) && Math.random() < 0.6) this.startStandoff(c, foe);
+      if (foe && !this.isYoung(c) && Math.random() < 0.25) this.startStandoff(c, foe);
     }
   }
 
@@ -1043,7 +1052,7 @@ export class Shrine {
 
   /** What next, for a rival with nothing on: mostly food, sometimes sleep or a little showing off. */
   private decide(c: ShrineCreature) {
-    c.timer = Math.floor(between(40, 110));
+    c.timer = Math.floor(between(110, 300));
     const hungry = c.energy < 0.75;
     const roll = Math.random();
     if (hungry) {
@@ -1059,9 +1068,9 @@ export class Shrine {
       c.timer = 120;
       return;
     }
-    if (roll < 0.18) { c.state = 'perform'; c.timer = Math.floor(between(120, 240)); return; }
+    if (roll < 0.1) { c.state = 'perform'; c.timer = Math.floor(between(120, 240)); return; }
     if (roll < 0.32) { c.state = 'sleep'; c.timer = Math.floor(between(300, 700)); return; }
-    if (roll < 0.47) { this.beginChange(c); return; }
+    if (roll < 0.44) { this.beginChange(c); return; }
     if (roll < 0.62 && this.tryCourt(c)) return;
     if (roll < 0.74) {
       const den = this.dens.filter(d => d.kind === c.species);
@@ -1784,7 +1793,7 @@ export class Shrine {
       }
     }
     // Leaves falling from the maples near the view, all the time.
-    if (this.tick % 5 === 0 && this.maples.length && this.motes.length < MAX_MOTES - 50) {
+    if (this.tick % 22 === 0 && this.maples.length && this.motes.length < MAX_MOTES - 50) {
       const near = this.maples.filter(p => p.z > this.viewZ.z0 - 40 && p.z < this.viewZ.z1 + 60);
       if (near.length) {
         const p = pick(near);
@@ -1807,7 +1816,7 @@ export class Shrine {
       f.x += f.vx; f.z += f.vz;
       f.h += Math.sin(this.tick * 0.03 + f.phase) * 0.05;
     }
-    const want = event ? 620 : 70;
+    const want = event ? 620 : 30;
     if (flies.length < want && this.tick % (event ? 1 : 20) === 0) {
       for (let k = 0; k < (event ? 5 : 1); k++) {
         const z = between(this.viewZ.z0 - 40, this.viewZ.z1 + 60);
@@ -1925,7 +1934,7 @@ export class Shrine {
       const next = this.happeningOrder.shift() as ShrineHappening;
       this.happeningOrder.push(next);
       this.startHappening(next);
-      this.nextHappening = Math.floor(between(70, 150)) * TICKS_PER_SECOND;
+      this.nextHappening = Math.floor(between(130, 260)) * TICKS_PER_SECOND;
     }
   }
 

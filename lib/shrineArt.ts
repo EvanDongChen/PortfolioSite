@@ -24,15 +24,15 @@ export const SHRINE_FLOOR = {
   stone: [[116, 122, 138], [100, 108, 126], [86, 94, 114], [132, 136, 150]] as Rgb[],
   joint: [34, 70, 66] as Rgb,
   /** Raked gravel in the shrine courts, pale under the moon, and its furrows. */
-  gravel: [[168, 174, 186], [146, 154, 172]] as Rgb[],
-  furrow: [118, 128, 152] as Rgb,
+  gravel: [[112, 116, 130], [98, 104, 122]] as Rgb[],
+  furrow: [76, 84, 108] as Rgb,
   /** Stones round the water, and the water from the shallows to the deep. */
   rim: [[92, 100, 112], [66, 76, 92]] as Rgb[],
   water: [[34, 96, 112], [24, 78, 104], [16, 60, 92], [12, 46, 78]] as Rgb[],
   caustic: [34, 62, 84] as Rgb,
   /** Moonlight dappling down through the canopy, and its shafts. */
-  moon: [34, 46, 66] as Rgb,
-  ray: [26, 34, 54] as Rgb,
+  moon: [20, 28, 44] as Rgb,
+  ray: [14, 20, 34] as Rgb,
 };
 
 const put = (ctx: CanvasRenderingContext2D, x: number, y: number, col: Rgb) => {
@@ -930,34 +930,35 @@ export const floatLanternSprite = () =>
 export const skyLanternSprite = () =>
   cached('sky-lantern', () => fromRows(['.pppp.', 'pPPPPp', 'pPYYPp', 'pPYYPp', '.pYYp.', '..qq..'], { p: [240, 156, 80], P: [255, 200, 110], Y: [255, 244, 190], q: [255, 120, 60] }));
 
-/** Curved tiled roof, the eaves swept up: shared by the hall, the small shrines and the pagoda. */
-const roof = (ctx: CanvasRenderingContext2D, cx: number, top: number, halfW: number, height: number, colours: { lit: Rgb; body: Rgb; low: Rgb; eave: Rgb }, tiles = 3) => {
+/**
+ * A curved tiled roof, its eaves swept up: steep at the ridge and easing out,
+ * with ribs of tile fanning down the slope and the sunlit (moonlit) side to
+ * the left. Shared by the hall, the small shrines and the pagoda.
+ */
+const roof = (ctx: CanvasRenderingContext2D, cx: number, top: number, halfW: number, height: number, colours: { lit: Rgb; body: Rgb; low: Rgb; eave: Rgb }, ribs = 4) => {
   for (let y = 0; y < height; y++) {
     const t = y / (height - 1 || 1);
-    // Steep near the ridge and flattening out to the eaves.
-    const half = Math.round(halfW * (0.2 + 0.8 * Math.pow(t, 1.8)));
-    const col = t < 0.2 ? colours.lit : colours.body;
-    box(ctx, Math.round(cx - half), top + y, half * 2, 1, col);
-    // Rows of tiles running down the slope.
-    if (tiles > 0) {
-      for (let x = -half; x < half; x += tiles) {
-        if ((x + half) % (tiles * 2) === 0 && y > 0) box(ctx, Math.round(cx + x), top + y, 1, 1, colours.low);
-      }
+    const half = Math.round(halfW * (0.24 + 0.76 * Math.pow(t, 1.7)));
+    for (let x = -half; x < half; x++) {
+      const u = (x + 0.5) / half;
+      const rib = ribs > 0 && Math.floor((u + 1) * halfW) % ribs === 0;
+      const col = rib ? colours.low : u < -0.35 ? colours.lit : colours.body;
+      put(ctx, Math.round(cx + x), top + y, y === 0 ? colours.lit : col);
     }
   }
-  // The eave's underside, with its corners flicking up.
+  // The eave's edge, its corners flicking up.
   for (let x = -halfW; x < halfW; x++) {
     const t = Math.abs(x + 0.5) / halfW;
-    const lift = Math.round(Math.pow(t, 5) * Math.max(2, height * 0.4));
+    const lift = Math.round(Math.pow(t, 6) * Math.max(2, height * 0.3));
     box(ctx, Math.round(cx + x), top + height - 1 - lift, 1, 2, colours.eave);
   }
 };
-const PATINA = { lit: [132, 192, 172] as Rgb, body: [76, 142, 132] as Rgb, low: [54, 112, 112] as Rgb, eave: [34, 62, 76] as Rgb };
-const BARK_ROOF = { lit: [96, 84, 88] as Rgb, body: [66, 58, 70] as Rgb, low: [48, 42, 56] as Rgb, eave: [26, 24, 36] as Rgb };
+const PATINA = { lit: [104, 150, 138] as Rgb, body: [66, 112, 108] as Rgb, low: [48, 88, 92] as Rgb, eave: [26, 40, 54] as Rgb };
+const BARK_ROOF = { lit: [92, 84, 96] as Rgb, body: [64, 58, 74] as Rgb, low: [46, 42, 58] as Rgb, eave: [24, 22, 34] as Rgb };
 const WOOD = { lit: [126, 84, 62] as Rgb, body: [88, 58, 52] as Rgb, dark: [54, 38, 44] as Rgb };
 const SHOJI: [Rgb, Rgb] = [[255, 226, 150], [244, 176, 88]];
 
-/** A strung sacred rope with its white paper streamers. */
+/** A strung sacred rope, twisted, with a few plain white paper streamers. */
 const rope = (ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, sag: number) => {
   const w = x1 - x0;
   for (let x = x0; x < x1; x++) {
@@ -965,84 +966,102 @@ const rope = (ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, 
     const yy = Math.round(y + Math.sin(t * Math.PI) * sag);
     box(ctx, x, yy, 1, 2, (x & 3) < 2 ? [226, 206, 150] : [176, 150, 100]);
   }
-  for (let k = 1; k < 5; k++) {
-    const x = Math.round(x0 + (w * k) / 5);
-    const yy = Math.round(y + Math.sin((k / 5) * Math.PI) * sag) + 2;
-    box(ctx, x, yy, 2, 2, [250, 250, 246]);
-    box(ctx, x + 1, yy + 2, 2, 2, [224, 230, 240]);
-    box(ctx, x, yy + 4, 2, 2, [250, 250, 246]);
+  for (let k = 1; k < 4; k++) {
+    const x = Math.round(x0 + (w * k) / 4);
+    const yy = Math.round(y + Math.sin((k / 4) * Math.PI) * sag) + 2;
+    box(ctx, x, yy, 2, 5, [244, 244, 240]);
+    box(ctx, x + 1, yy + 1, 1, 4, [206, 212, 226]);
   }
 };
 
-/** The main hall: stone plinth, red posts, warm paper walls, a great patina roof with crossed rafters. */
+/** The main hall: stone plinth, red posts framing lit paper bays and dark doors, under a great curved roof. */
 export const hondenSprite = () =>
   cached('honden', () => {
     const w = 92, h = 72;
     const c = makeCanvas(w, h);
     const ctx = c.getContext('2d')!;
-    // Plinth and steps.
-    box(ctx, 8, h - 8, w - 16, 8, [116, 122, 138]);
-    box(ctx, 8, h - 8, w - 16, 1, [156, 162, 176]);
-    box(ctx, 8, h - 2, w - 16, 2, [84, 90, 108]);
-    for (let s = 0; s < 3; s++) box(ctx, 34 - s * 2, h - 8 + s * 3, 24 + s * 4, 2, [172, 176, 188]);
-    // The hall's front: a dark veranda, paper walls glowing between red posts.
-    box(ctx, 14, 36, w - 28, h - 44, WOOD.dark);
-    for (let x = 16; x < w - 16; x += 12) {
-      box(ctx, x + 2, 40, 9, h - 50, SHOJI[1]);
-      box(ctx, x + 3, 41, 7, h - 52, SHOJI[0]);
-      for (let g = 44; g < h - 12; g += 4) box(ctx, x + 2, g, 9, 1, SHOJI[1]);
-      box(ctx, x + 6, 41, 1, h - 52, SHOJI[1]);
+    const stone: Rgb[] = [[148, 152, 166], [112, 118, 134], [80, 86, 104]];
+    // The plinth in two courses, and broad steps up the middle.
+    box(ctx, 6, h - 5, w - 12, 5, stone[1]);
+    box(ctx, 6, h - 5, w - 12, 1, stone[0]);
+    box(ctx, 6, h - 1, w - 12, 1, stone[2]);
+    box(ctx, 11, h - 9, w - 22, 4, stone[1]);
+    box(ctx, 11, h - 9, w - 22, 1, stone[0]);
+    for (let s = 0; s < 4; s++) { box(ctx, 35 - s, h - 9 + s * 2, 22 + s * 2, 1, stone[0]); box(ctx, 35 - s, h - 8 + s * 2, 22 + s * 2, 1, stone[2]); }
+    // The walls: five bays, the middle one dark doors under a lit lattice.
+    const top = 33, bottom = h - 9;
+    box(ctx, 13, top, w - 26, bottom - top, WOOD.dark);
+    const bays = [15, 29, 39, 53, 63];
+    const widths = [12, 8, 12, 8, 12];
+    bays.forEach((x, k) => {
+      if (k === 2) {
+        box(ctx, x, top + 3, widths[k], 6, SHOJI[1]);
+        for (let g = 0; g < widths[k]; g += 3) box(ctx, x + g, top + 3, 1, 6, WOOD.dark);
+        box(ctx, x, top + 9, widths[k], bottom - top - 9, WOOD.body);
+        box(ctx, x + 5, top + 9, 2, bottom - top - 9, WOOD.dark);
+        box(ctx, x, top + 9, 1, bottom - top - 9, WOOD.lit);
+        return;
+      }
+      if (k === 1 || k === 3) {
+        box(ctx, x, top + 3, widths[k], bottom - top - 3, WOOD.body);
+        box(ctx, x, top + 3, 1, bottom - top - 3, WOOD.lit);
+        return;
+      }
+      box(ctx, x, top + 3, widths[k], bottom - top - 3, SHOJI[0]);
+      for (let g = 3; g < widths[k]; g += 4) box(ctx, x + g, top + 3, 1, bottom - top - 3, SHOJI[1]);
+      for (let g = top + 7; g < bottom; g += 5) box(ctx, x, g, widths[k], 1, SHOJI[1]);
+    });
+    // The posts, and the beam across their tops.
+    for (const x of [13, 27, 37, 51, 61, 75]) {
+      box(ctx, x, top, 3, bottom - top, V.red);
+      box(ctx, x, top, 1, bottom - top, V.lit);
+      box(ctx, x + 2, top, 1, bottom - top, V.mid);
     }
-    for (let x = 14; x <= w - 16; x += 12) {
-      box(ctx, x, 34, 3, h - 42, V.red);
-      box(ctx, x, 34, 1, h - 42, V.lit);
-      box(ctx, x + 2, 34, 1, h - 42, V.mid);
+    box(ctx, 11, top - 1, w - 22, 3, V.red);
+    box(ctx, 11, top - 1, w - 22, 1, V.lit);
+    box(ctx, 11, top + 2, w - 22, 1, V.dark);
+    // The roof; rafter ends along the eave's shadow.
+    roof(ctx, w / 2, 7, 46, 27, PATINA, 7);
+    for (let x = 8; x < w - 8; x += 3) box(ctx, x, 34, 1, 1, [150, 120, 90]);
+    // A heavy ridge with flared ends, three short logs and crossed rafters.
+    box(ctx, 30, 5, w - 60, 3, PATINA.eave);
+    box(ctx, 30, 5, w - 60, 1, PATINA.low);
+    for (const x of [38, 45, 52]) { box(ctx, x, 3, 3, 2, PATINA.eave); box(ctx, x, 3, 1, 2, V.gold); }
+    for (const [x, d] of [[30, -1], [w - 31, 1]] as [number, number][]) {
+      for (let k = 0; k < 5; k++) { box(ctx, x + d * k, 5 - k, 2, 2, PATINA.eave); box(ctx, x - d * k, 5 - k, 2, 1, PATINA.low); }
     }
-    box(ctx, 12, 34, w - 24, 3, V.red);
-    box(ctx, 12, 34, w - 24, 1, V.lit);
-    // The roof, and its crossed rafters and ridge logs.
-    roof(ctx, w / 2, 8, 46, 28, PATINA, 4);
-    box(ctx, 28, 7, w - 56, 3, PATINA.eave);
-    box(ctx, 28, 6, w - 56, 1, [170, 216, 196]);
-    for (let x = 34; x < w - 34; x += 7) { box(ctx, x, 4, 3, 2, V.gold); box(ctx, x, 3, 3, 1, [255, 232, 160]); }
-    for (const [x, d] of [[28, -1], [w - 28, 1]] as [number, number][]) {
-      for (let k = 0; k < 8; k++) { box(ctx, x + d * k, 6 - k, 2, 1, [176, 196, 186]); box(ctx, x - d * k, 6 - k, 2, 1, [130, 158, 150]); }
-    }
-    // The rope and streamers, and the bell's rope.
-    rope(ctx, 24, w - 24, 37, 3);
-    box(ctx, w / 2 - 1, 40, 3, 3, [244, 204, 100]);
-    box(ctx, w / 2, 43, 1, 12, [226, 80, 70]);
+    rope(ctx, 26, w - 26, 36, 3);
+    box(ctx, w / 2 - 1, 39, 3, 3, V.gold);
     return c;
   });
 
-/** A small roadside shrine on a post or stone base, with a lit paper front. */
+/** A small roadside shrine: a dark wooden box on a stone base, its lattice door lit, under a curved roof. */
 export const hokoraSprite = (kind: number) =>
   cached(`hokora-${kind}`, () => {
-    const w = 24, h = 26;
+    const w = 24, h = 24;
     const c = makeCanvas(w, h);
     const ctx = c.getContext('2d')!;
-    box(ctx, 4, h - 4, 16, 4, [132, 138, 154]);
-    box(ctx, 4, h - 4, 16, 1, [168, 172, 186]);
-    box(ctx, 5, h - 1, 14, 1, [90, 96, 114]);
+    box(ctx, 4, h - 4, 16, 4, [124, 130, 146]);
+    box(ctx, 4, h - 4, 16, 1, [160, 164, 178]);
+    box(ctx, 4, h - 1, 16, 1, [84, 90, 108]);
     box(ctx, 6, 11, 12, h - 15, kind ? WOOD.body : V.mid);
     box(ctx, 6, 11, 1, h - 15, kind ? WOOD.lit : V.red);
-    box(ctx, 8, 13, 8, h - 18, SHOJI[1]);
-    box(ctx, 9, 14, 6, h - 20, SHOJI[0]);
-    box(ctx, 11, 14, 2, h - 20, SHOJI[1]);
-    roof(ctx, w / 2, 2, 12, 11, kind ? BARK_ROOF : PATINA, 3);
-    rope(ctx, 6, 18, 13, 1);
+    box(ctx, 17, 11, 1, h - 15, WOOD.dark);
+    box(ctx, 9, 13, 6, h - 18, SHOJI[0]);
+    for (const x of [11, 13]) box(ctx, x, 13, 1, h - 18, SHOJI[1]);
+    roof(ctx, w / 2, 2, 12, 10, kind ? BARK_ROOF : PATINA, 5);
     return c;
   });
 
-/** A five-storey pagoda, vermilion under dark roofs, a finial on top. */
+/** A five-storey pagoda, vermilion under dark roofs with rafters beneath, a spire of rings on top. */
 export const pagodaSprite = () =>
   cached('pagoda', () => {
     const w = 62, h = 128;
     const c = makeCanvas(w, h);
     const ctx = c.getContext('2d')!;
     const cx = w / 2;
-    box(ctx, 8, h - 5, w - 16, 5, [116, 122, 138]);
-    box(ctx, 8, h - 5, w - 16, 1, [156, 162, 176]);
+    box(ctx, 10, h - 5, w - 20, 5, [116, 122, 138]);
+    box(ctx, 10, h - 5, w - 20, 1, [156, 162, 176]);
     let y = h - 5;
     for (let f = 0; f < 5; f++) {
       const half = 17 - f * 2;
@@ -1051,39 +1070,45 @@ export const pagodaSprite = () =>
       box(ctx, cx - half, y, half * 2, wall, V.red);
       box(ctx, cx - half, y, 2, wall, V.lit);
       box(ctx, cx + half - 2, y, 2, wall, V.mid);
-      box(ctx, cx - 3, y + 2, 6, wall - 2, SHOJI[1]);
-      box(ctx, cx - 2, y + 3, 4, wall - 4, SHOJI[0]);
+      box(ctx, cx - 3, y + 2, 6, wall - 2, WOOD.dark);
+      if (f % 2 === 0) { box(ctx, cx - 2, y + 3, 4, wall - 3, SHOJI[0]); box(ctx, cx, y + 3, 1, wall - 3, SHOJI[1]); }
       const rh = 11 - f;
       y -= rh - 3;
-      roof(ctx, cx, y, half + 12, rh, BARK_ROOF, 3);
-      y += 0;
+      roof(ctx, cx, y, half + 11, rh, BARK_ROOF, 6);
+      for (let x = -half - 8; x < half + 8; x += 3) box(ctx, cx + x, y + rh + 1, 1, 1, [150, 110, 84]);
     }
-    // The finial: a tapering spire of gold rings.
     for (let k = 0; k < 9; k++) box(ctx, cx - 1 + (k % 3 === 0 ? -1 : 0), y - k * 2 - 2, 2 + (k % 3 === 0 ? 2 : 0), 2, k % 3 === 0 ? V.gold : [190, 146, 70]);
     return c;
   });
 
-/** A red arched bridge across the water, seen from the side. */
+/** A red arched bridge across the water: a solid curved span, a handrail on a few posts, two piers. */
 export const bridgeSprite = (w: number) =>
   cached(`bridge-${w}`, () => {
-    const rise = Math.round(w * 0.24);
-    const h = rise + 12;
+    const rise = Math.round(w * 0.2);
+    const h = rise + 16;
     const c = makeCanvas(w, h);
     const ctx = c.getContext('2d')!;
     const arch = (x: number) => { const t = (x + 0.5 - w / 2) / (w / 2); return Math.round((1 - t * t) * rise); };
+    // Two piers down into the water, well apart.
+    for (const x of [Math.round(w * 0.24), Math.round(w * 0.72)]) {
+      const top = h - 9 - arch(x);
+      box(ctx, x, top + 5, 3, h - top - 5, V.dark);
+      box(ctx, x, top + 5, 1, h - top - 5, V.mid);
+    }
     for (let x = 0; x < w; x++) {
-      const top = h - 8 - arch(x);
-      // The planks, the side beam, and the railing above.
-      box(ctx, x, top, 1, 2, [156, 118, 88]);
+      const top = h - 9 - arch(x);
+      box(ctx, x, top, 1, 1, [188, 150, 112]);
+      box(ctx, x, top + 1, 1, 1, [136, 100, 78]);
       box(ctx, x, top + 2, 1, 3, V.red);
       box(ctx, x, top + 5, 1, 1, V.dark);
       box(ctx, x, top - 6, 1, 1, V.lit);
+      box(ctx, x, top - 5, 1, 1, V.mid);
     }
-    for (let x = 2; x < w; x += 7) {
-      const top = h - 8 - arch(x);
+    for (let x = 1; x < w; x += Math.max(8, Math.round(w / 7))) {
+      const top = h - 9 - arch(x);
       box(ctx, x, top - 6, 2, 6, V.red);
-      box(ctx, x, top - 7, 2, 1, V.gold);
-      box(ctx, x, top + 6, 2, Math.max(0, h - top - 6), V.dark);
+      box(ctx, x, top - 6, 1, 6, V.lit);
+      box(ctx, x, top - 8, 2, 2, V.gold);
     }
     return c;
   });
@@ -1196,7 +1221,7 @@ const CEDAR_SETS: Rgb[][] = [
   [[12, 44, 54], [20, 62, 62], [32, 84, 72], [52, 112, 86], [108, 164, 136]],
   [[12, 40, 58], [18, 56, 68], [28, 76, 80], [46, 104, 96], [104, 158, 150]],
 ];
-const BARK: Rgb[] = [[148, 92, 68], [106, 66, 56], [68, 44, 48], [44, 32, 42]];
+const BARK: Rgb[] = [[104, 72, 62], [72, 50, 50], [46, 34, 42], [32, 26, 36]];
 
 /** A great cedar: a fibrous red trunk bare a long way up, then tiers of drooping dark boughs rimmed by the moon. */
 export const cedarSprite = (seed: number, size: number) =>
@@ -1292,60 +1317,56 @@ export const mapleSprite = (seed: number, r: number, gold = false) =>
   });
 
 const HYDRANGEA: Rgb[][] = [
-  [[60, 72, 158], [98, 118, 226], [150, 176, 250], [210, 224, 255]],
-  [[112, 58, 158], [168, 92, 214], [214, 150, 244], [244, 212, 255]],
-  [[160, 54, 112], [224, 92, 150], [248, 150, 188], [255, 214, 228]],
+  [[52, 66, 140], [84, 106, 200], [130, 156, 236]],
+  [[92, 56, 140], [140, 88, 190], [186, 136, 226]],
+  [[136, 58, 110], [190, 90, 146], [226, 142, 180]],
 ];
-/** A hydrangea: dark leaves under round heads of jewel-blue, violet or pink. */
+/** A hydrangea: a mound of broad leaves with a few round mopheads of one colour set well apart. */
 export const hydrangeaSprite = (seed: number, kind: number) =>
   cached(`hydrangea-${seed}-${kind}`, () => {
     const rnd = seededRandom(seed * 19 + kind);
-    const w = 24, h = 16;
+    const w = 20, h = 13;
     const c = makeCanvas(w, h);
     const ctx = c.getContext('2d')!;
-    for (let y = 2; y < h; y++) {
+    const LEAF: Rgb[] = [[20, 66, 62], [32, 92, 76], [52, 122, 90]];
+    for (let y = 1; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        const dx = (x + 0.5 - w / 2) / (w / 2), dy = (y + 0.5 - h) / (h - 2);
-        if (dx * dx + dy * dy > 1) continue;
-        put(ctx, x, y, dy < -0.6 ? [44, 112, 88] : (x + y * 3) % 7 === 0 ? [44, 112, 88] : [22, 74, 72]);
+        const dx = (x + 0.5 - w / 2) / (w / 2), dy = (y + 0.5 - h) / (h - 1);
+        if (dx * dx + dy * dy > 1 - rnd() * 0.08) continue;
+        const light = -dx * 0.4 - dy * 0.8 - 0.1;
+        put(ctx, x, y, LEAF[light > 0.45 ? 2 : light > 0.05 ? 1 : 0]);
       }
     }
-    const heads = 11;
     const set = HYDRANGEA[kind % HYDRANGEA.length];
-    for (let k = 0; k < heads; k++) {
-      const hx = 4 + rnd() * (w - 8), hy = 3 + rnd() * (h - 8);
-      const r = 1.5 + rnd() * 0.9;
-      for (let y = Math.floor(hy - r); y <= hy + r; y++) {
-        for (let x = Math.floor(hx - r); x <= hx + r; x++) {
-          const dx = x + 0.5 - hx, dy = y + 0.5 - hy;
-          if (dx * dx + dy * dy > r * r) continue;
-          const tone = dx + dy < -0.9 ? 2 : dx + dy > 0.9 ? 0 : 1;
-          put(ctx, x, y, set[tone]);
+    const spots = [[5, 6], [10, 4], [15, 6], [10, 9]];
+    for (const [hx, hy] of spots) {
+      const cx = hx + Math.floor(rnd() * 2) - 0.5, cy = hy + Math.floor(rnd() * 2) - 0.5;
+      for (let y = Math.floor(cy - 3); y <= cy + 3; y++) {
+        for (let x = Math.floor(cx - 3); x <= cx + 3; x++) {
+          const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+          if (dx * dx + dy * dy > 7 || x < 0 || x >= w || y < 0 || y >= h) continue;
+          put(ctx, x, y, set[dy < -0.6 ? 2 : dy > 1.1 ? 0 : 1]);
         }
       }
     }
     return c;
   });
 
-/** A cluster of red spider lilies, thin curling petals on bare stems. */
+const LILY_HEAD = [
+  '.R.....R.',
+  '..r.s.r..',
+  'R..RsR..R',
+  '.rRRsRRr.',
+  'R.rRRRr.R',
+  '..r.g.r..',
+];
+/** A red spider lily: a head of thin curling petals and long stamens on a bare green stem. */
 export const spiderLilySprite = (seed: number) =>
-  cached(`spider-lily-${seed}`, () => {
-    const rnd = seededRandom(seed * 7 + 3);
-    const w = 16, h = 16;
-    const c = makeCanvas(w, h);
-    const ctx = c.getContext('2d')!;
-    for (let k = 0; k < 3; k++) {
-      const x = 3 + k * 5 + Math.floor(rnd() * 2);
-      const top = 3 + Math.floor(rnd() * 5);
-      for (let y = top; y < h; y++) put(ctx, x, y, y > h - 5 ? [46, 122, 80] : [78, 162, 90]);
-      for (const [dx, dy, col] of [
-        [0, 0, [255, 110, 78]], [-1, -1, [244, 56, 58]], [1, -1, [244, 56, 58]], [-2, -2, [214, 34, 54]], [2, -2, [214, 34, 54]],
-        [-2, 0, [244, 56, 58]], [2, 0, [244, 56, 58]], [-3, -1, [255, 96, 86]], [3, -1, [255, 96, 86]], [0, -2, [255, 150, 112]], [-1, 1, [214, 34, 54]], [1, 1, [214, 34, 54]],
-      ] as [number, number, Rgb][]) {
-        if (x + dx >= 0 && x + dx < w && top + dy >= 0) put(ctx, x + dx, top + dy, col);
-      }
-    }
-    return c;
+  cached(`spider-lily-${seed % 2}`, () => {
+    const tall = seed % 2 ? 7 : 9;
+    const rows = [...LILY_HEAD];
+    for (let k = 0; k < tall; k++) rows.push(k > tall - 3 ? '....G....' : '....g....');
+    return fromRows(rows, { R: [226, 58, 56], r: [160, 34, 52], s: [255, 176, 140], g: [84, 150, 92], G: [46, 110, 80] });
   });
 
 /** Ferns, grass tufts, and glowing mushrooms for the understorey. */
@@ -1543,6 +1564,33 @@ export const pool = (r: number, colour: Rgb, transparent: boolean) =>
         } else {
           img.data[i] = colour[0] * step; img.data[i + 1] = colour[1] * step; img.data[i + 2] = colour[2] * step; img.data[i + 3] = 255;
         }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  });
+
+/**
+ * A hole of light for the darkness (see the view's night layer): a white disc
+ * whose alpha falls away in many fine dithered steps, flat on the ground.
+ */
+export const lightHole = (r: number) =>
+  cached(`shrine-hole-${r}`, () => {
+    const w = r * 2, h = Math.round(r * 1.4);
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const img = ctx.createImageData(w, h);
+    const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    const STEPS = 6;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = (x + 0.5 - w / 2) / (w / 2), dy = (y + 0.5 - h / 2) / (h / 2);
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d >= 1) continue;
+        const v = Math.pow(1 - d, 1.25) * STEPS * 1.15 + (BAYER[(y & 3) * 4 + (x & 3)] / 16 - 0.5) * 0.9;
+        const step = Math.max(0, Math.min(STEPS, Math.round(v))) / STEPS;
+        const i = (y * w + x) * 4;
+        img.data[i] = 255; img.data[i + 1] = 255; img.data[i + 2] = 255; img.data[i + 3] = Math.round(step * 255);
       }
     }
     ctx.putImageData(img, 0, 0);

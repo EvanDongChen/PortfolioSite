@@ -17,7 +17,7 @@ import { Cane, ELEVATION, GROUND, Marcher, Prop, Shrine, ShrineCreature, ShrineS
 import {
   AnimalKind, RivalPose, SHRINE_FLOOR, altarSprite, animalSprite, bambooSprite, bangSprite, bloodSprite, bridgeSprite, cedarSprite, crumbSprite, dappleTile, disguiseSprite,
   dustSprite, fallingLeafSprite, feetSprite, fireflySprite, fernSprite, floatLanternSprite, glowshroomSprite, grassSprite, guardianSprite, heartSprite, hitodamaSprite, hokoraSprite, hondenSprite,
-  hydrangeaSprite, jizoSprite, kitsuneSprite, koiSprite, leafSprite, lotusPadSprite, lotusSprite, makeCanvas, mapleSprite, noteSprite, offeringSprite, pagodaSprite, paperLanternSprite, paradeSprite,
+  hydrangeaSprite, jizoSprite, kitsuneSprite, koiSprite, leafSprite, lightHole, lotusPadSprite, lotusSprite, makeCanvas, mapleSprite, noteSprite, offeringSprite, pagodaSprite, paperLanternSprite, paradeSprite,
   persimmonSprite, pool, rockSprite, sacredCedarSprite, skyLanternSprite, smokeSprite, spiderLilySprite, spoutSprite, starSprite, susukiSprite, tailSprite, tanukiSprite, toriiSprite, toroSprite, tuftSprite, whatSprite, zedSprite,
 } from './shrineArt';
 import { shadowSprite } from './pixelOceanArt';
@@ -37,7 +37,7 @@ const SPRITE_MARGIN = 40;
 const TALL_MARGIN = 190;
 const LANTERN_POOL = 34;
 const HALO = 20;
-const WARM: [number, number, number] = [150, 92, 40];
+const WARM: [number, number, number] = [172, 92, 30];
 const FESTIVE: [number, number, number] = [176, 92, 48];
 const GHOST: [number, number, number] = [44, 110, 176];
 const HALO_WARM: [number, number, number] = [255, 190, 110];
@@ -47,6 +47,13 @@ const SHAFTS = 2;
 const SHAFT_PERIOD = 300;
 const SHAFT_SLANT = 0.5;
 const MARCHER_SCALE = 1.5;
+/** How dark the night lies over the ground and over everything standing on it (0 to 1), and its colour. */
+const NIGHT_FLOOR = 0.8;
+const NIGHT_SPRITES = 0.56;
+const NIGHT_COLOUR = '#050818';
+/** How far each kind of light reaches, in cells, and how fully it clears the dark. */
+const LANTERN_REACH = 48;
+const NIGHT_EVERY = 2;
 
 export type ShrineLayout = ReefLayout;
 
@@ -93,6 +100,9 @@ export class ShrineView {
   private notWater: HTMLCanvasElement | null = null;
   private shade: HTMLCanvasElement | null = null;
   private maskVersion = -1;
+  /** The dark, in cells over the sprite window, with holes where there is light. */
+  private night: HTMLCanvasElement | null = null;
+  private nightKey = '';
 
   constructor(
     private shrine: Shrine,
@@ -566,14 +576,9 @@ export class ShrineView {
 
     this.drawMotes(z0, z1);
     this.drawMoths(z0, z1);
+    this.applyNight(z0, z1);
     this.drawHalos(z0, z1);
     this.drawSky(z0, z1);
-    if (shrine.syncFlash > 0.02) {
-      ctx.globalAlpha = shrine.syncFlash * 0.34;
-      ctx.fillStyle = '#060a24';
-      ctx.fillRect(0, 0, this.viewW, this.regionHeight);
-      ctx.globalAlpha = 1;
-    }
     this.drawFireflies(z0, z1);
     for (const c of shrine.creatures) {
       if (c.emote && c.alive && !c.hidden && visible(c.z)) this.drawEmote(c);
@@ -831,6 +836,86 @@ export class ShrineView {
     }
   }
 
+  /**
+ * The night: a layer of darkness in cells, with a hole cut wherever something
+ * gives light, so that all the colour on the page is what the lanterns show.
+ * It goes over what's already drawn, and behind it over the floor below.
+ */
+  private applyNight(z0: number, z1: number) {
+    const { spriteCtx: ctx, shrine, px } = this;
+    const w = shrine.w, h = Math.ceil(this.regionHeight / px);
+    if (!this.night || this.night.width !== w || this.night.height !== h) { this.night = makeCanvas(w, h); this.nightKey = ''; }
+    const key = `${this.regionTop},${Math.floor(shrine.tick / NIGHT_EVERY)}`;
+    if (key !== this.nightKey) {
+      this.nightKey = key;
+      this.paintNight(z0, z1, h);
+    }
+    // A firefly night is darker still; the festival lifts it.
+    const deepen = 1 + shrine.syncFlash * 0.1 - shrine.festivalLight * 0.16;
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.globalAlpha = Math.min(1, NIGHT_SPRITES * deepen);
+    ctx.drawImage(this.night, 0, 0, w * px, h * px);
+    ctx.globalCompositeOperation = 'destination-over';
+    ctx.globalAlpha = Math.min(1, NIGHT_FLOOR * deepen);
+    ctx.drawImage(this.night, 0, 0, w * px, h * px);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
+
+  private paintNight(z0: number, z1: number, rows: number) {
+    const { shrine, px } = this;
+    const m = (this.night as HTMLCanvasElement).getContext('2d') as CanvasRenderingContext2D;
+    const top = this.regionTop / px;
+    m.imageSmoothingEnabled = false;
+    m.globalCompositeOperation = 'source-over';
+    m.globalAlpha = 1;
+    m.fillStyle = NIGHT_COLOUR;
+    m.fillRect(0, 0, shrine.w, rows);
+    m.globalCompositeOperation = 'destination-out';
+    const light = (x: number, z: number, reach: number, strength: number) => {
+      if (z < top - reach || z > top + rows + reach) return;
+      const img = lightHole(reach);
+      m.globalAlpha = Math.min(1, strength);
+      m.drawImage(img, Math.round(x - img.width / 2), Math.round(z - top - img.height / 2));
+    };
+    const fest = shrine.festivalLight;
+    for (const l of shrine.lanterns) {
+      const flick = 0.92 + Math.sin((shrine.tick + l.phase) * 0.17) * 0.05 + Math.sin((shrine.tick + l.phase) * 0.41) * 0.03;
+      light(l.x, l.z + 2, Math.round(LANTERN_REACH + fest * 10), flick);
+    }
+    for (const p of shrine.props) {
+      if (p.z < top - 80 || p.z > top + rows + 80) continue;
+      if (p.kind === 'honden') light(p.x, p.z + 2, 62, 0.9);
+      else if (p.kind === 'hokora') light(p.x, p.z + 3, 28, 0.8);
+      else if (p.kind === 'pagoda') light(p.x, p.z - 4, 38, 0.6);
+    }
+    // The moon lies on the ponds, a little of it.
+    for (const q of shrine.waters) light(q.x, q.z, Math.round(q.rx * 1.05), 0.42);
+    for (const c of shrine.creatures) {
+      if (!c.alive || c.z < z0 || c.z > z1) continue;
+      if (c.species === 'hitodama') light(c.x, c.z, 18, 0.7);
+      else if (c.species === 'chochin') light(c.x, c.z, 24, 0.85);
+      else if (c.disguise === 'lantern') light(c.x, c.z, 24, 0.85);
+    }
+    const p = shrine.parade;
+    if (p) {
+      for (const c of p.marchers) {
+        if (c.kind === 'hitodama') light(p.head + c.x, c.z, 34, 0.9);
+        else if (c.kind === 'chochin') light(p.head + c.x, c.z, 40, 0.95);
+      }
+    }
+    if (fest > 0.02) {
+      for (const f of shrine.festoons) light((f.x0 + f.x1) / 2, f.z, 42, fest);
+      for (const s of shrine.skies) {
+        if (s.floating) light(s.x, s.z, 14, fest);
+        else if (s.h < 60) light(s.x, s.z, 22, fest * (1 - s.h / 60));
+      }
+    }
+    m.globalCompositeOperation = 'source-over';
+    m.globalAlpha = 1;
+  }
+
   /** A soft glow around every flame, over whatever stands near it. */
   private drawHalos(z0: number, z1: number) {
     if (this.touches <= 0.02) return;
@@ -846,7 +931,7 @@ export class ShrineView {
     };
     for (const l of shrine.lanterns) {
       if (l.z < z0 || l.z > z1 + 30) continue;
-      place(halo, l.x, l.z, 16, 0.2 * (0.8 + Math.sin((shrine.tick + l.phase) * 0.2) * 0.12));
+      place(halo, l.x, l.z, 16, 0.16 * (0.8 + Math.sin((shrine.tick + l.phase) * 0.2) * 0.12));
     }
     for (const c of shrine.creatures) {
       if (c.z < z0 || c.z > z1) continue;
