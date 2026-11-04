@@ -42,3 +42,14 @@ export const POND_COLORS: ThemeColors = {
   searchPlaceholder: 'placeholder-emerald-200/50', periodBg: 'bg-[#1e4a32]',
   heroGradient: 'from-emerald-300 to-lime-300', contactIcon: 'text-emerald-300',
 };
+
+export const SHRINE_COLORS: ThemeColors = {
+  ...UNDERWATER_COLORS,
+  text: 'text-amber-50', textLighter: 'text-amber-50/90', highlight: 'text-amber-300',
+  highlightStrong: 'text-amber-200', border: 'border-amber-400/20', timeline: 'bg-amber-400/30',
+  timelineDot: 'bg-orange-500', timelineDotBorder: 'border-[#0a1022]',
+  cardBg: 'bg-[#0a1022]/75', tagBg: 'bg-indigo-950/60', tagHoverBg: 'hover:bg-indigo-900/70',
+  searchBg: 'bg-[#0a1022]/80', searchBorder: 'border-amber-400/30', searchRing: 'focus:ring-amber-400',
+  searchPlaceholder: 'placeholder-amber-200/50', periodBg: 'bg-[#3a2240]',
+  heroGradient: 'from-amber-300 to-orange-400', contactIcon: 'text-amber-300',
+};

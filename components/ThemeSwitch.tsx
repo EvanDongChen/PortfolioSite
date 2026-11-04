@@ -2,12 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Page, useTheme } from '../contexts/ThemeContext';
 import './ThemeSwitch.css';
 
-// Pixel icons for the three pages ('X' drawn, 'O' cut out of it).
+// Pixel icons for the four pages ('X' drawn, 'O' cut out of it).
 const ICONS: Record<Page, string[]> = {
   // Two rolling waves.
   aquarium: ['.XX...XX...', 'X..X.X..X.X', '....X....X.', '...........', '.XX...XX...', 'X..X.X..X.X', '....X....X.'],
   // A little reef fish.
   reef: ['.....XXX..', '...XXXXXX.', 'X.XXXXXX.X', 'XXXXXXXO.X', 'X.XXXXXXX.', '...XXXXX..', '.....XX...'],
+  // A torii gate.
+  shrine: ['X..........X', 'XXXXXXXXXXXX', '.XXXXXXXXXX.', '..X......X..', 'XXXXXXXXXXXX', '..X......X..', '..X......X..', '..X......X..', '.XX......XX.'],
   // A lily pad with a frog's eyes peeping over it.
   pond: ['...XX..XX...', '...XX..XX...', '............', '...XXXX.....', '.XXXXXXXX...', 'XXXXXXXXX..X', 'XXXXXXXXXXXX', '.XXXXXXXXXX.', '...XXXXXX...'],
 };
@@ -15,6 +17,7 @@ const PAGES: { page: Page; label: string }[] = [
   { page: 'aquarium', label: 'Aquarium' },
   { page: 'reef', label: 'Pixel reef' },
   { page: 'pond', label: 'Pixel pond' },
+  { page: 'shrine', label: 'Shrine forest' },
 ];
 
 const Icon: React.FC<{ page: Page }> = ({ page }) => {
@@ -27,7 +30,7 @@ const Icon: React.FC<{ page: Page }> = ({ page }) => {
 };
 
 /**
- * Switches between the three pages: a three-way switch in the right-hand
+ * Switches between the four pages: a four-way switch in the right-hand
  * stack, its stops on the stack's spacing. Click a page's icon and the
  * thumb springs over to it, then the page changes; arrow keys move between
  * the stops, Enter or Space picks one.
