@@ -651,10 +651,19 @@ export class Shrine {
     return this.solid[zi * this.w + xi] === 1;
   }
 
+  private inClearZone(x: number, z: number) {
+    return this.zones.some(q => x > q.x0 && x < q.x1 && z > q.z0 && z < q.z1);
+  }
+
+  /** Solid ground, or stepping from outside onto the clear zone round the hero text. */
+  private blocked(c: { x: number; z: number }, x: number, z: number) {
+    return this.isSolid(x, z) || (this.inClearZone(x, z) && !this.inClearZone(c.x, c.z));
+  }
+
   private freeSpot(c: { x: number; z: number }) {
     for (let k = 0; k < 40; k++) {
       const x = clamp(c.x + between(-12 - k * 2, 12 + k * 2), 3, this.w - 4), z = clamp(c.z + between(-12 - k * 2, 12 + k * 2), 3, this.h - 4);
-      if (!this.isSolid(x, z)) { c.x = x; c.z = z; return; }
+      if (!this.isSolid(x, z) && !this.inClearZone(x, z)) { c.x = x; c.z = z; return; }
     }
   }
 
@@ -671,7 +680,7 @@ export class Shrine {
       emote: null, emoteT: 0, carrying: null, home: null, pond: null,
     };
     if (!c.lineId) c.lineId = c.id;
-    if (species !== 'bat' && species !== 'owl' && species !== 'crow' && species !== 'hitodama' && species !== 'chochin' && species !== 'koi' && species !== 'frog' && species !== 'kappa' && this.isSolid(c.x, c.z)) this.freeSpot(c);
+    if (species !== 'bat' && species !== 'owl' && species !== 'crow' && species !== 'hitodama' && species !== 'chochin' && species !== 'koi' && species !== 'frog' && species !== 'kappa' && (this.isSolid(c.x, c.z) || this.inClearZone(c.x, c.z))) this.freeSpot(c);
     this.creatures.push(c);
     return c;
   }
@@ -864,10 +873,10 @@ export class Shrine {
     const d = Math.hypot(dx, dz) || 1;
     let vx = (dx / d) * speed, vz = (dz / d) * speed;
     const look = 4;
-    if (this.isSolid(c.x + (vx / speed) * look, c.z + (vz / speed) * look)) {
+    if (this.blocked(c, c.x + (vx / speed) * look, c.z + (vz / speed) * look)) {
       for (const turn of [0.8, -0.8, 1.6, -1.6, 2.4, -2.4]) {
         const nx = Math.cos(turn) * vx - Math.sin(turn) * vz, nz = Math.sin(turn) * vx + Math.cos(turn) * vz;
-        if (!this.isSolid(c.x + (nx / speed) * look, c.z + (nz / speed) * look)) { vx = nx; vz = nz; break; }
+        if (!this.blocked(c, c.x + (nx / speed) * look, c.z + (nz / speed) * look)) { vx = nx; vz = nz; break; }
       }
     }
     c.vx += (vx - c.vx) * easing;
@@ -878,8 +887,8 @@ export class Shrine {
 
   private moveOn(c: ShrineCreature) {
     const nx = c.x + c.vx, nz = c.z + c.vz;
-    if (!this.isSolid(nx, c.z)) c.x = nx; else c.vx *= -0.2;
-    if (!this.isSolid(c.x, nz)) c.z = nz; else c.vz *= -0.2;
+    if (!this.blocked(c, nx, c.z)) c.x = nx; else c.vx *= -0.2;
+    if (!this.blocked(c, c.x, nz)) c.z = nz; else c.vz *= -0.2;
     c.x = clamp(c.x, 2, this.w - 3);
     c.z = clamp(c.z, 2, this.h - 3);
     this.setFacing(c, c.vx);
@@ -893,7 +902,7 @@ export class Shrine {
   private wanderTarget(c: ShrineCreature, range: number) {
     for (let k = 0; k < 12; k++) {
       const x = clamp(c.x + between(-range, range), 6, this.w - 7), z = clamp(c.z + between(-range, range) * 0.8, 6, this.h - 7);
-      if (!this.isSolid(x, z)) { c.tx = x; c.tz = z; return; }
+      if (!this.isSolid(x, z) && !this.inClearZone(x, z)) { c.tx = x; c.tz = z; return; }
     }
     c.tx = c.x; c.tz = c.z;
   }
@@ -1709,8 +1718,10 @@ export class Shrine {
     c.h += (14 + Math.sin(this.tick * 0.03 + c.id) * 8 - c.h) * 0.04;
     if (Math.hypot(c.tx - c.x, c.tz - c.z) < 4 || Math.random() < 0.003) {
       c.tx = clamp(c.x + between(-50, 50), 4, this.w - 5); c.tz = clamp(c.z + between(-36, 36), 4, this.h - 5);
+      if (this.inClearZone(c.tx, c.tz)) { c.tx = c.x; c.tz = c.z; }
     }
     const dx = c.tx - c.x, dz = c.tz - c.z, d = Math.hypot(dx, dz) || 1;
+    if (this.inClearZone(c.x + dx / d, c.z + dz / d) && !this.inClearZone(c.x, c.z)) { c.tx = c.x; c.tz = c.z; return; }
     c.x += (dx / d) * SHRINE_SPECIES.hitodama.speed; c.z += (dz / d) * SHRINE_SPECIES.hitodama.speed;
   }
 
@@ -1740,6 +1751,7 @@ export class Shrine {
       c.tx = this.pathX[row] + between(-20, 20); c.tz = row;
     }
     const dx = c.tx - c.x, dz = c.tz - c.z, d = Math.hypot(dx, dz) || 1;
+    if (this.inClearZone(c.x + dx / d, c.z + dz / d) && !this.inClearZone(c.x, c.z)) { c.tx = c.x; c.tz = c.z; return; }
     c.x += (dx / d) * SHRINE_SPECIES.chochin.speed; c.z += (dz / d) * SHRINE_SPECIES.chochin.speed;
     this.setFacing(c, dx);
   }
