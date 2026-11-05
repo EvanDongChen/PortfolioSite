@@ -18,7 +18,7 @@ const PLURAL: Record<ShrineSpecies, string> = {
   tanuki: 'Tanuki', kitsune: 'Kitsune', hahaki: 'Broom spirits', baku: 'Baku', tsuchinoko: 'Tsuchinoko', nekomata: 'Nekomata', akaname: 'Akaname', mouse: 'Field mice', hare: 'Hares', deer: 'Sika deer', owl: 'Owls', bat: 'Bats', crow: 'Crows', frog: 'Frogs', koi: 'Koi',
   kappa: 'Kappa', kodama: 'Kodama', hitodama: 'Soul-flames', kasa: 'Umbrella ghosts', chochin: 'Lantern ghosts',
 };
-const HAPPENING_LABEL: Record<ShrineHappening, string> = { festival: 'Lantern festival', fireflies: 'Firefly night', parade: 'Night parade', moonview: 'Moon viewing', contest: 'Disguise contest' };
+const HAPPENING_LABEL: Record<ShrineHappening, string> = { festival: 'Lantern festival', parade: 'Night parade', moonview: 'Moon viewing', contest: 'Disguise contest' };
 
 let icons: Record<string, string> | null = null;
 const iconOf = (kind: string) => {

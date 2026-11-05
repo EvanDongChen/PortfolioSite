@@ -89,7 +89,6 @@ const ShrineDebugPanel: React.FC<ShrineDebugPanelProps> = ({ actions }) => {
       <p className="reef-debug-label">Events</p>
       <div className="reef-debug-events">
         <button type="button" onClick={() => act?.happening('festival')}>Lantern festival</button>
-        <button type="button" onClick={() => act?.happening('fireflies')}>Firefly night</button>
         <button type="button" onClick={() => act?.happening('parade')}>Night parade</button>
         <button type="button" onClick={() => act?.happening('moonview')}>Moon viewing</button>
         <button type="button" onClick={() => act?.happening('contest')}>Disguise contest</button>
@@ -98,6 +97,10 @@ const ShrineDebugPanel: React.FC<ShrineDebugPanelProps> = ({ actions }) => {
         <button type="button" onClick={() => act?.spawn('tag')}>Game of tag</button>
         <button type="button" onClick={() => act?.spawn('partners')}>Dance together</button>
         <button type="button" onClick={() => act?.spawn('catch')}>Catch with a flame</button>
+        <button type="button" onClick={() => act?.spawn('conga')}>Follow the leader</button>
+        <button type="button" onClick={() => act?.spawn('tug')}>Tug of war</button>
+        <button type="button" onClick={() => act?.spawn('kick')}>Persimmon kickabout</button>
+        <button type="button" onClick={() => act?.spawn('fruit')}>Fruit fight</button>
         <button type="button" onClick={() => act?.spawn('peck')}>Crow on a teapot</button>
         <button type="button" onClick={() => act?.spawn('sniff')}>Fox sniff test</button>
         <button type="button" onClick={() => act?.spawn('boo')}>Umbrella scare</button>

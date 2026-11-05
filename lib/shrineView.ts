@@ -13,10 +13,10 @@
 // light cover the whole page at a canvas pixel per cell, and the sprites are
 // drawn into a window around the view, swapped between two canvases.
 
-import { CONTEST_FORMS, CONTEST_TORII_FALL, CONTEST_TORII_STAND, Cane, Contest, ELEVATION, GROUND, Lantern, Marcher, PRINT_LIFE, Prop, Shrine, ShrineCreature, ShrineSpecies, Strand, isBarkTime, PECK_EVERY, TOPPLE_FLAT } from './shrine';
+import { CONTEST_FORMS, CONTEST_TORII_FALL, CONTEST_TORII_STAND, Cane, Contest, ELEVATION, GROUND, Lantern, Marcher, PRINT_LIFE, Prop, Shrine, ShrineCreature, ShrineSpecies, Strand, isBarkTime, PECK_EVERY, Play, TOPPLE_FLAT } from './shrine';
 import {
   basinSprite, sakuraPetalSprite, sakuraSprite, steamSprite, teahouseSprite, tongueSprite,
-  AnimalKind, RivalPose, SHRINE_FLOOR, altarSprite, animalSprite, bambooSprite, toppledSprite, bangSprite, berryBushSprite, bloodSprite, bridgeSprite, dreamSprite, pergolaSprite, persimmonTreeSprite, petalSprite, rimSprite, sporeSprite, tsuchinokoSprite, wisteriaSprite, cedarSprite, crumbSprite, dappleTile, disguiseSprite,
+  AnimalKind, RivalPose, SHRINE_FLOOR, altarSprite, animalSprite, bambooSprite, toppledSprite, juiceSprite, splatSprite, stickySprite, vineKnotSprite, bangSprite, berryBushSprite, bloodSprite, bridgeSprite, dreamSprite, pergolaSprite, persimmonTreeSprite, petalSprite, rimSprite, sporeSprite, tsuchinokoSprite, wisteriaSprite, cedarSprite, crumbSprite, dappleTile, disguiseSprite,
   dustSprite, fallingLeafSprite, feetSprite, fireflySprite, fernSprite, floatLanternSprite, glowshroomSprite, grassSprite, guardianSprite, heartSprite, hitodamaSprite, hokoraSprite, hondenSprite,
   hydrangeaSprite, mistTile, jizoSprite, kitsuneSprite, koiSprite, leafSprite, lightHole, lotusPadSprite, lotusSprite, makeCanvas, mapleSprite, noteSprite, offeringSprite, pagodaSprite, paperLanternSprite, paradeSprite,
   persimmonSprite, pool, rockSprite, sacredCedarSprite, skyLanternSprite, smokeSprite, spiderLilySprite, spoutSprite, starSprite, susukiSprite, tailSprite, tanukiSprite, toriiSprite, toroSprite, tuftSprite, whatSprite, zedSprite,
@@ -629,7 +629,7 @@ export class ShrineView {
       const air = c.species === 'bat' || c.species === 'owl' || c.species === 'crow' || c.species === 'hitodama' || c.species === 'chochin' || c.species === 'nekomata' || c.state === 'soak';
       const w = c.disguise ? 14 : BODY_WIDTH[c.species] * (air ? 0.7 : 0.85);
       if (!(air && c.h > 60) && c.species !== 'nekomata' && c.state !== 'soak') this.shadow(c.x, c.z, w, air ? 0.16 : 0.32);
-      over.push({ depth: c.z + 0.3, draw: () => { this.catchLight(c.x, c.z, air); this.drawCreature(c); this.rim = null; } });
+      over.push({ depth: c.z + 0.3, draw: () => { this.catchLight(c.x, c.z, air); this.drawCreature(c); this.rim = null; this.drawFruitOn(c); } });
     }
     const p = shrine.parade;
     if (p) {
@@ -638,6 +638,17 @@ export class ShrineView {
         if (!m.fly) this.shadow(m.x, m.z, 16, 0.3);
         over.push({ depth: m.z + 0.4, draw: () => { this.catchLight(m.x, m.z, m.fly); this.drawMarcher(m, m.x); this.rim = null; } });
       }
+    }
+    for (const q of shrine.plays) {
+      if (q.kind === 'tug' && q.stage !== 'out' && visible(q.z)) over.push({ depth: q.z + q.az * q.offset, draw: () => this.drawVine(q) });
+      if (q.ball && q.ball.h > -1 && visible(q.ball.z)) {
+        this.shadow(q.ball.x, q.ball.z, 5, 0.24);
+        const b = q.ball;
+        over.push({ depth: b.z + 0.6, draw: () => this.sprite(persimmonSprite(), b.x, b.z, b.h, { anchor: 'center', scale: 1.25 }) });
+      }
+    }
+    for (const t of shrine.thrown) {
+      if (visible(t.z)) over.push({ depth: t.z + 0.7, draw: () => this.sprite(persimmonSprite(), t.x, t.z, t.h, { anchor: 'center', scale: 1.25 }) });
     }
     for (const t of shrine.tussles) {
       if (visible(t.z)) over.push({ depth: t.z + 0.5, draw: () => this.drawTussle(t.x, t.z, t.t) });
@@ -674,7 +685,7 @@ export class ShrineView {
       case 'sakura': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z, 70, 0.3); this.drawSwaying(sakuraSprite(), p.x, p.z + 1, 2, 12, false); } };
       case 'teahouse': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z - 1, 58, 0.3); this.sprite(teahouseSprite(), p.x, p.z + 1, 0); } };
       case 'teapotProp': return { depth: p.z, draw: () => { this.shadow(p.x, p.z, 13, 0.28); this.sprite(disguiseSprite('teapot'), p.x, p.z, 0, { flipX: p.flip }); } };
-      case 'persimmonTree': return { depth: p.z, draw: () => { this.shadow(p.x + 1, p.z, p.size * 1.7, 0.26); this.drawSwaying(persimmonTreeSprite(p.seed % 5, p.size), p.x, p.z + 1, MAPLE_SWAY, MAPLE_SLICES, p.flip); } };
+      case 'persimmonTree': return { depth: p.z, draw: () => { this.shadow(p.x + 1, p.z, p.size * 1.7, 0.26); this.drawSwaying(persimmonTreeSprite(p.seed % 5, p.size), p.x, p.z + 1, MAPLE_SWAY, MAPLE_SLICES, p.flip, p.shake ?? 0); } };
       case 'maple': case 'goldMaple': return { depth: p.z, draw: () => { this.shadow(p.x + 1, p.z, p.size * 1.7, 0.26); this.drawSwaying(mapleSprite(p.seed % 6, p.size, p.kind === 'goldMaple'), p.x, p.z + 1, MAPLE_SWAY, MAPLE_SLICES, p.flip); } };
       case 'torii': return { depth: p.z, draw: () => this.sprite(toriiSprite(p.size), p.x, p.z + 1, 0) };
       case 'honden': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z - 2, 90, 0.3); this.sprite(hondenSprite(), p.x, p.z + 2, 0); } };
@@ -726,7 +737,7 @@ export class ShrineView {
    * at all at the root and most at the crown, a slow swell passing down the
    * page from tree to tree.
    */
-  private drawSwaying(img: HTMLCanvasElement, x: number, z: number, reach: number, slices: number, flip: boolean) {
+  private drawSwaying(img: HTMLCanvasElement, x: number, z: number, reach: number, slices: number, flip: boolean, shake = 0) {
     const { spriteCtx: ctx, px, shrine } = this;
     const swell = Math.sin(shrine.tick * 0.016 + x * 0.03 + z * 0.012) + Math.sin(shrine.tick * 0.037 + x * 0.05) * 0.35;
     const p = this.project(x, z, 0);
@@ -738,7 +749,7 @@ export class ShrineView {
       const sy = k * sh;
       const height = Math.min(sh, img.height - sy);
       const t = 1 - (sy + height / 2) / img.height;
-      const dx = Math.round(swell * reach * t * t) * px;
+      const dx = Math.round(swell * reach * t * t + Math.sin(shrine.tick * 1.3) * shake * 5 * t) * px;
       const y = foot - (img.height - sy) * px;
       if (!flip) ctx.drawImage(img, 0, sy, img.width, height, left + dx, y, img.width * px, height * px);
       else {
@@ -885,7 +896,7 @@ export class ShrineView {
         return;
       case 'frog': this.sprite(animalSprite(c.state === 'leap' ? 'frogLeap' : 'frog'), c.x, c.z, c.h + 0.5, { flipX, stretch: c.squash }); return;
       case 'kappa': {
-        const kind: AnimalKind = c.state === 'spill' ? 'kappaBow' : stride ? 'kappaWalk' : 'kappa';
+        const kind: AnimalKind = c.state === 'spill' ? 'kappaBow' : (c.state === 'stroll' && c.sneakLeft > 0) || !stride ? 'kappa' : 'kappaWalk';
         this.sprite(animalSprite(kind), c.x, c.z, 0, { flipX });
         return;
       }
@@ -942,7 +953,8 @@ export class ShrineView {
     if (c.state === 'soak') { this.sprite(animalSprite(c.species === 'tanuki' ? 'tanukiSoak' : 'kitsuneSoak'), c.x, c.z, 0, { flipX }); return; }
     let pose: RivalPose = 'stand';
     if (c.state === 'sleep') pose = 'sleep';
-    else if (c.state === 'passedOut') pose = 'sleep';
+    else if (c.state === 'passedOut' || c.state === 'heaped') pose = 'sleep';
+    else if (c.state === 'tugPull' && !(this.shrine.tick >> 3 & 1)) pose = 'walk';
     else if (c.state === 'drumLead') pose = c.drum?.stunned ? 'walk' : ((tick >> 2) & 1) ? 'drum' : 'sit';
     else if (c.state === 'dazed') pose = 'sit';
     else if (c.state === 'gloat') pose = (tick >> 5) & 1 ? 'howl' : 'sit';
@@ -1117,6 +1129,7 @@ export class ShrineView {
         case 'greenLeaf': this.sprite(leafSprite(), m.x, m.z, m.h, { anchor: 'center', alpha: Math.min(1, m.life / 15) }); break;
         case 'crumb': this.sprite(crumbSprite(), m.x, m.z, m.h, { anchor: 'center' }); break;
         case 'blood': this.sprite(bloodSprite(), m.x, m.z, m.h, { anchor: 'center' }); break;
+        case 'juice': this.sprite(juiceSprite(), m.x, m.z, m.h, { anchor: 'center' }); break;
         case 'tuft': this.sprite(tuftSprite(), m.x, m.z, m.h, { anchor: 'center' }); break;
         case 'steam': this.sprite(steamSprite(Math.floor(t * 3)), m.x, m.z, m.h, { anchor: 'center', scale: 1.5, alpha: Math.sin(t * Math.PI) * 0.42 }); break;
         case 'petal': this.sprite(petalSprite(), m.x, m.z, m.h, { anchor: 'center', alpha: Math.min(1, m.life / 15) }); break;
@@ -1125,6 +1138,37 @@ export class ShrineView {
         default: break;
       }
     }
+  }
+
+  /** A persimmon held up ready to throw, or the results of the last one. */
+  private drawFruitOn(c: ShrineCreature) {
+    if (!c.armed && c.sticky <= 0 && c.splat <= 0) return;
+    if (c.disguise) return;
+    const body = BODY_WIDTH[c.species];
+    if (c.armed) this.sprite(persimmonSprite(), c.x + c.facing * 2, c.z, c.h + (body + 6) / ELEVATION, { anchor: 'center', scale: 1.25 });
+    if (c.sticky > 0 && c.state !== 'soak') this.sprite(stickySprite(), c.x - c.facing * 1, c.z, c.h + 5 / ELEVATION, { alpha: Math.min(1, c.sticky / 120) });
+    if (c.splat > 0) this.sprite(splatSprite(), c.x + c.facing * body * 0.3, c.z, c.h + (body * 0.55) / ELEVATION, { alpha: Math.min(1, c.splat / 40) });
+  }
+
+  /** The vine, sagging and shivering between the two teams, with its bunch of flowers. */
+  private drawVine(q: Play) {
+    const { spriteCtx: ctx, px, shrine } = this;
+    let lo = q.offset, hi = q.offset;
+    for (const m of q.members) {
+      const along = q.offset + m.team * (15 + m.slot * 12);
+      lo = Math.min(lo, along); hi = Math.max(hi, along);
+    }
+    const steps = Math.max(2, Math.round((hi - lo) * 1.2));
+    ctx.globalAlpha = 1;
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps;
+      const along = lo + (hi - lo) * t;
+      const shiver = q.stage === 'play' && q.started ? Math.sin(shrine.tick * 0.9 + k * 0.6) * 0.5 : 0;
+      const p = this.project(q.x + q.ax * along, q.z + q.az * along, 18 - Math.sin(t * Math.PI) * 5 + shiver);
+      ctx.fillStyle = k % 5 === 0 ? 'rgb(190,160,240)' : k % 2 ? 'rgb(112,176,92)' : 'rgb(150,206,112)';
+      ctx.fillRect(Math.round(p.x / px) * px, Math.round(p.y / px) * px, px, px * 2);
+    }
+    this.sprite(vineKnotSprite(), q.x + q.ax * q.offset, q.z + q.az * q.offset, 12, { });
   }
 
   private drawMoths(z0: number, z1: number) {
@@ -1153,8 +1197,8 @@ export class ShrineView {
       this.nightKey = key;
       this.paintNight(z0, z1, h);
     }
-    // A firefly night is darker still; the festival lifts it.
-    const deepen = 1 + shrine.syncFlash * 0.1 - shrine.festivalLight * 0.16;
+    // The festival lifts the dark a little.
+    const deepen = 1 - shrine.festivalLight * 0.16;
     ctx.imageSmoothingEnabled = false;
     ctx.globalCompositeOperation = 'source-atop';
     ctx.globalAlpha = Math.min(1, NIGHT_SPRITES * deepen);
@@ -1334,18 +1378,15 @@ export class ShrineView {
     ctx.globalAlpha = 1;
   }
 
-  /** Fireflies blinking on and off; on a firefly night the whole wood falls into step. */
+  /** Fireflies blinking on and off. */
   private drawFireflies(z0: number, z1: number) {
     const { spriteCtx: ctx, shrine, px } = this;
     ctx.globalCompositeOperation = 'lighter';
-    const sync = shrine.syncFlash;
     const img = fireflySprite();
     const size = img.width * px;
     for (const f of shrine.fireflies) {
       if (f.z < z0 || f.z > z1) continue;
-      const own = Math.sin((shrine.tick + f.phase) * 0.08);
-      const beat = Math.sin(shrine.tick * 0.07 - (f.x + f.z) * 0.022);
-      const blink = own + (beat - own) * sync;
+      const blink = Math.sin((shrine.tick + f.phase) * 0.08);
       if (blink < 0.1) continue;
       const p = this.project(f.x, f.z, f.h);
       ctx.globalAlpha = Math.min(1, blink);

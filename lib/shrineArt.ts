@@ -2122,6 +2122,12 @@ export const steamSprite = (frame: number) =>
   ));
 export const tongueSprite = (frame: number) =>
   cached(`akaname-tongue-${frame % 2}`, () => fromRows(frame % 2 ? ['TTTTTTTt.', 'ttTTTTTTt', '.ttttTTTt', '.....ttt.'] : ['TTTTTTTTt', 'ttTTTTTTT', '.ttttttTt', '.......t.'], { T: [246, 130, 150], t: [206, 86, 118] }));
+export const juiceSprite = () => cached('shrine-juice', () => fromRows(['o'], { o: [250, 132, 40] }));
+/** Persimmon on the face, and stuck in the fur. */
+export const splatSprite = () => cached('shrine-splat', () => fromRows(['.OO.O', 'OOaOO', 'OaOOo', '.OoO.', '..o..'], { O: [250, 132, 40], o: [206, 88, 34], a: [255, 196, 110] }));
+export const stickySprite = () => cached('shrine-sticky', () => fromRows(['O..o.O', '..O...', 'o...O.', '..o..o'], { O: [250, 132, 40], o: [206, 88, 34] }));
+/** A length of wisteria vine, and the bunch tied at its middle to show who's winning. */
+export const vineKnotSprite = () => cached('shrine-vine-knot', () => fromRows(['.pPp.', 'pPlPp', 'PlPlP', 'pPlPp', '.pPp.', '..p..'], { p: [122, 92, 188], P: [168, 132, 226], l: [212, 186, 246] }));
 export const crumbSprite = () => cached('shrine-crumb', () => fromRows(['a'], { a: [244, 236, 214] }));
 export const bloodSprite = () => cached('shrine-blood', () => fromRows(['r'], { r: [200, 40, 50] }));
 export const tuftSprite = () => cached('shrine-tuft', () => fromRows(['a'], { a: [214, 196, 170] }));

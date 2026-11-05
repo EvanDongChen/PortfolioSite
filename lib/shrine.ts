@@ -26,7 +26,7 @@ export type ShrineSpecies = 'tanuki' | 'kitsune' | 'hahaki' | 'mouse' | 'hare' |
 export const SHRINE_SPECIES_LIST: ShrineSpecies[] = ['tanuki', 'kitsune', 'hahaki', 'mouse', 'hare', 'deer', 'owl', 'bat', 'crow', 'frog', 'koi', 'kappa', 'kodama', 'hitodama', 'kasa', 'chochin', 'baku', 'tsuchinoko', 'nekomata', 'akaname'];
 
 export type ShrineMood = 'wandering' | 'sniffing' | 'sneaking' | 'pretending' | 'changing' | 'eating' | 'facing off' | 'scrapping' | 'fleeing' | 'sleeping' | 'drumming' | 'barking' | 'hunting' | 'pouncing' | 'following' | 'courting'
-  | 'sweeping' | 'carrying' | 'bowing' | 'shooing' | 'puzzled' | 'grazing' | 'perched' | 'flying' | 'swooping' | 'sitting' | 'swimming' | 'hopping' | 'drifting' | 'watching' | 'thieving' | 'spilling' | 'sipping' | 'rolling' | 'dancing' | 'nibbling' | 'soaking' | 'licking' | 'moonviewing' | 'prowling' | 'pecking' | 'kicking' | 'chasing' | 'dazed' | 'lurking' | 'cackling' | 'out cold' | 'playing tag' | 'dancing together' | 'playing catch';
+  | 'sweeping' | 'carrying' | 'bowing' | 'shooing' | 'puzzled' | 'grazing' | 'perched' | 'flying' | 'swooping' | 'sitting' | 'swimming' | 'hopping' | 'drifting' | 'watching' | 'thieving' | 'spilling' | 'sipping' | 'rolling' | 'dancing' | 'nibbling' | 'soaking' | 'licking' | 'moonviewing' | 'prowling' | 'pecking' | 'kicking' | 'chasing' | 'dazed' | 'lurking' | 'cackling' | 'out cold' | 'playing tag' | 'dancing together' | 'playing catch' | 'following the leader' | 'tug of war' | 'kickabout' | 'fruit fight' | 'in a heap';
 
 interface SpeciesInfo {
   label: string; names: string[]; speed: number; palettes: number;
@@ -103,6 +103,10 @@ export interface ShrineCreature {
   nextForm: DisguiseKind | null;
   /** The game it's in. */
   play: Play | null;
+  /** Its place in a line or on a team, how high up a heap it landed, and whether it has a persimmon ready to throw. */
+  slot: number; team: 1 | -1; heapH: number; armed: boolean;
+  /** How long it stays with fruit on its face, and sticky all over. */
+  splat: number; sticky: number;
   /** Which way it's working round whatever is in its way, and for how much longer. */
   detour: 1 | -1; detourT: number;
   /** Where it was when last checked, to tell when it has stopped getting anywhere. */
@@ -112,7 +116,7 @@ export type Emote = 'bang' | 'what' | 'zed' | 'note' | 'heart';
 
 /** Tall or solid things in the scene. */
 export type PropKind = 'sakura' | 'teahouse' | 'teapotProp' | 'persimmonTree' | 'cedar' | 'sacred' | 'maple' | 'goldMaple' | 'torii' | 'honden' | 'pagoda' | 'hokora' | 'jizo' | 'foxStatue' | 'tanukiStatue' | 'lionStatue' | 'rock' | 'spout';
-export interface Prop { kind: PropKind; x: number; z: number; size: number; seed: number; flip: boolean }
+export interface Prop { kind: PropKind; x: number; z: number; size: number; seed: number; flip: boolean; shake?: number }
 /** Low plants, baked into the floor. */
 export type LowPlant = 'fern' | 'grass' | 'shroom' | 'hydrangea' | 'lily' | 'persimmon';
 export interface Low { kind: LowPlant; x: number; z: number; seed: number; variant: number }
@@ -145,7 +149,7 @@ export interface Altar { x: number; z: number; item: OfferingKind | null; favour
 export interface Water { x: number; z: number; rx: number; rz: number; moonX: number; moonZ: number }
 export interface Bridge { x: number; z: number; w: number }
 export interface Pad { x: number; z: number; r: number; tone: number; flower: number; phase: number; load: number }
-export type MoteKind = 'sakura' | 'steam' | 'dream' | 'spore' | 'smoke' | 'dust' | 'star' | 'note' | 'heart' | 'leaf' | 'crumb' | 'blood' | 'tuft' | 'ring' | 'ember' | 'petal' | 'splash' | 'greenLeaf';
+export type MoteKind = 'sakura' | 'steam' | 'dream' | 'spore' | 'smoke' | 'dust' | 'star' | 'note' | 'heart' | 'leaf' | 'crumb' | 'blood' | 'tuft' | 'ring' | 'ember' | 'petal' | 'splash' | 'greenLeaf' | 'juice';
 export interface Mote { kind: MoteKind; x: number; z: number; h: number; vx: number; vz: number; vh: number; life: number; max: number; seed: number }
 export interface Firefly { x: number; z: number; h: number; vx: number; vz: number; phase: number; life: number }
 export interface Moth { lantern: Lantern; a: number; r: number; h: number; x: number; z: number; alive: boolean; wait: number }
@@ -157,7 +161,9 @@ export interface DrumCircle {
   /** Counts up from the final note, while everybody stares. */
   stunned: number; over: boolean;
 }
-export type PlayKind = 'tag' | 'dance' | 'catch';
+export type PlayKind = 'tag' | 'dance' | 'catch' | 'conga' | 'tug' | 'kick' | 'fruit';
+/** A persimmon on its way to somebody's face. */
+export interface Thrown { x0: number; z0: number; h0: number; x: number; z: number; h: number; t: number; flight: number; lx: number; lz: number; from: ShrineCreature; at: ShrineCreature }
 /** A game of tag, a dance in a ring, or a soul-flame tossed from paw to paw. */
 export interface Play {
   kind: PlayKind; x: number; z: number; rx: number; rz: number; members: ShrineCreature[];
@@ -167,6 +173,14 @@ export interface Play {
   /** Catch: the flame, who has it, who it's flying to, and how far along. */
   flame: ShrineCreature | null; holder: ShrineCreature | null; to: ShrineCreature | null; fetcher: ShrineCreature | null;
   flightT: number; flight: number; fx: number; fz: number; fh: number; lx: number; lz: number; fumble: boolean; throws: number; target: number;
+  /** How far along it is: playing, then falling in a heap or being dragged, then scrambling out. */
+  stage: 'play' | 'heap' | 'drag' | 'out'; stageT: number;
+  /** Follow the leader: where the leader's been, how far down the path it's got, and which way it's going. */
+  crumbs: { x: number; z: number; h: number }[]; row: number; dir: 1 | -1; heapN: number;
+  /** Tug of war: the line of the vine, how far it has been hauled, how fast, and who won. */
+  ax: number; az: number; offset: number; pull: number; winner: 1 | -1;
+  /** The persimmon being kicked about, and the tree being shaken for more. */
+  ball: { x: number; z: number; h: number } | null; tree: Prop | null;
 }
 export interface Tussle { x: number; z: number; a: ShrineCreature; b: ShrineCreature; t: number; dur: number }
 
@@ -180,12 +194,12 @@ export interface Marcher {
 /** The line, walking down the approach: `head` is how far along the path its front has come, `headRow` and `tailRow` the rows its ends are on. */
 export interface Parade { head: number; headRow: number; tailRow: number; speed: number; length: number; marchers: Marcher[] }
 
-export type ShrineHappening = 'festival' | 'fireflies' | 'parade' | 'moonview' | 'contest';
+export type ShrineHappening = 'festival' | 'parade' | 'moonview' | 'contest';
 export type SiteKind = 'hall' | 'inari' | 'den' | 'koi' | 'bamboo' | 'lilies' | 'maples' | 'sacred' | 'pagoda' | 'zen' | 'ring' | 'sakura' | 'teahouse' | 'onsen';
 const SITE_KINDS: SiteKind[] = ['hall', 'koi', 'inari', 'maples', 'den', 'bamboo', 'sacred', 'lilies', 'pagoda', 'zen', 'ring'];
 export interface Site { kind: SiteKind; x: number; z: number; rx: number; rz: number }
 
-export type ShrineSpawnable = ShrineSpecies | 'teapot' | 'lantern' | 'statue' | 'bush' | 'dance' | 'peck' | 'sniff' | 'boo' | 'drum' | 'tag' | 'partners' | 'catch';
+export type ShrineSpawnable = ShrineSpecies | 'teapot' | 'lantern' | 'statue' | 'bush' | 'dance' | 'peck' | 'sniff' | 'boo' | 'drum' | 'tag' | 'partners' | 'catch' | 'conga' | 'tug' | 'kick' | 'fruit';
 
 /** What the rivals turn into in the great contest, in order, each bigger and sillier than the last. */
 export const CONTEST_FORMS = ['teapot', 'lantern', 'statue', 'mushroom', 'koi', 'torii'] as const;
@@ -246,7 +260,7 @@ const PATH_HALF = 7;
 const RIVALS: ShrineSpecies[] = ['tanuki', 'kitsune'];
 const OFFER_FOR_STANDS: OfferingKind[] = ['rice', 'mikan', 'fish', 'rice', 'mikan'];
 const MAX_MOTES = 700;
-const HAPPENING_LENGTH: Record<ShrineHappening, number> = { festival: 60 * TICKS_PER_SECOND, fireflies: 50 * TICKS_PER_SECOND, parade: 120 * TICKS_PER_SECOND, moonview: 60 * TICKS_PER_SECOND, contest: 80 * TICKS_PER_SECOND };
+const HAPPENING_LENGTH: Record<ShrineHappening, number> = { festival: 60 * TICKS_PER_SECOND, parade: 120 * TICKS_PER_SECOND, moonview: 60 * TICKS_PER_SECOND, contest: 80 * TICKS_PER_SECOND };
 
 export class Shrine {
   w = 0;
@@ -302,16 +316,16 @@ export class Shrine {
   drums: DrumCircle[] = [];
   plays: Play[] = [];
   /** How many games of each kind there have been, for checking they turn up often enough. */
-  games = { tag: 0, dance: 0, catch: 0 };
+  games = { tag: 0, dance: 0, catch: 0, conga: 0, tug: 0, kick: 0, fruit: 0 };
+  thrown: Thrown[] = [];
+  private shaken: Prop[] = [];
   parade: Parade | null = null;
   happening: { kind: ShrineHappening; t: number; dur: number } | null = null;
   /** How far the lanterns have gone over to ghost blue for the parade (0 to 1), and how far the festival has lit up. */
   ghostLight = 0;
   festivalLight = 0;
-  /** How far the fireflies' flashes have fallen into step. */
-  syncFlash = 0;
   nextHappening = 50 * TICKS_PER_SECOND;
-  private happeningOrder: ShrineHappening[] = ['fireflies', 'contest', 'parade', 'moonview', 'festival'];
+  private happeningOrder: ShrineHappening[] = ['contest', 'parade', 'moonview', 'festival'];
   spout = { tip: 0, t: 0 };
 
   viewZ = { z0: 0, z1: 200 };
@@ -1011,7 +1025,7 @@ export class Shrine {
       palette: parent ? parent.palette : Math.floor(Math.random() * info.palettes), mood: 'wandering',
       state: 'roam', timer: Math.floor(Math.random() * 60), tx: px, tz: pz,
       parent, foe: null, prey: null, altar: null, hidden: false, disguise: null, sneakLeft: 0, scuttling: false, tailOut: 0,
-      emote: null, emoteT: 0, carrying: null, food: null, spring: null, perch: null, basin: null, ring: null, angle: 0, onBridge: false, home: null, pond: null, pest: null, drum: null, nextForm: null, play: null, detour: 1, detourT: 0, checkX: px, checkZ: pz, checkT: 0, stuckN: 0, walkT: 0,
+      emote: null, emoteT: 0, carrying: null, food: null, spring: null, perch: null, basin: null, ring: null, angle: 0, onBridge: false, home: null, pond: null, pest: null, drum: null, nextForm: null, play: null, slot: 0, team: 1, heapH: 0, armed: false, splat: 0, sticky: 0, detour: 1, detourT: 0, checkX: px, checkZ: pz, checkT: 0, stuckN: 0, walkT: 0,
     };
     if (!c.lineId) c.lineId = c.id;
     const waterFolk = species === 'koi' || species === 'frog' || species === 'kappa';
@@ -1164,6 +1178,8 @@ export class Shrine {
       if (!c.alive) continue;
       c.age++;
       if (c.emoteT > 0 && --c.emoteT === 0) c.emote = null;
+      if (c.splat > 0) c.splat--;
+      if (c.sticky > 0 && --c.sticky % 40 === 0) this.burst('juice', c.x + between(-4, 4), c.z, 12, 1, 0.05, 0);
       if (c.squash) { c.squash *= 0.86; if (Math.abs(c.squash) < 0.01) c.squash = 0; }
       if (c.turnHold > 0) c.turnHold--;
       const info = SHRINE_SPECIES[c.species];
@@ -1887,8 +1903,13 @@ export class Shrine {
         return false;
       },
       ...PLAY_KINDS.map(kind => () => {
-        const leads = among(o => (o.species === 'tanuki' || o.species === 'kitsune') && free(o) && !o.disguise);
-        return leads.length > 0 && this.startPlay(kind, pick(leads));
+        const leads = among(o => (kind === 'conga' ? o.species === 'kitsune' : kind === 'fruit' ? o.species === 'tanuki' : o.species === 'tanuki' || o.species === 'kitsune') && free(o) && !o.disguise);
+        if (!leads.length) return false;
+        if (kind !== 'fruit') return this.startPlay(kind, pick(leads));
+        // A tree out where the fight can be seen, not one behind the page's cards.
+        const tree = this.props.find(q => q.kind === 'persimmonTree' && seen(q) && (q.x < this.w * 0.25 || q.x > this.w * 0.75));
+        if (!tree) return false;
+        return this.startPlay(kind, leads.reduce((b, o) => (dist(o, tree) < dist(b, tree) ? o : b)), false, tree);
       }),
       () => {
         // Somebody strolls past the bamboo with an umbrella in it.
@@ -2203,7 +2224,7 @@ export class Shrine {
     else { c.mood = 'grazing'; this.halt(c); c.energy = Math.min(1, c.energy + 0.0002); }
     // Polite: it bows to a broom spirit or a kappa it meets.
     if (this.tick % 30 === c.id % 30) {
-      const other = this.near(c, 16, o => o.species === 'hahaki' || (o.species === 'kappa' && o.state === 'ashore'));
+      const other = this.near(c, 16, o => o.species === 'hahaki' || (o.species === 'kappa' && (o.state === 'ashore' || o.state === 'stroll')));
       if (other && c.state !== 'bow') {
         this.setFacing(c, other.x - c.x);
         c.state = 'bow'; c.timer = 80;
@@ -2464,6 +2485,40 @@ export class Shrine {
       if (--c.timer <= 0) { c.state = 'home'; c.timer = 400; }
       return;
     }
+    if (c.state === 'stroll') {
+      // Out for a walk round its pond, dripping.
+      c.mood = 'wandering';
+      if (--c.timer <= 0) {
+        // The dish is drying out: back to the water, sharpish.
+        this.emote(c, 'what', 50);
+        c.state = 'home'; c.sneakLeft = 0;
+        return;
+      }
+      if (this.tick % 40 === c.id % 40 && !this.isWater(c.x, c.z) && this.near(c, 16, o => o.species === 'hahaki')) { c.state = 'spill'; c.timer = 80; this.emote(c, 'what', 30); return; }
+      if (c.sneakLeft > 0) {
+        c.sneakLeft--;
+        c.vx = 0; c.vz = 0;
+        if (c.sneakLeft % 60 === 30) c.facing = (c.facing * -1) as 1 | -1;
+        return;
+      }
+      const d = Math.hypot(c.tx - c.x, c.tz - c.z);
+      if (this.isWater(c.x, c.z)) {
+        // Wading out: water is no obstacle to a kappa.
+        c.h = -3;
+        c.x += ((c.tx - c.x) / (d || 1)) * 0.16; c.z += ((c.tz - c.z) / (d || 1)) * 0.16;
+        this.setFacing(c, c.tx - c.x);
+        if (this.tick % 14 === 0) this.burst('ring', c.x, c.z, 0, 1, 0, 0);
+        return;
+      }
+      if (c.h !== 0 && !c.onBridge) { c.h = 0; c.squash = 0.4; this.burst('splash', c.x, c.z, 2, 5, 0.4, 0.5); }
+      if (this.tick % 22 === 0) this.burst('splash', c.x, c.z, 1, 1, 0.1, 0.15);
+      this.walkTo(c, c.tx, c.tz, 0.17);
+      if (d < 5) {
+        this.kappaDestination(c, w);
+        c.sneakLeft = Math.random() < 0.5 ? Math.floor(between(70, 190)) : 0;
+      }
+      return;
+    }
     if (c.state === 'ashore' || c.state === 'home') {
       c.mood = 'wandering';
       const altar = this.altars.find(a => a.favourite === 'cucumber' && dist(a, w) < w.rx + 50);
@@ -2475,7 +2530,7 @@ export class Shrine {
       this.setFacing(c, dx);
       c.h = this.isWater(c.x, c.z) ? -3 : 0;
       if (d < 4) {
-        if (c.state === 'home' || !altar) { c.state = 'swim'; c.timer = Math.floor(between(300, 900)); return; }
+        if (c.state === 'home' || !altar) { c.state = 'swim'; c.timer = Math.floor(between(150, 450)); return; }
         if (altar.item === 'cucumber') { altar.bites = 0; altar.item = null; altar.wait = 200; this.burst('crumb', altar.x, altar.z, 8, 4, 0.3, 0.4); this.meals++; this.emote(c, 'heart', 50); this.log('offering', `${c.name} the kappa took the cucumber`, c); }
         c.state = 'home'; c.timer = 300;
       }
@@ -2494,9 +2549,19 @@ export class Shrine {
     this.setFacing(c, dx);
     if (--c.timer <= 0) {
       const has = this.altars.some(a => a.favourite === 'cucumber' && a.item && dist(a, w) < w.rx + 50);
-      if (has) { c.state = 'ashore'; c.timer = 500; }
-      else c.timer = Math.floor(between(200, 600));
+      if (has && Math.random() < 0.4) { c.state = 'ashore'; c.timer = 500; }
+      else { c.state = 'stroll'; c.timer = Math.floor(between(1100, 2200)); c.sneakLeft = 0; this.kappaDestination(c, w); }
     }
+  }
+
+  /** Somewhere on dry land not too far from its pond. */
+  private kappaDestination(c: ShrineCreature, w: Water) {
+    for (let k = 0; k < 14; k++) {
+      const a = Math.random() * 6.28;
+      const x = clamp(w.x + Math.cos(a) * (w.rx + between(14, 90)), 6, this.w - 7), z = clamp(w.z + Math.sin(a) * (w.rz + between(10, 60)), 6, this.h - 7);
+      if (!this.isSolid(x, z) && !this.inClearZone(x, z)) { c.tx = x; c.tz = z; return; }
+    }
+    c.tx = w.x; c.tz = w.z;
   }
 
   isWater(x: number, z: number) {
@@ -3531,48 +3596,93 @@ export class Shrine {
   private playable(o: ShrineCreature, kind: PlayKind) {
     if (!o.alive || o.disguise || o.hidden || o.drum || o.play) return false;
     switch (o.species) {
-      case 'tanuki': case 'kitsune': return o.state === 'roam' && (kind === 'tag' || !this.isYoung(o));
+      case 'tanuki': case 'kitsune': return o.state === 'roam' && (kind === 'tag' || kind === 'conga' || !this.isYoung(o));
       case 'baku': return o.state === 'roam';
-      case 'hare': return o.state !== 'flee' && o.state !== 'sitWatch';
-      case 'kasa': return kind !== 'catch' && o.state === 'roam';
-      case 'deer': return kind === 'dance' && (o.state === 'walk' || o.state === 'graze');
+      case 'hare': return kind !== 'tug' && kind !== 'fruit' && o.state !== 'flee' && o.state !== 'sitWatch';
+      case 'kasa': return (kind === 'tag' || kind === 'dance' || kind === 'conga') && o.state === 'roam';
+      case 'deer': return (kind === 'dance' || kind === 'conga') && (o.state === 'walk' || o.state === 'graze');
+      case 'mouse': return kind === 'conga' && o.state !== 'flee' && o.state !== 'sitWatch';
+      case 'kappa': return kind !== 'catch' && kind !== 'fruit' && o.state === 'stroll';
       default: return false;
     }
   }
 
   /** Someone starts a game with whoever is about, feuds forgotten. Fails if there's nobody to play with, or no room. */
-  private startPlay(kind: PlayKind, lead: ShrineCreature, force = false) {
+  private startPlay(kind: PlayKind, lead: ShrineCreature, force = false, wantTree: Prop | null = null) {
     if (!force && (this.happening || this.plays.length >= 3 || this.plays.some(p => dist(p, lead) < 150) || this.drums.some(d => dist(d, lead) < 110))) return false;
-    const [rx, rz, want, least] = kind === 'tag' ? [30, 40, 5, 3] : kind === 'dance' ? [18, 12, 4, 2] : [25, 15, 4, 3];
-    if (!force) for (let a = 0; a < 6.28; a += 0.78) {
+    const [rx, rz, want, least] = PLAY_SIZE[kind];
+    if (kind === 'conga' && lead.species !== 'kitsune') return false;
+    if (kind === 'fruit' && lead.species !== 'tanuki') return false;
+    if (!force && kind !== 'conga' && kind !== 'fruit') for (let a = 0; a < 6.28; a += 0.78) {
       const x = lead.x + Math.cos(a) * rx, z = lead.z + Math.sin(a) * rz;
       if (this.isSolid(x, z) || this.inClearZone(x, z)) return false;
+    }
+    // The vine runs on a slant, with room at both ends to be dragged along it.
+    const slant = Math.random() < 0.5 ? 1 : -1;
+    const ax = 0.72, az = 0.69 * slant;
+    if (!force && kind === 'tug') for (let along = -56; along <= 56; along += 8) {
+      const x = lead.x + ax * along, z = lead.z + az * along;
+      if (this.isSolid(x, z) || this.inClearZone(x, z)) return false;
+    }
+    // A fallen persimmon to kick, or a tree to shake.
+    let ball: { x: number; z: number; h: number } | null = null;
+    if (kind === 'kick') {
+      const f = this.fruits.filter(q => q.h === 0 && q.life > 0 && dist(q, lead) < 320).sort((a, b) => dist(a, lead) - dist(b, lead))[0];
+      if (!f) return false;
+      f.life = 0;
+      ball = { x: f.x, z: f.z, h: 0 };
+    }
+    let tree: Prop | null = null;
+    if (kind === 'fruit') {
+      tree = wantTree ?? this.props.filter(q => q.kind === 'persimmonTree' && dist(q, lead) < 260).sort((a, b) => dist(a, lead) - dist(b, lead))[0] ?? null;
+      if (!tree || this.isSolid(tree.x + 7, tree.z + 4)) return false;
+      if (!force && this.creatures.filter(o => o !== lead && this.playable(o, kind) && dist(o, tree!) < 190).length < 2) return false;
     }
     const members = [lead];
     const bakus = this.creatures.filter(o => o.species === 'baku' && o !== lead && this.playable(o, kind) && dist(o, lead) < 240).sort((a, b) => dist(a, lead) - dist(b, lead));
     if (bakus.length) members.push(bakus[0]);
     const rest = this.creatures.filter(o => o !== lead && o !== bakus[0] && this.playable(o, kind) && dist(o, lead) < 130).sort((a, b) => dist(a, lead) - dist(b, lead));
     for (const o of rest) { if (members.length >= want) break; members.push(o); }
+    if (kind === 'fruit') members.length = 1;
     if (members.length < least) return false;
+    // Tanuki against kitsune, and everyone else evens up the sides.
+    if (kind === 'tug') {
+      let left = 0, right = 0;
+      for (const m of members) {
+        if (m.species === 'tanuki') { m.team = -1; m.slot = left++; }
+        else if (m.species === 'kitsune') { m.team = 1; m.slot = right++; }
+      }
+      for (const m of members) {
+        if (m.species === 'tanuki' || m.species === 'kitsune') continue;
+        if (left < right || (left === right && Math.random() < 0.5)) { m.team = -1; m.slot = left++; } else { m.team = 1; m.slot = right++; }
+      }
+      if (!left || !right) return false;
+    }
     const flame = kind === 'catch' ? this.near(lead, 280, o => o.species === 'hitodama' && !o.drum && !o.play) : null;
     if (kind === 'catch' && !flame) return false;
     const p: Play = {
-      kind, x: lead.x, z: lead.z, rx, rz, members, t: 0, dur: kind === 'tag' ? Math.floor(between(650, 950)) : Math.floor(between(480, 720)), started: kind === 'tag', waited: 0, spin: 1, over: false,
+      kind, x: tree ? tree.x : lead.x, z: tree ? tree.z + 14 : lead.z, rx, rz, members, t: 0, dur: kind === 'tag' ? Math.floor(between(650, 950)) : kind === 'conga' ? Math.floor(between(500, 660)) : kind === 'fruit' ? Math.floor(between(700, 950)) : kind === 'tug' ? 540 : Math.floor(between(480, 720)), started: kind === 'tag', waited: 0, spin: 1, over: false,
       it: kind === 'tag' ? lead : null, last: null, wait: 60, since: 0,
       flame, holder: members[0], to: null, fetcher: null, flightT: -20, flight: 1, fx: 0, fz: 0, fh: 0, lx: 0, lz: 0, fumble: false, throws: 0, target: Math.floor(between(12, 20)),
+      stage: 'play', stageT: 0, crumbs: [], row: clamp(Math.round(lead.z), 3, this.h - 4), dir: lead.z < (this.viewZ.z0 + this.viewZ.z1) / 2 ? 1 : -1, heapN: 0,
+      ax, az, offset: 0, pull: 0, winner: 1, ball, tree,
     };
+    // The line keeps to the path while it's in the open, and to the gutter on this side while the page's cards would hide it.
+    if (kind === 'conga') p.lx = lead.x < this.w / 2 ? Math.min(this.w * 0.11, 40) : this.w - Math.min(this.w * 0.11, 40);
     this.plays.push(p);
     this.games[kind]++;
     members.forEach((c, k) => {
       c.play = p;
-      c.state = kind === 'tag' ? 'playTag' : 'playGo';
-      c.food = null; c.altar = null; c.foe = null; c.prey = null; c.ring = null; c.spring = null;
+      c.state = kind === 'tag' ? 'playTag' : kind === 'fruit' ? 'fruitGo' : kind === 'conga' ? (c === lead ? 'congaLead' : 'congaGo') : 'playGo';
+      c.food = null; c.altar = null; c.foe = null; c.prey = null; c.ring = null; c.spring = null; c.armed = false;
+      if (kind === 'conga') c.slot = k;
       c.angle = (k / members.length) * 6.28;
       this.emote(c, kind === 'tag' && c === lead ? 'bang' : 'note', 50);
     });
     if (flame) { flame.play = p; flame.state = 'ball'; }
     const names = members.slice(0, 2).map(m => m.name).join(' and ');
-    this.log('visit', kind === 'tag' ? `${names} are playing tag` : kind === 'dance' ? `${names} are dancing together` : `${names} are tossing a soul-flame about`, lead);
+    this.log('visit', kind === 'tag' ? `${names} are playing tag` : kind === 'dance' ? `${names} are dancing together` : kind === 'catch' ? `${names} are tossing a soul-flame about`
+      : kind === 'conga' ? `${lead.name} struts down the path, and they fall in behind` : kind === 'tug' ? 'A tug of war: tanuki against kitsune' : kind === 'kick' ? `${names} are kicking a persimmon about` : `${lead.name} has its eye on that persimmon tree`, lead);
     return true;
   }
 
@@ -3580,11 +3690,21 @@ export class Shrine {
     for (let i = this.plays.length - 1; i >= 0; i--) {
       const p = this.plays[i];
       p.members = p.members.filter(m => m.alive && m.play === p);
-      if (p.members.length < 2) this.endPlay(p, false);
+      if (p.members.length < (p.kind === 'fruit' || p.kind === 'conga' ? 1 : 2)) this.endPlay(p, false);
       else if (p.kind === 'tag') this.updateTag(p);
       else if (p.kind === 'dance') this.updateDance(p);
+      else if (p.kind === 'conga') this.updateConga(p);
+      else if (p.kind === 'tug') this.updateTug(p);
+      else if (p.kind === 'kick') this.updateKick(p);
+      else if (p.kind === 'fruit') this.updateFruitFight(p);
       else this.updateCatch(p);
       if (p.over) this.plays.splice(i, 1);
+    }
+    this.updateThrown();
+    for (let i = this.shaken.length - 1; i >= 0; i--) {
+      const t = this.shaken[i];
+      t.shake = (t.shake ?? 0) * 0.9;
+      if (t.shake < 0.03) { t.shake = 0; this.shaken.splice(i, 1); }
     }
   }
 
@@ -3593,9 +3713,10 @@ export class Shrine {
     for (const c of p.members) {
       c.play = null;
       if (!c.alive) continue;
-      c.h = 0; c.vh = 0; c.vx = 0; c.vz = 0;
+      c.h = 0; c.vh = 0; c.vx = 0; c.vz = 0; c.armed = false; c.heapH = 0;
+      if (this.isSolid(c.x, c.z) || this.inClearZone(c.x, c.z)) this.freeSpot(c);
       c.tx = c.x; c.tz = c.z;
-      c.state = c.species === 'deer' ? 'walk' : 'roam';
+      c.state = c.species === 'deer' ? 'walk' : c.species === 'kappa' ? 'home' : 'roam';
       c.timer = Math.floor(between(30, 90));
       if (cheer) { this.emote(c, 'note', 50); c.squash = 0.4; }
     }
@@ -3698,9 +3819,21 @@ export class Shrine {
   private thinkPlay(c: ShrineCreature) {
     const p = c.play!;
     if (c === p.flame) return;
-    this.fall(c, 0.11);
     const baku = c.species === 'baku';
+    if (c.state === 'heaped') { this.thinkHeaped(c); return; }
+    if (p.kind === 'conga' && c.state !== 'heapOut') { this.thinkConga(c, p, baku); return; }
+    this.fall(c, 0.11);
+    if (c.state === 'heapOut') {
+      // Scrambling out of it, all elbows.
+      const nx = c.x + c.vx, nz = c.z + c.vz;
+      if (!this.isSolid(nx, nz)) { c.x = nx; c.z = nz; }
+      c.vx *= 0.92; c.vz *= 0.92;
+      return;
+    }
     if (p.kind === 'tag') { this.thinkTag(c, p, baku); return; }
+    if (p.kind === 'tug') { this.thinkTug(c, p, baku); return; }
+    if (p.kind === 'kick') { this.thinkKick(c, p, baku); return; }
+    if (p.kind === 'fruit') { this.thinkFruitFight(c, p, baku); return; }
     const tx = p.x + Math.cos(c.angle) * p.rx, tz = p.z + Math.sin(c.angle) * p.rz;
     if (p.kind === 'dance') {
       c.mood = 'dancing together';
@@ -3739,6 +3872,439 @@ export class Shrine {
     c.vx = 0; c.vz = 0;
     const watch = p.to ?? p.flame;
     if (watch) this.setFacing(c, watch.x - c.x);
+  }
+
+  // --- follow the leader ---
+
+  private updateConga(p: Play) {
+    const lead = p.members[0];
+    if (p.stage === 'out') {
+      if (++p.stageT > 44) this.endPlay(p, true);
+      return;
+    }
+    if (p.stage === 'heap') {
+      p.stageT++;
+      const landed = p.members.every(m => m.state === 'heaped');
+      if ((landed && p.stageT > p.members.length * 8 + 70) || p.stageT > 320) {
+        this.burst('dust', p.x, p.z, 8, 14, 1, 0.5);
+        this.burst('star', p.x, p.z, 16, 8, 0.9, 0.9);
+        p.members.forEach(m => this.tumbleOut(m, p.x, p.z));
+        p.stage = 'out'; p.stageT = 0;
+      } else if (this.tick % 9 === 0) this.burst('star', p.x + between(-9, 9), p.z, 14 + p.heapN * 5, 1, 0.3, 0.5);
+      return;
+    }
+    if (!p.started) return;
+    p.t++;
+    if (p.t >= p.dur) { this.startHeap(p, lead); return; }
+    // The line picks up whoever it passes.
+    if (p.t % 46 === 0 && p.t < p.dur * 0.85 && p.members.length < 10) {
+      const tail = p.members[p.members.length - 1];
+      const nearest = this.creatures.filter(o => this.playable(o, 'conga') && (dist(o, lead) < 90 || dist(o, tail) < 90)).sort((a, b) => dist(a, tail) - dist(b, tail))[0];
+      if (nearest) {
+        nearest.play = p;
+        nearest.state = 'congaGo';
+        nearest.slot = p.members.length;
+        nearest.food = null; nearest.altar = null; nearest.foe = null; nearest.prey = null;
+        p.members.push(nearest);
+        this.emote(nearest, 'note', 40);
+      }
+    }
+  }
+
+  /** The leader stops dead. Nobody behind was looking. */
+  private startHeap(p: Play, lead: ShrineCreature) {
+    p.stage = 'heap'; p.stageT = 0; p.x = lead.x; p.z = lead.z; p.heapN = 0;
+    lead.vx = 0; lead.vz = 0;
+    this.land(lead, p);
+    this.emote(lead, 'what', 60);
+    for (const m of p.members) if (m !== lead) { m.state = 'congaCrash'; m.timer = (m.slot - 1) * 7; }
+  }
+
+  private land(c: ShrineCreature, p: Play) {
+    c.state = 'heaped';
+    c.heapH = p.heapN * 9;
+    c.h = c.heapH; c.vh = 0;
+    c.x = p.x + between(-8, 8);
+    c.z = p.z + 0.02 * p.heapN;
+    c.vx = 0; c.vz = 0;
+    c.squash = 0.8;
+    c.facing = Math.random() < 0.5 ? 1 : -1;
+    p.heapN++;
+    this.burst('dust', c.x, p.z, 2, 4, 0.6, 0.3);
+    this.burst('star', c.x, p.z, 8 + c.heapH, 2, 0.5, 0.6);
+    if (p.members[0] && p.members[0] !== c) p.members[0].squash = 0.6;
+  }
+
+  private tumbleOut(c: ShrineCreature, x: number, z: number) {
+    const a = Math.random() * 6.28;
+    c.state = 'heapOut';
+    c.h = Math.max(0.1, c.heapH * 0.5);
+    c.vh = between(1.2, 1.9);
+    c.vx = Math.cos(a) * 0.9 + (c.x - x) * 0.03;
+    c.vz = Math.sin(a) * 0.55 + (c.z - z) * 0.03;
+    this.setFacing(c, c.vx);
+    this.emote(c, Math.random() < 0.5 ? 'what' : 'note', 40);
+  }
+
+  private thinkHeaped(c: ShrineCreature) {
+    c.mood = 'in a heap';
+    c.h = c.heapH;
+    c.vx = 0; c.vz = 0;
+    if (this.tick % 16 === c.id % 16) { c.squash = 0.3; if (Math.random() < 0.4) c.facing = (c.facing * -1) as 1 | -1; }
+  }
+
+  private thinkConga(c: ShrineCreature, p: Play, baku: boolean) {
+    c.mood = 'following the leader';
+    if (c.state === 'congaCrash') {
+      // Too late to stop.
+      if (--c.timer > 0 && p.crumbs.length) this.followCrumb(c, p);
+      else {
+        const d = Math.hypot(p.x - c.x, p.z - c.z);
+        c.vx = ((p.x - c.x) / (d || 1)) * 0.85; c.vz = ((p.z - c.z) / (d || 1)) * 0.85;
+        c.x += c.vx; c.z += c.vz;
+        this.setFacing(c, c.vx);
+        c.h += (0 - c.h) * 0.2;
+        if (d < 8) this.land(c, p);
+      }
+      return;
+    }
+    if (c.state === 'congaLead') {
+      if (!p.started) {
+        p.waited++;
+        const row = clamp(p.row, 2, this.h - 3);
+        if (this.walkTo(c, this.congaX(p, row), row, 0.5) < 5 || p.waited > 200) {
+          p.started = true;
+          this.emote(c, 'note', 50);
+        }
+        return;
+      }
+      // Struts down the middle of the path, knees high, and everyone else copies it.
+      this.fall(c, 0.1);
+      const ahead = clamp(Math.round(c.z + p.dir * 14), 2, this.h - 3);
+      this.walkTo(c, this.congaX(p, ahead), ahead, 0.34);
+      const row = c.z;
+      p.row = row;
+      if (c.h === 0 && this.tick % 26 === 0) { c.vh = 1; c.h = 0.1; c.squash = 0.5; }
+      p.crumbs.push({ x: c.x, z: c.z, h: c.h });
+      if (p.crumbs.length > CONGA_GAP * 12) p.crumbs.shift();
+      if (row <= 3 || row >= this.h - 4 || this.inClearZone(c.x, c.z + p.dir * 10)) p.t = p.dur;
+      return;
+    }
+    c.vh = 0;
+    if (c.state === 'congaGo') {
+      const at = p.crumbs.length ? p.crumbs[Math.max(0, p.crumbs.length - 1 - c.slot * CONGA_GAP)] : p.members[0];
+      c.h += (0 - c.h) * 0.2;
+      if (this.walkTo(c, at.x, at.z, baku ? 0.42 : 0.58) < 8 && p.started) c.state = 'conga';
+      return;
+    }
+    if (p.crumbs.length) this.followCrumb(c, p);
+  }
+
+  private congaX(p: Play, row: number) {
+    const x = this.pathX[row];
+    return x < this.w * 0.2 || x > this.w * 0.8 ? x : p.lx;
+  }
+
+  /** Exactly where the leader was a moment ago, and exactly as high in the air. */
+  private followCrumb(c: ShrineCreature, p: Play) {
+    const at = p.crumbs[Math.max(0, p.crumbs.length - 1 - c.slot * CONGA_GAP)];
+    const nx = c.x + (at.x - c.x) * 0.4, nz = c.z + (at.z - c.z) * 0.4;
+    c.vx = nx - c.x; c.vz = nz - c.z;
+    c.x = nx; c.z = nz;
+    c.h = at.h;
+    c.vh = 0;
+    this.setFacing(c, c.vx);
+  }
+
+  // --- tug of war ---
+
+  /** Where along the vine it stands, as the vine gets hauled one way or the other. */
+  private tugSpot(c: ShrineCreature, p: Play) {
+    const along = p.offset + c.team * (15 + c.slot * 12);
+    return { x: p.x + p.ax * along, z: p.z + p.az * along };
+  }
+
+  private updateTug(p: Play) {
+    if (p.stage === 'out') {
+      if (++p.stageT > 40) this.endPlay(p, true);
+      return;
+    }
+    const left = p.members.filter(m => m.team < 0), right = p.members.filter(m => m.team > 0);
+    if (!left.length || !right.length) { this.endPlay(p, false); return; }
+    if (p.stage === 'drag') {
+      // The winners run for it, and the losers come too, whether they like it or not.
+      p.offset += p.winner * 0.55;
+      p.stageT++;
+      if (this.tick % 3 === 0) {
+        const heap = this.tugSpot((p.winner > 0 ? left : right)[0], p);
+        this.burst('dust', heap.x, heap.z, 1, 2, 0.5, 0.2);
+      }
+      if (p.stageT > 90) {
+        for (const m of p.members) {
+          if (m.team === p.winner) { m.state = 'heapOut'; m.h = 0.1; m.vh = 1.4; m.vx = 0; m.vz = 0; this.emote(m, 'note', 50); }
+          else this.tumbleOut(m, m.x, m.z);
+        }
+        p.stage = 'out'; p.stageT = 0;
+      }
+      return;
+    }
+    if (!p.started) {
+      if (p.members.every(m => m.state === 'tugPull') || ++p.waited > 260) { p.started = true; this.emote(p.members[0], 'bang', 40); }
+      return;
+    }
+    p.t++;
+    const might = (team: ShrineCreature[]) => team.reduce((sum, m) => sum + (m.species === 'baku' ? 1.7 : 1), 0);
+    // Heaves, back and forth, each side getting a second wind.
+    if (p.t % 20 === 0) {
+      const surge = between(-1.5, 1.5);
+      p.pull += (might(right) - might(left)) * 0.07 + surge * 0.3;
+      for (const m of p.members) { m.squash = 0.4; if (m.h === 0 && Math.random() < 0.35) m.vh = 0.6; }
+      const end = pick(p.members);
+      this.burst('dust', end.x, end.z, 0, 2, 0.4, 0.2);
+    }
+    p.pull *= 0.97;
+    p.offset += p.pull * 0.55;
+    if (p.t >= p.dur && Math.abs(p.offset) < 22) p.offset += Math.sign(p.offset || 1) * 0.3;
+    if (Math.abs(p.offset) > 22) {
+      p.winner = p.offset > 0 ? 1 : -1;
+      p.stage = 'drag'; p.stageT = 0;
+      let n = 0;
+      for (const m of p.members) {
+        if (m.team === p.winner) { this.emote(m, 'note', 60); continue; }
+        // Flat on their faces, on top of each other.
+        m.state = 'heaped';
+        m.heapH = n * 9;
+        m.slot = n++;
+        m.squash = 0.8;
+        this.emote(m, 'bang', 50);
+      }
+      this.burst('dust', p.x + p.ax * p.offset, p.z + p.az * p.offset, 2, 10, 0.8, 0.4);
+      this.log('visit', `The ${p.winner > 0 ? 'kitsune' : 'tanuki'} win the tug of war`, p.members[0]);
+    }
+  }
+
+  private thinkTug(c: ShrineCreature, p: Play, baku: boolean) {
+    c.mood = 'tug of war';
+    const at = this.tugSpot(c, p);
+    if (c.state === 'playGo') {
+      if (this.walkTo(c, at.x, at.z, baku ? 0.38 : 0.48) < 4) c.state = 'tugPull';
+      return;
+    }
+    const nx = c.x + (at.x - c.x) * 0.3, nz = c.z + (at.z - c.z) * 0.3;
+    c.vx = nx - c.x; c.vz = nz - c.z;
+    c.x = nx; c.z = nz;
+    // Leaning back on the vine, or at the end pelting away with it.
+    const toward = p.stage === 'drag' ? p.winner * p.ax : -c.team * p.ax;
+    c.facing = (toward > 0 ? 1 : -1) as 1 | -1;
+    c.turnHold = 4;
+  }
+
+  // --- the persimmon kickabout ---
+
+  private updateKick(p: Play) {
+    const b = p.ball;
+    if (!b) { this.endPlay(p, false); return; }
+    if (p.stage === 'out') {
+      if (++p.stageT > 80) this.endPlay(p, true);
+      return;
+    }
+    if (!p.started) {
+      if (p.members.every(m => m.state === 'playWait') || ++p.waited > 260) p.started = true;
+      return;
+    }
+    if (p.to && (!p.to.alive || p.to.play !== p)) p.to = null;
+    if (!p.holder?.alive || p.holder.play !== p) p.holder = p.members[0];
+    if (!p.to) {
+      const others = p.members.filter(m => m !== p.holder && m.state === 'playWait');
+      if (!others.length) return;
+      const from = p.holder;
+      p.to = pick(others);
+      p.fx = b.x; p.fz = b.z; p.fh = b.h;
+      p.lx = p.to.x; p.lz = p.to.z + 0.5;
+      const last = p.throws >= p.target;
+      p.flight = Math.round((last ? 46 : 26) + Math.hypot(p.lx - p.fx, p.lz - p.fz) * 0.5);
+      p.flightT = 0;
+      if (from.h === 0) from.vh = 0.8;
+      from.squash = 0.5;
+      this.setFacing(from, p.to.x - from.x);
+      this.burst('star', b.x, b.z, b.h, 1, 0.3, 0.4);
+    }
+    p.flightT++;
+    const to = p.to!;
+    const last = p.throws >= p.target;
+    const s = p.flightT / p.flight;
+    const faceH = (SHRINE_BODY_HEIGHT[to.species] ?? 16) / ELEVATION;
+    const endH = last ? faceH : 7;
+    b.x = p.fx + (to.x - p.fx) * s;
+    b.z = p.fz + (to.z + 0.5 - p.fz) * s;
+    b.h = p.fh + (endH - p.fh) * s + Math.sin(s * Math.PI) * (last ? 60 : 24 + p.flight * 0.3);
+    if (!last && p.flightT === p.flight - 10 && to.h === 0) { to.vh = 0.85; to.squash = 0.4; }
+    if (p.flightT < p.flight) return;
+    p.throws++;
+    p.to = null;
+    if (!last) { p.holder = to; to.squash = 0.5; return; }
+    // Right in the face.
+    this.splatter(to);
+    p.ball = { x: to.x, z: to.z, h: -100 };
+    p.stage = 'out'; p.stageT = 0;
+    for (const m of p.members) {
+      if (m === to) continue;
+      m.state = 'heapOut'; m.vx = 0; m.vz = 0; m.h = Math.max(m.h, 0.1); m.vh = 1;
+      this.emote(m, 'note', 70);
+    }
+    to.state = 'heapOut'; to.vx = 0; to.vz = 0; to.h = 0.1; to.vh = 0.9;
+    this.log('visit', `${to.name} takes a persimmon to the face`, to);
+  }
+
+  private thinkKick(c: ShrineCreature, p: Play, baku: boolean) {
+    c.mood = 'kickabout';
+    const a = c.angle;
+    if (c.state === 'playGo') {
+      if (this.walkTo(c, p.x + Math.cos(a) * p.rx, p.z + Math.sin(a) * p.rz, baku ? 0.36 : 0.45) < 4) { c.state = 'playWait'; c.vx = 0; c.vz = 0; }
+      return;
+    }
+    c.vx = 0; c.vz = 0;
+    if (p.ball) this.setFacing(c, p.ball.x - c.x);
+  }
+
+  /** Fruit on the face and stuck in the fur, for a good while. */
+  private splatter(c: ShrineCreature) {
+    c.splat = 260;
+    c.sticky = 900;
+    c.squash = 1;
+    this.emote(c, 'bang', 50);
+    const face = (SHRINE_BODY_HEIGHT[c.species] ?? 16) / ELEVATION;
+    this.burst('juice', c.x, c.z, face, 16, 0.6, 0.7);
+  }
+
+  // --- the fruit fight ---
+
+  private updateFruitFight(p: Play) {
+    const tree = p.tree;
+    if (!tree) { this.endPlay(p, false); return; }
+    if (!p.started) return;
+    p.t++;
+    if (p.t >= p.dur) {
+      for (const m of p.members) this.emote(m, 'note', 50);
+      this.endPlay(p, true);
+      return;
+    }
+    // Everyone nearby wants in.
+    if (p.t % 24 === 0 && p.t < p.dur * 0.7 && p.members.length < 8) {
+      const o = this.creatures.filter(q => this.playable(q, 'fruit') && dist(q, tree) < 230).sort((a, b) => dist(a, tree) - dist(b, tree))[0];
+      if (o) {
+        o.play = p; o.state = 'fruitFight'; o.armed = false; o.timer = 0; o.food = null; o.altar = null; o.foe = null; o.prey = null;
+        p.members.push(o);
+        this.emote(o, 'bang', 40);
+      }
+    }
+    // The tree keeps giving, as long as there's somebody bouncing off it.
+    if (p.t % 40 === 0 && this.fruitsNear(tree) < 6) this.dropFruit(tree, 2);
+  }
+
+  private fruitsNear(tree: Prop) {
+    let n = 0;
+    for (const f of this.fruits) if (f.life > 0 && dist(f, tree) < 70) n++;
+    return n;
+  }
+
+  private dropFruit(tree: Prop, count: number) {
+    for (let k = 0; k < count; k++) {
+      const x = tree.x + between(-tree.size * 1.5, tree.size * 1.5), z = tree.z + between(0, 26);
+      if (!this.isWater(x, z)) this.fruits.push({ x, z, h: tree.size * 2 + between(0, 10), vh: 0, life: 1500 });
+    }
+  }
+
+  private thinkFruitFight(c: ShrineCreature, p: Play, baku: boolean) {
+    c.mood = 'fruit fight';
+    const tree = p.tree!;
+    if (c.state === 'fruitGo') {
+      if (this.walkTo(c, tree.x + 7, tree.z + 4, 0.5) < 4) { c.state = 'fruitButt'; c.timer = 0; c.slot = 0; }
+      return;
+    }
+    if (c.state === 'fruitButt') {
+      // Back a step, and head first into the trunk, three times.
+      c.mood = 'fruit fight';
+      c.facing = -1; c.turnHold = 4;
+      c.vx = 0; c.vz = 0;
+      c.timer++;
+      c.x = tree.x + 7 + (c.timer < 22 ? c.timer * 0.5 : Math.max(0, 11 - (c.timer - 22) * 2.2));
+      if (c.timer === 28) {
+        c.squash = 1;
+        c.vh = 0.7; c.h = 0.1;
+        tree.shake = 1;
+        if (!this.shaken.includes(tree)) this.shaken.push(tree);
+        this.burst('leaf', tree.x, tree.z, tree.size * 2.2, 8, 0.8, 0.2);
+        this.burst('star', tree.x + 4, tree.z, 14, 3, 0.4, 0.6);
+        this.dropFruit(tree, c.slot === 2 ? 14 : 2);
+        if (++c.slot >= 3) {
+          c.state = 'fruitFight'; c.armed = false; c.timer = 0;
+          p.started = true;
+          this.emote(c, 'note', 50);
+          this.log('visit', `Persimmons rain down, and a fruit fight breaks out`, c);
+        } else c.timer = 0;
+      }
+      return;
+    }
+    if (c.armed) {
+      // Lining up a shot at whoever got it last, or whoever's closest.
+      let target = c.foe && c.foe.alive && c.foe.play === p ? c.foe : null;
+      if (!target) {
+        let best = Infinity;
+        for (const o of p.members) { if (o === c) continue; const d = dist(o, c); if (d < best) { best = d; target = o; } }
+      }
+      if (!target) return;
+      const d = dist(c, target);
+      if (d > 62) this.walkTo(c, target.x, target.z, baku ? 0.3 : 0.42);
+      else if (d < 24) this.walkTo(c, c.x + (c.x - target.x), c.z + (c.z - target.z), baku ? 0.3 : 0.42);
+      else { c.vx *= 0.7; c.vz *= 0.7; }
+      this.setFacing(c, target.x - c.x);
+      if (--c.timer <= 0 && d <= 80) this.throwFruit(c, target);
+      return;
+    }
+    // Scrabbling for the nearest bit of ammunition.
+    let f: Fruit | null = null;
+    let best = 150;
+    for (const q of this.fruits) { if (q.h > 0 || q.life <= 0) continue; const d = dist(q, c); if (d < best) { best = d; f = q; } }
+    if (f) {
+      if (this.walkTo(c, f.x, f.z, baku ? 0.4 : 0.56) < 5) {
+        f.life = 0;
+        c.armed = true;
+        c.timer = Math.floor(between(14, 40));
+        if (c.h === 0) { c.vh = 0.6; c.h = 0.1; }
+      }
+      return;
+    }
+    const a = c.angle += 0.03;
+    this.walkTo(c, p.x + Math.cos(a) * p.rx, p.z + Math.sin(a) * p.rz, 0.4);
+  }
+
+  private throwFruit(c: ShrineCreature, target: ShrineCreature) {
+    c.armed = false;
+    c.squash = 0.6;
+    if (c.h === 0) { c.vh = 0.75; c.h = 0.1; }
+    const h0 = (SHRINE_BODY_HEIGHT[c.species] ?? 16) / ELEVATION;
+    const d = dist(c, target);
+    this.thrown.push({ x0: c.x, z0: c.z, h0, x: c.x, z: c.z, h: h0, t: 0, flight: Math.round(16 + d * 0.28), lx: target.x, lz: target.z, from: c, at: target });
+  }
+
+  private updateThrown() {
+    for (let i = this.thrown.length - 1; i >= 0; i--) {
+      const t = this.thrown[i];
+      t.t++;
+      const s = t.t / t.flight;
+      t.x = t.x0 + (t.lx - t.x0) * s;
+      t.z = t.z0 + (t.lz - t.z0) * s;
+      const end = (SHRINE_BODY_HEIGHT[t.at.species] ?? 16) / ELEVATION;
+      t.h = t.h0 + (end - t.h0) * s + Math.sin(s * Math.PI) * 18;
+      if (t.t < t.flight) continue;
+      this.thrown.splice(i, 1);
+      // Aimed where it was, so anyone quick on their feet is safe.
+      if (t.at.alive && dist(t.at, t) < 12) {
+        this.splatter(t.at);
+        t.at.foe = t.from;
+      } else this.burst('juice', t.x, t.z, 1, 10, 0.5, 0.45);
+    }
   }
 
   private thinkTag(c: ShrineCreature, p: Play, baku: boolean) {
@@ -3860,8 +4426,6 @@ export class Shrine {
 
   private updateFireflies() {
     const flies = this.fireflies;
-    const event = this.happening?.kind === 'fireflies';
-    this.syncFlash += ((event ? 1 : 0) - this.syncFlash) * 0.003;
     for (let i = flies.length - 1; i >= 0; i--) {
       const f = flies[i];
       f.life--;
@@ -3871,12 +4435,9 @@ export class Shrine {
       f.x += f.vx; f.z += f.vz;
       f.h += Math.sin(this.tick * 0.03 + f.phase) * 0.05;
     }
-    const want = event ? 620 : 30;
-    if (flies.length < want && this.tick % (event ? 1 : 20) === 0) {
-      for (let k = 0; k < (event ? 5 : 1); k++) {
-        const z = between(this.viewZ.z0 - 40, this.viewZ.z1 + 60);
-        this.addFirefly(between(0, this.w), clamp(z, 0, this.h - 1));
-      }
+    if (flies.length < 30 && this.tick % 20 === 0) {
+      const z = between(this.viewZ.z0 - 40, this.viewZ.z1 + 60);
+      this.addFirefly(between(0, this.w), clamp(z, 0, this.h - 1));
     }
   }
 
@@ -3958,7 +4519,7 @@ export class Shrine {
         }
       }
       this.log('visit', 'The lantern festival begins', null);
-    } else if (kind === 'fireflies') this.log('visit', 'A firefly night', null);
+    }
   }
 
   private updateHappening() {
@@ -3982,10 +4543,6 @@ export class Shrine {
       for (const c of this.creatures) {
         if ((c.species === 'tanuki' || c.species === 'kitsune') && c.state === 'roam' && Math.random() < 0.25) { c.state = 'perform'; c.timer = Math.floor(between(120, 260)); }
       }
-    }
-    if (kind === 'fireflies' && this.tick % 50 === 0) {
-      // Kits and cubs chase them, hopping.
-      for (const c of this.creatures) if ((c.species === 'tanuki' || c.species === 'kitsune') && this.isYoung(c) && c.h === 0) c.vh = 0.7;
     }
     if (ev) {
       ev.t++;
@@ -4143,13 +4700,19 @@ export class Shrine {
       return;
     }
     if (kind === 'drum') { this.startDrumCircle(this.spawn('tanuki', x, z), true); return; }
-    if (kind === 'tag' || kind === 'partners' || kind === 'catch') {
+    if (kind === 'tag' || kind === 'partners' || kind === 'catch' || kind === 'conga' || kind === 'tug' || kind === 'kick' || kind === 'fruit') {
       // Somebody to play with, right there, whoever else is about.
       const game: PlayKind = kind === 'partners' ? 'dance' : kind;
-      const lead = this.spawn('tanuki', x, z);
-      this.spawn('kitsune', x + 22, z + 8);
+      // A tree to fight under, if that's the game: the one nearest here.
+      const tree = kind === 'fruit' ? this.props.filter(q => q.kind === 'persimmonTree').sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0] : null;
+      if (tree) { x = tree.x + 30; z = tree.z + 16; }
+      const lead = this.spawn(kind === 'conga' ? 'kitsune' : 'tanuki', x, z);
+      this.spawn(kind === 'tug' || kind === 'conga' ? 'tanuki' : 'kitsune', x + 22, z + 8);
+      if (kind === 'tug' || kind === 'conga' || kind === 'fruit') this.spawn('kitsune', x - 22, z + 14);
+      if (kind === 'tug') this.spawn('kitsune', x + 8, z - 16);
+      if (kind === 'kick') this.fruits.push({ x: x + 6, z: z + 4, h: 0, vh: 0, life: 900 });
       if (!bakuFull) this.spawn('baku', x - 26, z + 10);
-      if (game !== 'dance') this.spawn('hare', x + 8, z - 18);
+      if (game === 'tag' || game === 'catch' || game === 'kick' || game === 'conga') this.spawn('hare', x + 8, z - 18);
       if (game === 'catch') { const f = this.spawn('hitodama', x, z - 10); f.h = 14; }
       this.startPlay(game, lead, true);
       return;
@@ -4176,7 +4739,8 @@ export class Shrine {
       const w = this.waters.reduce((b, q) => (Math.hypot(q.x - x, q.z - z) < Math.hypot(b.x - x, b.z - z) ? q : b));
       const c = this.spawn(kind, w.x, w.z);
       c.pond = w;
-      c.state = kind === 'frog' ? 'sit' : kind === 'kappa' ? 'swim' : 'roam';
+      c.state = kind === 'frog' ? 'sit' : kind === 'kappa' ? 'stroll' : 'roam';
+      if (kind === 'kappa') { c.timer = 1500; c.sneakLeft = 0; this.kappaDestination(c, w); }
       return;
     }
     const c = this.spawn(kind, x, z);
@@ -4213,7 +4777,13 @@ const siteBox = (kind: SiteKind, x: number, z: number, k: number) => {
 /** However many are asked for, the whole page only ever holds this many baku. */
 const MAX_BAKU = 5;
 const DRUM_GAP = 2400;
-const PLAY_KINDS: PlayKind[] = ['tag', 'dance', 'catch', 'catch'];
+const PLAY_KINDS: PlayKind[] = ['tag', 'dance', 'catch', 'catch', 'conga', 'conga', 'tug', 'kick', 'fruit', 'fruit'];
+/** How much room each game needs across and down, how many it wants, and the fewest it can be played with. */
+const PLAY_SIZE: Record<PlayKind, [number, number, number, number]> = { tag: [30, 40, 5, 3], dance: [18, 12, 4, 2], catch: [25, 15, 4, 3], conga: [0, 0, 3, 2], tug: [34, 30, 6, 4], kick: [24, 15, 4, 3], fruit: [34, 22, 1, 1] };
+/** How many ticks behind the one in front each member of a line follows. */
+const CONGA_GAP = 58;
+/** Roughly where each creature's face is, in rows up from its feet. */
+const SHRINE_BODY_HEIGHT: Partial<Record<ShrineSpecies, number>> = { kappa: 13, tanuki: 16, kitsune: 17, baku: 20, hare: 12, deer: 22, mouse: 6, kasa: 14 };
 const FOREST_TREE = new Set<PropKind>(['cedar', 'maple', 'goldMaple', 'persimmonTree']);
 /** How tall each disguise stands, in rows, for a crow to land on; and how often it pecks (the view times its beak by this too). */
 const DISGUISE_ROWS: Record<DisguiseKind, number> = { teapot: 12, lantern: 16, statue: 15 };
