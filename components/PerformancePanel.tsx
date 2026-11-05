@@ -14,9 +14,9 @@ const TIER_LABELS: Record<PerformanceTier, string> = {
 };
 
 const TIER_DESCRIPTIONS: Record<PerformanceTier, string> = {
-  low: 'Fewest fish, glow effects off. Best for older phones and low-power devices.',
-  medium: 'Moderate fish count, glow effects reduced.',
-  high: 'Full fish count and full glow effects.',
+  low: 'Lightest visuals, with the fewest effects. Best for older phones and low-power devices.',
+  medium: 'Fewer creatures and effects on the aquarium, chunkier pixels on the pixel pages.',
+  high: 'Full detail and full effects.',
 };
 
 const PerformancePanel: React.FC<PerformancePanelProps> = ({ isOpen, onClose }) => {
@@ -76,7 +76,7 @@ const PerformancePanel: React.FC<PerformancePanelProps> = ({ isOpen, onClose }) 
 
         <div className="px-5 py-4 overflow-y-auto max-h-[calc(100vh-13rem)] space-y-4">
           <p className={`text-sm leading-relaxed ${mutedTextClasses}`}>
-            This site automatically lowers fish count and glow effects on slower devices so the page stays smooth. You can override that here for testing, or to trade visuals for smoothness yourself.
+            This site automatically lowers detail and effects on slower devices so the page stays smooth. You can override that here for testing, or to trade visuals for smoothness yourself.
           </p>
 
           <div className={`rounded-xl border p-3 ${slotClasses}`}>
