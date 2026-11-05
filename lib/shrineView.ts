@@ -284,9 +284,8 @@ export class ShrineView {
           c = rim[hash(Math.floor(x / 3) + Math.floor(z / 2) * 97) < 0.5 ? 0 : 1];
         } else {
           // Deepening toward the middle of the pond, in flat dithered steps.
-          let d = 1;
-          while (d < 22 && z + d < shrine.h && z - d >= 0 && x + d < w && x - d >= 0 && ground[i + d] === GROUND.water && ground[i - d] === GROUND.water && ground[i + d * w] === GROUND.water && ground[i - d * w] === GROUND.water) d++;
-          c = water[Math.min(water.length - 1, Math.floor(d / 6 + bayer))];
+          const d = shrine.shoreDepth[i] / 3 + (t - 0.5) * 4;
+          c = water[Math.max(0, Math.min(water.length - 1, Math.floor(d / 5 + bayer)))];
         }
         out[k * w + x] = c;
       }

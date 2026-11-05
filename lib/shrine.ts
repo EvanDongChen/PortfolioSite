@@ -185,6 +185,8 @@ export class Shrine {
   terrain = new Uint8Array(0);
   /** Each row's x along the approach. */
   pathX = new Float32Array(0);
+  /** Each water cell's distance from the shore, in thirds of a cell. */
+  shoreDepth = new Uint16Array(0);
   /** How far the path reaches either side of pathX on each row: wider where it runs sideways, so it keeps its width. */
   pathHalf = new Float32Array(0);
   /** How far along the path each row is, counting its bends. */
@@ -310,7 +312,7 @@ export class Shrine {
     }
 
     // The approach bends round the hero text and anything solid in its way, then is paved.
-    for (let pass = 0; pass < 2; pass++) {
+    const clearAll = () => {
       for (const q of this.zones) {
         if (q.x0 > PATH_HALF * 2 + 8) this.bendPath(q.x0 - 6, q.x1, q.z0 - 6, q.z1 + 6, -1);
       }
@@ -318,7 +320,13 @@ export class Shrine {
         const box = siteBox(s.kind, s.x, s.z, s.k);
         if (box) this.bendPath(box.x0, box.x1, box.z0, box.z1, s.x < w / 2 ? 1 : -1);
       }
+    };
+    for (let pass = 0; pass < 4; pass++) {
+      clearAll();
+      this.smoothPath(pass < 3 ? 28 : 14);
     }
+    clearAll();
+    this.smoothPath(8);
     for (let row = 0; row < h; row++) this.pathX[row] = clamp(this.pathX[row], PATH_HALF + 2, w - PATH_HALF - 3);
     this.pathHalf = new Float32Array(h);
     for (let row = 0; row < h; row++) {
@@ -359,6 +367,7 @@ export class Shrine {
       }
     }
 
+    this.measureWater();
     this.plantForest(r);
     this.props = this.props.filter(p => p.z < h);
     this.props.sort((p, q) => p.z - q.z);
@@ -388,6 +397,49 @@ export class Shrine {
       const t = z < first ? (z - (first - ease)) / ease : z > last ? (last + ease - z) / ease : 1;
       this.pathX[z] += toward * over * t * t * (3 - 2 * t);
     }
+  }
+
+  /** Rounds off the approach's bends with a moving average over this many rows either way. */
+  private smoothPath(radius: number) {
+    const { h, pathX } = this;
+    const out = new Float32Array(h);
+    let sum = 0;
+    const at = (z: number) => pathX[clamp(z, 0, h - 1)];
+    for (let z = -radius; z <= radius; z++) sum += at(z);
+    for (let z = 0; z < h; z++) {
+      out[z] = sum / (radius * 2 + 1);
+      sum += at(z + radius + 1) - at(z - radius);
+    }
+    this.pathX = out;
+  }
+
+  /** How far every water cell is from the nearest shore, in cells (a chamfer distance, measured in thirds). */
+  private measureWater() {
+    const { w, h, ground } = this;
+    const d = new Uint16Array(w * h);
+    for (let i = 0; i < w * h; i++) d[i] = ground[i] === GROUND.water ? 60000 : 0;
+    for (let z = 1; z < h; z++) {
+      for (let x = 1; x < w - 1; x++) {
+        const i = z * w + x;
+        if (d[i]) d[i] = Math.min(d[i], d[i - 1] + 3, d[i - w] + 3, d[i - w - 1] + 4, d[i - w + 1] + 4);
+      }
+    }
+    for (let z = h - 2; z >= 0; z--) {
+      for (let x = w - 2; x >= 1; x--) {
+        const i = z * w + x;
+        if (d[i]) d[i] = Math.min(d[i], d[i + 1] + 3, d[i + w] + 3, d[i + w + 1] + 4, d[i + w - 1] + 4);
+      }
+    }
+    // Water running off the page just carries on: its edge cells take their neighbours' depth.
+    for (let z = 0; z < h; z++) {
+      if (d[z * w]) d[z * w] = d[z * w + 1];
+      if (d[z * w + w - 1]) d[z * w + w - 1] = d[z * w + w - 2];
+    }
+    for (let x = 0; x < w; x++) {
+      if (d[x]) d[x] = d[w + x];
+      if (d[(h - 1) * w + x]) d[(h - 1) * w + x] = d[(h - 2) * w + x];
+    }
+    this.shoreDepth = d;
   }
 
   private markSolid(x: number, z: number, hw: number, hd: number) {
