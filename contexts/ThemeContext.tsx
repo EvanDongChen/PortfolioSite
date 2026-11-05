@@ -1,8 +1,8 @@
 import React, { createContext, useState, useContext, useCallback, useLayoutEffect, ReactNode } from 'react';
 
 type Theme = 'underwater' | 'deepsea';
-/** The three pages: the aquarium, the pixel reef and the pixel pond. */
-export type Page = 'aquarium' | 'reef' | 'pond';
+/** The four pages: the aquarium, the pixel reef, the pixel pond and the shrine forest. */
+export type Page = 'aquarium' | 'reef' | 'pond' | 'shrine';
 
 // Keep deep-sea support available while it is temporarily disabled in the UI.
 export const DEEP_SEA_MODE_ENABLED = false;
@@ -14,6 +14,8 @@ interface ThemeContextType {
   isPixelMode: boolean;
   /** The pixel pond replaces whichever page was showing while on. */
   isPondMode: boolean;
+  /** The shrine forest replaces whichever page was showing while on. */
+  isShrineMode: boolean;
   /** Which page is showing, and switching to another (see ThemeDial). */
   page: Page;
   setPage: (page: Page) => void;
@@ -29,22 +31,24 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // The pixel reef is the default look; the aquarium is one click away.
   const [isPixelMode, setIsPixelMode] = useState(true);
   const [isPondMode, setIsPondMode] = useState(false);
+  const [isShrineMode, setIsShrineMode] = useState(false);
 
   const toggleTheme = () => {
     if (!DEEP_SEA_MODE_ENABLED) return;
     setTheme(prevTheme => (prevTheme === 'underwater' ? 'deepsea' : 'underwater'));
   };
 
-  const page: Page = isPondMode ? 'pond' : isPixelMode ? 'reef' : 'aquarium';
+  const page: Page = isShrineMode ? 'shrine' : isPondMode ? 'pond' : isPixelMode ? 'reef' : 'aquarium';
 
   const setPage = useCallback((next: Page) => {
     pendingScrollY = window.scrollY;
     setIsPondMode(next === 'pond');
-    if (next !== 'pond') setIsPixelMode(next === 'reef');
+    setIsShrineMode(next === 'shrine');
+    if (next === 'reef' || next === 'aquarium') setIsPixelMode(next === 'reef');
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, isPixelMode, isPondMode, page, setPage }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, isPixelMode, isPondMode, isShrineMode, page, setPage }}>
       {children}
     </ThemeContext.Provider>
   );

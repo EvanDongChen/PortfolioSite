@@ -17,6 +17,8 @@ export interface Adoption<S extends string = Species> {
 const KEY = 'reef.adoption';
 /** Where the pond keeps its own adopted creature, apart from the reef's. */
 export const POND_ADOPTION_KEY = 'pond.adoption';
+/** Where the shrine forest keeps its own. */
+export const SHRINE_ADOPTION_KEY = 'shrine.adoption';
 
 export const loadAdoption = <S extends string = Species>(key = KEY): Adoption<S> | null => {
   try {

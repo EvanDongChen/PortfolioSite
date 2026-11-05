@@ -126,6 +126,7 @@ html.pixel-theme .theme-switch-stop { border-radius: 0; color: var(--px-mute); }
 html.pixel-theme .theme-switch-stop:hover { color: var(--px-text); }
 html.pixel-theme .theme-switch-stop.is-on { color: #2a1d08; }
 html.pond-theme .theme-switch-stop.is-on { color: #3a1222; }
+html.shrine-theme .theme-switch-stop.is-on { color: #2a1408; }
 html.pixel-theme .theme-switch-stop:focus-visible { outline: 2px solid var(--px-foam); outline-offset: 4px; }
 html.pixel-theme .theme-switch-stop.is-on .theme-switch-icon { animation-timing-function: steps(3, end); }
 html.pixel-theme .theme-switch-label {
