@@ -1,7 +1,7 @@
 /* Shrine theme: the page as ema, the wooden votive tablets hung at a shrine,
    over the night forest. Scoped to html.shrine-theme (set by ShrineApp,
    alongside pixel-theme), so it only re-colours the pixel UI from
-   pixel-theme.css: the same frames, type and controls in a palette of night
+   pixel-theme.css: the same frames and controls, its own lettering, in a palette of night
    indigo, lantern gold and torii vermilion.
 
    The frames, cursors and icons in the first block are generated from the
@@ -88,3 +88,27 @@ html.shrine-theme {
   height: 100%;
   background: #8e6a4c;
 }
+
+/* --- the shrine's own lettering: a Japanese dot-matrix face, thin and exact ------ */
+
+/* The rest of the theme's type sizes were set for Press Start 2P (wide) and VT323
+   (small), so each role gets its own face scaled to match them. */
+@font-face {
+  font-family: 'Shrine Display';
+  src: url('/fonts/dotgothic16.woff2') format('woff2');
+  font-display: swap;
+  size-adjust: 148%;
+}
+@font-face {
+  font-family: 'Shrine Label';
+  src: url('/fonts/dotgothic16.woff2') format('woff2');
+  font-display: swap;
+  size-adjust: 76%;
+}
+html.shrine-theme {
+  --px-display: 'Shrine Display', 'Press Start 2P', monospace;
+  --px-mono: 'Shrine Label', 'VT323', monospace;
+}
+.shrine-theme { font-feature-settings: 'palt'; }
+.shrine-theme .hero-name,
+.shrine-theme .section-title { letter-spacing: 0; }

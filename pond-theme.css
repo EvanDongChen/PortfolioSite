@@ -1,7 +1,7 @@
 /* Pond theme: the page as a naturalist's field notes over the pixel pond.
    Scoped to html.pond-theme (set by PondApp, alongside pixel-theme), so it
    only ever re-colours the pixel UI from pixel-theme.css for the pond: the
-   same pixel frames, type and controls in a pond palette of reed greens,
+   same pixel frames and controls, its own lettering, in a pond palette of reed greens,
    murky teal, lily pink and mud browns.
 
    The frames, cursors and icons in the first block are generated from the
@@ -95,3 +95,30 @@ html.pond-theme {
 .pond-stages li .eco-value { justify-self: start; color: var(--px-text); }
 .pond-stage-name { color: var(--px-mute); font-size: 0.95rem; }
 .pond-stages li.is-absent { opacity: 0.4; }
+
+/* --- the pond's own lettering: round and soft headings, compact and clear labels -- */
+
+/* The rest of the theme's type sizes were set for Press Start 2P (wide) and VT323
+   (small), so each role gets its own face scaled to match them. */
+@font-face {
+  font-family: 'Pond Display';
+  src: url('/fonts/pixelify-sans.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+  size-adjust: 142%;
+}
+@font-face {
+  font-family: 'Pond Label';
+  src: url('/fonts/jersey-15.woff2') format('woff2');
+  font-display: swap;
+  size-adjust: 92%;
+}
+html.pond-theme {
+  --px-display: 'Pond Display', 'Press Start 2P', monospace;
+  --px-mono: 'Pond Label', 'VT323', monospace;
+}
+.pond-theme .hero-name,
+.pond-theme .section-title { font-weight: 600; letter-spacing: 0; }
+
+/* The small logo reads better in the label face: at that size the heading face's C looks like an O. */
+.pond-theme .site-logo { font-family: var(--px-mono); font-size: 1.6em; }
