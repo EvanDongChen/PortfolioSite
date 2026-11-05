@@ -53,7 +53,7 @@ export const SHRINE_SPECIES: Record<ShrineSpecies, SpeciesInfo> = {
   kasa: { label: 'Kasa-obake', names: ['Old Umbrella'], speed: 0.2, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 170000, min: 2 },
   nekomata: { label: 'Nekomata', names: ['Tama', 'Kuro', 'Yoru', 'Mike'], speed: 0.16, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 300000, min: 2 },
   akaname: { label: 'Akaname', names: ['Akaname'], speed: 0.14, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 400000, min: 2 },
-  baku: { label: 'Baku', names: ['Old Dream-eater', 'Yumekui', 'Hakutaku'], speed: 0.13, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 450000, min: 2 },
+  baku: { label: 'Baku', names: ['Old Dream-eater', 'Yumekui', 'Hakutaku'], speed: 0.13, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 1e9, min: 4 },
   tsuchinoko: { label: 'Tsuchinoko', names: ['Tsuchinoko'], speed: 0.55, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 450000, min: 2 },
   chochin: { label: 'Chochin-obake', names: ['Old Lantern'], speed: 0.1, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 280000, min: 1 },
 };
@@ -4109,6 +4109,8 @@ export class Shrine {
   }
 
   debugSpawn(kind: ShrineSpawnable, x: number, z: number) {
+    const bakuFull = this.creatures.filter(c => c.alive && c.species === 'baku').length >= MAX_BAKU;
+    if (kind === 'baku' && bakuFull) return;
     if (kind === 'bush') {
       this.bushes.push({ x, z, kind: Math.floor(Math.random() * 3) as BushKind, berries: BUSH_BERRIES, regrow: 0, seed: Math.floor(Math.random() * 4) });
       this.bushes.sort((a, b) => a.z - b.z);
@@ -4146,7 +4148,7 @@ export class Shrine {
       const game: PlayKind = kind === 'partners' ? 'dance' : kind;
       const lead = this.spawn('tanuki', x, z);
       this.spawn('kitsune', x + 22, z + 8);
-      this.spawn('baku', x - 26, z + 10);
+      if (!bakuFull) this.spawn('baku', x - 26, z + 10);
       if (game !== 'dance') this.spawn('hare', x + 8, z - 18);
       if (game === 'catch') { const f = this.spawn('hitodama', x, z - 10); f.h = 14; }
       this.startPlay(game, lead, true);
@@ -4208,6 +4210,8 @@ const siteBox = (kind: SiteKind, x: number, z: number, k: number) => {
   }
 };
 
+/** However many are asked for, the whole page only ever holds this many baku. */
+const MAX_BAKU = 5;
 const DRUM_GAP = 2400;
 const PLAY_KINDS: PlayKind[] = ['tag', 'dance', 'catch', 'catch'];
 const FOREST_TREE = new Set<PropKind>(['cedar', 'maple', 'goldMaple', 'persimmonTree']);
