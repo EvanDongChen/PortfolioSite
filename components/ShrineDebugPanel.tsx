@@ -95,6 +95,9 @@ const ShrineDebugPanel: React.FC<ShrineDebugPanelProps> = ({ actions }) => {
         <button type="button" onClick={() => act?.happening('contest')}>Disguise contest</button>
         <button type="button" onClick={() => act?.spawn('dance')}>Fox dance</button>
         <button type="button" onClick={() => act?.spawn('drum')}>Drum circle</button>
+        <button type="button" onClick={() => act?.spawn('tag')}>Game of tag</button>
+        <button type="button" onClick={() => act?.spawn('partners')}>Dance together</button>
+        <button type="button" onClick={() => act?.spawn('catch')}>Catch with a flame</button>
         <button type="button" onClick={() => act?.spawn('peck')}>Crow on a teapot</button>
         <button type="button" onClick={() => act?.spawn('sniff')}>Fox sniff test</button>
         <button type="button" onClick={() => act?.spawn('boo')}>Umbrella scare</button>

@@ -26,7 +26,7 @@ export type ShrineSpecies = 'tanuki' | 'kitsune' | 'hahaki' | 'mouse' | 'hare' |
 export const SHRINE_SPECIES_LIST: ShrineSpecies[] = ['tanuki', 'kitsune', 'hahaki', 'mouse', 'hare', 'deer', 'owl', 'bat', 'crow', 'frog', 'koi', 'kappa', 'kodama', 'hitodama', 'kasa', 'chochin', 'baku', 'tsuchinoko', 'nekomata', 'akaname'];
 
 export type ShrineMood = 'wandering' | 'sniffing' | 'sneaking' | 'pretending' | 'changing' | 'eating' | 'facing off' | 'scrapping' | 'fleeing' | 'sleeping' | 'drumming' | 'barking' | 'hunting' | 'pouncing' | 'following' | 'courting'
-  | 'sweeping' | 'carrying' | 'bowing' | 'shooing' | 'puzzled' | 'grazing' | 'perched' | 'flying' | 'swooping' | 'sitting' | 'swimming' | 'hopping' | 'drifting' | 'watching' | 'thieving' | 'spilling' | 'sipping' | 'rolling' | 'dancing' | 'nibbling' | 'soaking' | 'licking' | 'moonviewing' | 'prowling' | 'pecking' | 'kicking' | 'chasing' | 'dazed' | 'lurking' | 'cackling' | 'out cold';
+  | 'sweeping' | 'carrying' | 'bowing' | 'shooing' | 'puzzled' | 'grazing' | 'perched' | 'flying' | 'swooping' | 'sitting' | 'swimming' | 'hopping' | 'drifting' | 'watching' | 'thieving' | 'spilling' | 'sipping' | 'rolling' | 'dancing' | 'nibbling' | 'soaking' | 'licking' | 'moonviewing' | 'prowling' | 'pecking' | 'kicking' | 'chasing' | 'dazed' | 'lurking' | 'cackling' | 'out cold' | 'playing tag' | 'dancing together' | 'playing catch';
 
 interface SpeciesInfo {
   label: string; names: string[]; speed: number; palettes: number;
@@ -36,8 +36,8 @@ interface SpeciesInfo {
 const MIN = TICKS_PER_SECOND * 60;
 /** Cells of forest that hold one of each `perArea`. */
 export const SHRINE_SPECIES: Record<ShrineSpecies, SpeciesInfo> = {
-  tanuki: { label: 'Tanuki', names: ['Ponta', 'Bunbuku', 'Mameta', 'Danzaburo', 'Shibaemon', 'Kincho', 'Rokuemon', 'Tarobo'], speed: 0.24, palettes: 3, mature: 3 * MIN, old: 24 * MIN, hunger: 0.00006, perArea: 75000, min: 4 },
-  kitsune: { label: 'Kitsune', names: ['Kuzunoha', 'Tamamo', 'Akane', 'Kon', 'Yuki', 'Otora', 'Hatsu', 'Shiro'], speed: 0.31, palettes: 3, mature: 3 * MIN, old: 24 * MIN, hunger: 0.00007, perArea: 75000, min: 4 },
+  tanuki: { label: 'Tanuki', names: ['Ponta', 'Bunbuku', 'Mameta', 'Danzaburo', 'Shibaemon', 'Kincho', 'Rokuemon', 'Tarobo'], speed: 0.24, palettes: 3, mature: 3 * MIN, old: 24 * MIN, hunger: 0.00006, perArea: 60000, min: 5 },
+  kitsune: { label: 'Kitsune', names: ['Kuzunoha', 'Tamamo', 'Akane', 'Kon', 'Yuki', 'Otora', 'Hatsu', 'Shiro'], speed: 0.31, palettes: 3, mature: 3 * MIN, old: 24 * MIN, hunger: 0.00007, perArea: 60000, min: 5 },
   hahaki: { label: 'Broom spirit', names: ['Old Bristle', 'Sasara', 'Takebo', 'Hokiji'], speed: 0.26, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 200000, min: 3 },
   mouse: { label: 'Field mouse', names: ['Mouse'], speed: 0.3, palettes: 1, mature: MIN / 2, old: 8 * MIN, hunger: 0.00005, perArea: 60000, min: 6 },
   hare: { label: 'Hare', names: ['Hare'], speed: 0.34, palettes: 1, mature: MIN, old: 14 * MIN, hunger: 0.00004, perArea: 110000, min: 3 },
@@ -101,6 +101,12 @@ export interface ShrineCreature {
   drum: DrumCircle | null;
   /** What it means to turn into next, if it has made up its mind. */
   nextForm: DisguiseKind | null;
+  /** The game it's in. */
+  play: Play | null;
+  /** Which way it's working round whatever is in its way, and for how much longer. */
+  detour: 1 | -1; detourT: number;
+  /** Where it was when last checked, to tell when it has stopped getting anywhere. */
+  checkX: number; checkZ: number; checkT: number; stuckN: number; walkT: number;
 }
 export type Emote = 'bang' | 'what' | 'zed' | 'note' | 'heart';
 
@@ -151,6 +157,17 @@ export interface DrumCircle {
   /** Counts up from the final note, while everybody stares. */
   stunned: number; over: boolean;
 }
+export type PlayKind = 'tag' | 'dance' | 'catch';
+/** A game of tag, a dance in a ring, or a soul-flame tossed from paw to paw. */
+export interface Play {
+  kind: PlayKind; x: number; z: number; rx: number; rz: number; members: ShrineCreature[];
+  t: number; dur: number; started: boolean; waited: number; spin: 1 | -1; over: boolean;
+  /** Tag: who's it, who was just it, how long it must count, and how long since anyone was caught. */
+  it: ShrineCreature | null; last: ShrineCreature | null; wait: number; since: number;
+  /** Catch: the flame, who has it, who it's flying to, and how far along. */
+  flame: ShrineCreature | null; holder: ShrineCreature | null; to: ShrineCreature | null; fetcher: ShrineCreature | null;
+  flightT: number; flight: number; fx: number; fz: number; fh: number; lx: number; lz: number; fumble: boolean; throws: number; target: number;
+}
 export interface Tussle { x: number; z: number; a: ShrineCreature; b: ShrineCreature; t: number; dur: number }
 
 /** One marcher in the night parade. */
@@ -168,7 +185,7 @@ export type SiteKind = 'hall' | 'inari' | 'den' | 'koi' | 'bamboo' | 'lilies' | 
 const SITE_KINDS: SiteKind[] = ['hall', 'koi', 'inari', 'maples', 'den', 'bamboo', 'sacred', 'lilies', 'pagoda', 'zen', 'ring'];
 export interface Site { kind: SiteKind; x: number; z: number; rx: number; rz: number }
 
-export type ShrineSpawnable = ShrineSpecies | 'teapot' | 'lantern' | 'statue' | 'bush' | 'dance' | 'peck' | 'sniff' | 'boo' | 'drum';
+export type ShrineSpawnable = ShrineSpecies | 'teapot' | 'lantern' | 'statue' | 'bush' | 'dance' | 'peck' | 'sniff' | 'boo' | 'drum' | 'tag' | 'partners' | 'catch';
 
 /** What the rivals turn into in the great contest, in order, each bigger and sillier than the last. */
 export const CONTEST_FORMS = ['teapot', 'lantern', 'statue', 'mushroom', 'koi', 'torii'] as const;
@@ -283,6 +300,9 @@ export class Shrine {
   skies: SkyLantern[] = [];
   tussles: Tussle[] = [];
   drums: DrumCircle[] = [];
+  plays: Play[] = [];
+  /** How many games of each kind there have been, for checking they turn up often enough. */
+  games = { tag: 0, dance: 0, catch: 0 };
   parade: Parade | null = null;
   happening: { kind: ShrineHappening; t: number; dur: number } | null = null;
   /** How far the lanterns have gone over to ghost blue for the parade (0 to 1), and how far the festival has lit up. */
@@ -345,6 +365,7 @@ export class Shrine {
     this.terrain = new Uint8Array(n);
     this.pathX = new Float32Array(h);
     this.endDrums();
+    this.endPlays();
     this.props = []; this.low = []; this.canes = []; this.lanterns = []; this.festoons = [];
     this.altars = []; this.waters = []; this.bridges = []; this.pads = []; this.sites = [];
     this.bushes = []; this.fruits = []; this.rings = []; this.beams = []; this.strands = [];
@@ -990,7 +1011,7 @@ export class Shrine {
       palette: parent ? parent.palette : Math.floor(Math.random() * info.palettes), mood: 'wandering',
       state: 'roam', timer: Math.floor(Math.random() * 60), tx: px, tz: pz,
       parent, foe: null, prey: null, altar: null, hidden: false, disguise: null, sneakLeft: 0, scuttling: false, tailOut: 0,
-      emote: null, emoteT: 0, carrying: null, food: null, spring: null, perch: null, basin: null, ring: null, angle: 0, onBridge: false, home: null, pond: null, pest: null, drum: null, nextForm: null,
+      emote: null, emoteT: 0, carrying: null, food: null, spring: null, perch: null, basin: null, ring: null, angle: 0, onBridge: false, home: null, pond: null, pest: null, drum: null, nextForm: null, play: null, detour: 1, detourT: 0, checkX: px, checkZ: pz, checkT: 0, stuckN: 0, walkT: 0,
     };
     if (!c.lineId) c.lineId = c.id;
     const waterFolk = species === 'koi' || species === 'frog' || species === 'kappa';
@@ -1154,6 +1175,7 @@ export class Shrine {
     if (this.tick % 40 === 0) this.creatures = this.creatures.filter(c => c.alive);
     this.updateTussles();
     this.updateDrums();
+    this.updatePlays();
     this.stageScenes();
     this.updateMotes();
     this.updateFireflies();
@@ -1242,11 +1264,31 @@ export class Shrine {
     const d = Math.hypot(dx, dz) || 1;
     let vx = (dx / d) * speed, vz = (dz / d) * speed;
     const look = 4;
+    if (c.detourT > 0) c.detourT--;
     if (this.blocked(c, c.x + (vx / speed) * look, c.z + (vz / speed) * look)) {
-      for (const turn of [0.8, -0.8, 1.6, -1.6, 2.4, -2.4]) {
-        const nx = Math.cos(turn) * vx - Math.sin(turn) * vz, nz = Math.sin(turn) * vx + Math.cos(turn) * vz;
-        if (!this.blocked(c, c.x + (nx / speed) * look, c.z + (nz / speed) * look)) { vx = nx; vz = nz; break; }
+      // Round it, keeping to one side so that it follows the edge of a pond all the way instead of dithering at the shore.
+      const first = c.detourT > 0 ? c.detour : (c.id & 1 ? 1 : -1);
+      turning: for (const side of [first, -first] as (1 | -1)[]) {
+        for (const a of [0.8, 1.6, 2.4, 3]) {
+          const turn = a * side;
+          const nx = Math.cos(turn) * vx - Math.sin(turn) * vz, nz = Math.sin(turn) * vx + Math.cos(turn) * vz;
+          if (this.blocked(c, c.x + (nx / speed) * look, c.z + (nz / speed) * look)) continue;
+          vx = nx; vz = nz;
+          c.detour = side; c.detourT = 70;
+          break turning;
+        }
       }
+    }
+    // Not getting anywhere? Try the other way round, and after that find something else to do.
+    if (this.tick - c.walkT > 8 || d < 6) { c.checkX = c.x; c.checkZ = c.z; c.checkT = this.tick; c.stuckN = 0; }
+    c.walkT = this.tick;
+    if (this.tick - c.checkT >= 60) {
+      if (Math.hypot(c.x - c.checkX, c.z - c.checkZ) < Math.min(speed * 15, 6)) {
+        c.detour = (c.detour * -1) as 1 | -1;
+        c.detourT = 120;
+        if (++c.stuckN >= 3) this.giveUp(c);
+      } else c.stuckN = 0;
+      c.checkX = c.x; c.checkZ = c.z; c.checkT = this.tick;
     }
     c.vx += (vx - c.vx) * easing;
     c.vz += (vz - c.vz) * easing;
@@ -1290,9 +1332,31 @@ export class Shrine {
   private wanderTarget(c: ShrineCreature, range: number) {
     for (let k = 0; k < 12; k++) {
       const x = clamp(c.x + between(-range, range), 6, this.w - 7), z = clamp(c.z + between(-range, range) * 0.8, 6, this.h - 7);
-      if (!this.isSolid(x, z) && !this.inClearZone(x, z)) { c.tx = x; c.tz = z; return; }
+      if (!this.isSolid(x, z) && !this.inClearZone(x, z) && (k > 8 || this.clearWay(c.x, c.z, x, z))) { c.tx = x; c.tz = z; return; }
     }
     c.tx = c.x; c.tz = c.z;
+  }
+
+  /** Whether it can walk straight there, with no water or wall in between. */
+  private clearWay(x0: number, z0: number, x1: number, z1: number) {
+    const steps = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 6);
+    for (let k = 1; k < steps; k++) {
+      if (this.isSolid(x0 + ((x1 - x0) * k) / steps, z0 + ((z1 - z0) * k) / steps)) return false;
+    }
+    return true;
+  }
+
+  /** It can't get there from here: forget the whole idea and wander off somewhere it can reach. */
+  private giveUp(c: ShrineCreature) {
+    c.stuckN = 0;
+    if (c.species === 'kappa' || c.species === 'frog' || c.species === 'koi' || c.species === 'tsuchinoko') return;
+    if (this.isSolid(c.x, c.z)) this.freeSpot(c);
+    if (c.play || c.state === 'sitWatch' || c.state === 'contest') return;
+    if (c.drum) { c.state = 'drumDance'; return; }
+    c.altar = null; c.food = null; c.prey = null; c.foe = null; c.basin = null; c.spring = null; c.ring = null; c.carrying = null;
+    c.state = 'roam';
+    c.timer = 30;
+    this.wanderTarget(c, 70);
   }
 
   private near(c: ShrineCreature, range: number, test: (o: ShrineCreature) => boolean) {
@@ -1328,6 +1392,7 @@ export class Shrine {
   /** Thinks a creature's thought for this tick. */
   private think(c: ShrineCreature) {
     if (c.drum) { this.thinkDrum(c); return; }
+    if (c.play) { this.thinkPlay(c); return; }
     switch (c.species) {
       case 'tanuki': case 'kitsune': this.thinkRival(c); break;
       case 'hahaki': this.thinkHahaki(c); break;
@@ -1484,7 +1549,7 @@ export class Shrine {
       const altar = this.bestAltar(c);
       if (altar && roll < 0.75) { c.altar = altar; c.state = 'approach'; return; }
       if (c.species === 'kitsune' && roll < 0.95) {
-        const prey = this.near(c, 90, o => o.species === 'mouse' || (o.species === 'hare' && Math.random() < 0.4));
+        const prey = this.near(c, 90, o => !o.play && (o.species === 'mouse' || (o.species === 'hare' && Math.random() < 0.4)));
         if (prey) { c.prey = prey; c.state = 'hunt'; c.timer = 240; return; }
       }
       // Berries or a windfall if there are any near; otherwise beetles and mushrooms.
@@ -1498,6 +1563,7 @@ export class Shrine {
     if (c.species === 'kitsune' && !this.happening && Math.random() < 0.2 && this.goDancing(c)) return;
     if (c.species === 'tanuki' && Math.random() < 0.14 && this.goSoaking(c)) return;
     if (c.species === 'tanuki' && roll < 0.1 && Math.random() < 0.6 && this.startDrumCircle(c)) return;
+    if (Math.random() < 0.16 && this.startPlay(pick(PLAY_KINDS), c)) return;
     if (roll < 0.1) { c.state = 'perform'; c.timer = Math.floor(between(120, 240)); return; }
     if (roll < 0.32) { c.state = 'sleep'; c.timer = Math.floor(between(300, 700)); return; }
     if (roll < 0.44) { this.beginChange(c); return; }
@@ -1641,7 +1707,7 @@ export class Shrine {
 
   private tryCourt(c: ShrineCreature) {
     const counts = this.creatures.filter(o => o.alive && o.species === c.species).length;
-    if (counts >= this.populationCap(c.species) + 4 || c.energy < 0.6 || this.isYoung(c)) return false;
+    if (counts >= this.populationCap(c.species) + 6 || c.energy < 0.6 || this.isYoung(c)) return false;
     const mate = this.near(c, 60, o => o.species === c.species && !o.disguise && !this.isYoung(o) && o.energy > 0.5 && !o.hidden);
     if (!mate) return false;
     this.emote(c, 'heart', 60);
@@ -1820,6 +1886,10 @@ export class Shrine {
         this.beginChange(t);
         return false;
       },
+      ...PLAY_KINDS.map(kind => () => {
+        const leads = among(o => (o.species === 'tanuki' || o.species === 'kitsune') && free(o) && !o.disguise);
+        return leads.length > 0 && this.startPlay(kind, pick(leads));
+      }),
       () => {
         // Somebody strolls past the bamboo with an umbrella in it.
         const lurker = among(o => o.species === 'kasa' && o.state === 'lurk')[0];
@@ -1839,11 +1909,12 @@ export class Shrine {
       },
     ];
     // Whichever comes up first and can actually happen, with the umbrella (which manages on its own) as a last resort.
-    const start = Math.floor(Math.random() * 3);
-    for (let k = 0; k < 3; k++) {
-      if (scenes[(start + k) % 3]()) { this.lastScene = this.tick; return; }
+    const choices = scenes.length - 1;
+    const start = Math.floor(Math.random() * choices);
+    for (let k = 0; k < choices; k++) {
+      if (scenes[(start + k) % choices]()) { this.lastScene = this.tick; return; }
     }
-    if (scenes[3]()) this.lastScene = this.tick;
+    if (scenes[choices]()) this.lastScene = this.tick;
   }
 
   // --- a crow on the teapot ----------------------------------------------------------
@@ -1997,7 +2068,8 @@ export class Shrine {
       c.mood = 'carrying';
       if (!a || a.item) { c.state = 'roam'; c.altar = null; c.carrying = null; c.timer = 20; return; }
       const d = this.walkTo(c, a.x, a.z + 6, speed);
-      if (d < 3) {
+      // A stand by the water can't always be reached from the front: as close as it gets will do.
+      if (d < 3 || (d < 11 && this.isSolid(a.x, a.z + 6))) {
         a.item = c.carrying ?? a.favourite;
         a.bites = 3;
         c.carrying = null; c.altar = null;
@@ -3249,7 +3321,7 @@ export class Shrine {
 
   /** Whether this one is going about its business, and so can be made to regret it. */
   private scareable(o: ShrineCreature) {
-    if (o.disguise || o.drum || o.h > 2) return false;
+    if (o.disguise || o.drum || o.play || o.h > 2) return false;
     if (o.species === 'tanuki' || o.species === 'kitsune') return o.state === 'roam' || o.state === 'forage' || o.state === 'approach';
     if (o.species === 'mouse' || o.species === 'hare') return o.state !== 'flee' && o.state !== 'sitWatch';
     return o.species === 'deer' && (o.state === 'walk' || o.state === 'graze');
@@ -3319,10 +3391,11 @@ export class Shrine {
   }
 
   private drawnToDrum(c: ShrineCreature) {
-    if (c.drum || c.hidden || c.disguise) return false;
+    if (c.drum || c.play || c.hidden || c.disguise) return false;
     if (c.species === 'kitsune') return c.state === 'roam' && !this.isYoung(c);
     if (c.species === 'mouse') return c.state !== 'flee' && c.state !== 'sitWatch';
     if (c.species === 'kasa') return c.state === 'roam' || c.state === 'lurk';
+    if (c.species === 'baku') return c.state === 'roam';
     return c.species === 'hitodama' || c.species === 'chochin';
   }
 
@@ -3366,6 +3439,9 @@ export class Shrine {
       if (d.t % 16 === 0 && d.t < d.dur * 0.8) {
         let dancers = 0;
         for (const c of this.creatures) if (c.alive && c.drum === d && c !== lead) dancers++;
+        // The baku never misses one, however far it has to trundle.
+        const baku = this.near(lead, 320, o => o.species === 'baku' && this.drawnToDrum(o));
+        if (baku) { this.joinDrum(baku, d); dancers++; }
         if (dancers < 12) {
           let joined = 0;
           for (const c of this.creatures) {
@@ -3391,7 +3467,7 @@ export class Shrine {
     if (!floats) this.fall(c, 0.1);
     // Frozen in the silence after the last note.
     if (d.stunned) { c.vx = 0; c.vz = 0; if (floats) c.h += ((c.species === 'chochin' ? 18 : 14) - c.h) * 0.05; return; }
-    const ring = c.species === 'mouse' ? 0.6 : c.species === 'kitsune' ? 0.88 : 1.08;
+    const ring = c.species === 'mouse' ? 0.6 : c.species === 'kitsune' || c.species === 'baku' ? 0.88 : 1.08;
     const tx = d.x + Math.cos(c.angle) * d.rx * ring, tz = d.z + Math.sin(c.angle) * d.rz * ring;
     if (c.state === 'toDrum') {
       // Hurrying, the further there is to come, so as not to miss it.
@@ -3448,6 +3524,272 @@ export class Shrine {
       this.burst('dust', lead.x, lead.z, 1, 8, 0.6, 0.3);
       this.emote(lead, 'zed', 200);
     }
+  }
+
+  // --- games -------------------------------------------------------------------------------
+
+  private playable(o: ShrineCreature, kind: PlayKind) {
+    if (!o.alive || o.disguise || o.hidden || o.drum || o.play) return false;
+    switch (o.species) {
+      case 'tanuki': case 'kitsune': return o.state === 'roam' && (kind === 'tag' || !this.isYoung(o));
+      case 'baku': return o.state === 'roam';
+      case 'hare': return o.state !== 'flee' && o.state !== 'sitWatch';
+      case 'kasa': return kind !== 'catch' && o.state === 'roam';
+      case 'deer': return kind === 'dance' && (o.state === 'walk' || o.state === 'graze');
+      default: return false;
+    }
+  }
+
+  /** Someone starts a game with whoever is about, feuds forgotten. Fails if there's nobody to play with, or no room. */
+  private startPlay(kind: PlayKind, lead: ShrineCreature, force = false) {
+    if (!force && (this.happening || this.plays.length >= 3 || this.plays.some(p => dist(p, lead) < 150) || this.drums.some(d => dist(d, lead) < 110))) return false;
+    const [rx, rz, want, least] = kind === 'tag' ? [30, 40, 5, 3] : kind === 'dance' ? [18, 12, 4, 2] : [25, 15, 4, 3];
+    if (!force) for (let a = 0; a < 6.28; a += 0.78) {
+      const x = lead.x + Math.cos(a) * rx, z = lead.z + Math.sin(a) * rz;
+      if (this.isSolid(x, z) || this.inClearZone(x, z)) return false;
+    }
+    const members = [lead];
+    const bakus = this.creatures.filter(o => o.species === 'baku' && o !== lead && this.playable(o, kind) && dist(o, lead) < 240).sort((a, b) => dist(a, lead) - dist(b, lead));
+    if (bakus.length) members.push(bakus[0]);
+    const rest = this.creatures.filter(o => o !== lead && o !== bakus[0] && this.playable(o, kind) && dist(o, lead) < 130).sort((a, b) => dist(a, lead) - dist(b, lead));
+    for (const o of rest) { if (members.length >= want) break; members.push(o); }
+    if (members.length < least) return false;
+    const flame = kind === 'catch' ? this.near(lead, 280, o => o.species === 'hitodama' && !o.drum && !o.play) : null;
+    if (kind === 'catch' && !flame) return false;
+    const p: Play = {
+      kind, x: lead.x, z: lead.z, rx, rz, members, t: 0, dur: kind === 'tag' ? Math.floor(between(650, 950)) : Math.floor(between(480, 720)), started: kind === 'tag', waited: 0, spin: 1, over: false,
+      it: kind === 'tag' ? lead : null, last: null, wait: 60, since: 0,
+      flame, holder: members[0], to: null, fetcher: null, flightT: -20, flight: 1, fx: 0, fz: 0, fh: 0, lx: 0, lz: 0, fumble: false, throws: 0, target: Math.floor(between(12, 20)),
+    };
+    this.plays.push(p);
+    this.games[kind]++;
+    members.forEach((c, k) => {
+      c.play = p;
+      c.state = kind === 'tag' ? 'playTag' : 'playGo';
+      c.food = null; c.altar = null; c.foe = null; c.prey = null; c.ring = null; c.spring = null;
+      c.angle = (k / members.length) * 6.28;
+      this.emote(c, kind === 'tag' && c === lead ? 'bang' : 'note', 50);
+    });
+    if (flame) { flame.play = p; flame.state = 'ball'; }
+    const names = members.slice(0, 2).map(m => m.name).join(' and ');
+    this.log('visit', kind === 'tag' ? `${names} are playing tag` : kind === 'dance' ? `${names} are dancing together` : `${names} are tossing a soul-flame about`, lead);
+    return true;
+  }
+
+  private updatePlays() {
+    for (let i = this.plays.length - 1; i >= 0; i--) {
+      const p = this.plays[i];
+      p.members = p.members.filter(m => m.alive && m.play === p);
+      if (p.members.length < 2) this.endPlay(p, false);
+      else if (p.kind === 'tag') this.updateTag(p);
+      else if (p.kind === 'dance') this.updateDance(p);
+      else this.updateCatch(p);
+      if (p.over) this.plays.splice(i, 1);
+    }
+  }
+
+  private endPlay(p: Play, cheer: boolean) {
+    p.over = true;
+    for (const c of p.members) {
+      c.play = null;
+      if (!c.alive) continue;
+      c.h = 0; c.vh = 0; c.vx = 0; c.vz = 0;
+      c.tx = c.x; c.tz = c.z;
+      c.state = c.species === 'deer' ? 'walk' : 'roam';
+      c.timer = Math.floor(between(30, 90));
+      if (cheer) { this.emote(c, 'note', 50); c.squash = 0.4; }
+    }
+    if (p.flame) { p.flame.play = null; p.flame.state = 'roam'; p.flame.tx = p.flame.x; p.flame.tz = p.flame.z; }
+  }
+
+  private endPlays() {
+    for (const p of this.plays) this.endPlay(p, false);
+    this.plays = [];
+  }
+
+  private updateTag(p: Play) {
+    p.t++;
+    p.since++;
+    if (p.wait > 0) p.wait--;
+    if (!p.it?.alive || p.it.play !== p) { p.it = p.members[0]; p.last = null; }
+    if (p.t >= p.dur) this.endPlay(p, true);
+  }
+
+  private updateDance(p: Play) {
+    if (!p.started) {
+      if (p.members.every(m => m.state === 'playDance') || ++p.waited > 240) p.started = true;
+      return;
+    }
+    p.t++;
+    if (p.t % 200 === 0) p.spin = (p.spin * -1) as 1 | -1;
+    if (p.t % 26 === 0) this.burst('note', p.x + between(-8, 8), p.z, 26, 1, 0.15, 0.4);
+    if (p.t % 60 === 0) this.burst('heart', p.x + between(-10, 10), p.z, 22, 1, 0.1, 0.4);
+    if (p.t >= p.dur) {
+      this.burst('heart', p.x, p.z, 20, 6, 0.5, 0.5);
+      for (const c of p.members) if (c.h === 0) c.vh = 1;
+      this.endPlay(p, true);
+    }
+  }
+
+  private updateCatch(p: Play) {
+    const f = p.flame;
+    if (!f?.alive) { this.endPlay(p, false); return; }
+    if (!p.started) {
+      f.x += (p.x - f.x) * 0.05; f.z += (p.z - f.z) * 0.05; f.h += (16 - f.h) * 0.06;
+      if (p.members.every(m => m.state === 'playWait') || ++p.waited > 280) p.started = true;
+      return;
+    }
+    if (p.fetcher) {
+      // On the ground, guttering, while somebody runs for it.
+      f.h += (3 - f.h) * 0.15;
+      if (this.tick % 8 === 0) this.burst('ember', f.x, f.z, 3, 1, 0.2, 0.2);
+      if (!p.fetcher.alive || p.fetcher.play !== p) { p.fetcher = null; p.flightT = -10; }
+      return;
+    }
+    if (p.to && (!p.to.alive || p.to.play !== p)) { p.to = null; p.flightT = -10; }
+    if (!p.holder?.alive || p.holder.play !== p) p.holder = p.members[0];
+    if (!p.to) {
+      // Held a moment, bobbing above the paws, then away.
+      const hold = p.holder;
+      f.x += (hold.x - f.x) * 0.2; f.z += (hold.z + 0.5 - f.z) * 0.2; f.h += (26 - f.h) * 0.2;
+      if (++p.flightT < 0) return;
+      if (p.throws >= p.target) { this.burst('ember', f.x, f.z, f.h, 8, 0.5, 0.5); this.endPlay(p, true); return; }
+      const others = p.members.filter(m => m !== hold && m.state === 'playWait');
+      if (!others.length) { p.flightT = -10; return; }
+      p.to = pick(others);
+      p.fx = f.x; p.fz = f.z; p.fh = f.h;
+      p.fumble = p.throws > 1 && Math.random() < 0.13;
+      const side = p.to.x >= hold.x ? 1 : -1;
+      p.lx = p.to.x + (p.fumble ? side * 20 : 0);
+      p.lz = p.to.z + (p.fumble ? 7 : 0);
+      p.flight = Math.round(24 + Math.hypot(p.lx - p.fx, p.lz - p.fz) * 0.55);
+      p.flightT = 0;
+      if (hold.h === 0) hold.vh = 0.95;
+      hold.squash = 0.5;
+      this.setFacing(hold, p.to.x - hold.x);
+      this.burst('ember', f.x, f.z, f.h, 4, 0.4, 0.4);
+    }
+    p.flightT++;
+    const s = p.flightT / p.flight;
+    f.x = p.fx + (p.lx - p.fx) * s;
+    f.z = p.fz + (p.lz - p.fz) * s;
+    f.h = p.fh + ((p.fumble ? 4 : 24) - p.fh) * s + Math.sin(s * Math.PI) * (26 + p.flight * 0.3);
+    if (this.tick % 3 === 0) this.burst('ember', f.x, f.z, f.h, 1, 0.08, 0.1);
+    const to = p.to!;
+    // It leaps to meet it, and if it has misjudged the thing it leaps anyway.
+    if (p.flightT === p.flight - 12 && to.h === 0) { to.vh = 1; to.squash = 0.4; }
+    if (p.flightT < p.flight) return;
+    p.throws++;
+    p.to = null;
+    if (p.fumble) {
+      this.emote(to, 'bang', 45);
+      this.burst('ember', f.x, f.z, 3, 10, 0.6, 0.6);
+      to.state = 'playFetch';
+      p.fetcher = to;
+    } else {
+      p.holder = to;
+      p.flightT = -7;
+      to.squash = 0.5;
+      this.burst('star', f.x, f.z, f.h, 2, 0.4, 0.5);
+      this.burst('ember', f.x, f.z, f.h, 4, 0.4, 0.4);
+    }
+  }
+
+  private thinkPlay(c: ShrineCreature) {
+    const p = c.play!;
+    if (c === p.flame) return;
+    this.fall(c, 0.11);
+    const baku = c.species === 'baku';
+    if (p.kind === 'tag') { this.thinkTag(c, p, baku); return; }
+    const tx = p.x + Math.cos(c.angle) * p.rx, tz = p.z + Math.sin(c.angle) * p.rz;
+    if (p.kind === 'dance') {
+      c.mood = 'dancing together';
+      if (c.state === 'playGo') {
+        if (this.walkTo(c, tx, tz, baku ? 0.36 : 0.45) < 5) c.state = 'playDance';
+        return;
+      }
+      if (p.started) c.angle += 0.02 * p.spin;
+      const nx = c.x + (tx - c.x) * 0.14, nz = c.z + (tz - c.z) * 0.14;
+      c.vx = nx - c.x; c.vz = nz - c.z;
+      c.x = nx; c.z = nz;
+      if (!p.started) return;
+      // Everyone in step: hop on alternate beats, facing in and out of the ring.
+      if (p.t % 22 === 0) {
+        const beat = p.t / 22;
+        if (c.h === 0 && (beat + p.members.indexOf(c)) % 2 === 0) { c.vh = baku ? 0.75 : 0.9; c.squash = 0.45; }
+        c.facing = ((p.x > c.x ? 1 : -1) * (beat % 4 === 3 ? -1 : 1)) as 1 | -1;
+        c.turnHold = 10;
+      }
+      return;
+    }
+    c.mood = 'playing catch';
+    if (c.state === 'playFetch') {
+      const f = p.flame!;
+      if (this.walkTo(c, f.x, f.z, baku ? 0.42 : 0.56) < 9) {
+        p.fetcher = null; p.holder = c; p.flightT = -25;
+        c.state = 'playGo'; c.vh = 1; c.h = 0.1; c.squash = 0.5;
+        this.emote(c, 'note', 40);
+      }
+      return;
+    }
+    if (c.state === 'playGo') {
+      if (this.walkTo(c, tx, tz, baku ? 0.36 : 0.45) < 4) { c.state = 'playWait'; c.vx = 0; c.vz = 0; }
+      return;
+    }
+    c.vx = 0; c.vz = 0;
+    const watch = p.to ?? p.flame;
+    if (watch) this.setFacing(c, watch.x - c.x);
+  }
+
+  private thinkTag(c: ShrineCreature, p: Play, baku: boolean) {
+    c.mood = 'playing tag';
+    if (c === p.it) {
+      if (p.wait > 0) {
+        // Counting, on the spot, and bouncing with impatience.
+        c.vx *= 0.7; c.vz *= 0.7;
+        if (c.h === 0 && this.tick % 14 === 0) c.vh = 0.6;
+        return;
+      }
+      let target: ShrineCreature | null = null;
+      let best = Infinity;
+      for (const o of p.members) {
+        if (o === c || o === p.last) continue;
+        const d = dist(o, c);
+        if (d < best) { best = d; target = o; }
+      }
+      target ??= p.members.find(o => o !== c) ?? null;
+      if (!target) return;
+      // The longer it goes without catching anyone, the harder it runs; even the baku gets there in the end.
+      const urgency = 1 + Math.min(p.since / 260, 0.9);
+      const d = this.walkTo(c, target.x, target.z, (baku ? 0.34 : 0.46) * urgency);
+      if (this.tick % 34 === 0) this.emote(c, 'bang', 30);
+      if (this.tick % 6 === 0) this.burst('dust', c.x, c.z, 0, 1, 0.1, 0.1);
+      if (d < 22 && c.h === 0 && this.tick % 12 === 0) { c.vh = 0.95; c.squash = 0.4; }
+      if (d < 11) {
+        p.last = c;
+        p.it = target;
+        p.wait = 42;
+        p.since = 0;
+        target.vh = 1.5; target.h = Math.max(target.h, 0.1); target.squash = 0.7;
+        this.emote(target, 'bang', 50);
+        this.emote(c, 'note', 40);
+        this.burst('star', target.x, target.z, 14, 4, 0.5, 0.7);
+      }
+      return;
+    }
+    // Keep clear of whoever's it, inside the clearing, and dance about when they aren't close.
+    const it = p.it;
+    const d = it ? dist(c, it) : Infinity;
+    if (it && d < 48) {
+      const a = Math.atan2(c.z - it.z, c.x - it.x);
+      c.tx = clamp(c.x + Math.cos(a) * 30, p.x - p.rx, p.x + p.rx);
+      c.tz = clamp(c.z + Math.sin(a) * 30, p.z - p.rz, p.z + p.rz);
+    } else if (Math.hypot(c.tx - c.x, c.tz - c.z) < 5 || this.tick % 50 === c.id % 50) {
+      c.tx = p.x + between(-p.rx, p.rx);
+      c.tz = p.z + between(-p.rz, p.rz);
+    }
+    this.walkTo(c, c.tx, c.tz, baku ? 0.3 : d < 48 ? 0.44 : 0.3);
+    if (c.h === 0 && this.tick % 18 === c.id % 18) c.vh = baku ? 0.55 : 0.7;
   }
 
   private endDrums() {
@@ -3599,6 +3941,7 @@ export class Shrine {
 
   startHappening(kind: ShrineHappening) {
     this.endDrums();
+    this.endPlays();
     this.endGathering();
     if (this.happening?.kind === 'parade') this.parade = null;
     this.happening = { kind, t: 0, dur: HAPPENING_LENGTH[kind] };
@@ -3798,6 +4141,17 @@ export class Shrine {
       return;
     }
     if (kind === 'drum') { this.startDrumCircle(this.spawn('tanuki', x, z), true); return; }
+    if (kind === 'tag' || kind === 'partners' || kind === 'catch') {
+      // Somebody to play with, right there, whoever else is about.
+      const game: PlayKind = kind === 'partners' ? 'dance' : kind;
+      const lead = this.spawn('tanuki', x, z);
+      this.spawn('kitsune', x + 22, z + 8);
+      this.spawn('baku', x - 26, z + 10);
+      if (game !== 'dance') this.spawn('hare', x + 8, z - 18);
+      if (game === 'catch') { const f = this.spawn('hitodama', x, z - 10); f.h = 14; }
+      this.startPlay(game, lead, true);
+      return;
+    }
     if (kind === 'dance') {
       // Every fox nearby off to the nearest ring.
       const ring = this.rings.length ? this.rings.reduce((b, q) => (Math.hypot(q.x - x, q.z - z) < Math.hypot(b.x - x, b.z - z) ? q : b)) : null;
@@ -3855,6 +4209,7 @@ const siteBox = (kind: SiteKind, x: number, z: number, k: number) => {
 };
 
 const DRUM_GAP = 2400;
+const PLAY_KINDS: PlayKind[] = ['tag', 'dance', 'catch', 'catch'];
 const FOREST_TREE = new Set<PropKind>(['cedar', 'maple', 'goldMaple', 'persimmonTree']);
 /** How tall each disguise stands, in rows, for a crow to land on; and how often it pecks (the view times its beak by this too). */
 const DISGUISE_ROWS: Record<DisguiseKind, number> = { teapot: 12, lantern: 16, statue: 15 };
@@ -3863,7 +4218,7 @@ export const PECK_EVERY = 16;
 export const TOPPLE_TICKS = 50;
 export const TOPPLE_FLAT = 40;
 /** How long (ticks) the forest waits between staging one scene in view and the next, and between drum circles. */
-const SCENE_GAP = 600;
+const SCENE_GAP = 450;
 
 /** How long (ticks) a bush takes to grow one berry back. */
 const BERRY_REGROW = 900;

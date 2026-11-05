@@ -916,7 +916,7 @@ export class ShrineView {
       }
       case 'baku': {
         const kind: AnimalKind = c.state === 'sip' ? 'bakuSip' : walking && stride ? 'bakuWalk' : 'baku';
-        this.sprite(animalSprite(kind), c.x, c.z, 0, { flipX, stretch: c.squash });
+        this.sprite(animalSprite(kind), c.x, c.z, c.h, { flipX, stretch: c.squash });
         return;
       }
       case 'tsuchinoko':
@@ -949,7 +949,8 @@ export class ShrineView {
     else if (c.state === 'sniff' && !walking) pose = 'sit';
     else if (c.state === 'perform') pose = c.species === 'tanuki' ? (((tick >> 2) & 1) ? 'drum' : 'sit') : (tick >> 5) & 1 ? 'howl' : 'sit';
     else if (c.state === 'changing' || ((c.state === 'sitWatch' || c.state === 'contest') && !walking)) pose = 'sit';
-    else if (c.state === 'drumDance') pose = c.h > 0.4 ? 'walk' : 'stand';
+    else if (c.state === 'drumDance' || c.state === 'playDance') pose = c.h > 0.4 ? 'walk' : 'stand';
+    else if (c.state === 'playWait') pose = c.h > 0.4 ? 'walk' : 'sit';
     else if (c.state === 'dance') pose = isBarkTime(c, tick) ? ((tick >> 4) & 1 ? 'howl' : 'sit') : c.h > 0.4 ? 'walk' : 'stand';
     else if (walking && stride) pose = 'walk';
     this.sprite(this.rivalSprite(c, pose), c.x, c.z, c.h, { flipX, stretch: c.squash, scale });
