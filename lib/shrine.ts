@@ -5,7 +5,7 @@
 // a koi pond or two, bamboo groves, maple glades and a pagoda.
 //
 // The story is an old rivalry: tanuki and kitsune both want the offerings the
-// shrine keepers leave out, and the keepers shoo away anything they catch at
+// broom spirits leave out, and the brooms swat away anything they catch at
 // the stands. So either rival may set a leaf on its head and turn, with a puff
 // of smoke, into a teapot, a lantern or a stone statue, then creep up to an
 // offering a hop at a time whenever it thinks nobody is looking. That means
@@ -22,8 +22,8 @@ export const ELEVATION = 0.55;
 
 export interface ClearZone { x0: number; z0: number; x1: number; z1: number }
 
-export type ShrineSpecies = 'tanuki' | 'kitsune' | 'keeper' | 'mouse' | 'hare' | 'deer' | 'owl' | 'bat' | 'crow' | 'frog' | 'koi' | 'kappa' | 'kodama' | 'hitodama' | 'kasa' | 'chochin';
-export const SHRINE_SPECIES_LIST: ShrineSpecies[] = ['tanuki', 'kitsune', 'keeper', 'mouse', 'hare', 'deer', 'owl', 'bat', 'crow', 'frog', 'koi', 'kappa', 'kodama', 'hitodama', 'kasa', 'chochin'];
+export type ShrineSpecies = 'tanuki' | 'kitsune' | 'hahaki' | 'mouse' | 'hare' | 'deer' | 'owl' | 'bat' | 'crow' | 'frog' | 'koi' | 'kappa' | 'kodama' | 'hitodama' | 'kasa' | 'chochin';
+export const SHRINE_SPECIES_LIST: ShrineSpecies[] = ['tanuki', 'kitsune', 'hahaki', 'mouse', 'hare', 'deer', 'owl', 'bat', 'crow', 'frog', 'koi', 'kappa', 'kodama', 'hitodama', 'kasa', 'chochin'];
 
 export type ShrineMood = 'wandering' | 'sniffing' | 'sneaking' | 'pretending' | 'changing' | 'eating' | 'facing off' | 'scrapping' | 'fleeing' | 'sleeping' | 'drumming' | 'barking' | 'hunting' | 'pouncing' | 'following' | 'courting'
   | 'sweeping' | 'carrying' | 'bowing' | 'shooing' | 'puzzled' | 'grazing' | 'perched' | 'flying' | 'swooping' | 'sitting' | 'swimming' | 'hopping' | 'drifting' | 'watching' | 'thieving' | 'spilling';
@@ -38,7 +38,7 @@ const MIN = TICKS_PER_SECOND * 60;
 export const SHRINE_SPECIES: Record<ShrineSpecies, SpeciesInfo> = {
   tanuki: { label: 'Tanuki', names: ['Ponta', 'Bunbuku', 'Mameta', 'Danzaburo', 'Shibaemon', 'Kincho', 'Rokuemon', 'Tarobo'], speed: 0.24, palettes: 3, mature: 3 * MIN, old: 24 * MIN, hunger: 0.00006, perArea: 75000, min: 4 },
   kitsune: { label: 'Kitsune', names: ['Kuzunoha', 'Tamamo', 'Akane', 'Kon', 'Yuki', 'Otora', 'Hatsu', 'Shiro'], speed: 0.31, palettes: 3, mature: 3 * MIN, old: 24 * MIN, hunger: 0.00007, perArea: 75000, min: 4 },
-  keeper: { label: 'Shrine keeper', names: ['Old Sato', 'Old Hara', 'Old Mori', 'Old Kaji'], speed: 0.26, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 200000, min: 3 },
+  hahaki: { label: 'Broom spirit', names: ['Old Bristle', 'Sasara', 'Takebo', 'Hokiji'], speed: 0.26, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 200000, min: 3 },
   mouse: { label: 'Field mouse', names: ['Mouse'], speed: 0.3, palettes: 1, mature: MIN / 2, old: 8 * MIN, hunger: 0.00005, perArea: 60000, min: 6 },
   hare: { label: 'Hare', names: ['Hare'], speed: 0.34, palettes: 1, mature: MIN, old: 14 * MIN, hunger: 0.00004, perArea: 110000, min: 3 },
   deer: { label: 'Sika deer', names: ['Shika', 'Momiji', 'Nara', 'Kasuga'], speed: 0.16, palettes: 1, mature: 3 * MIN, old: 30 * MIN, hunger: 0.00002, perArea: 160000, min: 3 },
@@ -108,8 +108,14 @@ export interface SkyLantern { x: number; z: number; h: number; drift: number; li
 export interface Tussle { x: number; z: number; a: ShrineCreature; b: ShrineCreature; t: number; dur: number }
 
 /** One marcher in the night parade. */
-export interface Marcher { kind: ParadeKind | 'kasa' | 'chochin' | 'hitodama' | 'teapot'; x: number; z: number; h: number; phase: number; fly: boolean }
-export interface Parade { z: number; head: number; speed: number; marchers: Marcher[]; dust: number }
+export interface Marcher {
+  kind: ParadeKind | 'kasa' | 'chochin' | 'hitodama' | 'teapot';
+  /** How many rows behind the head of the line it walks, and how far off the middle of the path. */
+  back: number; side: number;
+  x: number; z: number; h: number; facing: 1 | -1; phase: number; fly: boolean;
+}
+/** The line, walking down the approach: `head` is how far along the path its front has come, `headRow` and `tailRow` the rows its ends are on. */
+export interface Parade { head: number; headRow: number; tailRow: number; speed: number; length: number; marchers: Marcher[] }
 
 export type ShrineHappening = 'festival' | 'fireflies' | 'parade';
 export type SiteKind = 'hall' | 'inari' | 'den' | 'koi' | 'bamboo' | 'lilies' | 'maples' | 'sacred' | 'pagoda' | 'zen';
@@ -162,7 +168,7 @@ export const GROUND = { moss: 0, stone: 1, gravel: 2, water: 3, rim: 4 } as cons
 
 const PATH_HALF = 7;
 const RIVALS: ShrineSpecies[] = ['tanuki', 'kitsune'];
-const OFFER_FOR_KEEPER: OfferingKind[] = ['rice', 'mikan', 'fish', 'rice', 'mikan'];
+const OFFER_FOR_STANDS: OfferingKind[] = ['rice', 'mikan', 'fish', 'rice', 'mikan'];
 const MAX_MOTES = 700;
 const HAPPENING_LENGTH: Record<ShrineHappening, number> = { festival: 60 * TICKS_PER_SECOND, fireflies: 50 * TICKS_PER_SECOND, parade: 120 * TICKS_PER_SECOND };
 
@@ -179,6 +185,8 @@ export class Shrine {
   terrain = new Uint8Array(0);
   /** Each row's x along the approach. */
   pathX = new Float32Array(0);
+  /** How far along the path each row is, counting its bends. */
+  pathArc = new Float32Array(0);
   props: Prop[] = [];
   low: Low[] = [];
   canes: Cane[] = [];
@@ -272,14 +280,12 @@ export class Shrine {
     for (let z = 0; z < h; z++) {
       this.pathX[z] = w / 2 + Math.sin(z * 0.0055 + a) * swing + Math.sin(z * 0.017 + b) * swing * 0.22;
     }
-    for (let z = 0; z < h; z++) {
-      const half = PATH_HALF + Math.sin(z * 0.04) * 1;
-      for (let x = Math.max(0, Math.floor(this.pathX[z] - half)); x < Math.min(w, this.pathX[z] + half); x++) this.ground[z * w + x] = GROUND.stone;
-    }
 
     // Precincts down the page, every kind before any repeats, on alternate sides.
+    // The first goes opposite the way the path leaves the hero text.
     let queue: SiteKind[] = [];
-    let side = r() < 0.5 ? -1 : 1;
+    let side = 1;
+    const planned: { kind: SiteKind; x: number; z: number; k: number }[] = [];
     const hero = this.zones[0];
     let z = hero ? Math.min(h - 1, hero.z1 + 30) : 80;
     // Something beside the hero, in the opening view.
@@ -296,10 +302,29 @@ export class Shrine {
       const sprawl = r() < 0.3 ? 1.5 : 1;
       const gutter = Math.min(w * 0.16, 62);
       const x = clamp(side < 0 ? gutter : w - gutter, 40, w - 40);
-      this.placeSite(kind, x + (r() - 0.5) * 18, z, sprawl, r);
+      planned.push({ kind, x: x + (r() - 0.5) * 18, z, k: kind === 'koi' && w < 260 ? 0.45 : sprawl });
       z += 118 + r() * 60;
       side = -side;
     }
+
+    // The approach bends round the hero text and anything solid in its way, then is paved.
+    for (let pass = 0; pass < 2; pass++) {
+      for (const q of this.zones) {
+        if (q.x0 > PATH_HALF * 2 + 8) this.bendPath(q.x0 - 6, q.x1, q.z0 - 6, q.z1 + 6, -1);
+      }
+      for (const s of planned) {
+        const box = siteBox(s.kind, s.x, s.z, s.k);
+        if (box) this.bendPath(box.x0, box.x1, box.z0, box.z1, s.x < w / 2 ? 1 : -1);
+      }
+    }
+    for (let row = 0; row < h; row++) {
+      this.pathX[row] = clamp(this.pathX[row], PATH_HALF + 2, w - PATH_HALF - 3);
+      const half = PATH_HALF + Math.sin(row * 0.04) * 1;
+      for (let x = Math.max(0, Math.floor(this.pathX[row] - half)); x < Math.min(w, this.pathX[row] + half); x++) this.ground[row * w + x] = GROUND.stone;
+    }
+    this.pathArc = new Float32Array(h);
+    for (let row = 1; row < h; row++) this.pathArc[row] = this.pathArc[row - 1] + Math.hypot(1, this.pathX[row] - this.pathX[row - 1]);
+    for (const s of planned) this.placeSite(s.kind, s.x, s.z, s.k, r);
 
     // Lanterns line the approach, a torii every so far, and a festoon for the festival.
     for (let row = 20, k = 0; row < h - 4; row += 34, k++) {
@@ -343,6 +368,20 @@ export class Shrine {
     this.moths = [];
     for (const l of this.lanterns) if (hash2(Math.round(l.x), Math.round(l.z)) < 0.3) {
       for (let k = 0; k < 2; k++) this.moths.push({ lantern: l, a: Math.random() * 6.28, r: 4 + Math.random() * 4, h: 8 + Math.random() * 14, x: l.x, z: l.z, alive: true, wait: 0 });
+    }
+  }
+
+  /** Draws the approach aside just far enough to clear a box, easing in and out; rows already clear stay put. */
+  private bendPath(x0: number, x1: number, z0: number, z1: number, toward: 1 | -1) {
+    const margin = PATH_HALF + 5;
+    const limit = toward < 0 ? x0 - margin : x1 + margin;
+    const first = Math.max(0, Math.floor(z0)), last = Math.min(this.h - 1, Math.ceil(z1));
+    const ease = 110;
+    for (let z = Math.max(0, first - ease); z <= Math.min(this.h - 1, last + ease); z++) {
+      const over = toward < 0 ? this.pathX[z] - limit : limit - this.pathX[z];
+      if (over <= 0) continue;
+      const t = z < first ? (z - (first - ease)) / ease : z > last ? (last + ease - z) / ease : 1;
+      this.pathX[z] += toward * over * t * t * (3 - 2 * t);
     }
   }
 
@@ -647,8 +686,8 @@ export class Shrine {
       c.z = clamp(c.z, 2, h - 3);
       if (c.species === 'koi' || c.species === 'frog' || c.species === 'kappa') c.pond = null;
       c.altar = null;
-      if (c.species === 'tanuki' || c.species === 'kitsune' || c.species === 'keeper') { c.state = c.disguise ? 'disguised' : 'roam'; c.timer = 0; c.tx = c.x; c.tz = c.z; }
-      if (c.species === 'keeper') c.carrying = null;
+      if (c.species === 'tanuki' || c.species === 'kitsune' || c.species === 'hahaki') { c.state = c.disguise ? 'disguised' : 'roam'; c.timer = 0; c.tx = c.x; c.tz = c.z; }
+      if (c.species === 'hahaki') c.carrying = null;
       const flies = c.species === 'bat' || c.species === 'owl' || c.species === 'crow' || c.species === 'hitodama' || c.species === 'chochin' || c.species === 'koi' || c.species === 'frog' || c.species === 'kappa';
       if (!flies && this.isSolid(c.x, c.z)) this.freeSpot(c);
       if (c.species === 'owl' || c.species === 'crow') this.settleOnCedar(c);
@@ -991,15 +1030,15 @@ export class Shrine {
   /** The parade comes through: whoever is near its line gets out of the way, or pretends to be furniture. */
   private paradeNear(c: ShrineCreature) {
     const p = this.parade;
-    if (!p || Math.abs(c.z - p.z) > 34) return false;
-    return c.x > p.head - 600 && c.x < p.head + 70;
+    if (!p || c.z > p.headRow + 60 || c.z < p.tailRow - 10) return false;
+    return Math.abs(c.x - this.pathAt(c.z)) < 30;
   }
 
   /** Thinks a creature's thought for this tick. */
   private think(c: ShrineCreature) {
     switch (c.species) {
       case 'tanuki': case 'kitsune': this.thinkRival(c); break;
-      case 'keeper': this.thinkKeeper(c); break;
+      case 'hahaki': this.thinkHahaki(c); break;
       case 'mouse': this.thinkMouse(c); break;
       case 'hare': this.thinkHare(c); break;
       case 'deer': this.thinkDeer(c); break;
@@ -1079,7 +1118,7 @@ export class Shrine {
     }
     if (this.paradeNear(c)) {
       if (!c.disguise && Math.random() < 0.015) this.beginChange(c);
-      else if (this.parade) this.flee(c, { x: c.x, z: this.parade.z }, 70);
+      else if (this.parade) this.flee(c, { x: this.pathAt(c.z), z: c.z }, 70);
       return;
     }
     c.mood = 'wandering';
@@ -1091,6 +1130,19 @@ export class Shrine {
       if (foe && !this.isYoung(c) && Math.random() < 0.25) this.startStandoff(c, foe);
     }
   }
+
+  /** The row reached after going this far along the path (off either end, it runs straight on). */
+  private rowAlong(d: number) {
+    const arc = this.pathArc;
+    if (d <= 0) return d;
+    const last = arc[this.h - 1];
+    if (d >= last) return this.h - 1 + (d - last);
+    let lo = 0, hi = this.h - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (arc[mid] <= d) lo = mid; else hi = mid; }
+    return lo + (d - arc[lo]) / Math.max(0.001, arc[hi] - arc[lo]);
+  }
+
+  private pathAt(z: number) { return this.pathX[clamp(Math.round(z), 0, this.h - 1)]; }
 
   private wanderAbout(c: ShrineCreature, pace: number) {
     if (Math.hypot(c.tx - c.x, c.tz - c.z) < 3 || Math.random() < 0.004) this.wanderTarget(c, 44);
@@ -1137,9 +1189,9 @@ export class Shrine {
     return best;
   }
 
-  private keeperNear(x: number, z: number, range: number) {
+  private hahakiNear(x: number, z: number, range: number) {
     for (const o of this.creatures) {
-      if (o.species === 'keeper' && o.alive && Math.hypot(o.x - x, o.z - z) < range) return o;
+      if (o.species === 'hahaki' && o.alive && Math.hypot(o.x - x, o.z - z) < range) return o;
     }
     return null;
   }
@@ -1150,7 +1202,7 @@ export class Shrine {
     c.mood = 'sniffing';
     const d = this.walkTo(c, a.x + (c.id & 1 ? 8 : -8), a.z + 4, SHRINE_SPECIES[c.species].speed);
     // Across open ground to a guarded stand, go in disguise.
-    if (d < 46 && d > 16 && this.tick % 10 === 0 && this.keeperNear(a.x, a.z, 60) && Math.random() < 0.3) { this.beginChange(c); return; }
+    if (d < 46 && d > 16 && this.tick % 10 === 0 && this.hahakiNear(a.x, a.z, 60) && Math.random() < 0.3) { this.beginChange(c); return; }
     if (d < 4) { c.state = 'eat'; c.timer = 80; }
   }
 
@@ -1334,7 +1386,7 @@ export class Shrine {
       c.vx = 0; c.vz = 0;
       return;
     }
-    // A keeper walking by stops and scratches his head. A rival might see through it.
+    // A rival might see through it.
     if (this.tick % 24 === c.id % 24) {
       const foe = this.near(c, 22, o => o.species === this.rivalOf(c) && !o.disguise && !o.hidden && o.state === 'roam' && !this.isYoung(o));
       if (foe && Math.random() < 0.3) {
@@ -1356,7 +1408,7 @@ export class Shrine {
         return;
       }
     }
-    if (c.sneakLeft <= 0 && !this.keeperNear(c.x, c.z, 40)) { this.endDisguise(c); return; }
+    if (c.sneakLeft <= 0 && !this.hahakiNear(c.x, c.z, 40)) { this.endDisguise(c); return; }
     // A hop or two, then stock still again, with a nervous pause.
     const beat = (this.tick + c.id * 13) % 110;
     if (beat < 70) {
@@ -1379,17 +1431,17 @@ export class Shrine {
     return false;
   }
 
-  // --- the keepers ----------------------------------------------------------------
+  // --- the broom spirits ----------------------------------------------------------------
 
-  private thinkKeeper(c: ShrineCreature) {
-    const speed = SHRINE_SPECIES.keeper.speed;
+  private thinkHahaki(c: ShrineCreature) {
+    const speed = SHRINE_SPECIES.hahaki.speed;
     if (c.state === 'shoo') {
       const prey = c.prey;
       c.mood = 'shooing';
       if (!prey?.alive || prey.disguise || --c.timer <= 0) { c.prey = null; c.state = 'roam'; c.timer = 40; return; }
       const d = this.walkTo(c, prey.x, prey.z, speed * 2.1);
       if (this.tick % 12 === 0) c.squash = 0.2;
-      if (d < 16 && prey.state !== 'flee') { this.emote(prey, 'bang', 40); prey.vh = 1; this.flee(prey, c, 130); prey.altar = null; prey.h = 0.1; this.caught++; this.log('caught', `${c.name} chases ${prey.name} off with the broom`, prey); }
+      if (d < 16 && prey.state !== 'flee') { this.emote(prey, 'bang', 40); prey.vh = 1; this.flee(prey, c, 130); prey.altar = null; prey.h = 0.1; this.caught++; this.log('caught', `${c.name} swats ${prey.name} off the stand`, prey); }
       return;
     }
     if (c.state === 'carry') {
@@ -1427,10 +1479,10 @@ export class Shrine {
     }
     // Any empty stand is worth a walk.
     if (this.tick % 30 === c.id % 30) {
-      const empty = this.altars.filter(a => !a.item && a.wait <= 0 && !this.creatures.some(o => o.species === 'keeper' && o.altar === a));
+      const empty = this.altars.filter(a => !a.item && a.wait <= 0 && !this.creatures.some(o => o.species === 'hahaki' && o.altar === a));
       if (empty.length) {
         c.altar = empty.reduce((b, a) => (dist(c, a) < dist(c, b) ? a : b));
-        c.carrying = c.altar.favourite === 'sake' || c.altar.favourite === 'inari' || c.altar.favourite === 'cucumber' ? c.altar.favourite : pick(OFFER_FOR_KEEPER);
+        c.carrying = c.altar.favourite === 'sake' || c.altar.favourite === 'inari' || c.altar.favourite === 'cucumber' ? c.altar.favourite : pick(OFFER_FOR_STANDS);
         c.state = 'carry';
         return;
       }
@@ -1511,9 +1563,9 @@ export class Shrine {
     if (c.state === 'bow') { c.mood = 'bowing'; this.halt(c); return; }
     if (c.state === 'walk') { c.mood = 'wandering'; this.walkTo(c, c.tx, c.tz, SHRINE_SPECIES.deer.speed); }
     else { c.mood = 'grazing'; this.halt(c); c.energy = Math.min(1, c.energy + 0.0002); }
-    // Polite: it bows to a keeper or a kappa it meets.
+    // Polite: it bows to a broom spirit or a kappa it meets.
     if (this.tick % 30 === c.id % 30) {
-      const other = this.near(c, 16, o => o.species === 'keeper' || (o.species === 'kappa' && o.state === 'ashore'));
+      const other = this.near(c, 16, o => o.species === 'hahaki' || (o.species === 'kappa' && o.state === 'ashore'));
       if (other && c.state !== 'bow') {
         this.setFacing(c, other.x - c.x);
         c.state = 'bow'; c.timer = 80;
@@ -1595,7 +1647,7 @@ export class Shrine {
       c.mood = 'perched';
       if (--c.timer <= 0) {
         const altar = this.altars.filter(a => a.item && Math.abs(a.z - c.z) < 220);
-        if (altar.length && Math.random() < 0.7 && !this.keeperNear(c.x, c.z, 30)) { c.altar = pick(altar); c.state = 'raid'; }
+        if (altar.length && Math.random() < 0.7 && !this.hahakiNear(c.x, c.z, 30)) { c.altar = pick(altar); c.state = 'raid'; }
         else this.settleOnCedar(c);
       }
       return;
@@ -1734,7 +1786,7 @@ export class Shrine {
         if (altar.item === 'cucumber') { altar.bites = 0; altar.item = null; altar.wait = 200; this.burst('crumb', altar.x, altar.z, 8, 4, 0.3, 0.4); this.meals++; this.emote(c, 'heart', 50); this.log('offering', `${c.name} the kappa took the cucumber`, c); }
         c.state = 'home'; c.timer = 300;
       }
-      if (this.tick % 40 === 0 && !this.isWater(c.x, c.z) && this.near(c, 16, o => o.species === 'keeper')) { c.state = 'spill'; c.timer = 80; this.emote(c, 'what', 30); }
+      if (this.tick % 40 === 0 && !this.isWater(c.x, c.z) && this.near(c, 16, o => o.species === 'hahaki')) { c.state = 'spill'; c.timer = 80; this.emote(c, 'what', 30); }
       return;
     }
     // In the pond: only the head and dish show.
@@ -1764,7 +1816,7 @@ export class Shrine {
     c.mood = 'watching';
     // They tilt their heads in turn, and duck behind the roots when something big comes close.
     if (this.tick % 20 === c.id % 20) {
-      const big = this.near(c, 16, o => o.species === 'keeper' || o.species === 'deer' || ((o.species === 'tanuki' || o.species === 'kitsune') && !o.disguise));
+      const big = this.near(c, 16, o => o.species === 'hahaki' || o.species === 'deer' || ((o.species === 'tanuki' || o.species === 'kitsune') && !o.disguise));
       c.state = big ? 'shy' : 'roam';
     }
     if (c.home) {
@@ -1903,7 +1955,7 @@ export class Shrine {
   }
 
   private updateAltars() {
-    // Also, a passing worshipper leaves something now and then, when the keepers fall behind.
+    // Also, a passing worshipper leaves something now and then, when the brooms fall behind.
     if (this.tick % 90 === 0) {
       for (const a of this.altars) {
         if (a.item) continue;
@@ -1987,37 +2039,61 @@ export class Shrine {
   }
 
   private startParade() {
-    let z = clamp((this.viewZ.z0 + this.viewZ.z1) / 2 + 18, 30, this.h - 30);
-    for (const q of this.zones) if (z > q.z0 - 14 && z < q.z1 + 22) z = q.z1 + 22;
-    const line: Marcher['kind'][] = ['hitodama', 'chochin', 'oni', 'tengu', 'hitodama', 'kasa', 'biwa', 'oniBlue', 'roku', 'momen', 'hitodama', 'nurikabe', 'kasa', 'nine', 'chochin', 'oni', 'kasa', 'hitodama', 'tengu', 'teapot'];
-    const marchers: Marcher[] = line.map((kind, k) => ({
-      kind, x: -k * 28 - (kind === 'nine' ? 14 : 0) - Math.random() * 6, z: z + (k % 2 ? 4 : -4) + between(-3, 3), h: kind === 'momen' ? 18 : kind === 'hitodama' ? 16 : kind === 'chochin' ? 10 : 0, phase: Math.random() * 6.28, fly: kind === 'momen' || kind === 'hitodama' || kind === 'chochin',
-    }));
-    // Spirit flames flanking the line.
-    for (let k = 0; k < 12; k++) marchers.push({ kind: 'hitodama', x: -k * 36 - Math.random() * 30, z: z + (k % 2 ? 18 : -22) + between(-4, 4), h: 18, phase: Math.random() * 6.28, fly: true });
-    this.parade = { z, head: -10, speed: 0.4, marchers, dust: 0 };
-    this.log('visit', 'The night parade of a hundred demons is coming through', null);
+    const line: Marcher['kind'][] = ['chochin', 'oni', 'tengu', 'kasa', 'biwa', 'oniBlue', 'roku', 'momen', 'nurikabe', 'kasa', 'nine', 'chochin', 'oni', 'kasa', 'tengu', 'teapot'];
+    const make = (kind: Marcher['kind'], back: number, side: number): Marcher => {
+      const fly = kind === 'momen' || kind === 'hitodama' || kind === 'chochin';
+      return { kind, back, side, x: 0, z: 0, h: kind === 'momen' ? 16 : kind === 'hitodama' ? 14 : kind === 'chochin' ? 8 : 0, facing: 1, phase: Math.random() * 6.28, fly };
+    };
+    const marchers: Marcher[] = [];
+    // In single file down the middle of the path, the big ones given more room.
+    let back = 0;
+    for (const kind of line) {
+      back += kind === 'nurikabe' || kind === 'nine' || kind === 'roku' ? 30 : 20;
+      marchers.push(make(kind, back, between(-1.5, 1.5)));
+    }
+    // Soul-flames carried along both verges, lighting the way.
+    for (let f = 0; f <= back + 10; f += 28) {
+      marchers.push(make('hitodama', f, -(PATH_HALF + 9)));
+      marchers.push(make('hitodama', f + 14, PATH_HALF + 9));
+    }
+    const length = back + 24;
+    // From just above wherever the visitor is, on down the page.
+    const speed = 0.3;
+    const startRow = Math.max(-10, this.viewZ.z0 - 16);
+    const head = startRow < 0 ? startRow : this.pathArc[Math.min(this.h - 1, startRow | 0)];
+    this.parade = { head, headRow: startRow, tailRow: startRow - length, speed, length, marchers };
+    if (this.happening) this.happening.dur = Math.ceil((this.pathArc[this.h - 1] - head + length + 60) / speed);
+    this.log('visit', 'The night parade of a hundred demons is coming down the path', null);
   }
 
   private updateParade() {
     const p = this.parade;
     if (!p) return;
     p.head += p.speed;
-    if (this.tick % 5 === 0) {
-      const m = pick(p.marchers);
-      this.burst(m.fly ? 'ember' : 'dust', p.head + m.x, m.z, m.fly ? m.h : 0, 1, 0.1, 0.2);
+    p.headRow = this.rowAlong(p.head);
+    p.tailRow = this.rowAlong(p.head - p.length);
+    // Everyone follows the path's bends, turning as it turns.
+    for (const m of p.marchers) {
+      m.z = this.rowAlong(p.head - m.back);
+      m.x = this.pathAt(m.z) + m.side;
+      const slope = this.pathAt(m.z + 8) - this.pathAt(m.z - 8);
+      if (Math.abs(slope) > 1.5) m.facing = slope > 0 ? 1 : -1;
     }
-    // Scatter whoever is on the line.
+    if (this.tick % 7 === 0) {
+      const m = pick(p.marchers);
+      if (m.z > 0 && m.z < this.h) this.burst(m.fly ? 'ember' : 'dust', m.x, m.z, m.fly ? m.h : 0, 1, 0.1, 0.2);
+    }
+    // Whoever is on the path gets off it, or bows from the verge.
     if (this.tick % 15 === 0) {
       for (const c of this.creatures) {
-        if (!c.alive || c.h > 20) continue;
-        if (Math.abs(c.z - p.z) > 26 || c.x < p.head - 600 || c.x > p.head + 30) continue;
-        if (c.species === 'mouse' || c.species === 'hare') this.flee(c, { x: c.x, z: p.z }, 60);
-        else if (c.species === 'keeper' && c.state !== 'bow') { c.state = 'bow'; c.timer = 120; }
-        else if (c.species === 'deer' && c.state !== 'bow') { c.state = 'bow'; c.timer = 140; }
+        if (!c.alive || c.h > 20 || c.z > p.headRow + 40 || c.z < p.tailRow) continue;
+        const px = this.pathAt(c.z);
+        if (Math.abs(c.x - px) > 24) continue;
+        if (c.species === 'mouse' || c.species === 'hare') this.flee(c, { x: px, z: c.z }, 60);
+        else if ((c.species === 'hahaki' || c.species === 'deer') && c.state !== 'bow') { c.state = 'bow'; c.timer = 140; }
       }
     }
-    if (p.head + p.marchers.reduce((m, q) => Math.min(m, q.x), 0) > this.w + 40) {
+    if (p.tailRow > this.h + 30) {
       this.parade = null;
       if (this.happening?.kind === 'parade') this.happening = null;
     }
@@ -2047,7 +2123,9 @@ export class Shrine {
     c.adopted = true;
   }
 
-  release(species: ShrineSpecies, name: string, palette: number) {
+  release(saved: ShrineSpecies, name: string, palette: number) {
+    // A creature saved under a species that has since gone comes back as a tanuki.
+    const species: ShrineSpecies = SHRINE_SPECIES[saved] ? saved : 'tanuki';
     const water = species === 'koi' || species === 'frog' || species === 'kappa';
     const w = water && this.waters.length ? pick(this.waters) : null;
     const c = water && !w ? this.spawn('tanuki') : this.spawn(species, w?.x, w?.z);
@@ -2093,6 +2171,20 @@ export const bridgeRise = (w: number) => Math.round(w * 0.2);
 export const bridgeDeck = (w: number, offset: number) => {
   const t = Math.min(1, Math.abs(offset) / (w / 2));
   return (1 - t * t) * bridgeRise(w) + Math.min(5, (w / 2 - Math.abs(offset)) * 0.8);
+};
+
+/** The part of a precinct the approach has to go round; the softer kinds it can run through. */
+const siteBox = (kind: SiteKind, x: number, z: number, k: number) => {
+  const box = (hw: number, up: number, down: number) => ({ x0: x - hw, x1: x + hw, z0: z - up, z1: z + down });
+  switch (kind) {
+    case 'koi': return box(50 * k + 8, 41 * k + 8, 41 * k + 8);
+    case 'hall': return box(58, 12, 46);
+    case 'pagoda': return box(34, 8, 28);
+    case 'sacred': return box(34, 6, 30);
+    case 'inari': return box(30, 6, 16);
+    case 'den': return box(36, 6, 24);
+    default: return null;
+  }
 };
 
 const DISGUISE_ROTATION: DisguiseKind[] = ['teapot', 'lantern', 'statue'];

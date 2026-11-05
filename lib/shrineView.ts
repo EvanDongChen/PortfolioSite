@@ -46,7 +46,7 @@ const HALO_GHOST: [number, number, number] = [130, 200, 255];
 const SHAFTS = 2;
 const SHAFT_PERIOD = 300;
 const SHAFT_SLANT = 0.5;
-const MARCHER_SCALE = 1.5;
+const MARCHER_SCALE = 1.25;
 /** How far (cells) a tree's crown leans at most, and how many slices it bends in. */
 const CEDAR_SWAY = 2.2;
 const CEDAR_SLICES = 10;
@@ -67,7 +67,7 @@ interface SpriteOptions { alpha?: number; flipX?: boolean; scaleY?: number; scal
 
 /** Sprite widths in art pixels as drawn, for shadows, picking and the inspection reticle. */
 export const BODY_WIDTH: Record<ShrineSpecies, number> = {
-  tanuki: 18, kitsune: 21, keeper: 12, mouse: 8, hare: 11, deer: 23, owl: 10, bat: 9, crow: 13, frog: 9, koi: 15, kappa: 12, kodama: 9, hitodama: 7, kasa: 14, chochin: 11,
+  tanuki: 18, kitsune: 21, hahaki: 10, mouse: 8, hare: 11, deer: 23, owl: 10, bat: 9, crow: 13, frog: 9, koi: 15, kappa: 12, kodama: 9, hitodama: 7, kasa: 14, chochin: 11,
 };
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
@@ -568,10 +568,9 @@ export class ShrineView {
     const p = shrine.parade;
     if (p) {
       for (const m of p.marchers) {
-        const x = p.head + m.x;
-        if (x < -30 || x > shrine.w + 30 || !visible(m.z)) continue;
-        if (!m.fly) this.shadow(x, m.z, 16, 0.3);
-        over.push({ depth: m.z + 0.4, draw: () => this.drawMarcher(m, x) });
+        if (!visible(m.z)) continue;
+        if (!m.fly) this.shadow(m.x, m.z, 16, 0.3);
+        over.push({ depth: m.z + 0.4, draw: () => this.drawMarcher(m, m.x) });
       }
     }
     for (const t of shrine.tussles) {
@@ -706,7 +705,7 @@ export class ShrineView {
     const flipX = c.facing < 0;
     switch (c.species) {
       case 'tanuki': case 'kitsune': this.drawRival(c, walking, stride); return;
-      case 'keeper': this.drawKeeper(c, walking, stride); return;
+      case 'hahaki': this.drawHahaki(c, walking, stride); return;
       case 'mouse': this.sprite(animalSprite(walking && stride ? 'mouse2' : 'mouse'), c.x, c.z, c.h, { flipX }); return;
       case 'hare': this.sprite(animalSprite(c.h > 0.4 ? 'hareHop' : 'hare'), c.x, c.z, c.h, { flipX }); return;
       case 'deer': {
@@ -766,34 +765,33 @@ export class ShrineView {
     }
   }
 
-  private drawKeeper(c: ShrineCreature, walking: boolean, stride: number) {
+  private drawHahaki(c: ShrineCreature, walking: boolean, stride: number) {
     const flipX = c.facing < 0;
-    const bow = c.state === 'bow';
-    this.sprite(animalSprite(bow ? 'keeperBow' : walking && stride ? 'keeperWalk' : 'keeper'), c.x, c.z, 0, { flipX, stretch: c.squash });
-    if (!bow) {
-      const raised = c.state === 'shoo';
-      this.sprite(animalSprite('broom'), c.x + c.facing * 7, c.z, raised ? 22 + ((this.shrine.tick >> 2) & 1) * 3 : 0, { flipX });
-    }
-    if (c.carrying) this.sprite(offeringSprite(c.carrying), c.x + c.facing * 6, c.z, 18);
+    const lean = c.state === 'bow' || c.state === 'sweep' || c.state === 'puzzle';
+    // It gets about in little hops.
+    const hop = walking && !lean && stride ? 1.6 : 0;
+    this.sprite(animalSprite(lean ? 'hahakiLean' : hop ? 'hahakiStep' : 'hahaki'), c.x, c.z, c.h + hop, { flipX, stretch: c.squash });
+    if (c.carrying) this.sprite(offeringSprite(c.carrying), c.x, c.z, c.h + hop + 30);
   }
 
   private drawMarcher(m: Marcher, x: number) {
     const tick = this.shrine.tick;
     const scale = MARCHER_SCALE;
+    const flipX = m.facing < 0;
     const bob = Math.abs(Math.sin(tick * 0.14 + m.phase)) * 1.8;
     const frame = ((tick + Math.round(m.phase * 10)) >> 3) & 1;
     switch (m.kind) {
       case 'hitodama': this.sprite(hitodamaSprite((tick + Math.round(m.phase * 7)) >> 3), x, m.z, m.h + Math.sin(tick * 0.05 + m.phase) * 3, { anchor: 'center', alpha: 0.95, scale }); return;
-      case 'chochin': this.sprite(animalSprite('chochin'), x, m.z, m.h + bob, { scale }); return;
-      case 'kasa': this.sprite(animalSprite(frame ? 'kasaHop' : 'kasa'), x, m.z, frame ? 3 : 0, { scale }); return;
+      case 'chochin': this.sprite(animalSprite('chochin'), x, m.z, m.h + bob, { scale, flipX }); return;
+      case 'kasa': this.sprite(animalSprite(frame ? 'kasaHop' : 'kasa'), x, m.z, frame ? 3 : 0, { scale, flipX }); return;
       case 'teapot':
         // The joker at the back of the line, hoping nobody notices.
-        this.sprite(feetSprite('tanuki', frame), x, m.z + 1, bob * 0.6);
-        this.sprite(disguiseSprite('teapot'), x, m.z, 2 + bob);
-        this.sprite(tailSprite('tanuki'), x - 9, m.z, 3 + bob);
+        this.sprite(feetSprite('tanuki', frame), x, m.z + 1, bob * 0.6, { flipX });
+        this.sprite(disguiseSprite('teapot'), x, m.z, 2 + bob, { flipX });
+        this.sprite(tailSprite('tanuki'), x - m.facing * 9, m.z, 3 + bob, { flipX });
         return;
-      case 'momen': this.sprite(paradeSprite('momen', frame), x, m.z, m.h + Math.sin(tick * 0.06 + m.phase) * 4, { anchor: 'center', scale }); return;
-      default: this.sprite(paradeSprite(m.kind, frame), x, m.z, bob * (m.kind === 'nurikabe' ? 0.5 : 1), { scale });
+      case 'momen': this.sprite(paradeSprite('momen', frame), x, m.z, m.h + Math.sin(tick * 0.06 + m.phase) * 4, { anchor: 'center', scale, flipX }); return;
+      default: this.sprite(paradeSprite(m.kind, frame), x, m.z, bob * (m.kind === 'nurikabe' ? 0.5 : 1), { scale, flipX });
     }
   }
 
@@ -951,8 +949,8 @@ export class ShrineView {
     const p = shrine.parade;
     if (p) {
       for (const c of p.marchers) {
-        if (c.kind === 'hitodama') light(p.head + c.x, c.z, 34, 0.9);
-        else if (c.kind === 'chochin') light(p.head + c.x, c.z, 40, 0.95);
+        if (c.kind === 'hitodama') light(c.x, c.z, 30, 0.9);
+        else if (c.kind === 'chochin') light(c.x, c.z, 38, 0.95);
       }
     }
     if (fest > 0.02) {
@@ -992,7 +990,7 @@ export class ShrineView {
     const p = shrine.parade;
     if (p) {
       for (const m of p.marchers) {
-        if ((m.kind === 'hitodama' || m.kind === 'chochin') && m.z > z0 && m.z < z1) place(m.kind === 'hitodama' ? blue : warm, p.head + m.x, m.z, m.h + 4, 0.34);
+        if ((m.kind === 'hitodama' || m.kind === 'chochin') && m.z > z0 && m.z < z1) place(m.kind === 'hitodama' ? blue : warm, m.x, m.z, m.h + 4, 0.34);
       }
     }
     ctx.globalCompositeOperation = 'source-over';
@@ -1039,7 +1037,7 @@ export class ShrineView {
 
   private drawEmote(c: ShrineCreature) {
     const img = c.emote === 'bang' ? bangSprite() : c.emote === 'what' ? whatSprite() : c.emote === 'zed' ? zedSprite() : c.emote === 'heart' ? heartSprite() : noteSprite();
-    const tall = c.disguise ? 22 : c.species === 'keeper' ? 26 : c.species === 'deer' ? 22 : 18;
+    const tall = c.disguise ? 22 : c.species === 'hahaki' ? 22 : c.species === 'deer' ? 22 : 18;
     this.sprite(img, c.x, c.z, c.h + tall / ELEVATION + ((this.shrine.tick >> 3) & 1));
   }
 

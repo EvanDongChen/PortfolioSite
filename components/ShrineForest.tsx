@@ -43,7 +43,7 @@ const canDrawInWorker = () => {
 const MOOD_LABEL: Record<ShrineMood, string> = {
   wandering: 'Wandering', sniffing: 'Sniffing about', sneaking: 'Sneaking', pretending: 'Holding very still', changing: 'Leaf on head...', eating: 'Eating the offering',
   'facing off': 'Facing off!', scrapping: 'In a scrap', fleeing: 'Fleeing!', sleeping: 'Asleep', drumming: 'Drumming on its belly', barking: 'Barking at the moon', hunting: 'Hunting',
-  pouncing: 'Pouncing!', following: 'Following its parent', courting: 'Courting', sweeping: 'Sweeping the path', carrying: 'Bringing an offering', bowing: 'Bowing', shooing: 'Shooing a thief!',
+  pouncing: 'Pouncing!', following: 'Following its parent', courting: 'Courting', sweeping: 'Sweeping the path', carrying: 'Bringing an offering', bowing: 'Bowing', shooing: 'Swatting a thief!',
   puzzled: 'Was that teapot always there?', grazing: 'Grazing the moss', perched: 'Perched, watching', flying: 'Flying', swooping: 'Swooping!', sitting: 'Sitting', swimming: 'Swimming',
   hopping: 'Hopping', drifting: 'Drifting', watching: 'Watching quietly', thieving: 'Stealing an offering', spilling: 'Spilling its dish of water',
 };

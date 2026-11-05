@@ -12,10 +12,10 @@ const FEED_LENGTH = 3;
 const EVENT_COLOR: Record<ShrineEvent['kind'], string> = {
   shift: '#ffc978', offering: '#f4f0dc', scrap: '#ff7a5a', caught: '#ff7a5a', theft: '#9aa6c8', eaten: '#e2484c', birth: '#f2a6c2', visit: '#8fd0ff', death: '#9aa6c8',
 };
-const WILD: ShrineSpecies[] = ['keeper', 'deer', 'hare', 'mouse', 'owl', 'bat', 'crow', 'frog', 'koi'];
-const SPIRITS: ShrineSpecies[] = ['kappa', 'kodama', 'hitodama', 'kasa', 'chochin'];
+const WILD: ShrineSpecies[] = ['deer', 'hare', 'mouse', 'owl', 'bat', 'crow', 'frog', 'koi'];
+const SPIRITS: ShrineSpecies[] = ['hahaki', 'kappa', 'kodama', 'hitodama', 'kasa', 'chochin'];
 const PLURAL: Record<ShrineSpecies, string> = {
-  tanuki: 'Tanuki', kitsune: 'Kitsune', keeper: 'Keepers', mouse: 'Field mice', hare: 'Hares', deer: 'Sika deer', owl: 'Owls', bat: 'Bats', crow: 'Crows', frog: 'Frogs', koi: 'Koi',
+  tanuki: 'Tanuki', kitsune: 'Kitsune', hahaki: 'Broom spirits', mouse: 'Field mice', hare: 'Hares', deer: 'Sika deer', owl: 'Owls', bat: 'Bats', crow: 'Crows', frog: 'Frogs', koi: 'Koi',
   kappa: 'Kappa', kodama: 'Kodama', hitodama: 'Soul-flames', kasa: 'Umbrella ghosts', chochin: 'Lantern ghosts',
 };
 const HAPPENING_LABEL: Record<ShrineHappening, string> = { festival: 'Lantern festival', fireflies: 'Firefly night', parade: 'Night parade' };

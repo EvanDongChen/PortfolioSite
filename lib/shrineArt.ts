@@ -326,7 +326,7 @@ const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> 
   const KODAMA: Record<string, Rgb> = { a: [242, 248, 240], B: [206, 222, 214], b: [160, 184, 186], E: [28, 40, 48] };
   const KASA: Record<string, Rgb> = { R: [212, 66, 76], r: [160, 44, 72], P: [236, 214, 164], p: [196, 168, 124], S: [108, 76, 56], W: [252, 244, 228], E: [18, 14, 18], T: [244, 110, 130], F: [226, 190, 150] };
   const CHOCHIN: Record<string, Rgb> = { p: [255, 226, 150], P: [250, 190, 92], q: [224, 136, 66], K: [52, 36, 44], E: [24, 14, 20], T: [232, 66, 84], W: [255, 248, 224] };
-  const KEEPER: Record<string, Rgb> = { H: [38, 34, 50], h: [68, 62, 84], F: [232, 198, 160], f: [190, 150, 124], W: [240, 240, 244], w: [188, 196, 216], T: [78, 170, 164], t: [50, 122, 128], E: [20, 16, 20], S: [224, 220, 210], B: [146, 114, 72], b: [204, 180, 112], G: [176, 176, 176] };
+  const HAHAKI: Record<string, Rgb> = { B: [150, 112, 72], L: [196, 156, 104], R: [214, 58, 52], r: [158, 38, 46], a: [236, 210, 128], b: [204, 172, 92], d: [150, 120, 66], E: [34, 24, 30], W: [255, 250, 230] };
   return {
     deer: { rows: [
       '.................A..A..',
@@ -569,71 +569,66 @@ const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> 
       '..qPPPPPq..',
       '...KKKKK...',
     ], colours: CHOCHIN },
-    keeper: { rows: [
-      '....HHHH....',
-      '....HhhH....',
-      '...HHhhHH...',
-      '...HHHHHH...',
-      '...fFFFFF...',
-      '...fFEFEF...',
-      '...fFFFFF...',
-      '....fFFF....',
-      '..wWWWWWWW..',
-      '.wWWWWWWWWW.',
-      '.wWWwWWWwWW.',
-      '.wWFwWWWwFW.',
-      '..w.TTTTT.W.',
-      '....TTTTt...',
-      '...TTTTTTt..',
-      '...TTtTTtt..',
-      '...TTtTTtt..',
-      '...TTtTtTt..',
-      '...TtTTtTt..',
-      '...SS...SS..',
-    ], colours: KEEPER },
-    keeperWalk: { rows: [
-      '....HHHH....',
-      '....HhhH....',
-      '...HHhhHH...',
-      '...HHHHHH...',
-      '...fFFFFF...',
-      '...fFEFEF...',
-      '...fFFFFF...',
-      '....fFFF....',
-      '..wWWWWWWW..',
-      '.wWWWWWWWWW.',
-      '.wWWwWWWwWW.',
-      '.wWFwWWWwFW.',
-      '..w.TTTTT.W.',
-      '....TTTTt...',
-      '...TTTTTTt..',
-      '...TTtTTtt..',
-      '..TTtTTTTtt.',
-      '..TTtTtTTtt.',
-      '..TtTTtTTTt.',
-      '..SS.....SS.',
-    ], colours: KEEPER },
-    // Bent from the waist in a bow to the shrine.
-    keeperBow: { rows: [
-      '.......HHH..',
-      '......HhhHHH',
-      '.wWWWWWHHHHH',
-      'wWWWWWWWfFFF',
-      'wWWwWWWWfFEF',
-      'wWWWwWWWwfFF',
-      '..TTTwWWw...',
-      '..TTTTTWF...',
-      '..TTTTTtt...',
-      '..TTtTTtt...',
-      '..TTtTTtt...',
-      '..TTtTtTt...',
-      '..TtTTtTt...',
-      '..SS...SS...',
-    ], colours: KEEPER },
-    broom: { rows: ['.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', '.B', 'bbb', 'bbbb', 'b.bb'], colours: KEEPER },
+    // A broom come to life: a bamboo handle, a red cord, a skirt of straw with two eyes in it.
+    hahaki: { rows: [
+      '....LB....',
+      '....LB....',
+      '....LB....',
+      '....LB....',
+      '....LB....',
+      '....LB....',
+      '....LB....',
+      '...RRRr...',
+      '...aab....',
+      '..aabbb...',
+      '..aWEbWE..',
+      '.aabbbbbd.',
+      '.abadbadb.',
+      'aabdabdabd',
+      'abdabdabdd',
+      'abdabdabdd',
+      'd.bd.ab.d.',
+    ], colours: HAHAKI },
+    // Mid-hop, its straw gathered in and its bristles off the ground.
+    hahakiStep: { rows: [
+      '....LB....',
+      '....LB....',
+      '....LB....',
+      '....LB....',
+      '....LB....',
+      '....LB....',
+      '....LB....',
+      '...RRRr...',
+      '...aab....',
+      '..aabbb...',
+      '..aWEbWE..',
+      '..abbbbd..',
+      '..badbad..',
+      '.abdabda..',
+      '.abdabdd..',
+      '..dabdd...',
+    ], colours: HAHAKI },
+    // Tipped over to sweep, or to bow.
+    hahakiLean: { rows: [
+      '........LB',
+      '.......LB.',
+      '......LB..',
+      '.....LB...',
+      '....LB....',
+      '...RRRr...',
+      '...aab....',
+      '..aabbb...',
+      '..aWEbWE..',
+      '.aabbbbbd.',
+      '.abadbadb.',
+      'aabdabdabd',
+      'abdabdabdd',
+      'abdabdabdd',
+      'd.bd.ab.d.',
+    ], colours: HAHAKI },
   };
 })();
-export type AnimalKind = 'deer' | 'deerWalk' | 'deerBow' | 'hare' | 'hareHop' | 'mouse' | 'mouse2' | 'owl' | 'owlFly0' | 'owlFly1' | 'bat0' | 'bat1' | 'crow' | 'crowFly0' | 'crowFly1' | 'frog' | 'frogLeap' | 'kappa' | 'kappaWalk' | 'kappaBow' | 'kodama' | 'kodama1' | 'kasa' | 'kasaHop' | 'chochin' | 'keeper' | 'keeperWalk' | 'keeperBow' | 'broom';
+export type AnimalKind = 'deer' | 'deerWalk' | 'deerBow' | 'hare' | 'hareHop' | 'mouse' | 'mouse2' | 'owl' | 'owlFly0' | 'owlFly1' | 'bat0' | 'bat1' | 'crow' | 'crowFly0' | 'crowFly1' | 'frog' | 'frogLeap' | 'kappa' | 'kappaWalk' | 'kappaBow' | 'kodama' | 'kodama1' | 'kasa' | 'kasaHop' | 'chochin' | 'hahaki' | 'hahakiStep' | 'hahakiLean';
 export const animalSprite = (kind: AnimalKind) => cached(`shrine-animal-${kind}`, () => fromRows(ANIMALS[kind].rows, ANIMALS[kind].colours));
 
 /** Koi seen from above through the water: kohaku, showa, ogon, shiro, in two tail swings. */
@@ -1637,7 +1632,7 @@ export const shrineIcon = (kind: string): HTMLCanvasElement => {
   switch (kind) {
     case 'tanuki': return tanukiSprite('stand', 0);
     case 'kitsune': return kitsuneSprite('stand', 0);
-    case 'keeper': return animalSprite('keeper');
+    case 'hahaki': return animalSprite('hahaki');
     case 'mouse': return animalSprite('mouse');
     case 'deer': return animalSprite('deer');
     case 'hare': return animalSprite('hare');
