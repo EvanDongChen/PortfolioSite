@@ -2,10 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Page, useTheme } from '../contexts/ThemeContext';
 import './ThemeSwitch.css';
 
-// Pixel icons for the four pages ('X' drawn, 'O' cut out of it).
-const ICONS: Record<Page, string[]> = {
-  // Two rolling waves.
-  aquarium: ['.XX...XX...', 'X..X.X..X.X', '....X....X.', '...........', '.XX...XX...', 'X..X.X..X.X', '....X....X.'],
+// The pages on the switch; the aquarium is archived, in the settings panel.
+type SwitchPage = Exclude<Page, 'aquarium'>;
+
+// Pixel icons for them ('X' drawn, 'O' cut out of it).
+const ICONS: Record<SwitchPage, string[]> = {
   // A little reef fish.
   reef: ['.....XXX..', '...XXXXXX.', 'X.XXXXXX.X', 'XXXXXXXO.X', 'X.XXXXXXX.', '...XXXXX..', '.....XX...'],
   // A torii gate.
@@ -13,14 +14,13 @@ const ICONS: Record<Page, string[]> = {
   // A lily pad with a frog's eyes peeping over it.
   pond: ['...XX..XX...', '...XX..XX...', '............', '...XXXX.....', '.XXXXXXXX...', 'XXXXXXXXX..X', 'XXXXXXXXXXXX', '.XXXXXXXXXX.', '...XXXXXX...'],
 };
-const PAGES: { page: Page; label: string }[] = [
-  { page: 'aquarium', label: 'Aquarium' },
+const PAGES: { page: SwitchPage; label: string }[] = [
   { page: 'reef', label: 'Pixel reef' },
   { page: 'pond', label: 'Pixel pond' },
   { page: 'shrine', label: 'Shrine forest' },
 ];
 
-const Icon: React.FC<{ page: Page }> = ({ page }) => {
+const Icon: React.FC<{ page: SwitchPage }> = ({ page }) => {
   const rows = ICONS[page];
   return (
     <svg className="theme-switch-icon" viewBox={`0 0 ${rows[0].length} ${rows.length}`} fill="currentColor" shapeRendering="crispEdges" aria-hidden="true">
@@ -30,10 +30,11 @@ const Icon: React.FC<{ page: Page }> = ({ page }) => {
 };
 
 /**
- * Switches between the four pages: a four-way switch in the right-hand
+ * Switches between the three pixel pages: a three-way switch in the right-hand
  * stack, its stops on the stack's spacing. Click a page's icon and the
  * thumb springs over to it, then the page changes; arrow keys move between
- * the stops, Enter or Space picks one.
+ * the stops, Enter or Space picks one. On the archived aquarium no stop is
+ * lit, and any of them leads back.
  */
 const ThemeSwitch: React.FC = () => {
   const { page, setPage } = useTheme();
@@ -66,7 +67,7 @@ const ThemeSwitch: React.FC = () => {
       className={`theme-switch fixed right-8 ${page === 'aquarium' ? 'bottom-[12.5rem]' : 'bottom-[9rem]'} z-[55]`}
       style={{ '--at': at } as React.CSSProperties}
     >
-      <span className="theme-switch-thumb" aria-hidden="true" />
+      {at >= 0 && <span className="theme-switch-thumb" aria-hidden="true" />}
       {PAGES.map(({ page: p, label }, k) => (
         <button
           key={p}
@@ -75,7 +76,7 @@ const ThemeSwitch: React.FC = () => {
           role="radio"
           aria-checked={p === picked}
           aria-label={label}
-          tabIndex={p === picked ? 0 : -1}
+          tabIndex={p === picked || (at < 0 && k === 0) ? 0 : -1}
           className={`theme-switch-stop ${p === picked ? 'is-on' : ''}`}
           onClick={() => pick(p)}
           onKeyDown={e => onKeyDown(e, k)}

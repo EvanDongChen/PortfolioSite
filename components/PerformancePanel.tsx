@@ -20,7 +20,7 @@ const TIER_DESCRIPTIONS: Record<PerformanceTier, string> = {
 };
 
 const PerformancePanel: React.FC<PerformancePanelProps> = ({ isOpen, onClose }) => {
-  const { theme } = useTheme();
+  const { theme, page, setPage } = useTheme();
   const { tier, reducedMotion, override, setOverride, frameRate, setFrameRate } = usePerformance();
 
   useEffect(() => {
@@ -63,7 +63,7 @@ const PerformancePanel: React.FC<PerformancePanelProps> = ({ isOpen, onClose }) 
         }`}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-          <h2 className="text-lg font-semibold tracking-wide">Performance</h2>
+          <h2 className="text-lg font-semibold tracking-wide">Settings</h2>
           <button
             type="button"
             onClick={onClose}
@@ -138,6 +138,27 @@ const PerformancePanel: React.FC<PerformancePanelProps> = ({ isOpen, onClose }) 
             </div>
             <p className={`mt-2 text-[11px] leading-relaxed ${mutedTextClasses}`}>
               30fps (default) is easier on slower devices. 60fps is smoother but roughly doubles the simulation and rendering work per second.
+            </p>
+          </div>
+
+          <div className={`rounded-xl border p-3 ${slotClasses}`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold">Archived themes</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => { onClose(); setPage('aquarium'); }}
+              disabled={page === 'aquarium'}
+              tabIndex={isOpen ? 0 : -1}
+              className={`w-full rounded-lg border px-2 py-2 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                page === 'aquarium' ? activeTierClasses : inactiveTierClasses
+              }`}
+              aria-pressed={page === 'aquarium'}
+            >
+              Aquarium
+            </button>
+            <p className={`mt-2 text-[11px] leading-relaxed ${mutedTextClasses}`}>
+              {page === 'aquarium' ? 'Showing now. The switch beside this panel leads back to the pixel pages.' : "The site's original page, with its fish, food and fish tank."}
             </p>
           </div>
         </div>
