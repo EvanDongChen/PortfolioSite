@@ -829,13 +829,13 @@ export class Shrine {
       const xi = Math.round(x), zi = Math.round(z);
       return xi >= 0 && xi < w && zi >= 0 && zi < h ? this.ground[zi * w + xi] : GROUND.moss;
     };
-    const cedars = Math.round(area / 2800);
+    const cedars = Math.round(area / 7000);
     for (let k = 0; k < cedars; k++) {
       // Thickest toward the page's edges; thinner across the middle.
       const u = r();
       const side = r() < 0.5 ? u * u * 0.42 : 1 - u * u * 0.42;
       const x = side * w, z = r() * (h + 30);
-      const size = 15 + Math.floor(r() * r() * 26);
+      const size = 15 + Math.floor(r() * r() * 15);
       const tall = size * 3.6;
       if (this.inZone(x, z, size, tall, 8)) continue;
       if (Math.abs(x - this.pathX[clamp(Math.round(z), 0, h - 1)]) < this.pathHalf[clamp(Math.round(z), 0, h - 1)] + 8) continue;
@@ -845,7 +845,7 @@ export class Shrine {
       this.addProp('cedar', x, z, size, r);
     }
     // Maple accents out in the forest, a jewel every so often.
-    for (let k = 0; k < area / 70000; k++) {
+    for (let k = 0; k < area / 110000; k++) {
       const x = r() * w, z = r() * h;
       if (this.inZone(x, z, 16, 30, 6) || nearSite(x, z, 1) || onGround(x, z) !== GROUND.moss) continue;
       if (Math.abs(x - this.pathX[clamp(Math.round(z), 0, h - 1)]) < this.pathHalf[clamp(Math.round(z), 0, h - 1)] + 10) continue;
@@ -879,10 +879,12 @@ export class Shrine {
       this.addProp('persimmonTree', x, z, 13 + Math.floor(r() * 4), r);
     }
     // Thickets of bamboo out in the gutters, clear of the page's cards, so there's always somewhere in view for an old umbrella to wait.
+    const thickets: { x: number; z: number }[] = [];
     for (let row = 60 + Math.floor(r() * 50), k = 0; row < h - 20; row += 190 + Math.floor(r() * 70), k++) {
       const side = k & 1 ? 1 : -1;
       const cx = w / 2 + side * (w / 2 - Math.min(w * 0.11, 40)) + (r() - 0.5) * 14, cz = row;
       if (this.inZone(cx, cz, 14, 40) || onGround(cx, cz) !== GROUND.moss) continue;
+      thickets.push({ x: cx, z: cz });
       this.addLantern(cx + side * -6, cz + 12, r);
       const count = 8 + Math.floor(r() * 5);
       for (let g = 0; g < count; g++) {
@@ -890,6 +892,8 @@ export class Shrine {
         this.canes.push({ kind: 'bamboo', x: cx + Math.cos(a) * d * 17, z: cz + Math.sin(a) * d * 9, len: 46 + Math.floor(r() * 30), seed: Math.floor(r() * 100), phase: r() * 6.28, bx: 0, bv: 0 });
       }
     }
+    // No forest tree stands in front of a thicket and hides what happens there.
+    this.props = this.props.filter(p => !(FOREST_TREE.has(p.kind) && thickets.some(t => Math.abs(p.x - t.x) < p.size + 22 && p.z > t.z && p.z - p.size * 3.6 < t.z + 12)));
     // Clear what was planted over the clear zones.
     this.low = this.low.filter(p => !this.zones.some(q => p.x > q.x0 && p.x < q.x1 && p.z > q.z0 && p.z < q.z1));
     this.canes = this.canes.filter(c => {
@@ -1777,8 +1781,11 @@ export class Shrine {
     const { z0, z1 } = this.viewZ;
     const seen = (o: { z: number }) => o.z > z0 + 10 && o.z < z1 - 10;
     // The page's cards cover the middle, so the gutters come first when there's anyone in them.
+    // And nothing is staged behind a tree, where nobody would see it.
+    const trees = this.props.filter(p => FOREST_TREE.has(p.kind) && p.z > z0 && p.z - p.size * 3.6 < z1);
+    const inTheOpen = (o: { x: number; z: number }) => !trees.some(p => Math.abs(p.x - o.x) < p.size + 8 && p.z > o.z && p.z - p.size * 3.6 < o.z);
     const among = (test: (o: ShrineCreature) => boolean) => {
-      const all = this.creatures.filter(o => o.alive && !o.hidden && seen(o) && test(o));
+      const all = this.creatures.filter(o => o.alive && !o.hidden && seen(o) && inTheOpen(o) && test(o));
       const out = all.filter(o => o.x < this.w * 0.2 || o.x > this.w * 0.8);
       return out.length ? out : all;
     };
@@ -3848,6 +3855,7 @@ const siteBox = (kind: SiteKind, x: number, z: number, k: number) => {
 };
 
 const DRUM_GAP = 2400;
+const FOREST_TREE = new Set<PropKind>(['cedar', 'maple', 'goldMaple', 'persimmonTree']);
 /** How tall each disguise stands, in rows, for a crow to land on; and how often it pecks (the view times its beak by this too). */
 const DISGUISE_ROWS: Record<DisguiseKind, number> = { teapot: 12, lantern: 16, statue: 15 };
 export const PECK_EVERY = 16;
