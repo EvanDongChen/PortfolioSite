@@ -94,7 +94,6 @@ const formatAge = (ticks: number) => {
 const baseName = (name: string) => name.replace(/\s+#\d+$/, '');
 
 interface PixelOceanProps {
-  isFoodMode: boolean;
   onStats: (stats: OceanStats) => void;
 }
 
@@ -105,7 +104,7 @@ interface PixelOceanProps {
  * places its canvases, passes on the scroll, the pointer and the visitor's
  * actions, and shows what comes back.
  */
-const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
+const PixelOcean: React.FC<PixelOceanProps> = ({ onStats }) => {
   const layerRef = useRef<HTMLDivElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const sendRef = useRef<((m: ToEngine) => void) | null>(null);
@@ -115,8 +114,6 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
   const [adoption, setAdoption] = useState<Adoption | null>(() => loadAdoption());
   const [notice, setNotice] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
-  const isFoodModeRef = useRef(isFoodMode);
-  isFoodModeRef.current = isFoodMode;
   const onStatsRef = useRef(onStats);
   onStatsRef.current = onStats;
 
@@ -292,7 +289,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ isFoodMode, onStats }) => {
     const handlePointerLeave = () => send({ type: 'pointerLeave' });
     const handlePointerDown = (e: PointerEvent) => {
       if ((e.target as Element | null)?.closest('button, a, input, textarea, select, [role="dialog"], [data-reef-ui]')) return;
-      send({ type: 'click', x: e.clientX, y: e.clientY + window.scrollY, food: isFoodModeRef.current });
+      send({ type: 'click', x: e.clientX, y: e.clientY + window.scrollY });
     };
     const handleVisibility = () => send({ type: 'visible', visible: document.visibilityState === 'visible' });
 

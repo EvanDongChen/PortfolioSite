@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } fro
 import PortfolioContent from './components/PortfolioContent';
 import PixelOcean from './components/PixelOcean';
 import EcosystemPanel from './components/EcosystemPanel';
-import FishFoodButton from './components/FishFoodButton';
 import BackToTopButton from './components/BackToTopButton';
 import ThemeSwitch from './components/ThemeSwitch';
 import PerformanceButton from './components/PerformanceButton';
@@ -46,18 +45,16 @@ const PixelApp: React.FC = () => {
   // scroll restore's layout effect clears the switch.
   const [isSwitchIn] = useState(isSwitchingPages);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isFoodMode, setIsFoodMode] = useState(false);
   const [isPerformancePanelOpen, setIsPerformancePanelOpen] = useState(false);
   const [stats, setStats] = useState<OceanStats | null>(null);
 
   const filteredProjects = useMemo(() => filterProjects(searchTerm), [searchTerm]);
-  const toggleFoodMode = useCallback(() => setIsFoodMode(on => !on), []);
   const togglePerformancePanel = useCallback(() => setIsPerformancePanelOpen(open => !open), []);
   const closePerformancePanel = useCallback(() => setIsPerformancePanelOpen(false), []);
 
   return (
-    <div className={`relative min-h-screen text-white overflow-x-hidden bg-[#050d14] ${isFoodMode ? 'cursor-crosshair' : ''}`}>
-      <PixelOcean isFoodMode={isFoodMode} onStats={setStats} />
+    <div className="relative min-h-screen text-white overflow-x-hidden bg-[#050d14]">
+      <PixelOcean onStats={setStats} />
       <PortfolioContent
         theme="underwater"
         colors={PIXEL_COLORS}
@@ -75,7 +72,6 @@ const PixelApp: React.FC = () => {
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
       <ThemeSwitch />
-      <FishFoodButton isActive={isFoodMode} onToggle={toggleFoodMode} />
       <EcosystemPanel stats={stats} />
       {isSwitchIn && <PixelTransition />}
     </div>

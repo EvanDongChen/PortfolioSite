@@ -24,7 +24,6 @@ const LEAN_RECOVER_MS = 5;
 const LEAN_HOLD_MS = 1500;
 const RECOVER_HOLD_MS = 8000;
 // Food is dropped near the surface so it visibly sinks to the floor.
-const DROP_HEIGHT = 90;
 // Fish shy away from the cursor at roughly their own swimming height.
 const POINTER_HEIGHT = 25;
 const INSPECT_INTERVAL_MS = 100;
@@ -77,7 +76,7 @@ export type ToEngine =
   | { type: 'zones'; zones: ClearZone[] }
   | { type: 'pointer'; x: number; y: number; mouse: boolean }
   | { type: 'pointerLeave' }
-  | { type: 'click'; x: number; y: number; food: boolean }
+  | { type: 'click'; x: number; y: number }
   | { type: 'adopt'; name: string }
   | { type: 'find' }
   | { type: 'letGo' }
@@ -179,14 +178,9 @@ export class ReefEngine {
         ocean.clearPointer();
         break;
       case 'click':
-        if (m.food) {
-          const p = view.pageToWorld(m.x, m.y, DROP_HEIGHT);
-          ocean.dropFood(p.x, p.z, DROP_HEIGHT);
-        } else {
-          // Clicking (or tapping) a creature keeps it under inspection; elsewhere lets go.
-          this.pinned = view.pick(m.x, m.y, CLICK_REACH);
-          this.lastInspect = 0;
-        }
+        // Clicking (or tapping) a creature keeps it under inspection; elsewhere lets go.
+        this.pinned = view.pick(m.x, m.y, CLICK_REACH);
+        this.lastInspect = 0;
         break;
       case 'adopt': {
         const pinned = this.pinned;

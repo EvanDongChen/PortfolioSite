@@ -70,7 +70,7 @@ const Row: React.FC<{ label: string; value: string | number; fill: number; color
   </div>
 );
 
-/** Live census of the reef, bottom left by the food button. */
+/** Live census of the reef, bottom left. */
 const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
   // Closed until the visitor opens it.
   const [isOpen, setIsOpen] = useState(false);
@@ -79,7 +79,7 @@ const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
   const icon = speciesIcons();
 
   return (
-    <section className={`eco-hud fixed bottom-8 left-24 z-40 hidden sm:block ${isOpen ? 'w-72' : 'w-auto'}`} aria-label="Reef census">
+    <section className={`eco-hud fixed bottom-8 left-8 z-40 hidden sm:block ${isOpen ? 'w-72' : 'w-auto'}`} aria-label="Reef census">
       <button
         type="button"
         onClick={() => setIsOpen(open => !open)}
