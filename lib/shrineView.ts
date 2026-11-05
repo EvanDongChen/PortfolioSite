@@ -13,11 +13,12 @@
 // light cover the whole page at a canvas pixel per cell, and the sprites are
 // drawn into a window around the view, swapped between two canvases.
 
-import { Cane, ELEVATION, GROUND, Lantern, Marcher, Prop, Shrine, ShrineCreature, ShrineSpecies, Strand, isBarkTime } from './shrine';
+import { CONTEST_FORMS, CONTEST_TORII_FALL, CONTEST_TORII_STAND, Cane, Contest, ELEVATION, GROUND, Lantern, Marcher, PRINT_LIFE, Prop, Shrine, ShrineCreature, ShrineSpecies, Strand, isBarkTime } from './shrine';
 import {
+  basinSprite, sakuraPetalSprite, sakuraSprite, steamSprite, teahouseSprite, tongueSprite,
   AnimalKind, RivalPose, SHRINE_FLOOR, altarSprite, animalSprite, bambooSprite, bangSprite, berryBushSprite, bloodSprite, bridgeSprite, dreamSprite, pergolaSprite, persimmonTreeSprite, petalSprite, rimSprite, sporeSprite, tsuchinokoSprite, wisteriaSprite, cedarSprite, crumbSprite, dappleTile, disguiseSprite,
   dustSprite, fallingLeafSprite, feetSprite, fireflySprite, fernSprite, floatLanternSprite, glowshroomSprite, grassSprite, guardianSprite, heartSprite, hitodamaSprite, hokoraSprite, hondenSprite,
-  hydrangeaSprite, jizoSprite, kitsuneSprite, koiSprite, leafSprite, lightHole, lotusPadSprite, lotusSprite, makeCanvas, mapleSprite, noteSprite, offeringSprite, pagodaSprite, paperLanternSprite, paradeSprite,
+  hydrangeaSprite, mistTile, jizoSprite, kitsuneSprite, koiSprite, leafSprite, lightHole, lotusPadSprite, lotusSprite, makeCanvas, mapleSprite, noteSprite, offeringSprite, pagodaSprite, paperLanternSprite, paradeSprite,
   persimmonSprite, pool, rockSprite, sacredCedarSprite, skyLanternSprite, smokeSprite, spiderLilySprite, spoutSprite, starSprite, susukiSprite, tailSprite, tanukiSprite, toriiSprite, toroSprite, tuftSprite, whatSprite, zedSprite,
 } from './shrineArt';
 import { shadowSprite } from './pixelOceanArt';
@@ -47,6 +48,7 @@ const SHAFTS = 2;
 const SHAFT_PERIOD = 300;
 const SHAFT_SLANT = 0.5;
 const MARCHER_SCALE = 1.25;
+const MIST_TILE = 192;
 /** How far (cells) a lantern's light reaches to catch something's edge. */
 const RIM_REACH = 44;
 /** How far (rows) a lantern's light runs across the water. */
@@ -73,7 +75,7 @@ interface SpriteOptions { alpha?: number; flipX?: boolean; scaleY?: number; scal
 
 /** Sprite widths in art pixels as drawn, for shadows, picking and the inspection reticle. */
 export const BODY_WIDTH: Record<ShrineSpecies, number> = {
-  tanuki: 18, kitsune: 21, baku: 24, tsuchinoko: 15, hahaki: 10, mouse: 8, hare: 11, deer: 23, owl: 10, bat: 9, crow: 13, frog: 9, koi: 15, kappa: 12, kodama: 9, hitodama: 7, kasa: 14, chochin: 11,
+  tanuki: 18, kitsune: 21, nekomata: 16, akaname: 11, baku: 24, tsuchinoko: 15, hahaki: 10, mouse: 8, hare: 11, deer: 23, owl: 10, bat: 9, crow: 13, frog: 9, koi: 15, kappa: 12, kodama: 9, hitodama: 7, kasa: 14, chochin: 11,
 };
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
@@ -91,6 +93,9 @@ export class ShrineView {
   /** Set when frames are slow to draw: finishing touches are left out (see the reef's). */
   lean = false;
   private touches = 1;
+  private mistFade = 1;
+  private mistCanvas: HTMLCanvasElement | null = null;
+  private mistKey = '';
   highlighted: ShrineCreature | null = null;
   /** The lantern light falling on whatever is being drawn: from which side, how strong, and how blue. */
   private rim: { side: 1 | -1; alpha: number; ghost: boolean } | null = null;
@@ -256,6 +261,7 @@ export class ShrineView {
     const furrow = rgba(F.furrow);
     const rim = F.rim.map(rgba);
     const water = F.water.map(rgba);
+    const spring = F.spring.map(rgba);
     for (let k = 0; k < rows; k++) {
       const z = top + k;
       this.painted[z] = 1;
@@ -291,6 +297,10 @@ export class ShrineView {
           // Raked in long lines that ripple as they go.
           const wave = Math.sin(x * 0.09 + Math.sin(z * 0.05) * 1.4) * 2.5;
           c = Math.floor(z + wave) % 4 === 0 ? furrow : gravel[bayer < 0.5 ? 0 : 1];
+        } else if (g === GROUND.spring) {
+          // Milky hot-spring water, pale at the rocks.
+          const d = shrine.shoreDepth[i] / 3 + (t - 0.5) * 3;
+          c = spring[Math.max(0, Math.min(spring.length - 1, Math.floor(d / 4 + bayer)))];
         } else if (g === GROUND.rim) {
           c = rim[hash(Math.floor(x / 3) + Math.floor(z / 2) * 97) < 0.5 ? 0 : 1];
         } else {
@@ -353,7 +363,7 @@ export class ShrineView {
     const ctx = c.getContext('2d') as CanvasRenderingContext2D;
     const img = ctx.createImageData(w, h);
     const out = new Uint32Array(img.data.buffer);
-    for (let i = 0; i < w * h; i++) out[i] = ground[i] === GROUND.water ? 0 : 255 << 24;
+    for (let i = 0; i < w * h; i++) out[i] = ground[i] === GROUND.water || ground[i] === GROUND.spring ? 0 : 255 << 24;
     ctx.putImageData(img, 0, 0);
     this.notWater = c;
     // Moonlight is kindest to the open middle and falls away under the edges' cedars.
@@ -532,6 +542,15 @@ export class ShrineView {
     const visible = (z: number) => z >= z0 && z <= z1 + 40;
     this.nearLanterns = shrine.lanterns.filter(l => l.z >= z0 - RIM_REACH && l.z <= z1 + 40 + RIM_REACH);
 
+    // Tracks in the gravel, filling back in.
+    ctx.fillStyle = 'rgb(58,62,84)';
+    for (const q of shrine.prints) {
+      if (!visible(q.z)) continue;
+      const p = this.project(q.x, q.z, 0);
+      ctx.globalAlpha = Math.min(0.8, (q.life / PRINT_LIFE) * 1.1);
+      ctx.fillRect(Math.round(p.x / px) * px, Math.round(p.y / px) * px, px * 2, px);
+    }
+    ctx.globalAlpha = 1;
     // On the water: the moving things under it first, then pads and floating lanterns.
     for (const c of shrine.creatures) {
       if (c.species === 'koi' && visible(c.z) && c.h <= 0) this.drawKoi(c);
@@ -560,6 +579,13 @@ export class ShrineView {
     }
     for (const c of shrine.canes) {
       if (c.z >= z0 && c.z <= z1 + (c.kind === 'bamboo' ? 120 : 40)) over.push({ depth: c.z, draw: () => this.drawCane(c) });
+    }
+    for (const b of shrine.basins) {
+      if (visible(b.z)) over.push({ depth: b.z, draw: () => { this.shadow(b.x, b.z, 15, 0.28); this.sprite(basinSprite(b.dirt > 0.3), b.x, b.z, 0); } });
+    }
+    if (shrine.contest && shrine.contest.stage !== 'gather' && visible(shrine.contest.z)) {
+      const k = shrine.contest;
+      over.push({ depth: k.z + 0.6, draw: () => this.drawContest(k) });
     }
     for (const b of shrine.bushes) {
       if (visible(b.z)) over.push({ depth: b.z, draw: () => { this.shadow(b.x, b.z, 16, 0.28); this.sprite(berryBushSprite(b.seed, b.kind, b.berries), b.x, b.z, 0); } });
@@ -600,9 +626,9 @@ export class ShrineView {
     }
     for (const c of shrine.creatures) {
       if (!c.alive || c.hidden || c.species === 'koi' || (c.species === 'kappa' && c.h < 0) || !visible(c.z)) continue;
-      const air = c.species === 'bat' || c.species === 'owl' || c.species === 'crow' || c.species === 'hitodama' || c.species === 'chochin';
+      const air = c.species === 'bat' || c.species === 'owl' || c.species === 'crow' || c.species === 'hitodama' || c.species === 'chochin' || c.species === 'nekomata' || c.state === 'soak';
       const w = c.disguise ? 14 : BODY_WIDTH[c.species] * (air ? 0.7 : 0.85);
-      if (!(air && c.h > 60)) this.shadow(c.x, c.z, w, air ? 0.16 : 0.32);
+      if (!(air && c.h > 60) && c.species !== 'nekomata' && c.state !== 'soak') this.shadow(c.x, c.z, w, air ? 0.16 : 0.32);
       over.push({ depth: c.z + 0.3, draw: () => { this.catchLight(c.x, c.z, air); this.drawCreature(c); this.rim = null; } });
     }
     const p = shrine.parade;
@@ -622,9 +648,11 @@ export class ShrineView {
     this.drawMotes(z0, z1);
     this.drawMoths(z0, z1);
     this.applyNight(z0, z1);
+    this.drawMist();
     for (const m of shrine.motes) {
       if (m.z < z0 || m.z > z1 + 40) continue;
       if (m.kind === 'dream') this.sprite(dreamSprite((shrine.tick >> 3) + m.seed), m.x + Math.sin(shrine.tick * 0.2 + m.seed) * 1.2, m.z, m.h, { anchor: 'center', alpha: Math.min(1, m.life / 10) });
+      else if (m.kind === 'sakura') this.sprite(sakuraPetalSprite((shrine.tick >> 4) + m.seed), m.x, m.z, m.h, { anchor: 'center', alpha: Math.min(0.95, m.life / 60) });
       else if (m.kind === 'spore') this.sprite(sporeSprite(), m.x, m.z, m.h, { anchor: 'center', alpha: Math.min(1, m.life / 12) });
     }
     this.drawHalos(z0, z1);
@@ -643,6 +671,9 @@ export class ShrineView {
     switch (p.kind) {
       case 'cedar': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z, p.size * 1.5, 0.26); this.drawSwaying(cedarSprite(p.seed % 9, p.size), p.x, p.z + 1, CEDAR_SWAY, CEDAR_SLICES, false); } };
       case 'sacred': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z, p.size * 1.6, 0.3); this.drawSwaying(sacredCedarSprite(p.seed % 3), p.x, p.z + 1, CEDAR_SWAY, CEDAR_SLICES + 4, false); } };
+      case 'sakura': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z, 70, 0.3); this.drawSwaying(sakuraSprite(), p.x, p.z + 1, 2, 12, false); } };
+      case 'teahouse': return { depth: p.z, draw: () => { this.shadow(p.x + 2, p.z - 1, 58, 0.3); this.sprite(teahouseSprite(), p.x, p.z + 1, 0); } };
+      case 'teapotProp': return { depth: p.z, draw: () => { this.shadow(p.x, p.z, 13, 0.28); this.sprite(disguiseSprite('teapot'), p.x, p.z, 0, { flipX: p.flip }); } };
       case 'persimmonTree': return { depth: p.z, draw: () => { this.shadow(p.x + 1, p.z, p.size * 1.7, 0.26); this.drawSwaying(persimmonTreeSprite(p.seed % 5, p.size), p.x, p.z + 1, MAPLE_SWAY, MAPLE_SLICES, p.flip); } };
       case 'maple': case 'goldMaple': return { depth: p.z, draw: () => { this.shadow(p.x + 1, p.z, p.size * 1.7, 0.26); this.drawSwaying(mapleSprite(p.seed % 6, p.size, p.kind === 'goldMaple'), p.x, p.z + 1, MAPLE_SWAY, MAPLE_SLICES, p.flip); } };
       case 'torii': return { depth: p.z, draw: () => this.sprite(toriiSprite(p.size), p.x, p.z + 1, 0) };
@@ -836,6 +867,7 @@ export class ShrineView {
       case 'mouse': this.sprite(animalSprite(walking && stride ? 'mouse2' : 'mouse'), c.x, c.z, c.h, { flipX }); return;
       case 'hare': this.sprite(animalSprite(c.h > 0.4 ? 'hareHop' : 'hare'), c.x, c.z, c.h, { flipX }); return;
       case 'deer': {
+        if (c.state === 'soak') { this.sprite(animalSprite('deerSoak'), c.x, c.z, 0, { flipX }); return; }
         const kind: AnimalKind = c.state === 'bow' || c.state === 'graze' ? 'deerBow' : walking && stride ? 'deerWalk' : 'deer';
         this.sprite(animalSprite(kind), c.x, c.z, 0, { flipX });
         return;
@@ -864,6 +896,17 @@ export class ShrineView {
       case 'hitodama': this.sprite(hitodamaSprite((tick + c.id) >> 3, c.palette), c.x, c.z, c.h, { anchor: 'center', alpha: 0.92 }); return;
       case 'kasa': this.sprite(animalSprite(c.h > 0.3 ? 'kasaHop' : 'kasa'), c.x, c.z, c.h, { flipX, stretch: c.squash }); return;
       case 'chochin': this.sprite(animalSprite('chochin'), c.x, c.z, c.h, { flipX }); return;
+      case 'nekomata': {
+        const kind: AnimalKind = c.state === 'dance' ? ((tick >> 4) & 1 ? 'nekoDance1' : 'nekoDance0') : c.state === 'sit' ? 'nekoSit' : stride ? 'neko1' : 'neko0';
+        this.sprite(animalSprite(kind), c.x, c.z, c.h, { flipX, stretch: c.squash });
+        return;
+      }
+      case 'akaname': {
+        const licking = c.state === 'lick';
+        this.sprite(animalSprite(licking ? 'akanameLick' : 'akaname'), c.x, c.z, 0, { flipX, stretch: c.squash });
+        if (licking) this.sprite(tongueSprite(tick >> 3), c.x + c.facing * 9, c.z, 7 + ((tick >> 3) & 1) * 1.6, { flipX });
+        return;
+      }
       case 'baku': {
         const kind: AnimalKind = c.state === 'sip' ? 'bakuSip' : walking && stride ? 'bakuWalk' : 'baku';
         this.sprite(animalSprite(kind), c.x, c.z, 0, { flipX, stretch: c.squash });
@@ -889,10 +932,11 @@ export class ShrineView {
       if (c.tailOut > 0 || c.scuttling) this.sprite(tailSprite(rival), c.x - c.facing * (img.width / 2 + 1), c.z, c.h + 2, { flipX });
       return;
     }
+    if (c.state === 'soak') { this.sprite(animalSprite(c.species === 'tanuki' ? 'tanukiSoak' : 'kitsuneSoak'), c.x, c.z, 0, { flipX }); return; }
     let pose: RivalPose = 'stand';
     if (c.state === 'sleep') pose = 'sleep';
     else if (c.state === 'perform') pose = c.species === 'tanuki' ? (((tick >> 2) & 1) ? 'drum' : 'sit') : (tick >> 5) & 1 ? 'howl' : 'sit';
-    else if (c.state === 'changing') pose = 'sit';
+    else if (c.state === 'changing' || ((c.state === 'sitWatch' || c.state === 'contest') && !walking)) pose = 'sit';
     else if (c.state === 'dance') pose = isBarkTime(c, tick) ? ((tick >> 4) & 1 ? 'howl' : 'sit') : c.h > 0.4 ? 'walk' : 'stand';
     else if (walking && stride) pose = 'walk';
     this.sprite(this.rivalSprite(c, pose), c.x, c.z, c.h, { flipX, stretch: c.squash, scale });
@@ -900,6 +944,64 @@ export class ShrineView {
       // The leaf on its head, while it gets ready.
       this.sprite(leafSprite(), c.x + c.facing * 3, c.z, c.h + 24);
     }
+  }
+
+  /** Whatever the current contestant is pretending to be, its tail giving it away, and the great fake gate coming down. */
+  private drawContest(k: Contest) {
+    const { shrine } = this;
+    const form = CONTEST_FORMS[k.round];
+    if (k.stage !== 'show') {
+      if (form === 'torii') this.drawFallenTorii(k, 1);
+      return;
+    }
+    const who = k.round % 2 ? k.b : k.a;
+    const rival = who.species as 'tanuki' | 'kitsune';
+    const wobble = Math.sin(shrine.tick * 0.2) * 0.6;
+    const flipX = who.facing < 0;
+    switch (form) {
+      case 'teapot': case 'lantern': case 'statue': {
+        const scale = form === 'teapot' ? 1.3 : form === 'lantern' ? 1.6 : 2.1;
+        const img = disguiseSprite(form);
+        this.sprite(img, who.x + wobble, who.z, 0, { scale, flipX });
+        this.sprite(tailSprite(rival), who.x - who.facing * ((img.width * scale) / 2 + 1), who.z, 2, { flipX });
+        return;
+      }
+      case 'mushroom':
+        this.sprite(glowshroomSprite(0), who.x, who.z, 0, { scale: 3.4, stretch: Math.sin(shrine.tick * 0.14) * 0.2 });
+        this.sprite(tailSprite(rival), who.x - who.facing * 15, who.z, 2, { flipX });
+        return;
+      case 'koi': {
+        // A very large fish, a long way from the water, flopping.
+        const flop = Math.abs(Math.sin(shrine.tick * 0.22)) * 6;
+        this.sprite(koiSprite((shrine.tick >> 3) & 1, 0), who.x, who.z, flop, { scale: 3.2, flipX, anchor: 'bottom' });
+        this.sprite(tailSprite(rival), who.x - who.facing * 26, who.z, 3 + flop, { flipX });
+        return;
+      }
+      default: {
+        const lean = k.t < CONTEST_TORII_STAND ? Math.sin(k.t * 0.25) * (k.t / CONTEST_TORII_STAND) * 0.035 : Math.min(1, (k.t - CONTEST_TORII_STAND) / CONTEST_TORII_FALL);
+        if (k.t < CONTEST_TORII_STAND) { this.drawToriiAt(k, lean); return; }
+        this.drawFallenTorii(k, lean);
+      }
+    }
+  }
+
+  private drawToriiAt(k: Contest, angle: number) {
+    const { spriteCtx: ctx, px } = this;
+    const img = toriiSprite(46);
+    const p = this.project(k.x, k.z + 1, 0);
+    const pivotX = (img.width / 2) * k.side * 0.72 * px;
+    ctx.globalAlpha = 1;
+    ctx.save();
+    ctx.translate(Math.round(p.x + pivotX), Math.round(p.y));
+    ctx.rotate(angle * k.side);
+    ctx.drawImage(img, -Math.round((img.width * px) / 2) - pivotX, -img.height * px, img.width * px, img.height * px);
+    ctx.restore();
+  }
+
+  /** The fall, in an ease-in and a small bounce, and then flat on its side. */
+  private drawFallenTorii(k: Contest, t: number) {
+    const fall = t < 0.86 ? (t / 0.86) ** 2 : 1 - Math.sin(((t - 0.86) / 0.14) * Math.PI) * 0.06;
+    this.drawToriiAt(k, fall * (Math.PI / 2));
   }
 
   private drawHahaki(c: ShrineCreature, walking: boolean, stride: number) {
@@ -1002,6 +1104,7 @@ export class ShrineView {
         case 'crumb': this.sprite(crumbSprite(), m.x, m.z, m.h, { anchor: 'center' }); break;
         case 'blood': this.sprite(bloodSprite(), m.x, m.z, m.h, { anchor: 'center' }); break;
         case 'tuft': this.sprite(tuftSprite(), m.x, m.z, m.h, { anchor: 'center' }); break;
+        case 'steam': this.sprite(steamSprite(Math.floor(t * 3)), m.x, m.z, m.h, { anchor: 'center', scale: 1.5, alpha: Math.sin(t * Math.PI) * 0.42 }); break;
         case 'petal': this.sprite(petalSprite(), m.x, m.z, m.h, { anchor: 'center', alpha: Math.min(1, m.life / 15) }); break;
         case 'splash': this.sprite(crumbSprite(), m.x, m.z, m.h, { anchor: 'center', alpha: 0.8 }); break;
         case 'ember': this.sprite(hitodamaSprite(0), m.x, m.z, m.h, { anchor: 'center', scale: 0.35, alpha: 1 - t }); break;
@@ -1076,6 +1179,15 @@ export class ShrineView {
       else if (p.kind === 'hokora') light(p.x, p.z + 3, 28, 0.8);
       else if (p.kind === 'pagoda') light(p.x, p.z - 4, 38, 0.6);
     }
+    // The old cherry glows pale against the dark; the teahouse's one window; the spring's steam; a watched contest; the moon on a truce.
+    for (const p of shrine.props) {
+      if (p.z < top - 110 || p.z > top + rows + 110) continue;
+      if (p.kind === 'sakura') { light(p.x, p.z - 66, 78, 0.92); light(p.x, p.z + 2, 46, 0.42); }
+      else if (p.kind === 'teahouse') { light(p.x + 7, p.z - 12, 38, 0.92); light(p.x + 4, p.z + 12, 34, 0.5); }
+    }
+    for (const q of shrine.springs) light(q.x, q.z, Math.round(q.rx * 1.25), 0.5);
+    if (shrine.contest) light(shrine.contest.x, shrine.contest.z, 72, 0.9);
+    if (shrine.moonview) light(shrine.moonview.x, shrine.moonview.z, 110, 0.86);
     // Each ring's mushrooms glow, and more so with foxes dancing in it.
     for (const q of shrine.rings) {
       if (q.z < top - 60 || q.z > top + rows + 60) continue;
@@ -1095,6 +1207,7 @@ export class ShrineView {
       if (c.species === 'hitodama') light(c.x, c.z, 18, 0.7);
       else if (c.species === 'chochin') light(c.x, c.z, 24, 0.85);
       else if (c.disguise === 'lantern') light(c.x, c.z, 24, 0.85);
+      else if (c.species === 'nekomata') light(c.x, c.z - c.h * ELEVATION - 4, 20, 0.62);
     }
     const p = shrine.parade;
     if (p) {
@@ -1113,6 +1226,48 @@ export class ShrineView {
     }
     m.globalCompositeOperation = 'source-over';
     m.globalAlpha = 1;
+  }
+
+  /**
+   * Thin ground mist in two layers sliding past each other. It is laid over
+   * the dark with the dark itself cut out of it, so it hardly shows in the
+   * night and glows where it drifts through a lantern's light.
+   */
+  private drawMist() {
+    this.mistFade += ((this.lean ? 0 : 1) - this.mistFade) * 0.04;
+    if (this.mistFade < 0.02 || !this.night || typeof DOMMatrix === 'undefined') return;
+    const { spriteCtx: ctx, px, shrine } = this;
+    const w = shrine.w, h = this.night.height;
+    if (!this.mistCanvas || this.mistCanvas.width !== w || this.mistCanvas.height !== h) { this.mistCanvas = makeCanvas(w, h); this.mistKey = ''; }
+    const key = `${this.regionTop},${Math.floor(shrine.tick / 3)}`;
+    if (key !== this.mistKey) {
+      this.mistKey = key;
+      const m = this.mistCanvas.getContext('2d') as CanvasRenderingContext2D;
+      const a = m.createPattern(mistTile(MIST_TILE), 'repeat');
+      const b = m.createPattern(mistTile(MIST_TILE), 'repeat');
+      if (!a || !b) return;
+      const t = shrine.tick;
+      const top = Math.round(this.regionTop / px);
+      a.setTransform(new DOMMatrix([1, 0, 0, 1, Math.round(t * 0.05), Math.round(t * 0.012) - top]));
+      b.setTransform(new DOMMatrix([-1.5, 0, 0, 1.5, Math.round(-t * 0.07) + 97, Math.round(t * 0.02) + 41 - top]));
+      m.globalCompositeOperation = 'source-over';
+      m.clearRect(0, 0, w, h);
+      m.globalAlpha = 0.6;
+      m.fillStyle = a;
+      m.fillRect(0, 0, w, h);
+      m.globalAlpha = 0.5;
+      m.fillStyle = b;
+      m.fillRect(0, 0, w, h);
+      m.globalAlpha = 0.97;
+      m.globalCompositeOperation = 'destination-out';
+      m.drawImage(this.night, 0, 0);
+      m.globalCompositeOperation = 'source-over';
+      m.globalAlpha = 1;
+    }
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = 0.6 * this.mistFade;
+    ctx.drawImage(this.mistCanvas, 0, 0, w * px, h * px);
+    ctx.globalAlpha = 1;
   }
 
   /** A soft glow around every flame, over whatever stands near it. */

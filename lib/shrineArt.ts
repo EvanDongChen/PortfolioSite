@@ -30,6 +30,8 @@ export const SHRINE_FLOOR = {
   /** Stones round the water, and the water from the shallows to the deep. */
   rim: [[92, 100, 112], [66, 76, 92]] as Rgb[],
   water: [[34, 96, 112], [24, 78, 104], [16, 60, 92], [12, 46, 78]] as Rgb[],
+  /** Milky hot-spring water. */
+  spring: [[158, 208, 202], [122, 186, 186], [92, 164, 172], [70, 142, 158]] as Rgb[],
   caustic: [34, 62, 84] as Rgb,
   /** Moonlight dappling down through the canopy, and its shafts. */
   moon: [20, 28, 44] as Rgb,
@@ -328,6 +330,9 @@ const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> 
   const KODAMA: Record<string, Rgb> = { a: [242, 248, 240], B: [206, 222, 214], b: [160, 184, 186], E: [28, 40, 48] };
   const KASA: Record<string, Rgb> = { R: [212, 66, 76], r: [160, 44, 72], P: [236, 214, 164], p: [196, 168, 124], S: [108, 76, 56], W: [252, 244, 228], E: [18, 14, 18], T: [244, 110, 130], F: [226, 190, 150] };
   const CHOCHIN: Record<string, Rgb> = { p: [255, 226, 150], P: [250, 190, 92], q: [224, 136, 66], K: [52, 36, 44], E: [24, 14, 20], T: [232, 66, 84], W: [255, 248, 224] };
+  const NEKO: Record<string, Rgb> = { a: [136, 124, 176], B: [86, 76, 118], K: [52, 46, 78], T: [112, 100, 152], Y: [255, 232, 110], P: [236, 130, 150] };
+  const AKA: Record<string, Rgb> = { r: [160, 34, 44], R: [214, 56, 54], l: [244, 96, 76], M: [52, 16, 30], W: [255, 244, 220], E: [20, 12, 16], T: [246, 130, 150], D: [116, 26, 40] };
+  const SOAK: Record<string, Rgb> = { a: [186, 148, 104], B: [142, 106, 76], D: [66, 46, 44], W: [236, 226, 206], N: [24, 18, 22], c: [120, 180, 180], C: [176, 220, 214], A: [214, 196, 158], d: [196, 148, 104], e: [158, 112, 76], f: [40, 28, 30], O: [228, 114, 44], o: [250, 170, 84], w: [252, 244, 228] };
   const BAKU: Record<string, Rgb> = { a: [176, 160, 206], B: [122, 110, 160], b: [82, 74, 118], W: [226, 220, 240], E: [255, 240, 190], t: [70, 62, 96], K: [48, 42, 70] };
   const TSUCHI: Record<string, Rgb> = TSUCHI_COLOURS;
   const HAHAKI: Record<string, Rgb> = { B: [150, 112, 72], L: [196, 156, 104], R: [214, 58, 52], r: [158, 38, 46], a: [236, 210, 128], b: [204, 172, 92], d: [150, 120, 66], E: [34, 24, 30], W: [255, 250, 230] };
@@ -573,6 +578,125 @@ const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> 
       '..qPPPPPq..',
       '...KKKKK...',
     ], colours: CHOCHIN },
+    // In to the chin with its eyes shut, the water lapping round it.
+    tanukiSoak: { rows: [
+      '..aa..aa..',
+      '..aBaaBa..',
+      '.aBBBBBBa.',
+      '.BDDBBDDB.',
+      '.BffWWffB.',
+      '..BWWNWW..',
+      'cCCCCCCCCc',
+      '.cccccccc.',
+    ], colours: { ...SOAK, f: [38, 26, 26] } },
+    kitsuneSoak: { rows: [
+      '..oD..oD..',
+      '..OODOOO..',
+      '.oOOOOOOO.',
+      '.OOffOOww.',
+      '.oOOOwwwwN',
+      '..OOwww...',
+      'cCCCCCCCCc',
+      '.cccccccc.',
+    ], colours: SOAK },
+    deerSoak: { rows: [
+      '...A..A...',
+      '...A.AA...',
+      '..AA.A....',
+      '...AAA....',
+      '..eddde...',
+      '.deffeNN..',
+      '.eeeeeeN..',
+      '..deee....',
+      'cCCCCCCCCc',
+      '.cccccccc.',
+    ], colours: SOAK },
+    // A black cat with two tails, its eyes gleaming.
+    neko0: { rows: [
+      '.T..T...........',
+      '.T.T.........a.a',
+      '..TT.........aaa',
+      '..TT........aYaY',
+      '...TaaaaaaaaaBaP',
+      '...BBBBBBBBBBBB.',
+      '...BBBBBBBBBBB..',
+      '...B.B.....B.B..',
+      '...K.K.....K.K..',
+    ], colours: NEKO },
+    neko1: { rows: [
+      '..T.T...........',
+      '.T..T........a.a',
+      '.TT.T........aaa',
+      '..TT........aYaY',
+      '...TaaaaaaaaaBaP',
+      '...BBBBBBBBBBBB.',
+      '...BBBBBBBBBBB..',
+      '..B...B...B...B.',
+      '..K...K...K...K.',
+    ], colours: NEKO },
+    nekoSit: { rows: [
+      '......a.a.',
+      '......aaa.',
+      '.....aYaY.',
+      '.T.T..aaP.',
+      '.T.T.aBB..',
+      '..TT.BBBB.',
+      '..TTBBBBB.',
+      '...TBBBBB.',
+      '...BBBKBK.',
+    ], colours: NEKO },
+    // Up on its hind legs, paws in the air.
+    nekoDance0: { rows: [
+      'a.....a..',
+      'aa.a.a.aa',
+      '.aaaaaaa.',
+      '..aYaYa..',
+      '...aaP...',
+      '..BBBBB..',
+      'T.BBBBB.T',
+      '.TBBBBBT.',
+      '.TBBBBB..',
+      '..BB.BB..',
+      '..KK.KK..',
+    ], colours: NEKO },
+    nekoDance1: { rows: [
+      '.....a...',
+      '.a.a.a.a.',
+      '..aaaaaaa',
+      '..aYaYa.a',
+      '...aaP...',
+      '..BBBBB..',
+      '.TBBBBBT.',
+      'T.BBBBB.T',
+      '..BBBBB.T',
+      '..BB.BB..',
+      '.KK...KK.',
+    ], colours: NEKO },
+    // A small red imp, nearly all mouth.
+    akaname: { rows: [
+      '...l...l...',
+      '...RrrrR...',
+      '..lRRRRRr..',
+      '.lRWERWERr.',
+      '.RRRRRRRRr.',
+      '.RMMMMMMMr.',
+      '..RMTTTMr..',
+      '..RRRRRRr..',
+      '.RR.R.r.rr.',
+      '.D..D.D..D.',
+    ], colours: AKA },
+    akanameLick: { rows: [
+      '...l...l...',
+      '...RrrrR...',
+      '..lRRRRRr..',
+      '.lRWERWERr.',
+      '.RRRRRRRRMM',
+      '.RMMMMMMMMT',
+      '.RMMMMMMTTT',
+      '..RRRRRRMMT',
+      '.RR.R.r.rr.',
+      '.D..D.D..D.',
+    ], colours: AKA },
     // A dream-eater: a tapir's bulk and an elephant's trunk, in dusk lilac with pale star-marks.
     baku: { rows: [
       '...............a.aa.....',
@@ -685,7 +809,7 @@ const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> 
     ], colours: HAHAKI },
   };
 })();
-export type AnimalKind = 'deer' | 'deerWalk' | 'deerBow' | 'hare' | 'hareHop' | 'mouse' | 'mouse2' | 'owl' | 'owlFly0' | 'owlFly1' | 'bat0' | 'bat1' | 'crow' | 'crowFly0' | 'crowFly1' | 'frog' | 'frogLeap' | 'kappa' | 'kappaWalk' | 'kappaBow' | 'kodama' | 'kodama1' | 'kasa' | 'kasaHop' | 'chochin' | 'hahaki' | 'hahakiStep' | 'hahakiLean' | 'baku' | 'bakuWalk' | 'bakuSip' | 'tsuchinokoRest';
+export type AnimalKind = 'deer' | 'deerWalk' | 'deerBow' | 'hare' | 'hareHop' | 'mouse' | 'mouse2' | 'owl' | 'owlFly0' | 'owlFly1' | 'bat0' | 'bat1' | 'crow' | 'crowFly0' | 'crowFly1' | 'frog' | 'frogLeap' | 'kappa' | 'kappaWalk' | 'kappaBow' | 'kodama' | 'kodama1' | 'kasa' | 'kasaHop' | 'chochin' | 'hahaki' | 'hahakiStep' | 'hahakiLean' | 'baku' | 'bakuWalk' | 'bakuSip' | 'tsuchinokoRest' | 'tanukiSoak' | 'kitsuneSoak' | 'deerSoak' | 'neko0' | 'neko1' | 'nekoSit' | 'nekoDance0' | 'nekoDance1' | 'akaname' | 'akanameLick';
 export const animalSprite = (kind: AnimalKind) => cached(`shrine-animal-${kind}`, () => fromRows(ANIMALS[kind].rows, ANIMALS[kind].colours));
 
 /** Koi seen from above through the water: kohaku, showa, ogon, shiro, in two tail swings. */
@@ -1393,6 +1517,130 @@ export const rimSprite = (img: HTMLCanvasElement, side: 1 | -1, ghost: boolean) 
   return c;
 };
 
+/** A stone water basin with a bamboo spout, its water clear or scummed over. */
+export const basinSprite = (dirty: boolean) =>
+  cached(`basin-${dirty}`, () => fromRows([
+    '..........gg..',
+    '.........gGG..',
+    '......ggGG....',
+    '....gGGg.b....',
+    'sSSSSSSSSbSSs.',
+    'sWWWWWWWWWWSd.',
+    'sWVWWWVWWWWSd.',
+    'sSSSSSSSSSSSd.',
+    '.sSSSSSSSSSd..',
+    '.dddddddddd...',
+  ], {
+    g: [110, 196, 110], G: [68, 156, 96], b: [116, 84, 62], s: [176, 182, 194], S: [132, 140, 158], d: [88, 94, 116],
+    W: dirty ? [94, 110, 64] : [120, 196, 226], V: dirty ? [70, 84, 50] : [214, 244, 252],
+  }));
+
+const SAKURA: Rgb[] = [[176, 110, 146], [222, 152, 184], [246, 192, 214], [255, 224, 236], [255, 244, 250]];
+/** The old cherry: a huge gnarled trunk splitting into low boughs under a wide cloud of pale blossom. */
+export const sakuraSprite = () =>
+  cached('sakura-old', () => {
+    const rnd = seededRandom(77);
+    const w = 110, h = 112;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const cx = w / 2;
+    const BARK: Rgb[] = [[110, 84, 92], [72, 54, 66], [44, 34, 48]];
+    const limb = (x0: number, y0: number, x1: number, y1: number, r0: number, r1: number) => {
+      const steps = Math.ceil(Math.hypot(x1 - x0, y1 - y0));
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const x = x0 + (x1 - x0) * t + Math.sin(t * 5 + x0) * 1.5, y = y0 + (y1 - y0) * t;
+        const r = r0 + (r1 - r0) * t;
+        for (let dx = -r; dx <= r; dx++) {
+          const across = (dx + r) / (r * 2);
+          put(ctx, Math.round(x + dx), Math.round(y), BARK[across < 0.3 ? 0 : across > 0.7 ? 2 : (Math.floor(y / 3 + dx) & 1) ? 2 : 1]);
+        }
+      }
+    };
+    // Roots, the great trunk, and boughs reaching out low.
+    limb(cx - 14, h - 1, cx - 3, h - 12, 2, 4);
+    limb(cx + 15, h - 1, cx + 3, h - 12, 2, 4);
+    limb(cx, h - 1, cx - 2, h - 34, 8, 6);
+    limb(cx - 2, h - 34, cx - 34, h - 58, 5, 2);
+    limb(cx - 2, h - 34, cx + 32, h - 56, 5, 2);
+    limb(cx - 2, h - 34, cx - 6, h - 72, 5, 2);
+    limb(cx - 18, h - 46, cx - 44, h - 46, 3, 1);
+    limb(cx + 16, h - 45, cx + 44, h - 44, 3, 1);
+    // A wide low crown, in overlapping clouds lit from above.
+    const lumps: { x: number; y: number; r: number }[] = [];
+    for (let k = 0; k < 26; k++) {
+      const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd());
+      lumps.push({ x: cx + Math.cos(a) * d * 44, y: 40 + Math.sin(a) * d * 24, r: 9 + rnd() * 8 });
+    }
+    lumps.sort((p, q) => p.y - q.y);
+    for (const l of lumps) {
+      for (let y = Math.floor(l.y - l.r); y <= l.y + l.r; y++) {
+        for (let x = Math.floor(l.x - l.r); x <= l.x + l.r; x++) {
+          if (x < 0 || x >= w || y < 0 || y >= h) continue;
+          const dx = (x + 0.5 - l.x) / l.r, dy = (y + 0.5 - l.y) / (l.r * 0.82);
+          if (dx * dx + dy * dy > 1 + (rnd() - 0.5) * 0.35) continue;
+          // Gaps in the blossom low down, where the boughs show through.
+          if (dy > 0.5 && rnd() < 0.35) continue;
+          const light = 0.55 - dx * 0.2 - dy * 0.55 + (rnd() - 0.5) * 0.35;
+          put(ctx, x, y, SAKURA[Math.max(0, Math.min(4, Math.floor(light * 5)))]);
+        }
+      }
+    }
+    return c;
+  });
+
+/** The abandoned teahouse: a sagging thatch with a hole in it, leaning posts, a loose shutter, and one window still lit. */
+export const teahouseSprite = () =>
+  cached('teahouse', () => {
+    const w = 60, h = 46;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const rnd = seededRandom(31);
+    const WOOD_: Rgb[] = [[104, 80, 70], [72, 56, 56], [46, 36, 44]];
+    // The step and the walls, in old vertical boards, a few gone.
+    box(ctx, 6, h - 3, w - 12, 3, [92, 80, 76]);
+    box(ctx, 6, h - 3, w - 12, 1, [128, 110, 96]);
+    for (let x = 10; x < w - 10; x++) {
+      const board = Math.floor(x / 3);
+      if (board === 15) continue;
+      box(ctx, x, 20, 1, h - 23, WOOD_[x % 3 === 0 ? 2 : board % 2 ? 1 : 0]);
+    }
+    // The missing board's dark gap, and the doorway hanging open.
+    box(ctx, 45, 20, 3, h - 23, [20, 16, 26]);
+    box(ctx, 15, 24, 11, h - 27, [24, 18, 28]);
+    box(ctx, 15, 24, 1, h - 27, WOOD_[0]);
+    box(ctx, 26, 25, 2, h - 28, WOOD_[1]);
+    // The window, still lit, its lattice broken at one corner.
+    box(ctx, 32, 24, 11, 9, SHOJI[0]);
+    for (const x of [35, 39]) box(ctx, x, 24, 1, 9, SHOJI[1]);
+    box(ctx, 32, 28, 11, 1, SHOJI[1]);
+    box(ctx, 41, 24, 2, 3, [24, 18, 28]);
+    // Leaning posts.
+    for (let y = 18; y < h - 2; y++) {
+      const lean = Math.round((y - 18) * 0.08);
+      box(ctx, 8 + lean, y, 2, 1, WOOD_[0]);
+      box(ctx, w - 10 - lean, y, 2, 1, WOOD_[1]);
+    }
+    // The thatch, sagging in the middle with a hole gone through it.
+    const THATCH: Rgb[] = [[148, 124, 84], [116, 96, 70], [84, 70, 58], [58, 50, 48]];
+    for (let x = 0; x < w; x++) {
+      const t = (x + 0.5 - w / 2) / (w / 2);
+      const sag = Math.round((1 - t * t) * 4);
+      const top = Math.round(2 + Math.abs(t) * 11 + sag);
+      const bottom = 22 + (Math.abs(t) > 0.9 ? -1 : 0) + Math.round(sag * 0.4);
+      for (let y = top; y <= bottom; y++) {
+        const f = (y - top) / Math.max(1, bottom - top);
+        const straw = (x * 3 + y) % 5 === 0;
+        put(ctx, x, y, THATCH[f > 0.86 ? 3 : straw ? 2 : f < 0.25 ? 0 : 1]);
+      }
+      if (rnd() < 0.3) put(ctx, x, bottom + 1, THATCH[2]);
+    }
+    // The hole, with the dark showing through, and moss on the low side.
+    for (let y = 10; y < 16; y++) for (let x = 39; x < 39 + 7 - Math.abs(y - 13); x++) put(ctx, x, y, [22, 18, 30]);
+    for (let k = 0; k < 40; k++) put(ctx, Math.floor(rnd() * 22) + 2, 16 + Math.floor(rnd() * 6), rnd() < 0.5 ? [70, 120, 74] : [48, 96, 66]);
+    return c;
+  });
+
 /** A pale stone rock in the moss or the raked gravel, with a cap of moss. */
 export const rockSprite = (seed: number, r: number) =>
   cached(`shrine-rock-${seed}-${r}`, () => {
@@ -1791,6 +2039,16 @@ export const dreamSprite = (frame: number) =>
   cached(`shrine-dream-${frame % 2}`, () => fromRows(frame % 2 ? ['.ab.', 'abca', '.bab', '..a.'] : ['..a.', '.bab', 'acba', '.ba.'], { a: [214, 110, 180], b: [250, 158, 214], c: [255, 226, 244] }));
 export const sporeSprite = () => cached('shrine-spore', () => fromRows(['.a.', 'aba', '.a.'], { a: [70, 170, 160], b: [190, 255, 236] }));
 export const petalSprite = () => cached('shrine-petal', () => fromRows(['ab'], { a: [196, 160, 240], b: [150, 110, 214] }));
+export const sakuraPetalSprite = (frame: number) =>
+  cached(`shrine-sakura-petal-${frame % 2}`, () => fromRows(frame % 2 ? ['ab', '.a'] : ['.b', 'ab'], { a: [226, 150, 186], b: [250, 196, 216] }));
+/** A wisp of steam: pale, gapped, more air than vapour. */
+export const steamSprite = (frame: number) =>
+  cached(`shrine-steam-${frame}`, () => fromRows(
+    [['..aa..', '.aAAa.', '..aa..'], ['.a.aa.', 'aAAAa.', '.aAAAa', '..a.a.'], ['a..aa..', '.aAAaa.', 'a.AAAa.', '.a.a..a', '...a...']][Math.min(2, frame)],
+    { a: [190, 210, 220], A: [228, 238, 240] },
+  ));
+export const tongueSprite = (frame: number) =>
+  cached(`akaname-tongue-${frame % 2}`, () => fromRows(frame % 2 ? ['TTTTTTTt.', 'ttTTTTTTt', '.ttttTTTt', '.....ttt.'] : ['TTTTTTTTt', 'ttTTTTTTT', '.ttttttTt', '.......t.'], { T: [246, 130, 150], t: [206, 86, 118] }));
 export const crumbSprite = () => cached('shrine-crumb', () => fromRows(['a'], { a: [244, 236, 214] }));
 export const bloodSprite = () => cached('shrine-blood', () => fromRows(['r'], { r: [200, 40, 50] }));
 export const tuftSprite = () => cached('shrine-tuft', () => fromRows(['a'], { a: [214, 196, 170] }));
@@ -1855,6 +2113,29 @@ export const lightHole = (r: number) =>
     return c;
   });
 
+/** A tile of ground mist: long soft banks, dithered thin, wrapping at its edges. */
+export const mistTile = (size: number) =>
+  cached(`shrine-mist-${size}`, () => {
+    const c = makeCanvas(size, size);
+    const ctx = c.getContext('2d')!;
+    const img = ctx.createImageData(size, size);
+    const k = (Math.PI * 2) / size;
+    const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        // Stretched sideways, as mist lies.
+        const a = Math.sin(k * (x + 2 * y) + 1.1 * Math.sin(k * 3 * y)) + Math.sin(k * (2 * x - 3 * y) + 0.8 * Math.sin(k * (x + y))) + 0.6 * Math.sin(k * 7 * y + k * x);
+        const v = (a + 0.2) / 2.4 + (BAYER[(y & 3) * 4 + (x & 3)] / 16 - 0.5) * 0.45;
+        if (v <= 0.14) continue;
+        const i = (y * size + x) * 4;
+        img.data[i] = 255; img.data[i + 1] = 232; img.data[i + 2] = 204;
+        img.data[i + 3] = Math.round(Math.min(1, v) * 170);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  });
+
 /** A tile of soft moonlight falling through the boughs: blobs in a few flat levels, dithered at their edges. */
 export const dappleTile = (size: number, colour: Rgb) =>
   cached(`shrine-dapple-${size}-${colour.join(',')}`, () => {
@@ -1898,6 +2179,8 @@ export const shrineIcon = (kind: string): HTMLCanvasElement => {
     case 'kasa': return animalSprite('kasa');
     case 'chochin': return animalSprite('chochin');
     case 'baku': return animalSprite('baku');
+    case 'nekomata': return animalSprite('nekoSit');
+    case 'akaname': return animalSprite('akaname');
     case 'tsuchinoko': return tsuchinokoSprite(0);
     default: return animalSprite('hare');
   }
