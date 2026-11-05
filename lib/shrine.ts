@@ -22,11 +22,11 @@ export const ELEVATION = 0.55;
 
 export interface ClearZone { x0: number; z0: number; x1: number; z1: number }
 
-export type ShrineSpecies = 'tanuki' | 'kitsune' | 'hahaki' | 'mouse' | 'hare' | 'deer' | 'owl' | 'bat' | 'crow' | 'frog' | 'koi' | 'kappa' | 'kodama' | 'hitodama' | 'kasa' | 'chochin';
-export const SHRINE_SPECIES_LIST: ShrineSpecies[] = ['tanuki', 'kitsune', 'hahaki', 'mouse', 'hare', 'deer', 'owl', 'bat', 'crow', 'frog', 'koi', 'kappa', 'kodama', 'hitodama', 'kasa', 'chochin'];
+export type ShrineSpecies = 'tanuki' | 'kitsune' | 'hahaki' | 'mouse' | 'hare' | 'deer' | 'owl' | 'bat' | 'crow' | 'frog' | 'koi' | 'kappa' | 'kodama' | 'hitodama' | 'kasa' | 'chochin' | 'baku' | 'tsuchinoko';
+export const SHRINE_SPECIES_LIST: ShrineSpecies[] = ['tanuki', 'kitsune', 'hahaki', 'mouse', 'hare', 'deer', 'owl', 'bat', 'crow', 'frog', 'koi', 'kappa', 'kodama', 'hitodama', 'kasa', 'chochin', 'baku', 'tsuchinoko'];
 
 export type ShrineMood = 'wandering' | 'sniffing' | 'sneaking' | 'pretending' | 'changing' | 'eating' | 'facing off' | 'scrapping' | 'fleeing' | 'sleeping' | 'drumming' | 'barking' | 'hunting' | 'pouncing' | 'following' | 'courting'
-  | 'sweeping' | 'carrying' | 'bowing' | 'shooing' | 'puzzled' | 'grazing' | 'perched' | 'flying' | 'swooping' | 'sitting' | 'swimming' | 'hopping' | 'drifting' | 'watching' | 'thieving' | 'spilling';
+  | 'sweeping' | 'carrying' | 'bowing' | 'shooing' | 'puzzled' | 'grazing' | 'perched' | 'flying' | 'swooping' | 'sitting' | 'swimming' | 'hopping' | 'drifting' | 'watching' | 'thieving' | 'spilling' | 'sipping' | 'rolling' | 'dancing' | 'nibbling';
 
 interface SpeciesInfo {
   label: string; names: string[]; speed: number; palettes: number;
@@ -51,6 +51,8 @@ export const SHRINE_SPECIES: Record<ShrineSpecies, SpeciesInfo> = {
   kodama: { label: 'Kodama', names: ['Kodama'], speed: 0.06, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: Infinity, min: 0 },
   hitodama: { label: 'Hitodama', names: ['Soul-flame'], speed: 0.1, palettes: 2, mature: 0, old: Infinity, hunger: 0, perArea: 130000, min: 3 },
   kasa: { label: 'Kasa-obake', names: ['Old Umbrella'], speed: 0.2, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 280000, min: 1 },
+  baku: { label: 'Baku', names: ['Old Dream-eater', 'Yumekui', 'Hakutaku'], speed: 0.13, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 450000, min: 2 },
+  tsuchinoko: { label: 'Tsuchinoko', names: ['Tsuchinoko'], speed: 0.55, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 450000, min: 2 },
   chochin: { label: 'Chochin-obake', names: ['Old Lantern'], speed: 0.1, palettes: 1, mature: 0, old: Infinity, hunger: 0, perArea: 280000, min: 1 },
 };
 
@@ -77,6 +79,10 @@ export interface ShrineCreature {
   /** A speech mark over its head: '!', '?', 'z', a note or a heart, and for how long. */
   emote: Emote | null; emoteT: number;
   carrying: OfferingKind | null;
+  /** The berries or fruit it's making for. */
+  food: BerryBush | Fruit | null;
+  /** The mushroom ring it's dancing in, and where round it. */
+  ring: MushroomRing | null; angle: number;
   /** Up on a bridge's arch, its height set by the deck. */
   onBridge: boolean;
   /** Which cedar or pond it belongs to. */
@@ -86,13 +92,24 @@ export interface ShrineCreature {
 export type Emote = 'bang' | 'what' | 'zed' | 'note' | 'heart';
 
 /** Tall or solid things in the scene. */
-export type PropKind = 'cedar' | 'sacred' | 'maple' | 'goldMaple' | 'torii' | 'honden' | 'pagoda' | 'hokora' | 'jizo' | 'foxStatue' | 'tanukiStatue' | 'lionStatue' | 'rock' | 'spout';
+export type PropKind = 'persimmonTree' | 'cedar' | 'sacred' | 'maple' | 'goldMaple' | 'torii' | 'honden' | 'pagoda' | 'hokora' | 'jizo' | 'foxStatue' | 'tanukiStatue' | 'lionStatue' | 'rock' | 'spout';
 export interface Prop { kind: PropKind; x: number; z: number; size: number; seed: number; flip: boolean }
 /** Low plants, baked into the floor. */
 export type LowPlant = 'fern' | 'grass' | 'shroom' | 'hydrangea' | 'lily' | 'persimmon';
 export interface Low { kind: LowPlant; x: number; z: number; seed: number; variant: number }
 /** A stem that sways and bends away from whatever brushes it. */
 export interface Cane { kind: 'bamboo' | 'susuki'; x: number; z: number; len: number; seed: number; phase: number; bx: number; bv: number }
+/** A bush with berries that get eaten and grow back. */
+export type BushKind = 0 | 1 | 2;
+export interface BerryBush { x: number; z: number; kind: BushKind; berries: number; regrow: number; seed: number }
+export const BUSH_BERRIES = 6;
+/** A persimmon on its way down from the tree, or lying where it fell. */
+export interface Fruit { x: number; z: number; h: number; vh: number; life: number }
+/** A fairy ring of glowing mushrooms, where foxes come to dance. */
+export interface MushroomRing { x: number; z: number; rx: number; rz: number; shrooms: { x: number; z: number; seed: number }[]; dancers: number }
+/** A cross-beam of a wisteria pergola over the path, and a hanging spray of its flowers. */
+export interface WisteriaBeam { x: number; z: number; w: number }
+export interface Strand { x: number; z: number; len: number; seed: number; phase: number; bx: number; bv: number }
 export interface Lantern { x: number; z: number; phase: number; mossy: number }
 /** A rope strung across the approach for the festival, hung with paper lanterns. */
 export interface Festoon { x0: number; x1: number; z: number; seed: number }
@@ -100,7 +117,7 @@ export interface Altar { x: number; z: number; item: OfferingKind | null; favour
 export interface Water { x: number; z: number; rx: number; rz: number; moonX: number; moonZ: number }
 export interface Bridge { x: number; z: number; w: number }
 export interface Pad { x: number; z: number; r: number; tone: number; flower: number; phase: number; load: number }
-export type MoteKind = 'smoke' | 'dust' | 'star' | 'note' | 'heart' | 'leaf' | 'crumb' | 'blood' | 'tuft' | 'ring' | 'ember' | 'petal' | 'splash' | 'greenLeaf';
+export type MoteKind = 'dream' | 'spore' | 'smoke' | 'dust' | 'star' | 'note' | 'heart' | 'leaf' | 'crumb' | 'blood' | 'tuft' | 'ring' | 'ember' | 'petal' | 'splash' | 'greenLeaf';
 export interface Mote { kind: MoteKind; x: number; z: number; h: number; vx: number; vz: number; vh: number; life: number; max: number; seed: number }
 export interface Firefly { x: number; z: number; h: number; vx: number; vz: number; phase: number; life: number }
 export interface Moth { lantern: Lantern; a: number; r: number; h: number; x: number; z: number; alive: boolean; wait: number }
@@ -118,11 +135,11 @@ export interface Marcher {
 export interface Parade { head: number; headRow: number; tailRow: number; speed: number; length: number; marchers: Marcher[] }
 
 export type ShrineHappening = 'festival' | 'fireflies' | 'parade';
-export type SiteKind = 'hall' | 'inari' | 'den' | 'koi' | 'bamboo' | 'lilies' | 'maples' | 'sacred' | 'pagoda' | 'zen';
-const SITE_KINDS: SiteKind[] = ['hall', 'koi', 'inari', 'maples', 'den', 'bamboo', 'sacred', 'lilies', 'pagoda', 'zen'];
+export type SiteKind = 'hall' | 'inari' | 'den' | 'koi' | 'bamboo' | 'lilies' | 'maples' | 'sacred' | 'pagoda' | 'zen' | 'ring';
+const SITE_KINDS: SiteKind[] = ['hall', 'koi', 'inari', 'maples', 'den', 'bamboo', 'sacred', 'lilies', 'pagoda', 'zen', 'ring'];
 export interface Site { kind: SiteKind; x: number; z: number; rx: number; rz: number }
 
-export type ShrineSpawnable = ShrineSpecies | 'teapot' | 'lantern' | 'statue';
+export type ShrineSpawnable = ShrineSpecies | 'teapot' | 'lantern' | 'statue' | 'bush' | 'dance';
 export type ShrineEventKind = 'shift' | 'offering' | 'scrap' | 'caught' | 'theft' | 'eaten' | 'birth' | 'visit' | 'death';
 export interface ShrineEvent { tick: number; kind: ShrineEventKind; text: string; starred: boolean }
 export type ShrineDeath = 'eaten' | 'starved' | 'oldAge';
@@ -135,6 +152,8 @@ export interface ShrineStats {
   births: number; meals: number;
   deaths: Record<ShrineDeath, number>;
   fireflies: number;
+  berries: number;
+  berriesFull: number;
   happening: { kind: ShrineHappening; progress: number } | null;
   events: ShrineEvent[];
 }
@@ -201,6 +220,11 @@ export class Shrine {
   bridges: Bridge[] = [];
   pads: Pad[] = [];
   sites: Site[] = [];
+  bushes: BerryBush[] = [];
+  fruits: Fruit[] = [];
+  rings: MushroomRing[] = [];
+  beams: WisteriaBeam[] = [];
+  strands: Strand[] = [];
   private maples: Prop[] = [];
   private cedars: Prop[] = [];
   private dens: { kind: ShrineSpecies; x: number; z: number }[] = [];
@@ -269,6 +293,7 @@ export class Shrine {
     this.pathX = new Float32Array(h);
     this.props = []; this.low = []; this.canes = []; this.lanterns = []; this.festoons = [];
     this.altars = []; this.waters = []; this.bridges = []; this.pads = []; this.sites = [];
+    this.bushes = []; this.fruits = []; this.rings = []; this.beams = []; this.strands = [];
     this.dens = [];
 
     for (let z = 0; z < h; z++) {
@@ -293,7 +318,7 @@ export class Shrine {
     const hero = this.zones[0];
     let z = hero ? Math.min(h - 1, hero.z1 + 30) : 80;
     // Something beside the hero, in the opening view.
-    const opening: SiteKind[] = ['koi', 'hall', 'sacred'];
+    const opening: SiteKind[] = ['koi', 'hall', 'ring', 'sacred'];
     const used = new Set<SiteKind>();
     while (z < h - 30) {
       if (!queue.length) queue = SITE_KINDS.slice().sort(() => r() - 0.5);
@@ -368,6 +393,7 @@ export class Shrine {
     }
 
     this.measureWater();
+    this.placeWisteria(r);
     this.plantForest(r);
     this.props = this.props.filter(p => p.z < h);
     this.props.sort((p, q) => p.z - q.z);
@@ -554,7 +580,7 @@ export class Shrine {
           const a = r() * 6.28, d = 34 + r() * 22;
           this.canes.push({ kind: 'bamboo', x: x + Math.cos(a) * d, z: z - 6 + Math.sin(a) * d * 0.55, len: 46 + Math.floor(r() * 26), seed: Math.floor(r() * 100), phase: r() * 6.28, bx: 0, bv: 0 });
         }
-        this.drift('persimmon', x, z + 10, 26, 16, 6, r);
+        this.addProp('persimmonTree', x + 30, z + 30, 14, r);
         this.drift('shroom', x, z + 8, 40, 20, 4, r);
         break;
       }
@@ -600,7 +626,12 @@ export class Shrine {
           }
         }
         this.addAltar(lobes[1].x + lobes[1].rx + 8, lobes[1].z - 6, 'cucumber', false);
-        this.addLantern(lobes[0].x - lobes[0].rx - 6, lobes[0].z, r);
+        // Lanterns on the far banks, so their light runs down across the water toward you.
+        for (const [lx, l] of [[lobes[0].x - lobes[0].rx * 0.2, lobes[0]], [lobes[1].x + lobes[1].rx * 0.45, lobes[1]]] as [number, typeof lobes[0]][]) {
+          let lz = l.z;
+          while (lz > 2 && this.isWater(lx, lz)) lz--;
+          this.addLantern(lx, lz - 4, r);
+        }
         this.addLantern(left - 10, row + 4, r);
         this.addLantern(right + 10, row + 4, r);
         for (const l of lobes) {
@@ -642,7 +673,7 @@ export class Shrine {
         this.addLantern(x + 8, z + 16, r);
         this.addLantern(x - 18, z + 18, r);
         this.addAltar(x - 4, z + 22, 'mikan', false);
-        this.drift('persimmon', x, z + 10, 40, 24, 6, r);
+        this.addProp('persimmonTree', x - 30, z + 28, 15, r);
         this.dens.push({ kind: 'kitsune', x: x + 34, z: z + 22 });
         break;
       }
@@ -663,6 +694,18 @@ export class Shrine {
         this.addAltar(x, z + 15, 'fish', true);
         for (const dx of [-30, 30, -18, 18]) this.addLantern(x + dx, z + 16 + Math.abs(dx) * 0.1, r);
         this.trail(x, z + 24, r);
+        break;
+      }
+      case 'ring': {
+        // A wide fairy ring of mushrooms on a clear patch of moss, with nothing in the middle.
+        const ring: MushroomRing = { x, z, rx: 30 * k, rz: 16 * k, shrooms: [], dancers: 0 };
+        const count = Math.round(18 * k);
+        for (let g = 0; g < count; g++) {
+          const a = (g / count) * 6.28 + (r() - 0.5) * 0.12;
+          ring.shrooms.push({ x: x + Math.cos(a) * ring.rx, z: z + Math.sin(a) * ring.rz, seed: Math.floor(r() * 1000) });
+        }
+        ring.shrooms.sort((p, q) => p.z - q.z);
+        this.rings.push(ring);
         break;
       }
       case 'zen': {
@@ -718,6 +761,25 @@ export class Shrine {
       const kind: LowPlant = v < 0.4 ? 'fern' : v > 0.82 ? 'shroom' : 'grass';
       this.addLow(kind, x, z, r, Math.floor(r() * 3));
     }
+    // Berry bushes: mostly at the edge of a lantern's light, the rest out in the dark, in small clumps.
+    const addBush = (x: number, z: number) => {
+      if (onGround(x, z) !== GROUND.moss || this.inZone(x, z, 10, 12, 4) || x < 4 || x > w - 5) return;
+      const kind = Math.floor(noise(x * 0.02 + 40, z * 0.02) * 3 * 1.4) % 3 as BushKind;
+      this.bushes.push({ x, z, kind, berries: Math.floor(BUSH_BERRIES * (0.5 + r() * 0.5)), regrow: Math.floor(r() * BERRY_REGROW), seed: Math.floor(r() * 4) });
+    };
+    for (const l of this.lanterns) {
+      if (r() > 0.34) continue;
+      const a = r() * 6.28;
+      addBush(l.x + Math.cos(a) * 20, l.z + Math.sin(a) * 12);
+    }
+    for (let k = 0; k < area / 40000; k++) addBush(r() * w, r() * h);
+    this.bushes.sort((a, b) => a.z - b.z);
+    // A persimmon tree here and there, dropping its fruit.
+    for (let k = 0; k < area / 90000; k++) {
+      const x = r() * w, z = r() * h;
+      if (this.inZone(x, z, 16, 30, 6) || nearSite(x, z, 1) || onGround(x, z) !== GROUND.moss) continue;
+      this.addProp('persimmonTree', x, z, 13 + Math.floor(r() * 4), r);
+    }
     // Clear what was planted over the clear zones.
     this.low = this.low.filter(p => !this.zones.some(q => p.x > q.x0 && p.x < q.x1 && p.z > q.z0 && p.z < q.z1));
     this.canes = this.canes.filter(c => {
@@ -743,6 +805,8 @@ export class Shrine {
       c.z = clamp(c.z, 2, h - 3);
       if (c.species === 'koi' || c.species === 'frog' || c.species === 'kappa') c.pond = null;
       c.altar = null;
+      c.food = null;
+      c.ring = null;
       if (c.species === 'tanuki' || c.species === 'kitsune' || c.species === 'hahaki') { c.state = c.disguise ? 'disguised' : 'roam'; c.timer = 0; c.tx = c.x; c.tz = c.z; }
       if (c.species === 'hahaki') c.carrying = null;
       const flies = c.species === 'bat' || c.species === 'owl' || c.species === 'crow' || c.species === 'hitodama' || c.species === 'chochin' || c.species === 'koi' || c.species === 'frog' || c.species === 'kappa';
@@ -807,7 +871,7 @@ export class Shrine {
       palette: parent ? parent.palette : Math.floor(Math.random() * info.palettes), mood: 'wandering',
       state: 'roam', timer: Math.floor(Math.random() * 60), tx: px, tz: pz,
       parent, foe: null, prey: null, altar: null, hidden: false, disguise: null, sneakLeft: 0, scuttling: false, tailOut: 0,
-      emote: null, emoteT: 0, carrying: null, onBridge: false, home: null, pond: null,
+      emote: null, emoteT: 0, carrying: null, food: null, ring: null, angle: 0, onBridge: false, home: null, pond: null,
     };
     if (!c.lineId) c.lineId = c.id;
     const waterFolk = species === 'koi' || species === 'frog' || species === 'kappa';
@@ -867,6 +931,21 @@ export class Shrine {
       this.spawn((['deer', 'hare', 'hitodama'] as ShrineSpecies[])[k], x, between(this.viewZ.z0 + 14, this.viewZ.z1 - 6));
     }
     for (const w of this.waters) this.stockWater(w);
+    if (this.rings.length) {
+      const ring = this.rings[0];
+      for (let k = 0; k < 3; k++) {
+        const c = this.spawn('kitsune', ring.x, ring.z);
+        c.ring = ring; c.angle = (k / 3) * 6.28; c.state = 'dance'; c.timer = 1500;
+        c.x = ring.x + Math.cos(c.angle) * ring.rx * 0.65; c.z = ring.z + Math.sin(c.angle) * ring.rz * 0.65;
+      }
+    }
+    {
+      const left = between(8, 40);
+      const sleeper = this.spawn('tanuki', left, between(this.viewZ.z0 + 30, this.viewZ.z1 - 16));
+      sleeper.state = 'sleep'; sleeper.timer = 1500;
+      const baku = this.spawn('baku', sleeper.x + 34, sleeper.z - 12);
+      baku.prey = sleeper; baku.state = 'seek';
+    }
     // Kodama round the sacred cedars, and on any cedars in the opening view.
     for (const p of this.cedars) {
       const sacred = p.kind === 'sacred';
@@ -940,6 +1019,9 @@ export class Shrine {
     this.updateCanes();
     this.updateAltars();
     this.updateScenery();
+    this.updateFood();
+    this.updateRings();
+    this.updateWisteria();
     this.updateHappening();
     this.updateParade();
     if (this.tick - this.lastCheck > 300) {
@@ -1065,7 +1147,7 @@ export class Shrine {
     let best: ShrineCreature | null = null;
     let bestD = range;
     for (const o of this.creatures) {
-      if (o === c || !o.alive || !test(o)) continue;
+      if (o === c || !o.alive || o.hidden || !test(o)) continue;
       const dx = Math.abs(o.x - c.x);
       if (dx > bestD) continue;
       const d = Math.hypot(o.x - c.x, o.z - c.z);
@@ -1109,6 +1191,8 @@ export class Shrine {
       case 'hitodama': this.thinkHitodama(c); break;
       case 'kasa': this.thinkKasa(c); break;
       case 'chochin': this.thinkChochin(c); break;
+      case 'baku': this.thinkBaku(c); break;
+      case 'tsuchinoko': this.thinkTsuchinoko(c); break;
     }
   }
 
@@ -1152,12 +1236,15 @@ export class Shrine {
         return;
       }
       case 'hunt': this.thinkHunt(c); return;
+      case 'toRing': case 'dance': this.thinkDance(c); return;
       case 'forage': {
         c.mood = 'sniffing';
         const d = this.walkTo(c, c.tx, c.tz, SHRINE_SPECIES[c.species].speed);
         if (d < 3 || --c.timer <= 0) {
           this.burst('crumb', c.x, c.z, 2, 3, 0.2, 0.3);
-          c.energy = Math.min(1, c.energy + 0.1);
+          const ate = !!c.food && this.takeFood(c.food);
+          c.food = null;
+          c.energy = Math.min(1, c.energy + (ate ? 0.3 : 0.1));
           c.state = 'roam'; c.timer = Math.floor(between(30, 70));
         }
         return;
@@ -1218,12 +1305,15 @@ export class Shrine {
         const prey = this.near(c, 90, o => o.species === 'mouse' || (o.species === 'hare' && Math.random() < 0.4));
         if (prey) { c.prey = prey; c.state = 'hunt'; c.timer = 240; return; }
       }
-      // Something on the forest floor: windfall persimmons, beetles, mushrooms.
-      this.wanderTarget(c, 30);
+      // Berries or a windfall if there are any near; otherwise beetles and mushrooms.
+      c.food = this.foodNear(c, 110);
+      if (c.food) { c.tx = c.food.x; c.tz = c.food.z + 3; }
+      else this.wanderTarget(c, 30);
       c.state = 'forage';
       c.timer = 120;
       return;
     }
+    if (c.species === 'kitsune' && !this.happening && Math.random() < 0.2 && this.goDancing(c)) return;
     if (roll < 0.1) { c.state = 'perform'; c.timer = Math.floor(between(120, 240)); return; }
     if (roll < 0.32) { c.state = 'sleep'; c.timer = Math.floor(between(300, 700)); return; }
     if (roll < 0.44) { this.beginChange(c); return; }
@@ -1577,13 +1667,15 @@ export class Shrine {
       const altar = this.altars.find(a => a.item && Math.abs(a.x - c.x) < 34 && Math.abs(a.z - c.z) < 24);
       if (altar && Math.random() < 0.2) { c.tx = altar.x; c.tz = altar.z + 3; }
     }
-    // Nibbling makes a little go a long way, and new litters keep up the numbers.
-    c.energy = Math.min(1, c.energy + 0.0002);
+    if (c.state === 'feed') { this.feeding(c, SHRINE_SPECIES.mouse.speed, 0.45); return; }
+    // A little found on the ground keeps it going, but it's the berries it's after.
+    c.energy = Math.min(1, c.energy + 0.00002);
     if (Math.hypot(c.tx - c.x, c.tz - c.z) < 2) {
       if (--c.timer > 0) { this.halt(c); return; }
+      const food = c.energy < 0.85 ? this.foodNear(c, 90) : null;
+      if (food) { c.food = food; c.state = 'feed'; c.timer = 80; return; }
       this.wanderTarget(c, 30);
       c.timer = Math.floor(between(20, 110));
-      if (Math.random() < 0.006 && this.creatures.filter(o => o.species === 'mouse' && o.alive).length < this.populationCap('mouse')) { this.spawn('mouse', c.x, c.z, c); this.births++; }
     } else this.walkTo(c, c.tx, c.tz, SHRINE_SPECIES.mouse.speed);
   }
 
@@ -1601,9 +1693,12 @@ export class Shrine {
       if (threat) { this.flee(c, threat, 80); return; }
     }
     if (--c.timer <= 0) {
-      if (Math.random() < 0.5) { this.wanderTarget(c, 40); c.state = 'hop'; c.timer = 60; }
+      const food = c.energy < 0.8 ? this.foodNear(c, 90) : null;
+      if (food) { c.food = food; c.state = 'feed'; c.timer = 90; }
+      else if (Math.random() < 0.5) { this.wanderTarget(c, 40); c.state = 'hop'; c.timer = 60; }
       else { c.state = 'graze'; c.timer = Math.floor(between(60, 240)); }
     }
+    if (c.state === 'feed') { this.feeding(c, SHRINE_SPECIES.hare.speed, 0.4); return; }
     if (c.state === 'hop') {
       c.mood = 'hopping';
       this.walkTo(c, c.tx, c.tz, SHRINE_SPECIES.hare.speed);
@@ -1881,6 +1976,327 @@ export class Shrine {
     }
   }
 
+  // --- the dream-eater -------------------------------------------------------------
+
+  /** It plods from sleeper to sleeper, and stands over each one drinking a pink wisp of dream. */
+  private thinkBaku(c: ShrineCreature) {
+    const speed = SHRINE_SPECIES.baku.speed;
+    const sleeper = c.prey;
+    if (c.state === 'sip') {
+      c.mood = 'sipping';
+      this.halt(c);
+      if (!sleeper?.alive || sleeper.state !== 'sleep') { c.prey = null; c.state = 'roam'; c.timer = 120; return; }
+      sleeper.timer = Math.max(sleeper.timer, 40);
+      this.setFacing(c, sleeper.x - c.x);
+      if (this.tick % 12 === 0 && this.motes.length < MAX_MOTES) {
+        // A wisp lifts off the sleeper's head and drifts to the trunk.
+        const life = 44;
+        const fromH = 14, toH = 16;
+        const tx = c.x + c.facing * 12;
+        this.motes.push({ kind: 'dream', x: sleeper.x, z: sleeper.z, h: fromH, vx: (tx - sleeper.x) / life, vz: (c.z - sleeper.z) / life, vh: (toH - fromH) / life, life, max: life, seed: Math.floor(Math.random() * 100) });
+      }
+      if (--c.timer <= 0) {
+        this.log('visit', `A baku drinks ${sleeper.name}'s dream`, sleeper);
+        c.prey = null; c.state = 'roam'; c.timer = 400; c.squash = 0.3;
+      }
+      return;
+    }
+    if (c.state === 'seek') {
+      c.mood = 'wandering';
+      if (!sleeper?.alive || sleeper.state !== 'sleep') { c.prey = null; c.state = 'roam'; c.timer = 60; return; }
+      const side = c.x < sleeper.x ? -1 : 1;
+      const d = this.walkTo(c, sleeper.x + side * 16, sleeper.z - 1, speed);
+      if (d < 3) { c.state = 'sip'; c.timer = 220; c.vx = 0; c.vz = 0; }
+      return;
+    }
+    c.mood = 'wandering';
+    if (--c.timer <= 0) {
+      c.timer = 60;
+      const next = this.near(c, 170, o => (o.species === 'tanuki' || o.species === 'kitsune') && o.state === 'sleep' && !this.creatures.some(b => b.species === 'baku' && b.prey === o));
+      if (next) { c.prey = next; c.state = 'seek'; return; }
+    }
+    if (Math.hypot(c.tx - c.x, c.tz - c.z) < 4) this.wanderTarget(c, 70);
+    this.walkTo(c, c.tx, c.tz, speed * 0.8);
+  }
+
+  // --- the tsuchinoko -----------------------------------------------------------------
+
+  /**
+   * A fat little snake that takes its tail in its mouth and bowls down the
+   * path like a wheel. Nobody ever quite sees one: as soon as anything looks
+   * its way (a cursor counts), it's gone, and turns up later further along.
+   */
+  private thinkTsuchinoko(c: ShrineCreature) {
+    if (c.state === 'roam') { this.rollIn(c); return; }
+    if (c.hidden) {
+      if (--c.timer <= 0) this.rollIn(c);
+      return;
+    }
+    if (this.tick % 5 === c.id % 5) {
+      const p = this.pointer;
+      const seen = (p && Math.hypot(p.x - c.x, p.z - c.z) < 34)
+        || this.near(c, 24, o => o.h < 12 && !o.disguise && o.species !== 'tsuchinoko' && o.species !== 'koi' && o.species !== 'kodama' && o.species !== 'hitodama' && o.species !== 'frog');
+      if (seen || this.parade && Math.abs(c.z - this.parade.headRow) < 60) { this.vanish(c, typeof seen === 'object' && seen ? seen as ShrineCreature : null); return; }
+    }
+    if (c.state === 'peek') {
+      c.mood = 'sitting';
+      c.vx = 0; c.vz = 0;
+      if (--c.timer <= 0) { c.state = 'rollAlong'; c.timer = Math.floor(between(240, 560)); }
+      return;
+    }
+    c.mood = 'rolling';
+    // tx is how far along the path it has come, tz how far off the middle.
+    c.tx += SHRINE_SPECIES.tsuchinoko.speed;
+    const z = this.rowAlong(c.tx);
+    if (z > this.h - 6) { c.hidden = true; c.timer = 300; return; }
+    const row = clamp(Math.round(z), 0, this.h - 1);
+    const nx = this.pathX[row] + c.tz * (this.pathHalf[row] / PATH_HALF);
+    c.vx = nx - c.x; c.vz = z - c.z;
+    this.setFacing(c, c.vx);
+    c.x = nx; c.z = z;
+    // A bump now and then, as a wheel goes over the flagstones.
+    c.h = (this.tick + c.id * 3) % 44 < 6 ? 1.6 : 0;
+    if (this.tick % 9 === 0) this.burst('dust', c.x, c.z, 0, 1, 0.1, 0.1);
+    if (--c.timer <= 0) { c.state = 'peek'; c.timer = 70; c.squash = 0.5; c.h = 0; }
+  }
+
+  private rollIn(c: ShrineCreature) {
+    const row = clamp(Math.round(between(this.viewZ.z0 - 30, this.viewZ.z1 - 30)), 2, this.h - 40);
+    c.tx = this.pathArc[row];
+    c.tz = between(-4, 4);
+    c.x = this.pathX[row] + c.tz; c.z = row;
+    c.hidden = false;
+    c.state = 'rollAlong';
+    c.timer = Math.floor(between(240, 560));
+  }
+
+  private vanish(c: ShrineCreature, by: ShrineCreature | null) {
+    this.burst('dust', c.x, c.z, 2, 5, 0.5, 0.5);
+    if (by && (by.species === 'tanuki' || by.species === 'kitsune' || by.species === 'hahaki')) { this.emote(by, 'what', 40); this.setFacing(by, c.x - by.x); }
+    c.hidden = true;
+    c.state = 'gone';
+    c.vx = 0; c.vz = 0;
+    c.timer = Math.floor(between(500, 1300));
+  }
+
+  // --- the fox dance ---------------------------------------------------------------------
+
+  private goDancing(c: ShrineCreature) {
+    let best: MushroomRing | null = null;
+    let bestD = 260;
+    for (const q of this.rings) {
+      const d = dist(c, q);
+      if (d < bestD && q.dancers < 5) { bestD = d; best = q; }
+    }
+    if (!best) return false;
+    c.ring = best;
+    c.state = 'toRing';
+    c.timer = 900;
+    return true;
+  }
+
+  private thinkDance(c: ShrineCreature) {
+    const q = c.ring;
+    if (!q || --c.timer <= 0 || this.happening?.kind === 'parade') { c.ring = null; c.state = 'roam'; c.timer = 60; c.h = 0; c.vh = 0; return; }
+    if (c.state === 'toRing') {
+      c.mood = 'wandering';
+      const d = this.walkTo(c, q.x, q.z, SHRINE_SPECIES.kitsune.speed);
+      if (Math.abs(c.x - q.x) < q.rx * 0.7 && Math.abs(c.z - q.z) < q.rz * 0.7 || d < 6) {
+        c.state = 'dance';
+        c.timer = Math.floor(between(600, 1100));
+        c.angle = Math.atan2((c.z - q.z) / q.rz, (c.x - q.x) / q.rx);
+      }
+      return;
+    }
+    // Round the ring in hops, stopping now and then to sit up and bark at the moon.
+    c.mood = 'dancing';
+    if (c.h > 0 || c.vh !== 0) { c.h = Math.max(0, c.h + c.vh); c.vh -= 0.1; if (c.h === 0) { c.vh = 0; c.squash = 0.35; } }
+    if (isBarkTime(c, this.tick)) {
+      c.vx = 0; c.vz = 0;
+      if (this.tick % 40 === 0) this.burst('note', c.x + c.facing * 7, c.z, 30, 1, 0.1, 0.4);
+      return;
+    }
+    if (c.h === 0 && (this.tick + c.id * 7) % 22 === 0) c.vh = 0.75;
+    c.angle += 0.009;
+    const tx = q.x + Math.cos(c.angle) * q.rx * 0.65, tz = q.z + Math.sin(c.angle) * q.rz * 0.65;
+    c.vx = tx - c.x; c.vz = tz - c.z;
+    c.x += c.vx * 0.1; c.z += c.vz * 0.1;
+    this.setFacing(c, c.vx);
+  }
+
+  private updateRings() {
+    if (this.tick % 30) return;
+    for (const q of this.rings) {
+      q.dancers = 0;
+      for (const c of this.creatures) if (c.alive && c.ring === q && c.state === 'dance') q.dancers++;
+      // It breathes out spores while they dance.
+      if (q.dancers && q.z > this.viewZ.z0 - 30 && q.z < this.viewZ.z1 + 30) {
+        for (let k = 0; k < q.dancers + 1; k++) {
+          const s = pick(q.shrooms);
+          this.burst('spore', s.x, s.z, 4, 1, 0.05, 0.25);
+        }
+      }
+    }
+  }
+
+  // --- things to eat ------------------------------------------------------------------------
+
+  /** The nearest berries or fallen fruit in reach. */
+  private foodNear(c: ShrineCreature, range: number): BerryBush | Fruit | null {
+    let best: BerryBush | Fruit | null = null;
+    let bestD = range;
+    for (const b of this.bushes) {
+      if (b.berries <= 0) continue;
+      const dx = Math.abs(b.x - c.x);
+      if (dx > bestD) continue;
+      const d = Math.hypot(b.x - c.x, b.z - c.z);
+      if (d < bestD) { bestD = d; best = b; }
+    }
+    for (const f of this.fruits) {
+      if (f.h > 0) continue;
+      const d = Math.hypot(f.x - c.x, f.z - c.z);
+      if (d < bestD) { bestD = d; best = f; }
+    }
+    return best;
+  }
+
+  private foodLeft(f: BerryBush | Fruit) { return 'berries' in f ? f.berries > 0 : f.life > 0; }
+
+  /** Takes a bite from it, if there's anything left. */
+  private takeFood(f: BerryBush | Fruit) {
+    if (!this.foodLeft(f)) return false;
+    if ('berries' in f) f.berries--;
+    else f.life = 0;
+    this.meals++;
+    return true;
+  }
+
+  /** Going over to some food, and sitting nibbling at it. Returns once it's done. */
+  private feeding(c: ShrineCreature, speed: number, gain: number) {
+    c.mood = 'nibbling';
+    const f = c.food;
+    if (!f || !this.foodLeft(f)) { c.food = null; c.state = 'roam'; c.timer = 20; return; }
+    const d = this.walkTo(c, f.x + (c.id & 1 ? 6 : -6), f.z + 3, speed);
+    if (d > 2.5) return;
+    this.setFacing(c, f.x - c.x);
+    this.halt(c);
+    if (this.tick % 14 === 0) { c.squash = 0.25; this.burst('crumb', f.x, f.z, 3, 1, 0.2, 0.3); }
+    if (--c.timer > 0) return;
+    if (this.takeFood(f)) {
+      c.energy = Math.min(1, c.energy + gain);
+      // A well-fed mouse has a litter, while there's room.
+      if (c.species === 'mouse' && c.energy > 0.75 && Math.random() < 0.3 && this.creatures.filter(o => o.species === 'mouse' && o.alive).length < this.populationCap('mouse') + 3) {
+        this.spawn('mouse', c.x, c.z, c);
+        this.births++;
+      }
+    }
+    c.food = null; c.state = 'roam'; c.timer = Math.floor(between(30, 90));
+    c.tx = c.x; c.tz = c.z;
+  }
+
+  private updateFood() {
+    if (this.tick % 30 === 0) {
+      for (const b of this.bushes) {
+        if (b.berries >= BUSH_BERRIES) continue;
+        b.regrow += 30;
+        if (b.regrow >= BERRY_REGROW) { b.regrow = 0; b.berries++; }
+      }
+    }
+    // Ripe persimmons let go now and then: more where someone might see.
+    if (this.tick % 150 === 0 && this.fruits.length < 24) {
+      const trees = this.props.filter(p => p.kind === 'persimmonTree');
+      if (trees.length) {
+        const near = trees.filter(p => p.z > this.viewZ.z0 - 30 && p.z < this.viewZ.z1 + 60);
+        const p = near.length && Math.random() < 0.7 ? pick(near) : pick(trees);
+        const x = p.x + between(-p.size, p.size), z = p.z + between(-3, 5);
+        if (!this.isWater(x, z)) this.fruits.push({ x, z, h: p.size * 2, vh: 0, life: 2400 });
+      }
+    }
+    for (let i = this.fruits.length - 1; i >= 0; i--) {
+      const f = this.fruits[i];
+      if (f.h > 0) {
+        f.vh -= 0.06;
+        f.h += f.vh;
+        if (f.h <= 0) { f.h = 0; this.burst('dust', f.x, f.z, 0, 1, 0.15, 0.2); }
+        continue;
+      }
+      if (--f.life <= 0) this.fruits.splice(i, 1);
+    }
+  }
+
+  // --- the wisteria walk --------------------------------------------------------------------
+
+  /** Roofs the straightest stretch of the approach (out in a gutter, for choice) with a pergola of hanging wisteria. */
+  private placeWisteria(r: () => number) {
+    const { w, h, pathX, pathHalf } = this;
+    const length = 96;
+    const score = (z0: number) => {
+      let out = 0;
+      for (let z = z0; z < z0 + length; z += 4) {
+        const half = pathHalf[z];
+        if (half > PATH_HALF * 1.35 || this.inZone(pathX[z], z, half + 8, 0)) return -1;
+        const i = z * w + Math.round(pathX[z]);
+        if (this.ground[i] !== GROUND.stone) return -1;
+        out += Math.abs(pathX[z] - w / 2);
+      }
+      return out;
+    };
+    const taken: number[] = [];
+    const wanted = h > 1100 ? 2 : 1;
+    for (let n = 0; n < wanted; n++) {
+      let best = -1, bestRow = -1;
+      for (let z0 = 10; z0 + length < h - 4; z0 += 12) {
+        if (taken.some(t => Math.abs(t - z0) < 500)) continue;
+        const s = score(z0);
+        if (s > best) { best = s; bestRow = z0; }
+      }
+      if (bestRow < 0) break;
+      taken.push(bestRow);
+      for (let z = bestRow; z < bestRow + length; z += 24) {
+        const half = pathHalf[z] + 5;
+        const x = pathX[z];
+        this.beams.push({ x, z, w: Math.round(half * 2) });
+        const count = Math.round((half * 2) / 3);
+        for (let k = 0; k < count; k++) {
+          // Long at the posts and short over the middle, like curtains drawn back; the very middle stays open.
+          const across = Math.abs((k + 0.5) / count - 0.5) * 2;
+          if (across < 0.22 && r() < 0.75) continue;
+          const len = Math.round(4 + across * across * 15 + r() * 5);
+          this.strands.push({ x: x - half + 1 + (k + 0.5) * ((half * 2 - 2) / count) + (r() - 0.5), z: z + r() * 3 - 1.5, len, seed: Math.floor(r() * 4), phase: r() * 6.28, bx: 0, bv: 0 });
+        }
+      }
+      // Clear away what the pergola takes the place of.
+      const inside = (z: number) => z > bestRow - 8 && z < bestRow + length + 8;
+      this.props = this.props.filter(p => !(p.kind === 'torii' && inside(p.z)));
+      this.festoons = this.festoons.filter(f => !inside(f.z));
+      this.lanterns = this.lanterns.filter(l => !(inside(l.z) && Math.abs(l.x - pathX[clamp(Math.round(l.z), 0, h - 1)]) < pathHalf[clamp(Math.round(l.z), 0, h - 1)] + 9));
+    }
+    this.beams.sort((a, b) => a.z - b.z);
+    this.strands.sort((a, b) => a.z - b.z);
+  }
+
+  /** Anything brushing through pushes the sprays apart; they swing back, shedding a petal or two. */
+  private updateWisteria() {
+    if (this.tick % 2) return;
+    const { z0, z1 } = this.viewZ;
+    const pushers: { x: number; z: number }[] = this.creatures.filter(c => c.alive && !c.hidden && c.h < 16 && c.z > z0 - 20 && c.z < z1 + 40 && Math.abs(c.vx) + Math.abs(c.vz) > 0.03 && c.species !== 'koi' && c.species !== 'bat');
+    if (this.parade) for (const m of this.parade.marchers) if (Math.abs(m.side) < 4) pushers.push(m);
+    for (const s of this.strands) {
+      if (s.z < z0 - 20 || s.z > z1 + 40) continue;
+      for (const p of pushers) {
+        const dx = s.x - p.x;
+        if (Math.abs(dx) < 8 && Math.abs(s.z - p.z) < 4) {
+          s.bv += (dx >= 0 ? 1 : -1) * 0.55;
+          if (Math.random() < 0.03) this.burst('petal', s.x, s.z, 24, 1, 0.1, 0);
+          break;
+        }
+      }
+      s.bv += -s.bx * 0.06;
+      s.bv *= 0.9;
+      s.bx = clamp(s.bx + s.bv, -8, 8);
+    }
+  }
+
   private thinkHitodama(c: ShrineCreature) {
     c.mood = 'drifting';
     c.h += (14 + Math.sin(this.tick * 0.03 + c.id) * 8 - c.h) * 0.04;
@@ -1943,7 +2359,8 @@ export class Shrine {
         case 'note': case 'heart': m.vx = Math.sin(this.tick * 0.1 + m.seed) * 0.08; m.vh = 0.14; break;
         case 'star': m.vh -= 0.03; break;
         case 'ember': m.vh = 0.05; m.vx += between(-0.02, 0.02); break;
-        case 'ring': break;
+        case 'ring': case 'dream': break;
+        case 'spore': m.vh = 0.1; m.vx += between(-0.015, 0.015); break;
         default:
           m.vh -= 0.07;
           if (m.h <= 0) { m.h = 0; m.vx = 0; m.vz = 0; m.vh = 0; }
@@ -2171,6 +2588,8 @@ export class Shrine {
       births: this.births, meals: this.meals,
       deaths: { ...this.deaths },
       fireflies: this.fireflies.length,
+      berries: this.bushes.reduce((n, b) => n + b.berries, 0),
+      berriesFull: this.bushes.length * BUSH_BERRIES,
       happening: this.happening ? { kind: this.happening.kind, progress: this.happening.t / this.happening.dur } : null,
       events: this.events.slice(0, 6),
     };
@@ -2204,6 +2623,22 @@ export class Shrine {
   }
 
   debugSpawn(kind: ShrineSpawnable, x: number, z: number) {
+    if (kind === 'bush') {
+      this.bushes.push({ x, z, kind: Math.floor(Math.random() * 3) as BushKind, berries: BUSH_BERRIES, regrow: 0, seed: Math.floor(Math.random() * 4) });
+      this.bushes.sort((a, b) => a.z - b.z);
+      return;
+    }
+    if (kind === 'dance') {
+      // Every fox nearby off to the nearest ring.
+      const ring = this.rings.length ? this.rings.reduce((b, q) => (Math.hypot(q.x - x, q.z - z) < Math.hypot(b.x - x, b.z - z) ? q : b)) : null;
+      if (!ring) return;
+      for (let k = 0; k < 3; k++) {
+        const c = this.spawn('kitsune', ring.x + between(-20, 20), ring.z + between(-8, 8));
+        c.ring = ring; c.state = 'toRing'; c.timer = 1400;
+      }
+      return;
+    }
+    if (kind === 'tsuchinoko') { const c = this.spawn(kind, x, z); this.rollIn(c); c.tx = this.pathArc[clamp(Math.round(z), 0, this.h - 1)]; return; }
     if (kind === 'teapot' || kind === 'lantern' || kind === 'statue') {
       const c = this.spawn(Math.random() < 0.5 ? 'tanuki' : 'kitsune', x, z);
       this.startDisguise(c, kind);
@@ -2244,6 +2679,11 @@ const siteBox = (kind: SiteKind, x: number, z: number, k: number) => {
     default: return null;
   }
 };
+
+/** How long (ticks) a bush takes to grow one berry back. */
+const BERRY_REGROW = 900;
+/** Whether a dancing fox has stopped to sit up and bark, for a stretch out of every so often. */
+export const isBarkTime = (c: { id: number }, tick: number) => (tick + c.id * 53) % 260 < 50;
 
 const DISGUISE_ROTATION: DisguiseKind[] = ['teapot', 'lantern', 'statue'];
 const OFFERING_NAME: Record<string, string> = { rice: 'rice balls', inari: 'inari sushi', sake: 'sake', mikan: 'mikan', fish: 'fish', cucumber: 'cucumber' };

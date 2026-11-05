@@ -46,6 +46,7 @@ const MOOD_LABEL: Record<ShrineMood, string> = {
   pouncing: 'Pouncing!', following: 'Following its parent', courting: 'Courting', sweeping: 'Sweeping the path', carrying: 'Bringing an offering', bowing: 'Bowing', shooing: 'Swatting a thief!',
   puzzled: 'Was that teapot always there?', grazing: 'Grazing the moss', perched: 'Perched, watching', flying: 'Flying', swooping: 'Swooping!', sitting: 'Sitting', swimming: 'Swimming',
   hopping: 'Hopping', drifting: 'Drifting', watching: 'Watching quietly', thieving: 'Stealing an offering', spilling: 'Spilling its dish of water',
+  sipping: 'Sipping a dream', rolling: 'Rolling down the path', dancing: 'Dancing in the ring', nibbling: 'Nibbling',
 };
 const DISGUISE_LABEL: Record<string, { name: string; kind: string; mood: string }> = {
   teapot: { name: 'A teapot', kind: 'Perfectly ordinary teapot', mood: 'Just being a teapot' },

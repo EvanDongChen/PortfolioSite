@@ -314,6 +314,8 @@ export const tailSprite = (rival: 'tanuki' | 'kitsune') =>
 
 // --- the rest of the forest's animals ---------------------------------------
 
+const TSUCHI_COLOURS: Record<string, Rgb> = { a: [204, 172, 108], B: [128, 94, 62], c: [232, 214, 170], E: [20, 16, 18], N: [86, 60, 44], t: [150, 116, 76] };
+
 const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> = (() => {
   const DEER: Record<string, Rgb> = { a: [196, 148, 104], B: [158, 112, 76], b: [116, 80, 62], W: [244, 234, 214], s: [244, 236, 220], D: [78, 56, 52], E: [16, 14, 18], N: [30, 24, 28], A: [214, 196, 158] };
   const HARE: Record<string, Rgb> = { a: [226, 226, 234], B: [188, 192, 208], b: [144, 150, 176], P: [238, 158, 176], E: [226, 58, 72] };
@@ -326,6 +328,8 @@ const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> 
   const KODAMA: Record<string, Rgb> = { a: [242, 248, 240], B: [206, 222, 214], b: [160, 184, 186], E: [28, 40, 48] };
   const KASA: Record<string, Rgb> = { R: [212, 66, 76], r: [160, 44, 72], P: [236, 214, 164], p: [196, 168, 124], S: [108, 76, 56], W: [252, 244, 228], E: [18, 14, 18], T: [244, 110, 130], F: [226, 190, 150] };
   const CHOCHIN: Record<string, Rgb> = { p: [255, 226, 150], P: [250, 190, 92], q: [224, 136, 66], K: [52, 36, 44], E: [24, 14, 20], T: [232, 66, 84], W: [255, 248, 224] };
+  const BAKU: Record<string, Rgb> = { a: [176, 160, 206], B: [122, 110, 160], b: [82, 74, 118], W: [226, 220, 240], E: [255, 240, 190], t: [70, 62, 96], K: [48, 42, 70] };
+  const TSUCHI: Record<string, Rgb> = TSUCHI_COLOURS;
   const HAHAKI: Record<string, Rgb> = { B: [150, 112, 72], L: [196, 156, 104], R: [214, 58, 52], r: [158, 38, 46], a: [236, 210, 128], b: [204, 172, 92], d: [150, 120, 66], E: [34, 24, 30], W: [255, 250, 230] };
   return {
     deer: { rows: [
@@ -569,6 +573,59 @@ const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> 
       '..qPPPPPq..',
       '...KKKKK...',
     ], colours: CHOCHIN },
+    // A dream-eater: a tapir's bulk and an elephant's trunk, in dusk lilac with pale star-marks.
+    baku: { rows: [
+      '...............a.aa.....',
+      '...........aaaaBaBBa....',
+      '.......aaaaBBBBBBBBBa...',
+      '.t..aaaBBBBBBBBBBBEBBa..',
+      't..aBBBBBBBWWBBBBBBBBBaa',
+      't.aBBWWBBBBBWWWBBBBBbBBa',
+      '.tBBWWWBBBBBBBBBBBbbb.Ba',
+      '..BBBBBBBBBBBBBBBbb...Ba',
+      '..bBBBBbbbbbbbBBBb.....a',
+      '..bBB.bb....bb.BBb......',
+      '..bBB.bb....bb.BBb......',
+      '..KKK.KK....KK.KKK......',
+    ], colours: BAKU },
+    bakuWalk: { rows: [
+      '...............a.aa.....',
+      '...........aaaaBaBBa....',
+      '.......aaaaBBBBBBBBBa...',
+      '.t..aaaBBBBBBBBBBBEBBa..',
+      't..aBBBBBBBWWBBBBBBBBBaa',
+      't.aBBWWBBBBBWWWBBBBBbBBa',
+      '.tBBWWWBBBBBBBBBBBbbb.Ba',
+      '..BBBBBBBBBBBBBBBbb...Ba',
+      '..bBBBBbbbbbbbBBBb.....a',
+      '.bBB...bb..bb...BBb.....',
+      '.bBB...bb..bb...BBb.....',
+      '.KKK...KK..KK...KKK.....',
+    ], colours: BAKU },
+    // Trunk raised, drinking the air.
+    bakuSip: { rows: [
+      '..............a.aa....aa',
+      '..........aaaaBaBBa..aBa',
+      '......aaaaBBBBBBBBBaaBa.',
+      '.t.aaaBBBBBBBBBBBEBBBBa.',
+      't.aBBBBBBBWWBBBBBBBBa...',
+      't.BBWWBBBBBBWWWBBBBb....',
+      '.tBBWWWBBBBBBBBBBBb.....',
+      '..BBBBBBBBBBBBBBBb......',
+      '..bBBBBbbbbbbbBBBb......',
+      '..bBB.bb....bb.BBb......',
+      '..bBB.bb....bb.BBb......',
+      '..KKK.KK....KK.KKK......',
+    ], colours: BAKU },
+    // At rest, for a moment: a fat body with a thin tail and a blunt head.
+    tsuchinokoRest: { rows: [
+      '.........aaaa...',
+      '......aaaBBaEa..',
+      '...aaaBaBBaBBaN.',
+      '.aaBBaBBaBBaBc..',
+      'tBBaBBaBBccccc..',
+      'tt.ccccccc......',
+    ], colours: TSUCHI },
     // A broom come to life: a bamboo handle, a red cord, a skirt of straw with two eyes in it.
     hahaki: { rows: [
       '....LB....',
@@ -628,7 +685,7 @@ const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> 
     ], colours: HAHAKI },
   };
 })();
-export type AnimalKind = 'deer' | 'deerWalk' | 'deerBow' | 'hare' | 'hareHop' | 'mouse' | 'mouse2' | 'owl' | 'owlFly0' | 'owlFly1' | 'bat0' | 'bat1' | 'crow' | 'crowFly0' | 'crowFly1' | 'frog' | 'frogLeap' | 'kappa' | 'kappaWalk' | 'kappaBow' | 'kodama' | 'kodama1' | 'kasa' | 'kasaHop' | 'chochin' | 'hahaki' | 'hahakiStep' | 'hahakiLean';
+export type AnimalKind = 'deer' | 'deerWalk' | 'deerBow' | 'hare' | 'hareHop' | 'mouse' | 'mouse2' | 'owl' | 'owlFly0' | 'owlFly1' | 'bat0' | 'bat1' | 'crow' | 'crowFly0' | 'crowFly1' | 'frog' | 'frogLeap' | 'kappa' | 'kappaWalk' | 'kappaBow' | 'kodama' | 'kodama1' | 'kasa' | 'kasaHop' | 'chochin' | 'hahaki' | 'hahakiStep' | 'hahakiLean' | 'baku' | 'bakuWalk' | 'bakuSip' | 'tsuchinokoRest';
 export const animalSprite = (kind: AnimalKind) => cached(`shrine-animal-${kind}`, () => fromRows(ANIMALS[kind].rows, ANIMALS[kind].colours));
 
 /** Koi seen from above through the water: kohaku, showa, ogon, shiro, in two tail swings. */
@@ -832,25 +889,46 @@ export const paradeSprite = (kind: ParadeKind, frame: number) =>
     return fromRows(a.rows, a.colours);
   });
 
-/** The great white fox of the parade, with nine tails spread in a fan behind it. */
+/**
+ * The great white fox of the parade: nine separate plumes fanned out behind
+ * it, each fat in the middle and fine at the root, tipped with blue foxfire,
+ * swaying a little out of step with one another over four frames.
+ */
 const nineTails = (frame: number) => {
   const base = kitsuneSprite(frame & 1 ? 'walk' : 'stand', 2);
-  const w = base.width + 26, h = base.height + 22;
+  const margin = 34;
+  const w = base.width + margin - 6, h = base.height + margin;
   const c = makeCanvas(w, h);
   const ctx = c.getContext('2d')!;
   ctx.imageSmoothingEnabled = false;
-  const hipX = 30, hipY = h - 8;
-  for (let k = 0; k < 9; k++) {
-    const a = Math.PI * (0.42 + (k / 8) * 0.68) + Math.sin(frame * 0.8 + k) * 0.02;
-    const len = 22 + (k & 1) * 4;
-    for (let s = 0; s < len; s++) {
+  const hipX = margin + 3, hipY = h - 8;
+  const WHITE: Rgb[] = [[252, 252, 250], [214, 220, 236], [160, 172, 206]];
+  const FIRE: Rgb[] = [[150, 214, 255], [226, 246, 255], [90, 160, 240]];
+  const phase = ((frame % 4) / 4) * Math.PI * 2;
+  // From the outermost in, so the middle plumes lie on top.
+  const order = [0, 8, 1, 7, 2, 6, 3, 5, 4];
+  for (const k of order) {
+    const spread = (k - 4) / 4;
+    const a = Math.PI * (0.72 + spread * 0.36) + Math.sin(phase + k * 0.9) * 0.05;
+    const len = 27 - Math.abs(spread) * 5;
+    const curl = spread * 0.34 + Math.sin(phase + k * 1.4) * 0.05;
+    for (let s = 0; s <= len; s += 0.5) {
       const t = s / len;
-      const r = Math.round(0.5 + Math.sin(t * Math.PI) * 1);
-      const x = Math.round(hipX + Math.cos(a) * s * 1.1), y = Math.round(hipY - Math.sin(a) * s);
-      box(ctx, x - r, y - r, r * 2, r * 2, t > 0.84 ? [150, 210, 255] : k & 1 ? [206, 212, 232] : [248, 248, 252]);
+      const ang = a + curl * t * t;
+      const x = hipX + Math.cos(ang) * s, y = hipY - Math.sin(ang) * s;
+      const r = 0.5 + Math.sin(Math.pow(t, 0.8) * Math.PI) * 1.75;
+      const set = t > 0.82 ? FIRE : WHITE;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          if (dx * dx + dy * dy > r * r) continue;
+          // Lit along the top of the plume, its own shade beneath.
+          const tone = dy > 0.5 ? 2 : dy > -0.5 ? 1 : 0;
+          put(ctx, Math.round(x + dx), Math.round(y + dy), t > 0.82 ? set[tone === 2 ? 2 : tone === 0 ? 1 : 0] : set[tone]);
+        }
+      }
     }
   }
-  ctx.drawImage(base, 26, 20);
+  ctx.drawImage(base, margin - 6, h - base.height);
   return c;
 };
 
@@ -1145,6 +1223,175 @@ const OFFERINGS: Record<string, { rows: string[]; colours: Record<string, Rgb> }
 export type OfferingKind = keyof typeof OFFERINGS;
 export const OFFERING_KINDS = Object.keys(OFFERINGS) as OfferingKind[];
 export const offeringSprite = (kind: OfferingKind) => cached(`offering-${kind}`, () => fromRows(OFFERINGS[kind].rows, OFFERINGS[kind].colours));
+
+/** A tsuchinoko bowling along, curled tight with its tail in its mouth: a fat coil with a blunt head, not a ring. */
+export const tsuchinokoSprite = (frame: number) =>
+  cached(`tsuchinoko-${frame % 8}`, () => {
+    const size = 15;
+    const c = makeCanvas(size, size);
+    const ctx = c.getContext('2d')!;
+    const cx = size / 2, cy = size / 2;
+    const spin = ((frame % 8) / 8) * Math.PI * 2;
+    const C = TSUCHI_COLOURS;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+        const d = Math.hypot(dx, dy);
+        if (d > 5.6) continue;
+        const a = Math.atan2(dy, dx) - spin;
+        // A spiral seam where the coil lies against itself, and its belly showing in the middle.
+        const seam = Math.sin(a * 2 + d * 1.5);
+        const band = Math.sin(a * 4 + d);
+        put(ctx, x, y, d < 1.6 ? C.c : seam > 0.82 ? C.N : band > 0.5 ? C.B : dx + dy < -1 ? C.a : C.t);
+      }
+    }
+    // The head on the outside, biting down on the tail as it comes round.
+    const hx = Math.round(cx + Math.cos(spin) * 5.2 - 1.5), hy = Math.round(cy + Math.sin(spin) * 5.2 - 1.5);
+    box(ctx, hx, hy, 4, 3, C.a);
+    box(ctx, hx, hy + 2, 4, 1, C.B);
+    put(ctx, hx + 1, hy + 1, C.E);
+    put(ctx, hx + 3, hy + 2, C.N);
+    return c;
+  });
+
+/** A berry bush: a low dark mound with its fruit on the side that shows, as many as are left. */
+export const berryBushSprite = (seed: number, kind: number, berries: number) =>
+  cached(`berry-bush-${seed % 4}-${kind}-${berries}`, () => {
+    const rnd = seededRandom((seed % 4) * 23 + 5);
+    const w = 18, h = 12;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const LEAF: Rgb[] = [[18, 60, 56], [30, 88, 70], [50, 120, 84]];
+    for (let y = 1; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const dx = (x + 0.5 - w / 2) / (w / 2), dy = (y + 0.5 - h) / (h - 1);
+        if (dx * dx + dy * dy > 1 - rnd() * 0.1) continue;
+        const light = -dx * 0.4 - dy * 0.8 - 0.1 + (rnd() - 0.5) * 0.25;
+        put(ctx, x, y, LEAF[light > 0.42 ? 2 : light > 0.02 ? 1 : 0]);
+      }
+    }
+    const SETS: Rgb[][] = [[[236, 50, 60], [255, 150, 130]], [[70, 92, 214], [160, 184, 255]], [[204, 86, 214], [244, 170, 246]]];
+    const set = SETS[kind % SETS.length];
+    const spots = [[4, 6], [9, 3], [13, 6], [7, 8], [11, 9], [3, 9]];
+    for (let k = 0; k < berries && k < spots.length; k++) {
+      const [x, y] = spots[k];
+      box(ctx, x, y, 2, 2, set[0]);
+      put(ctx, x, y, set[1]);
+    }
+    return c;
+  });
+
+/** A persimmon tree: dark sparse leaves and a scatter of bright fruit. */
+export const persimmonTreeSprite = (seed: number, r: number) =>
+  cached(`persimmon-tree-${seed}-${r}`, () => {
+    const rnd = seededRandom(seed * 37 + r);
+    const trunkH = Math.round(r * 1.1);
+    const w = r * 2 + 8, h = Math.round(r * 1.5) + trunkH + 2;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    const cx = w / 2;
+    const lean = rnd() < 0.5 ? -1 : 1;
+    for (let y = h - 1; y > h - trunkH - 6; y--) {
+      const x = Math.round(cx + lean * Math.sin(((h - y) / trunkH) * 2) * 2);
+      box(ctx, x - 2, y, 4, 1, [58, 42, 48]);
+      box(ctx, x - 2, y, 1, 1, [96, 70, 62]);
+    }
+    const set: Rgb[] = [[20, 58, 50], [32, 82, 58], [52, 108, 66], [80, 136, 74]];
+    const lumps: { x: number; y: number; r: number }[] = [{ x: cx, y: r * 0.6, r: r * 0.55 }];
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + rnd();
+      lumps.push({ x: cx + Math.cos(a) * r * 0.6, y: r * 0.7 + Math.sin(a) * r * 0.32, r: r * (0.3 + rnd() * 0.14) });
+    }
+    lumps.sort((a, b) => a.y - b.y);
+    for (const l of lumps) {
+      for (let y = Math.floor(l.y - l.r); y <= l.y + l.r; y++) {
+        for (let x = Math.floor(l.x - l.r); x <= l.x + l.r; x++) {
+          const dx = (x + 0.5 - l.x) / l.r, dy = (y + 0.5 - l.y) / (l.r * 0.82);
+          if (dx * dx + dy * dy > 1 + (rnd() - 0.5) * 0.3) continue;
+          const light = 0.5 - dx * 0.3 - dy * 0.5 + (rnd() - 0.5) * 0.3;
+          put(ctx, x, y, set[Math.max(0, Math.min(3, Math.floor(light * 3.6)))]);
+        }
+      }
+    }
+    for (let k = 0; k < r; k++) {
+      const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * r * 0.85;
+      const x = Math.round(cx + Math.cos(a) * d), y = Math.round(r * 0.7 + Math.sin(a) * d * 0.55);
+      box(ctx, x, y, 2, 2, [244, 130, 40]);
+      put(ctx, x, y, [255, 196, 110]);
+    }
+    return c;
+  });
+
+/** One hanging spray of wisteria: broad and pale at the top, tapering to a deep violet tip. */
+export const wisteriaSprite = (seed: number, len: number) =>
+  cached(`wisteria-${seed % 4}-${len}`, () => {
+    const rnd = seededRandom((seed % 4) * 41 + len);
+    const w = 7;
+    const c = makeCanvas(w, len);
+    const ctx = c.getContext('2d')!;
+    const SET: Rgb[] = [[214, 190, 248], [176, 140, 234], [134, 98, 206], [96, 66, 170]];
+    for (let y = 0; y < len; y++) {
+      const t = y / (len - 1);
+      const half = (1 - t) * 3 + 0.5;
+      for (let x = 0; x < w; x++) {
+        const dx = x + 0.5 - w / 2;
+        if (Math.abs(dx) > half) continue;
+        // Separate little blossoms, not a solid tongue.
+        if ((x + y * 2 + seed) % 4 === 0 && t < 0.92) continue;
+        const tone = Math.min(3, Math.floor(t * 3.4 + (dx > 0 ? 0.6 : 0) + (rnd() - 0.5) * 0.5));
+        put(ctx, x, y, SET[Math.max(0, tone)]);
+      }
+    }
+    return c;
+  });
+
+/** A cross-beam of the wisteria pergola: two dark posts, a beam across, and leaves bunched along the top. */
+export const pergolaSprite = (w: number) =>
+  cached(`pergola-${w}`, () => {
+    const h = 28;
+    const c = makeCanvas(w, h);
+    const ctx = c.getContext('2d')!;
+    for (const x of [1, w - 4]) {
+      box(ctx, x, 5, 3, h - 5, [62, 46, 50]);
+      box(ctx, x, 5, 1, h - 5, [100, 76, 66]);
+      box(ctx, x - 1, h - 2, 5, 2, [84, 90, 108]);
+    }
+    box(ctx, 0, 4, w, 2, [84, 62, 56]);
+    box(ctx, 0, 4, w, 1, [118, 90, 74]);
+    const rnd = seededRandom(w * 7 + 3);
+    const LEAF: Rgb[] = [[28, 78, 62], [46, 110, 74], [76, 144, 84]];
+    for (let x = 0; x < w; x++) {
+      const up = 2 + Math.floor(rnd() * 3);
+      for (let y = 4 - up; y < 5; y++) if (y >= 0) put(ctx, x, y, LEAF[y < 2 ? 2 : rnd() < 0.5 ? 1 : 0]);
+    }
+    return c;
+  });
+
+const RIMS = new WeakMap<HTMLCanvasElement, HTMLCanvasElement[]>();
+/**
+ * The warm edge a sprite catches on the side a lantern is: its outermost
+ * pixels on that side in one colour, so it can be laid straight over the sprite.
+ */
+export const rimSprite = (img: HTMLCanvasElement, side: 1 | -1, ghost: boolean) => {
+  let set = RIMS.get(img);
+  if (!set) { set = []; RIMS.set(img, set); }
+  const slot = (side > 0 ? 1 : 0) + (ghost ? 2 : 0);
+  if (set[slot]) return set[slot];
+  const w = img.width, h = img.height;
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d')!;
+  const data = img.getContext('2d')!.getImageData(0, 0, w, h).data;
+  const solid = (x: number, y: number) => x >= 0 && x < w && y >= 0 && y < h && data[(y * w + x) * 4 + 3] > 40;
+  ctx.fillStyle = ghost ? 'rgb(150,214,255)' : 'rgb(255,196,112)';
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      // Its edge on that side, and along the top where the light falls across it.
+      if (solid(x, y) && (!solid(x + side, y) || (!solid(x, y - 1) && !solid(x + side, y - 1)))) ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  set[slot] = c;
+  return c;
+};
 
 /** A pale stone rock in the moss or the raked gravel, with a cap of moss. */
 export const rockSprite = (seed: number, r: number) =>
@@ -1540,6 +1787,10 @@ export const fallingLeafSprite = (kind: number, frame: number) =>
     return fromRows(frame % 2 ? ['.a.', 'aaa', '.a.'] : ['a.', '.a'], { a: col });
   });
 export const fireflySprite = () => cached('shrine-firefly', () => fromRows(['..a..', '.bcb.', 'acdca', '.bcb.', '..a..'], { a: [44, 62, 20], b: [78, 106, 32], c: [170, 210, 72], d: [246, 255, 176] }));
+export const dreamSprite = (frame: number) =>
+  cached(`shrine-dream-${frame % 2}`, () => fromRows(frame % 2 ? ['.ab.', 'abca', '.bab', '..a.'] : ['..a.', '.bab', 'acba', '.ba.'], { a: [214, 110, 180], b: [250, 158, 214], c: [255, 226, 244] }));
+export const sporeSprite = () => cached('shrine-spore', () => fromRows(['.a.', 'aba', '.a.'], { a: [70, 170, 160], b: [190, 255, 236] }));
+export const petalSprite = () => cached('shrine-petal', () => fromRows(['ab'], { a: [196, 160, 240], b: [150, 110, 214] }));
 export const crumbSprite = () => cached('shrine-crumb', () => fromRows(['a'], { a: [244, 236, 214] }));
 export const bloodSprite = () => cached('shrine-blood', () => fromRows(['r'], { r: [200, 40, 50] }));
 export const tuftSprite = () => cached('shrine-tuft', () => fromRows(['a'], { a: [214, 196, 170] }));
@@ -1646,6 +1897,8 @@ export const shrineIcon = (kind: string): HTMLCanvasElement => {
     case 'hitodama': return hitodamaSprite(0);
     case 'kasa': return animalSprite('kasa');
     case 'chochin': return animalSprite('chochin');
+    case 'baku': return animalSprite('baku');
+    case 'tsuchinoko': return tsuchinokoSprite(0);
     default: return animalSprite('hare');
   }
 };
