@@ -265,12 +265,15 @@ export class ShrineView {
           else if (step === F.moss.length - 1 && speck > 0.94) c = glow;
           if (v < -1.2 && bayer < 0.5) c = shade;
         } else if (g === GROUND.stone) {
-          // Long flagstones in staggered rows, moss in the joints.
-          const row = Math.floor(z / 5);
-          const cx = pathX[Math.min(shrine.h - 1, z)];
-          const off = x - cx + 40 + (row & 1) * 3;
+          // Flagstones in staggered courses laid along the path, whichever way it runs, moss in the joints.
+          const cx = pathX[z];
+          const m = (pathX[Math.min(shrine.h - 1, z + 3)] - pathX[Math.max(0, z - 3)]) / 6;
+          const len = Math.sqrt(1 + m * m);
+          const along = shrine.pathArc[z] + ((x - cx) * m) / len;
+          const row = Math.floor(along / 5);
+          const off = (x - cx) / len + 300 + (row & 1) * 3;
           const col = Math.floor(off / 6);
-          const seam = z % 5 === 0 || Math.floor(off) % 6 === 0;
+          const seam = along - row * 5 < 1 || off - col * 6 < 1;
           const tone = stones[Math.floor(hash(row * 31 + col * 7) * stones.length)];
           c = seam ? (hash(i) < 0.45 ? joint : stones[2]) : tone;
         } else if (g === GROUND.gravel) {

@@ -185,6 +185,8 @@ export class Shrine {
   terrain = new Uint8Array(0);
   /** Each row's x along the approach. */
   pathX = new Float32Array(0);
+  /** How far the path reaches either side of pathX on each row: wider where it runs sideways, so it keeps its width. */
+  pathHalf = new Float32Array(0);
   /** How far along the path each row is, counting its bends. */
   pathArc = new Float32Array(0);
   props: Prop[] = [];
@@ -317,9 +319,12 @@ export class Shrine {
         if (box) this.bendPath(box.x0, box.x1, box.z0, box.z1, s.x < w / 2 ? 1 : -1);
       }
     }
+    for (let row = 0; row < h; row++) this.pathX[row] = clamp(this.pathX[row], PATH_HALF + 2, w - PATH_HALF - 3);
+    this.pathHalf = new Float32Array(h);
     for (let row = 0; row < h; row++) {
-      this.pathX[row] = clamp(this.pathX[row], PATH_HALF + 2, w - PATH_HALF - 3);
-      const half = PATH_HALF + Math.sin(row * 0.04) * 1;
+      const slope = (this.pathX[Math.min(h - 1, row + 3)] - this.pathX[Math.max(0, row - 3)]) / 6;
+      const half = (PATH_HALF + Math.sin(row * 0.04) * 1) * Math.sqrt(1 + slope * slope) * (1 + 0.3 * Math.min(1, Math.abs(slope)));
+      this.pathHalf[row] = half;
       for (let x = Math.max(0, Math.floor(this.pathX[row] - half)); x < Math.min(w, this.pathX[row] + half); x++) this.ground[row * w + x] = GROUND.stone;
     }
     this.pathArc = new Float32Array(h);
@@ -328,9 +333,9 @@ export class Shrine {
 
     // Lanterns line the approach, a torii every so far, and a festoon for the festival.
     for (let row = 20, k = 0; row < h - 4; row += 34, k++) {
-      const x = this.pathX[row] + (k & 1 ? 1 : -1) * (PATH_HALF + 5);
+      const x = this.pathX[row] + (k & 1 ? 1 : -1) * (this.pathHalf[row] + 5);
       if (!this.inZone(x, row, 4, 6)) this.lanterns.push({ x, z: row, phase: r() * 100, mossy: r() < 0.4 ? 1 : 0 });
-      if (k % 3 === 1) {
+      if (k % 3 === 1 && this.pathHalf[row] < PATH_HALF * 1.4) {
         const c = this.pathX[row];
         this.festoons.push({ x0: c - PATH_HALF - 8, x1: c + PATH_HALF + 8, z: row, seed: Math.floor(r() * 1000) });
       }
@@ -342,7 +347,7 @@ export class Shrine {
       this.lanterns.push({ x, z: row, phase: r() * 100, mossy: r() < 0.5 ? 1 : 0 });
     }
     for (let row = 70; row < h - 10; row += 210 + Math.floor(r() * 90)) {
-      if (this.inZone(this.pathX[row], row, 25, 40)) continue;
+      if (this.inZone(this.pathX[row], row, 25, 40) || this.pathHalf[row] > PATH_HALF * 1.4) continue;
       this.props.push({ kind: 'torii', x: this.pathX[row], z: row, size: 40, seed: 1, flip: false });
     }
 
@@ -640,7 +645,7 @@ export class Shrine {
       const size = 15 + Math.floor(r() * r() * 26);
       const tall = size * 3.6;
       if (this.inZone(x, z, size, tall, 8)) continue;
-      if (Math.abs(x - this.pathX[clamp(Math.round(z), 0, h - 1)]) < PATH_HALF + 8) continue;
+      if (Math.abs(x - this.pathX[clamp(Math.round(z), 0, h - 1)]) < this.pathHalf[clamp(Math.round(z), 0, h - 1)] + 8) continue;
       if (nearSite(x, z, 1.35) || onGround(x, z) !== GROUND.moss) continue;
       // Nor standing in front of a building or the water, hiding it with its crown.
       if (this.sites.some(q => Math.abs(x - q.x) < q.rx + size && z > q.z && z - tall < q.z + q.rz)) continue;
@@ -650,7 +655,7 @@ export class Shrine {
     for (let k = 0; k < area / 70000; k++) {
       const x = r() * w, z = r() * h;
       if (this.inZone(x, z, 16, 30, 6) || nearSite(x, z, 1) || onGround(x, z) !== GROUND.moss) continue;
-      if (Math.abs(x - this.pathX[clamp(Math.round(z), 0, h - 1)]) < PATH_HALF + 10) continue;
+      if (Math.abs(x - this.pathX[clamp(Math.round(z), 0, h - 1)]) < this.pathHalf[clamp(Math.round(z), 0, h - 1)] + 10) continue;
       this.addProp(r() < 0.25 ? 'goldMaple' : 'maple', x, z, 12 + Math.floor(r() * 7), r);
     }
     // Ferns, grasses, mushrooms and the odd flower underfoot, in drifts.
@@ -1031,7 +1036,7 @@ export class Shrine {
   private paradeNear(c: ShrineCreature) {
     const p = this.parade;
     if (!p || c.z > p.headRow + 60 || c.z < p.tailRow - 10) return false;
-    return Math.abs(c.x - this.pathAt(c.z)) < 30;
+    return Math.abs(c.x - this.pathAt(c.z)) < this.pathHalf[clamp(Math.round(c.z), 0, this.h - 1)] + 23;
   }
 
   /** Thinks a creature's thought for this tick. */
@@ -2075,7 +2080,8 @@ export class Shrine {
     // Everyone follows the path's bends, turning as it turns.
     for (const m of p.marchers) {
       m.z = this.rowAlong(p.head - m.back);
-      m.x = this.pathAt(m.z) + m.side;
+      const row = clamp(Math.round(m.z), 0, this.h - 1);
+      m.x = this.pathX[row] + m.side * (this.pathHalf[row] / PATH_HALF);
       const slope = this.pathAt(m.z + 8) - this.pathAt(m.z - 8);
       if (Math.abs(slope) > 1.5) m.facing = slope > 0 ? 1 : -1;
     }
@@ -2088,7 +2094,7 @@ export class Shrine {
       for (const c of this.creatures) {
         if (!c.alive || c.h > 20 || c.z > p.headRow + 40 || c.z < p.tailRow) continue;
         const px = this.pathAt(c.z);
-        if (Math.abs(c.x - px) > 24) continue;
+        if (Math.abs(c.x - px) > this.pathHalf[clamp(Math.round(c.z), 0, this.h - 1)] + 17) continue;
         if (c.species === 'mouse' || c.species === 'hare') this.flee(c, { x: px, z: c.z }, 60);
         else if ((c.species === 'hahaki' || c.species === 'deer') && c.state !== 'bow') { c.state = 'bow'; c.timer = 140; }
       }
