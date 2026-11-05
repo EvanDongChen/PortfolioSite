@@ -1,4 +1,6 @@
 import React, { createContext, useState, useContext, useCallback, useLayoutEffect, ReactNode } from 'react';
+import { loadAquarium, loadPond, loadShrine } from '../lib/pageLoaders';
+import { movePage } from '../lib/pageTransition';
 
 type Theme = 'underwater' | 'deepsea';
 /** The four pages: the aquarium, the pixel reef, the pixel pond and the shrine forest. */
@@ -16,15 +18,26 @@ interface ThemeContextType {
   isPondMode: boolean;
   /** The shrine forest replaces whichever page was showing while on. */
   isShrineMode: boolean;
-  /** Which page is showing, and switching to another (see ThemeDial). */
+  /** Which page is showing, and switching to another; the transition ripples out from `origin` if given. */
   page: Page;
-  setPage: (page: Page) => void;
+  setPage: (page: Page, origin?: { x: number; y: number }) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 // Switching pages remounts the content, so remember where the reader was.
 let pendingScrollY: number | null = null;
+
+/** The page's code and its lettering, fetched while the transition is covering the screen. */
+const preparePage = async (page: Page) => {
+  if (page === 'pond') {
+    await loadPond();
+    await Promise.all([document.fonts?.load("16px 'Pond Display'"), document.fonts?.load("16px 'Pond Label'")]);
+  } else if (page === 'shrine') {
+    await loadShrine();
+    await Promise.all([document.fonts?.load("16px 'Shrine Display'"), document.fonts?.load("16px 'Shrine Label'")]);
+  } else if (page === 'aquarium') await loadAquarium();
+};
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>('underwater');
@@ -40,11 +53,15 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const page: Page = isShrineMode ? 'shrine' : isPondMode ? 'pond' : isPixelMode ? 'reef' : 'aquarium';
 
-  const setPage = useCallback((next: Page) => {
-    pendingScrollY = window.scrollY;
-    setIsPondMode(next === 'pond');
-    setIsShrineMode(next === 'shrine');
-    if (next === 'reef' || next === 'aquarium') setIsPixelMode(next === 'reef');
+  const setPage = useCallback((next: Page, origin?: { x: number; y: number }) => {
+    const swap = () => {
+      pendingScrollY = window.scrollY;
+      setIsPondMode(next === 'pond');
+      setIsShrineMode(next === 'shrine');
+      if (next === 'reef' || next === 'aquarium') setIsPixelMode(next === 'reef');
+    };
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { swap(); return; }
+    movePage({ to: next, origin, prepare: () => preparePage(next), swap });
   }, []);
 
   return (
@@ -53,9 +70,6 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     </ThemeContext.Provider>
   );
 };
-
-/** True while a page is mounting because the reader switched to it (not on first load). */
-export const isSwitchingPages = () => pendingScrollY !== null;
 
 /** Call once in each page so the reader lands where they were before a switch. */
 export const useRestoreScrollAfterSwitch = () => {

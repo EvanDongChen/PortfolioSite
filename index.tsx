@@ -3,13 +3,14 @@ import ReactDOM from 'react-dom/client';
 import PixelApp from './PixelApp';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { PerformanceProvider } from './contexts/PerformanceContext';
+import { loadAquarium, loadPond, loadShrine } from './lib/pageLoaders';
 import './index.css';
 
 // The pixel reef is the default page; the aquarium, the pond and the shrine are fetched
 // only when someone switches to them.
-const App = lazy(() => import('./App'));
-const PondApp = lazy(() => import('./PondApp'));
-const ShrineApp = lazy(() => import('./ShrineApp'));
+const App = lazy(loadAquarium);
+const PondApp = lazy(loadPond);
+const ShrineApp = lazy(loadShrine);
 
 const Page: React.FC = () => {
   const { isPixelMode, isPondMode, isShrineMode } = useTheme();

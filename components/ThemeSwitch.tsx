@@ -46,9 +46,11 @@ const ThemeSwitch: React.FC = () => {
   const pick = (to: Page) => {
     if (to === picked) return;
     setPicked(to);
-    // Let the thumb land before the page goes.
+    // Let the thumb start on its way, then the page's transition ripples out from this stop.
+    const box = stops.current[PAGES.findIndex(p => p.page === to)]?.getBoundingClientRect();
+    const origin = box ? { x: box.left + box.width / 2, y: box.top + box.height / 2 } : undefined;
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    timer.current = window.setTimeout(() => setPage(to), reduced ? 0 : 420);
+    timer.current = window.setTimeout(() => setPage(to, origin), reduced ? 0 : 140);
   };
 
   const onKeyDown = (e: React.KeyboardEvent, k: number) => {

@@ -5,13 +5,13 @@ import BackToTopButton from './components/BackToTopButton';
 import ThemeSwitch from './components/ThemeSwitch';
 import PerformanceButton from './components/PerformanceButton';
 import PerformancePanel from './components/PerformancePanel';
-import PixelTransition from './components/PixelTransition';
 import DiveCard from './components/DiveCard';
 import PondCensus from './components/PondCensus';
 import { PondStats } from './lib/pond';
 import { POND_COLORS } from './lib/themeColors';
 import { filterProjects, experiences, education, skills } from './data/portfolio';
-import { isSwitchingPages, useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
+import { useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
+import { markPageReady } from './lib/pageTransition';
 import './pixel-theme.css';
 import './pond-theme.css';
 
@@ -39,10 +39,12 @@ const PondApp: React.FC = () => {
       root.removeAttribute('data-blink-off');
     };
   }, []);
-  const [isSwitchIn] = useState(isSwitchingPages);
   const [searchTerm, setSearchTerm] = useState('');
   const [isPerformancePanelOpen, setIsPerformancePanelOpen] = useState(false);
   const [stats, setStats] = useState<PondStats | null>(null);
+  // The world's first report means it's there to be seen: the page transition can uncover it.
+  const worldUp = stats !== null;
+  useEffect(() => { if (worldUp) markPageReady(); }, [worldUp]);
 
   const filteredProjects = useMemo(() => filterProjects(searchTerm), [searchTerm]);
   const togglePerformancePanel = useCallback(() => setIsPerformancePanelOpen(open => !open), []);
@@ -68,7 +70,6 @@ const PondApp: React.FC = () => {
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
       <ThemeSwitch />
       <PondCensus stats={stats} />
-      {isSwitchIn && <PixelTransition ink="#0b1a14" edge="#173226" />}
     </div>
   );
 };

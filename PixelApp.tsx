@@ -6,13 +6,13 @@ import BackToTopButton from './components/BackToTopButton';
 import ThemeSwitch from './components/ThemeSwitch';
 import PerformanceButton from './components/PerformanceButton';
 import PerformancePanel from './components/PerformancePanel';
-import PixelTransition from './components/PixelTransition';
 import DiveGauge from './components/DiveGauge';
 import DiveCard from './components/DiveCard';
 import { OceanStats } from './lib/pixelOcean';
 import { PIXEL_COLORS } from './lib/themeColors';
 import { filterProjects, experiences, education, skills } from './data/portfolio';
-import { isSwitchingPages, useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
+import { useRestoreScrollAfterSwitch } from './contexts/ThemeContext';
+import { markPageReady } from './lib/pageTransition';
 import './pixel-theme.css';
 
 // How long the dive log's cursor and live dot stay on, then off.
@@ -40,13 +40,12 @@ const PixelApp: React.FC = () => {
       root.removeAttribute('data-blink-off');
     };
   }, []);
-  // The block dissolve only plays when switching over from the aquarium; on
-  // a first visit the reef simply appears. Read during render, before the
-  // scroll restore's layout effect clears the switch.
-  const [isSwitchIn] = useState(isSwitchingPages);
   const [searchTerm, setSearchTerm] = useState('');
   const [isPerformancePanelOpen, setIsPerformancePanelOpen] = useState(false);
   const [stats, setStats] = useState<OceanStats | null>(null);
+  // The world's first report means it's there to be seen: the page transition can uncover it.
+  const worldUp = stats !== null;
+  useEffect(() => { if (worldUp) markPageReady(); }, [worldUp]);
 
   const filteredProjects = useMemo(() => filterProjects(searchTerm), [searchTerm]);
   const togglePerformancePanel = useCallback(() => setIsPerformancePanelOpen(open => !open), []);
@@ -73,7 +72,6 @@ const PixelApp: React.FC = () => {
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
       <ThemeSwitch />
       <EcosystemPanel stats={stats} />
-      {isSwitchIn && <PixelTransition />}
     </div>
   );
 };
