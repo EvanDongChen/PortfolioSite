@@ -94,6 +94,10 @@ const ShrineDebugPanel: React.FC<ShrineDebugPanelProps> = ({ actions }) => {
         <button type="button" onClick={() => act?.happening('moonview')}>Moon viewing</button>
         <button type="button" onClick={() => act?.happening('contest')}>Disguise contest</button>
         <button type="button" onClick={() => act?.spawn('dance')}>Fox dance</button>
+        <button type="button" onClick={() => act?.spawn('drum')}>Drum circle</button>
+        <button type="button" onClick={() => act?.spawn('peck')}>Crow on a teapot</button>
+        <button type="button" onClick={() => act?.spawn('sniff')}>Fox sniff test</button>
+        <button type="button" onClick={() => act?.spawn('boo')}>Umbrella scare</button>
         <button type="button" onClick={() => act?.spawn('bush')}>Berry bush</button>
       </div>
       <p className="reef-debug-label">Simulation speed</p>

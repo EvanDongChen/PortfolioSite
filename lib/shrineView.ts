@@ -13,10 +13,10 @@
 // light cover the whole page at a canvas pixel per cell, and the sprites are
 // drawn into a window around the view, swapped between two canvases.
 
-import { CONTEST_FORMS, CONTEST_TORII_FALL, CONTEST_TORII_STAND, Cane, Contest, ELEVATION, GROUND, Lantern, Marcher, PRINT_LIFE, Prop, Shrine, ShrineCreature, ShrineSpecies, Strand, isBarkTime } from './shrine';
+import { CONTEST_FORMS, CONTEST_TORII_FALL, CONTEST_TORII_STAND, Cane, Contest, ELEVATION, GROUND, Lantern, Marcher, PRINT_LIFE, Prop, Shrine, ShrineCreature, ShrineSpecies, Strand, isBarkTime, PECK_EVERY, TOPPLE_FLAT } from './shrine';
 import {
   basinSprite, sakuraPetalSprite, sakuraSprite, steamSprite, teahouseSprite, tongueSprite,
-  AnimalKind, RivalPose, SHRINE_FLOOR, altarSprite, animalSprite, bambooSprite, bangSprite, berryBushSprite, bloodSprite, bridgeSprite, dreamSprite, pergolaSprite, persimmonTreeSprite, petalSprite, rimSprite, sporeSprite, tsuchinokoSprite, wisteriaSprite, cedarSprite, crumbSprite, dappleTile, disguiseSprite,
+  AnimalKind, RivalPose, SHRINE_FLOOR, altarSprite, animalSprite, bambooSprite, toppledSprite, bangSprite, berryBushSprite, bloodSprite, bridgeSprite, dreamSprite, pergolaSprite, persimmonTreeSprite, petalSprite, rimSprite, sporeSprite, tsuchinokoSprite, wisteriaSprite, cedarSprite, crumbSprite, dappleTile, disguiseSprite,
   dustSprite, fallingLeafSprite, feetSprite, fireflySprite, fernSprite, floatLanternSprite, glowshroomSprite, grassSprite, guardianSprite, heartSprite, hitodamaSprite, hokoraSprite, hondenSprite,
   hydrangeaSprite, mistTile, jizoSprite, kitsuneSprite, koiSprite, leafSprite, lightHole, lotusPadSprite, lotusSprite, makeCanvas, mapleSprite, noteSprite, offeringSprite, pagodaSprite, paperLanternSprite, paradeSprite,
   persimmonSprite, pool, rockSprite, sacredCedarSprite, skyLanternSprite, smokeSprite, spiderLilySprite, spoutSprite, starSprite, susukiSprite, tailSprite, tanukiSprite, toriiSprite, toroSprite, tuftSprite, whatSprite, zedSprite,
@@ -869,7 +869,7 @@ export class ShrineView {
       case 'deer': {
         if (c.state === 'soak') { this.sprite(animalSprite('deerSoak'), c.x, c.z, 0, { flipX }); return; }
         const kind: AnimalKind = c.state === 'bow' || c.state === 'graze' ? 'deerBow' : walking && stride ? 'deerWalk' : 'deer';
-        this.sprite(animalSprite(kind), c.x, c.z, 0, { flipX });
+        this.sprite(animalSprite(kind), c.x, c.z, c.h, { flipX, stretch: c.squash });
         return;
       }
       case 'owl':
@@ -879,6 +879,7 @@ export class ShrineView {
       case 'bat': this.sprite(animalSprite(((tick + c.id) >> 1) & 1 ? 'bat1' : 'bat0'), c.x, c.z, c.h, { flipX, anchor: 'center' }); return;
       case 'crow':
         if (c.state === 'perch') { this.sprite(animalSprite('crow'), c.x, c.z, c.h, { flipX }); return; }
+        if (c.state === 'peck') { this.sprite(animalSprite(c.timer % PECK_EVERY < 6 ? 'crowPeck' : 'crow'), c.x, c.z, c.h, { flipX, stretch: c.squash }); return; }
         this.sprite(animalSprite((tick >> 2) & 1 ? 'crowFly1' : 'crowFly0'), c.x, c.z, c.h, { flipX, anchor: 'center' });
         if (c.carrying) this.sprite(offeringSprite(c.carrying), c.x + c.facing * 4, c.z, c.h - 4, { scale: 0.7 });
         return;
@@ -894,7 +895,13 @@ export class ShrineView {
         return;
       }
       case 'hitodama': this.sprite(hitodamaSprite((tick + c.id) >> 3, c.palette), c.x, c.z, c.h, { anchor: 'center', alpha: 0.92 }); return;
-      case 'kasa': this.sprite(animalSprite(c.h > 0.3 ? 'kasaHop' : 'kasa'), c.x, c.z, c.h, { flipX, stretch: c.squash }); return;
+      case 'kasa': {
+        const shut = c.state === 'lurk';
+        const eyeing = shut && this.shrine.creatures.some(o => o.alive && o !== c && o.species !== 'bat' && o.species !== 'crow' && o.species !== 'owl' && Math.abs(o.x - c.x) < 48 && Math.abs(o.z - c.z) < 36);
+        const kind: AnimalKind = shut ? (eyeing ? 'kasaPeek' : 'kasaLurk') : c.h > 0.3 ? 'kasaHop' : 'kasa';
+        this.sprite(animalSprite(kind), c.x, c.z, c.h, { flipX, stretch: c.squash });
+        return;
+      }
       case 'chochin': this.sprite(animalSprite('chochin'), c.x, c.z, c.h, { flipX }); return;
       case 'nekomata': {
         const kind: AnimalKind = c.state === 'dance' ? ((tick >> 4) & 1 ? 'nekoDance1' : 'nekoDance0') : c.state === 'sit' ? 'nekoSit' : stride ? 'neko1' : 'neko0';
@@ -927,7 +934,7 @@ export class ShrineView {
     const rival = c.species as 'tanuki' | 'kitsune';
     if (c.disguise) {
       if (c.scuttling) this.sprite(feetSprite(rival, stride), c.x, c.z + 1, c.h, { flipX });
-      const img = disguiseSprite(c.disguise);
+      const img = c.state === 'toppling' ? toppledSprite(c.disguise, c.timer > TOPPLE_FLAT + 5 ? 0 : c.timer > TOPPLE_FLAT ? 1 : 2) : disguiseSprite(c.disguise);
       this.sprite(img, c.x, c.z, c.h + (c.scuttling ? 1.6 : 0), { flipX: c.disguise === 'lantern' ? false : flipX, stretch: c.squash });
       if (c.tailOut > 0 || c.scuttling) this.sprite(tailSprite(rival), c.x - c.facing * (img.width / 2 + 1), c.z, c.h + 2, { flipX });
       return;
@@ -935,8 +942,14 @@ export class ShrineView {
     if (c.state === 'soak') { this.sprite(animalSprite(c.species === 'tanuki' ? 'tanukiSoak' : 'kitsuneSoak'), c.x, c.z, 0, { flipX }); return; }
     let pose: RivalPose = 'stand';
     if (c.state === 'sleep') pose = 'sleep';
+    else if (c.state === 'passedOut') pose = 'sleep';
+    else if (c.state === 'drumLead') pose = c.drum?.stunned ? 'walk' : ((tick >> 2) & 1) ? 'drum' : 'sit';
+    else if (c.state === 'dazed') pose = 'sit';
+    else if (c.state === 'gloat') pose = (tick >> 5) & 1 ? 'howl' : 'sit';
+    else if (c.state === 'sniff' && !walking) pose = 'sit';
     else if (c.state === 'perform') pose = c.species === 'tanuki' ? (((tick >> 2) & 1) ? 'drum' : 'sit') : (tick >> 5) & 1 ? 'howl' : 'sit';
     else if (c.state === 'changing' || ((c.state === 'sitWatch' || c.state === 'contest') && !walking)) pose = 'sit';
+    else if (c.state === 'drumDance') pose = c.h > 0.4 ? 'walk' : 'stand';
     else if (c.state === 'dance') pose = isBarkTime(c, tick) ? ((tick >> 4) & 1 ? 'howl' : 'sit') : c.h > 0.4 ? 'walk' : 'stand';
     else if (walking && stride) pose = 'walk';
     this.sprite(this.rivalSprite(c, pose), c.x, c.z, c.h, { flipX, stretch: c.squash, scale });

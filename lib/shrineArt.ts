@@ -303,6 +303,29 @@ const DISGUISES: Record<string, { rows: string[]; colours: Record<string, Rgb> }
 export type DisguiseKind = 'teapot' | 'lantern' | 'statue';
 export const disguiseSprite = (kind: DisguiseKind) => cached(`disguise-${kind}`, () => fromRows(DISGUISES[kind].rows, DISGUISES[kind].colours));
 
+/** A disguise going over: leaning a little (0), leaning a lot (1), then flat on its side (2), its top toward +x. */
+export const toppledSprite = (kind: DisguiseKind, frame: number) =>
+  cached(`disguise-${kind}-toppled-${frame}`, () => {
+    const img = disguiseSprite(kind);
+    const w = img.width, h = img.height;
+    if (frame >= 2) {
+      const c = makeCanvas(h, w);
+      const ctx = c.getContext('2d')!;
+      ctx.imageSmoothingEnabled = false;
+      ctx.translate(h, 0);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, 0, 0);
+      return c;
+    }
+    // Sheared a row at a time, so its pixels stay pixels.
+    const lean = frame === 0 ? 0.45 : 0.95;
+    const reach = Math.ceil(lean * h);
+    const c = makeCanvas(w + reach * 2, h);
+    const ctx = c.getContext('2d')!;
+    for (let y = 0; y < h; y++) ctx.drawImage(img, 0, y, w, 1, reach + Math.round((h - 1 - y) * lean), y, w, 1);
+    return c;
+  });
+
 /** Little feet the disguise grows when it thinks nobody is looking, and the tail that gives it away. */
 export const feetSprite = (rival: 'tanuki' | 'kitsune', frame: number) =>
   cached(`disguise-feet-${rival}-${frame}`, () => {
@@ -460,6 +483,18 @@ const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> 
       '.....N.N.....',
       '....NN.NN....',
     ], colours: CROW },
+    // Head down, hammering at whatever it's standing on.
+    crowPeck: { rows: [
+      '.............',
+      '.............',
+      '.............',
+      'b...aaaaa....',
+      'bbaaBBBBBaa..',
+      '.bbBBBBBBBEB.',
+      '...bbbBBBBBNN',
+      '.....N.N....N',
+      '....NN.NN....',
+    ], colours: CROW },
     crowFly0: { rows: [
       '...aaa........',
       '...BBaa.......',
@@ -561,6 +596,44 @@ const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> 
       '.......S......',
       '......FF......',
       '....SSFSS.....',
+    ], colours: KASA },
+    // Shut up tight and standing very still among the canes, the eye closed.
+    kasaLurk: { rows: [
+      '...SS...',
+      '...RR...',
+      '..RRRr..',
+      '..RPRr..',
+      '..RPRr..',
+      '.RRPRrr.',
+      '.RPRRrr.',
+      '.RPRRrr.',
+      '.RPRRrr.',
+      '.RPRRrr.',
+      '.RRPRrr.',
+      '..p.p.p.',
+      '....S...',
+      '....S...',
+      '....F...',
+      '..SSFSS.',
+    ], colours: KASA },
+    // And the eye open, sliding round to see who's coming.
+    kasaPeek: { rows: [
+      '...SS...',
+      '...RR...',
+      '..RRRr..',
+      '..RPRr..',
+      '..RPRr..',
+      '.RRPWWr.',
+      '.RPWWEW.',
+      '.RPWEEW.',
+      '.RPRWWr.',
+      '.RPRRrr.',
+      '.RRPRrr.',
+      '..p.p.p.',
+      '....S...',
+      '....S...',
+      '....F...',
+      '..SSFSS.',
     ], colours: KASA },
     // A torn paper lantern with a face, a floating ghost of one.
     chochin: { rows: [
@@ -809,7 +882,7 @@ const ANIMALS: Record<string, { rows: string[]; colours: Record<string, Rgb> }> 
     ], colours: HAHAKI },
   };
 })();
-export type AnimalKind = 'deer' | 'deerWalk' | 'deerBow' | 'hare' | 'hareHop' | 'mouse' | 'mouse2' | 'owl' | 'owlFly0' | 'owlFly1' | 'bat0' | 'bat1' | 'crow' | 'crowFly0' | 'crowFly1' | 'frog' | 'frogLeap' | 'kappa' | 'kappaWalk' | 'kappaBow' | 'kodama' | 'kodama1' | 'kasa' | 'kasaHop' | 'chochin' | 'hahaki' | 'hahakiStep' | 'hahakiLean' | 'baku' | 'bakuWalk' | 'bakuSip' | 'tsuchinokoRest' | 'tanukiSoak' | 'kitsuneSoak' | 'deerSoak' | 'neko0' | 'neko1' | 'nekoSit' | 'nekoDance0' | 'nekoDance1' | 'akaname' | 'akanameLick';
+export type AnimalKind = 'crowPeck' | 'kasaLurk' | 'kasaPeek' | 'deer' | 'deerWalk' | 'deerBow' | 'hare' | 'hareHop' | 'mouse' | 'mouse2' | 'owl' | 'owlFly0' | 'owlFly1' | 'bat0' | 'bat1' | 'crow' | 'crowFly0' | 'crowFly1' | 'frog' | 'frogLeap' | 'kappa' | 'kappaWalk' | 'kappaBow' | 'kodama' | 'kodama1' | 'kasa' | 'kasaHop' | 'chochin' | 'hahaki' | 'hahakiStep' | 'hahakiLean' | 'baku' | 'bakuWalk' | 'bakuSip' | 'tsuchinokoRest' | 'tanukiSoak' | 'kitsuneSoak' | 'deerSoak' | 'neko0' | 'neko1' | 'nekoSit' | 'nekoDance0' | 'nekoDance1' | 'akaname' | 'akanameLick';
 export const animalSprite = (kind: AnimalKind) => cached(`shrine-animal-${kind}`, () => fromRows(ANIMALS[kind].rows, ANIMALS[kind].colours));
 
 /** Koi seen from above through the water: kohaku, showa, ogon, shiro, in two tail swings. */
