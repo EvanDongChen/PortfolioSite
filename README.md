@@ -175,19 +175,6 @@ Measured in headless Chromium at a 1440 × 900 view, on a page 6000 px tall:
 
 The pages also respect the performance panel (quality tier and a 30/60 fps cap), and stop animating while the tab is hidden.
 
-## Projects
-
-| Project | Summary |
-|---|---|
-| [Blade & Brush](https://evandongchen.github.io/BladeAndBrush/) | Browser puzzle game set inside a procedurally generated Chinese ink landscape, built with TypeScript and Canvas 2D. |
-| [The Wishing Terminal](https://matchabatcha.itch.io/thewishingterminal) | Adventure horror game built in Roblox for the SFU Summer Summit 2026 game jam. |
-| [Cramsino](https://devpost.com/software/cramsino) | AI study app with focus detection and gacha rewards. Best UI at JourneyHacks 2026. |
-| [WitchDog](https://devpost.com/software/witch-dog) | Real-time multiplayer trivia game in Unity with Socket.IO. |
-| [Money Mango](https://github.com/EvanDongChen/MoneyMango) | Android personal finance app with OCR receipt parsing. |
-| [Chord Breakers](https://angrycow05.itch.io/chord-breaker) | 2D action game in Unity with elemental combat and FSM-driven AI. |
-
-The full list is on [the site](https://evanchen.info).
-
 ## Run it locally
 
 You'll need [Node.js](https://nodejs.org/) 20 or newer.
