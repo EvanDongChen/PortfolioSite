@@ -26,7 +26,7 @@ Scroll through my projects and experience while a whole reef, a pond or a moonli
 
 ## Three worlds, one portfolio
 
-The content is the same everywhere: hero, experience, education, skills, projects and contact. Only the world behind it changes, from the buttons at the bottom right. The original aquarium is archived, one click away in the settings panel.
+The content is the same everywhere: hero, experience, education, skills, projects and contact. Only the world behind it changes, from the buttons at the bottom right. The original aquarium is [archived](#archived-theme-the-aquarium), one click away in the settings panel.
 
 <table>
   <tr>
@@ -79,6 +79,25 @@ The pond has real depth. A translucent water surface separates the bed, everythi
 
 ### ⛩️ The shrine forest
 
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/shrine-crow.gif" alt="A tanuki disguised as a teapot, pecked by a crow until it gives up the disguise and runs"></td>
+    <td width="50%"><img src="docs/media/shrine-statue.gif" alt="A fox circling a suspicious statue, sniffing it, then kicking it over to reveal a tanuki"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A crow pecks a disguised tanuki out of its teapot</sub></td>
+    <td align="center"><sub>A fox sniffs out a fake statue and kicks it over</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/shrine-tug.gif" alt="Tanuki and foxes in a tug of war on a wisteria vine"></td>
+    <td width="50%"><img src="docs/media/shrine-parade.gif" alt="The night parade of lantern and umbrella ghosts marching through a torii gate, lit by blue soul-flames"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Tanuki against foxes in a tug of war on a wisteria vine</sub></td>
+    <td align="center"><sub>The night parade turns every lantern ghost blue</sub></td>
+  </tr>
+</table>
+
 A moss-and-cedar forest under a permanent night, where the stone lanterns are what the page is lit by. A flagstone approach winds down the page past a main hall, an Inari shrine with its tunnel of gates, a koi pond and bridge, a bamboo grove, a pagoda, a raked zen garden and more. There are no humans here: the shrine is kept by living brooms.
 
 - **Tanuki and kitsune after the offerings.** They want what's on the altars, which the broom spirits restock and guard. Rivals who meet face off and scrap in a cloud of dust. Either may put a leaf on its head and turn into a teapot, a lantern or a statue, then creep towards an offering in little hops. Hold your cursor near one and it freezes; click it and it gives itself away.
@@ -87,10 +106,6 @@ A moss-and-cedar forest under a permanent night, where the stone lanterns are wh
 - **They play together, feuds forgotten.** Tag, dancing in rings, tossing a soul-flame back and forth, follow-the-leader down the path that ends in a heap, tug of war on a wisteria vine, a persimmon kickabout and a fruit fight under a shaken tree. A tanuki's belly drumming draws a crowd to dance round it, until one note too hard knocks it out.
 - **Mischief and its consequences.** Crows land on disguised tanuki and peck them out; foxes circle a suspicious statue, sniff it and kick it over.
 - **Events.** Moon viewing, a disguise contest, the lantern festival and the night parade, which turns every lantern ghost blue.
-
-### 🐠 The aquarium (archived)
-
-The original page, now opened from the settings panel: smooth, full-colour fish that school, dart, form conga lines, get curious about food and pair up to breed. Drop fish food (or love food), grab and carry fish, open the fish tank, and follow the built-in tutorial.
 
 ## Things to try
 
@@ -156,19 +171,6 @@ Measured in headless Chromium at a 1440 × 900 view, on a page 6000 px tall:
 
 The pages also respect the performance panel (quality tier and a 30/60 fps cap), and stop animating while the tab is hidden.
 
-## Projects
-
-| Project | Summary |
-|---|---|
-| [Blade & Brush](https://evandongchen.github.io/BladeAndBrush/) | Browser puzzle game set inside a procedurally generated Chinese ink landscape, built with TypeScript and Canvas 2D. |
-| [The Wishing Terminal](https://matchabatcha.itch.io/thewishingterminal) | Adventure horror game built in Roblox for the SFU Summer Summit 2026 game jam. |
-| [Cramsino](https://devpost.com/software/cramsino) | AI study app with focus detection and gacha rewards. Best UI at JourneyHacks 2026. |
-| [WitchDog](https://devpost.com/software/witch-dog) | Real-time multiplayer trivia game in Unity with Socket.IO. |
-| [Money Mango](https://github.com/EvanDongChen/MoneyMango) | Android personal finance app with OCR receipt parsing. |
-| [Chord Breakers](https://angrycow05.itch.io/chord-breaker) | 2D action game in Unity with elemental combat and FSM-driven AI. |
-
-The full list is on [the site](https://evanchen.info).
-
 ## Run it locally
 
 You'll need [Node.js](https://nodejs.org/) 20 or newer.
@@ -220,6 +222,12 @@ Pushes to the `update` branch also deploy automatically through GitHub Actions.
 
 1. Put the thumbnail in `image-originals/` and a 960 px-wide `.webp` copy in `public/images/`. `scripts/optimize-images.mjs` converts PNG and JPG files in `public/images` to `.webp`.
 2. Add an entry to the `projects` list in `data/portfolio.ts` with a `title`, `description`, `image`, `tags`, `codeUrl` and an optional `linkLabel` (defaults to "View Code").
+
+## Archived theme: the aquarium
+
+<img src="docs/media/aquarium.png" alt="The aquarium theme" width="720">
+
+The original page, from before the pixel worlds: smooth, full-colour fish that school, dart, form conga lines, get curious about food and pair up to breed. Drop fish food (or love food), grab and carry fish, open the fish tank, and follow the built-in tutorial. It's no longer on the page switch, but you can still open it from the settings panel.
 
 ## Credits
 
