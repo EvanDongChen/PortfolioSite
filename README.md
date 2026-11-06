@@ -79,6 +79,25 @@ The pond has real depth. A translucent water surface separates the bed, everythi
 
 ### ⛩️ The shrine forest
 
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/shrine-crow.gif" alt="A tanuki disguised as a teapot, pecked by a crow until it gives up the disguise and runs"></td>
+    <td width="50%"><img src="docs/media/shrine-statue.gif" alt="A fox circling a suspicious statue, sniffing it, then kicking it over to reveal a tanuki"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A crow pecks a disguised tanuki out of its teapot</sub></td>
+    <td align="center"><sub>A fox sniffs out a fake statue and kicks it over</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/shrine-tug.gif" alt="Tanuki and foxes in a tug of war on a wisteria vine"></td>
+    <td width="50%"><img src="docs/media/shrine-parade.gif" alt="The night parade of lantern and umbrella ghosts marching through a torii gate, lit by blue soul-flames"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Tanuki against foxes in a tug of war on a wisteria vine</sub></td>
+    <td align="center"><sub>The night parade turns every lantern ghost blue</sub></td>
+  </tr>
+</table>
+
 A moss-and-cedar forest under a permanent night, where the stone lanterns are what the page is lit by. A flagstone approach winds down the page past a main hall, an Inari shrine with its tunnel of gates, a koi pond and bridge, a bamboo grove, a pagoda, a raked zen garden and more. There are no humans here: the shrine is kept by living brooms.
 
 - **Tanuki and kitsune after the offerings.** They want what's on the altars, which the broom spirits restock and guard. Rivals who meet face off and scrap in a cloud of dust. Either may put a leaf on its head and turn into a teapot, a lantern or a statue, then creep towards an offering in little hops. Hold your cursor near one and it freezes; click it and it gives itself away.
