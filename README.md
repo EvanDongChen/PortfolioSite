@@ -4,7 +4,7 @@
 
 **A personal portfolio that is also a living pixel-art ecosystem.**
 
-Scroll through my projects and experience while a whole reef, or a whole pond, lives, hunts, breeds and sleeps behind the page.
+Scroll through my projects and experience while a whole reef, a pond or a moonlit shrine forest lives, hunts, plays and sleeps behind the page.
 
 [![Live site](https://img.shields.io/badge/live-evanchen.info-f2b8cc?style=for-the-badge)](https://evanchen.info)
 
@@ -26,13 +26,13 @@ Scroll through my projects and experience while a whole reef, or a whole pond, l
 
 ## Three worlds, one portfolio
 
-The content is the same everywhere: hero, experience, education, skills, projects and contact. Only the world behind it changes, from the buttons at the bottom right.
+The content is the same everywhere: hero, experience, education, skills, projects and contact. Only the world behind it changes, from the buttons at the bottom right. The original aquarium is archived, one click away in the settings panel.
 
 <table>
   <tr>
     <td width="33%" align="center"><img src="docs/media/reef.png" alt="The pixel reef theme"><br><b>The reef</b> (default)<br><sub>A dive log over a coral reef</sub></td>
     <td width="33%" align="center"><img src="docs/media/pond.png" alt="The pixel pond theme"><br><b>The pond</b><br><sub>Field notes over a lily pond</sub></td>
-    <td width="33%" align="center"><img src="docs/media/aquarium.png" alt="The aquarium theme"><br><b>The aquarium</b><br><sub>The original, smooth and blue</sub></td>
+    <td width="33%" align="center"><img src="docs/media/shrine.png" alt="The shrine forest theme"><br><b>The shrine forest</b><br><sub>Ema plaques in a lantern-lit forest</sub></td>
   </tr>
 </table>
 
@@ -77,9 +77,20 @@ The pond has real depth. A translucent water surface separates the bed, everythi
 - **Plants that react.** Lily pads drift aside for swimmers, duckweed parts around them, and reeds bend.
 - **Events.** Rain, a mayfly hatch with fish rising, and the evening chorus.
 
-### 🐠 The aquarium
+### ⛩️ The shrine forest
 
-The original page: smooth, full-colour fish that school, dart, form conga lines, get curious about food and pair up to breed. Drop fish food (or love food), grab and carry fish, open the fish tank, and follow the built-in tutorial.
+A moss-and-cedar forest under a permanent night, where the stone lanterns are what the page is lit by. A flagstone approach winds down the page past a main hall, an Inari shrine with its tunnel of gates, a koi pond and bridge, a bamboo grove, a pagoda, a raked zen garden and more. There are no humans here: the shrine is kept by living brooms.
+
+- **Tanuki and kitsune after the offerings.** They want what's on the altars, which the broom spirits restock and guard. Rivals who meet face off and scrap in a cloud of dust. Either may put a leaf on its head and turn into a teapot, a lantern or a statue, then creep towards an offering in little hops. Hold your cursor near one and it freezes; click it and it gives itself away.
+- **Folklore everywhere.** A baku drinks dreams from sleepers, a tsuchinoko bowls down the path and vanishes when noticed, nekomata dance on the rooftops when no one's watching, akaname lick dirty basins clean, kasa-obake leap out of the bamboo at passers-by, and a kappa wades ashore for walks round its pond, spilling its dish when it bows.
+- **A forest that feeds itself.** Berry bushes and persimmon windfalls feed the mice, hares and rivals, then grow back. Deer and tanuki soak in a hot spring, gravel takes footprints, and mist lies low until a lantern finds it.
+- **They play together, feuds forgotten.** Tag, dancing in rings, tossing a soul-flame back and forth, follow-the-leader down the path that ends in a heap, tug of war on a wisteria vine, a persimmon kickabout and a fruit fight under a shaken tree. A tanuki's belly drumming draws a crowd to dance round it, until one note too hard knocks it out.
+- **Mischief and its consequences.** Crows land on disguised tanuki and peck them out; foxes circle a suspicious statue, sniff it and kick it over.
+- **Events.** Moon viewing, a disguise contest, the lantern festival and the night parade, which turns every lantern ghost blue.
+
+### 🐠 The aquarium (archived)
+
+The original page, now opened from the settings panel: smooth, full-colour fish that school, dart, form conga lines, get curious about food and pair up to breed. Drop fish food (or love food), grab and carry fish, open the fish tank, and follow the built-in tutorial.
 
 ## Things to try
 
@@ -96,7 +107,8 @@ The original page: smooth, full-colour fish that school, dart, form conga lines,
 - **Adopt** it and give it a name. It comes back on your next visit, and when it dies the adoption passes down its family line.
 - **Open the census** (bottom left) for live counts, including every stage of a frog's life, and a feed of what just happened.
 - **Move your mouse fast** near the frogs and watch them dive.
-- **Type the Konami code** (↑ ↑ ↓ ↓ ← → ← → B A) on the reef or the pond for a hidden debug panel. It spawns any creature and starts any event.
+- **Hold your cursor** near a disguised tanuki in the shrine forest to freeze it, and click to catch it out.
+- **Type the Konami code** (↑ ↑ ↓ ↓ ← → ← → B A) on the reef, the pond or the shrine for a hidden debug panel. It spawns any creature and starts any event.
 
     </td>
   </tr>
@@ -112,7 +124,7 @@ The original page: smooth, full-colour fish that school, dart, form conga lines,
 
 <img src="docs/media/phones.png" alt="The reef and the pond on a phone" width="520">
 
-Both worlds scale down to phone widths, with the plants and landmarks kept to the margins so the content stays readable.
+Every world scales down to phone widths, with the plants and landmarks kept to the margins so the content stays readable.
 
 ## How it works
 
@@ -120,7 +132,7 @@ The pixel worlds are small simulations that run alongside the page, not videos o
 
 ```mermaid
 flowchart LR
-  page["React page<br/>(PixelApp / PondApp)"] -- "scroll, pointer, clicks,<br/>adopt, debug" --> engine
+  page["React page<br/>(PixelApp / PondApp / ShrineApp)"] -- "scroll, pointer, clicks,<br/>adopt, debug" --> engine
   engine -- "census, tooltip,<br/>canvas layout" --> page
   subgraph worker["Web Worker (or the main thread as a fallback)"]
     engine["Engine<br/>30 ticks a second"] --> sim["Simulation<br/>(no DOM)"]
@@ -130,9 +142,9 @@ flowchart LR
 ```
 
 - **Off the main thread.** Each world hands its canvases to a Web Worker as `OffscreenCanvas`es, so the simulation and drawing never hold up scrolling. Browsers that can't do this run the same engine on the main thread.
-- **A DOM-free simulation.** `lib/pixelOcean.ts` (the reef) and `lib/pond.ts` (the pond) step 30 times a second. Every species has its own `think*` method; populations are kept in balance by caps, breeding and newcomers arriving when numbers run low.
+- **A DOM-free simulation.** `lib/pixelOcean.ts` (the reef), `lib/pond.ts` (the pond) and `lib/shrine.ts` (the shrine forest) step 30 times a second. Every species has its own `think*` method; populations are kept in balance by caps, breeding and newcomers arriving when numbers run low.
 - **A 2.5D camera.** The world is seen from above at an angle. Height lifts a sprite up the screen and draws it a little bigger, with a shadow on the ground (or the water) below it. Sprites are depth-sorted with squash and stretch.
-- **Cheap where it counts.** The sea and pond beds are painted once at one canvas pixel per cell and scrolled natively by the browser. Only a window around the view is redrawn, and plants are drawn as batched runs of rectangles. On slow devices the finishing touches drop out before the frame rate does.
+- **Cheap where it counts.** The sea bed, the pond bed and the forest floor are painted once at one canvas pixel per cell and scrolled natively by the browser. Only a window around the view is redrawn, and plants are drawn as batched runs of rectangles. On slow devices the finishing touches drop out before the frame rate does.
 - **Pixel art made in code.** Sprites are character maps, sketched and previewed with a pixel-art tool, then drawn with no smoothing so every art pixel stays square.
 
 Measured in headless Chromium at a 1440 × 900 view, on a page 6000 px tall:
@@ -178,14 +190,15 @@ npm run dev        # http://localhost:3000
 Pushes to the `update` branch also deploy automatically through GitHub Actions.
 
 > [!TIP]
-> In development, add `?pond-main` to the URL to run the pond on the main thread, where you can reach it from the console as `window.__pond`.
+> In development, add `?pond-main` or `?shrine-main` to the URL to run the pond or the shrine forest on the main thread, where you can reach it from the console as `window.__pond` or `window.__shrine`.
 
 ## Project structure
 
 ```
-├── index.tsx              picks the page: reef, pond or aquarium
+├── index.tsx              picks the page: reef, pond, shrine forest or aquarium
 ├── PixelApp.tsx           the reef page
 ├── PondApp.tsx            the pond page
+├── ShrineApp.tsx          the shrine-forest page
 ├── App.tsx                the aquarium page
 ├── components/            page content, buttons, panels, and the canvas hosts
 ├── contexts/              theme and performance settings
@@ -194,9 +207,12 @@ Pushes to the `update` branch also deploy automatically through GitHub Actions.
 │   ├── pixelOcean*.ts     the reef: simulation, renderer, sprites
 │   ├── reefEngine.ts      runs the reef (in reefWorker.ts where possible)
 │   ├── pond*.ts           the pond: simulation, renderer, sprites, engine, worker
+│   ├── shrine*.ts         the shrine forest: simulation, renderer, sprites, engine, worker
+│   ├── pageTransition.ts  the wave of pixel blocks between pages
 │   └── adoption.ts        your adopted creature, kept in localStorage
 ├── pixel-theme.css        the pixel UI (fonts, 9-slice frames, cursors)
-├── pond-theme.css         the pond's colours over it
+├── pond-theme.css         the pond's colours and lettering over it
+├── shrine-theme.css       the shrine's colours and lettering over it
 └── public/images/         project thumbnails (960 px .webp)
 ```
 
@@ -207,7 +223,7 @@ Pushes to the `update` branch also deploy automatically through GitHub Actions.
 
 ## Credits
 
-- Pixel fonts: [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P) and [VT323](https://fonts.google.com/specimen/VT323) (SIL Open Font License); body text in [Poppins](https://fonts.google.com/specimen/Poppins).
+- Pixel fonts: [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P) and [VT323](https://fonts.google.com/specimen/VT323) (SIL Open Font License); [Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans) and [Jersey 15](https://fonts.google.com/specimen/Jersey+15) on the pond and [DotGothic16](https://fonts.google.com/specimen/DotGothic16) in the shrine forest (all SIL Open Font License); body text in [Poppins](https://fonts.google.com/specimen/Poppins).
 - All creatures, plants and scenery are original pixel art.
 
 <div align="center">
