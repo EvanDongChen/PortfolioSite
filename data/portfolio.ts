@@ -30,6 +30,14 @@ export const projects: Project[] = [
     featured: true,
   },
   {
+    title: 'Show Me the Monet',
+    description: 'An endlessly varied, procedurally painted Bridge over a Pond of Water Lilies, after Monet. Step into the canvas, row a boat through an endless water garden, and plant lilies in a live pond.',
+    image: `${BASE_URL}images/show_me_the_monet.webp`,
+    tags: ['TypeScript', 'Vite', 'Canvas 2D', 'Web Audio', 'Procedural Generation', 'Generative Art'],
+    codeUrl: 'https://evandongchen.github.io/ShowMeTheMonet/',
+    linkLabel: 'Play',
+  },
+  {
     title: 'Cramsino',
     description: 'AI-powered study app that uses computer vision to detect focus and rewards studying with gacha-style card pulls. Won Best UI at JourneyHacks 2026.',
     image: `${BASE_URL}images/cramsino.webp`,
