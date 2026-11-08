@@ -30,6 +30,14 @@ export const projects: Project[] = [
     featured: true,
   },
   {
+    title: 'PokeMatch',
+    description: 'Upload or snap a photo and find out which of the 1025 Pokémon matches your facial structure. MediaPipe face landmarks are measured into traits and matched against each Pokémon, all in the browser.',
+    image: `${BASE_URL}images/pokematch.webp`,
+    tags: ['TypeScript', 'Vite', 'MediaPipe', 'Computer Vision', 'Web App'],
+    codeUrl: 'https://evandongchen.github.io/PokeMatch/',
+    linkLabel: 'Play',
+  },
+  {
     title: 'Show Me the Monet',
     description: 'An endlessly varied, procedurally painted Bridge over a Pond of Water Lilies, after Monet. Step into the canvas, row a boat through an endless water garden, and plant lilies in a live pond.',
     image: `${BASE_URL}images/show_me_the_monet.webp`,
