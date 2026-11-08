@@ -30,6 +30,13 @@ export const projects: Project[] = [
     featured: true,
   },
   {
+    title: 'HangyoPlop',
+    description: 'A pixel-art Hangyodon desktop pet for Windows. He watches your cursor, types along with you, naps when you are away, reminds you to stretch and drink water, and thinks along while your coding agent works. Fully offline.',
+    image: `${BASE_URL}images/hangyoplop.webp`,
+    tags: ['Electron', 'JavaScript', 'Pixel Art', 'Desktop App', 'Windows'],
+    codeUrl: 'https://github.com/EvanDongChen/HangyoPlop',
+  },
+  {
     title: 'PokeMatch',
     description: 'Upload or snap a photo and find out which of the 1025 Pokémon matches your facial structure. MediaPipe face landmarks are measured into traits and matched against each Pokémon, all in the browser.',
     image: `${BASE_URL}images/pokematch.webp`,
