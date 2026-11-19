@@ -143,3 +143,4 @@ html.pixel-theme .theme-switch-label {
   color: var(--px-text);
   transition-timing-function: steps(2, end);
 }
+html.space-theme .theme-switch-stop.is-on { color: #16102e; }

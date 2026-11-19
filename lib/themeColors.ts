@@ -53,3 +53,15 @@ export const SHRINE_COLORS: ThemeColors = {
   searchPlaceholder: 'placeholder-amber-200/50', periodBg: 'bg-[#3a2240]',
   heroGradient: 'from-amber-300 to-orange-400', contactIcon: 'text-amber-300',
 };
+
+// Space: content on deep ink, with starlight violet and comet-teal accents.
+export const SPACE_COLORS: ThemeColors = {
+  ...UNDERWATER_COLORS,
+  text: 'text-indigo-50', textLighter: 'text-indigo-50/90', highlight: 'text-violet-300',
+  highlightStrong: 'text-violet-200', border: 'border-violet-400/20', timeline: 'bg-violet-400/30',
+  timelineDot: 'bg-pink-400', timelineDotBorder: 'border-[#04030a]',
+  cardBg: 'bg-[#08071a]/75', tagBg: 'bg-indigo-950/60', tagHoverBg: 'hover:bg-indigo-900/70',
+  searchBg: 'bg-[#08071a]/80', searchBorder: 'border-violet-400/30', searchRing: 'focus:ring-violet-400',
+  searchPlaceholder: 'placeholder-violet-200/50', periodBg: 'bg-[#2a1848]',
+  heroGradient: 'from-violet-300 to-pink-400', contactIcon: 'text-violet-300',
+};

@@ -11,6 +11,8 @@ const ICONS: Record<SwitchPage, string[]> = {
   reef: ['.....XXX..', '...XXXXXX.', 'X.XXXXXX.X', 'XXXXXXXO.X', 'X.XXXXXXX.', '...XXXXX..', '.....XX...'],
   // A torii gate.
   shrine: ['X..........X', 'XXXXXXXXXXXX', '.XXXXXXXXXX.', '..X......X..', 'XXXXXXXXXXXX', '..X......X..', '..X......X..', '..X......X..', '.XX......XX.'],
+  // A ringed planet.
+  space: ['.......XX..', '..XXXX.X...', '.XXXXXX....', 'XXXOXXXX..X', 'XXXXXXXXXX.', '..XXXXXXX..', 'X.XXXXXX...', '.XXXXXXX...', '...XXXX....'],
   // A lily pad with a frog's eyes peeping over it.
   pond: ['...XX..XX...', '...XX..XX...', '............', '...XXXX.....', '.XXXXXXXX...', 'XXXXXXXXX..X', 'XXXXXXXXXXXX', '.XXXXXXXXXX.', '...XXXXXX...'],
 };
@@ -18,6 +20,7 @@ const PAGES: { page: SwitchPage; label: string }[] = [
   { page: 'reef', label: 'Pixel reef' },
   { page: 'pond', label: 'Pixel pond' },
   { page: 'shrine', label: 'Shrine forest' },
+  { page: 'space', label: 'Deep space' },
 ];
 
 const Icon: React.FC<{ page: SwitchPage }> = ({ page }) => {
@@ -30,7 +33,7 @@ const Icon: React.FC<{ page: SwitchPage }> = ({ page }) => {
 };
 
 /**
- * Switches between the three pixel pages: a three-way switch in the right-hand
+ * Switches between the pixel pages: a switch in the right-hand
  * stack, its stops on the stack's spacing. Click a page's icon and the
  * thumb springs over to it, then the page changes; arrow keys move between
  * the stops, Enter or Space picks one. On the archived aquarium no stop is
