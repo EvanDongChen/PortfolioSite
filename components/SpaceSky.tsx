@@ -78,12 +78,16 @@ const SpaceSky: React.FC<SpaceSkyProps> = ({ onReady }) => {
     window.addEventListener('resize', maybeRebuild);
 
     const lean = { x: 0, y: 0, tx: 0, ty: 0 };
+    let pointer: { x: number; y: number } | null = null;
     const onPointer = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse') return;
+      pointer = { x: e.clientX, y: e.clientY };
       lean.tx = (e.clientX / window.innerWidth - 0.5) * LEAN;
       lean.ty = (e.clientY / window.innerHeight - 0.5) * LEAN * 0.6;
     };
     window.addEventListener('pointermove', onPointer, { passive: true });
+    const onLeave = () => { pointer = null; };
+    document.documentElement.addEventListener('mouseleave', onLeave);
 
     let raf = 0;
     let last = performance.now();
@@ -110,7 +114,7 @@ const SpaceSky: React.FC<SpaceSkyProps> = ({ onReady }) => {
       const scroll = window.scrollY;
       const snapped = Math.floor(scroll / px) * px;
       canvas.style.transform = `translate3d(0, ${snapped - scroll}px, 0)`;
-      view.draw({ viewW: w, viewH: h, scrollY: snapped, offX: lean.x, offY: lean.y, time });
+      view.draw({ viewW: w, viewH: h, scrollY: snapped, offX: lean.x, offY: lean.y, time, dt: still ? 0 : dt, pointer });
       if (first) { first = false; readyRef.current(); }
     };
     const onVisibility = () => {
@@ -127,6 +131,7 @@ const SpaceSky: React.FC<SpaceSkyProps> = ({ onReady }) => {
       observer.disconnect();
       window.removeEventListener('resize', maybeRebuild);
       window.removeEventListener('pointermove', onPointer);
+      document.documentElement.removeEventListener('mouseleave', onLeave);
       document.removeEventListener('visibilitychange', onVisibility);
       worker?.terminate();
       view.dispose();

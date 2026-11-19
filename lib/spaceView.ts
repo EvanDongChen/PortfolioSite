@@ -1,3 +1,4 @@
+import { stepAliens } from './spaceAliens';
 import { F, G, GLOW_STRIDE, OBJ_TEXELS, RAMPS, SHADES, SKY_PALETTE, SOLID_STRIDE, SpaceScene, poseBodies } from './space';
 
 /**
@@ -36,9 +37,14 @@ void main() {
   vec4 r1 = texelFetch(u_obj, ivec2(o + 1, 0), 0);
   vec4 r2 = texelFetch(u_obj, ivec2(o + 2, 0), 0);
   vec4 sh = texelFetch(u_obj, ivec2(o + 3, 0), 0);
-  vec3 w = vec3(dot(r0.xyz, a_pos) + r0.w, dot(r1.xyz, a_pos) + r1.w, dot(r2.xyz, a_pos) + r2.w);
-  vec3 n = normalize(vec3(dot(r0.xyz, a_nrm), dot(r1.xyz, a_nrm), dot(r2.xyz, a_nrm)));
+  vec4 st = texelFetch(u_obj, ivec2(o + 4, 0), 0);
   int flags = int(a_flags + 0.5);
+  // Closed eyes: the body behind shows through.
+  if ((flags & ${F.eye}) != 0 && st.z > 0.5) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  vec3 lp = a_pos;
+  if ((flags & ${F.wobble}) != 0) lp.x += sin(u_time * 4.0 + st.w) * st.x * max(0.0, -lp.y - st.y);
+  vec3 w = vec3(dot(r0.xyz, lp) + r0.w, dot(r1.xyz, lp) + r1.w, dot(r2.xyz, lp) + r2.w);
+  vec3 n = normalize(vec3(dot(r0.xyz, a_nrm), dot(r1.xyz, a_nrm), dot(r2.xyz, a_nrm)));
   float d = u_cam.z - w.z;
   vec3 eye = vec3(u_cam.xy, u_cam.z);
   vec3 toEye = normalize(eye - w);
@@ -60,6 +66,10 @@ void main() {
   v_round = size > 3.0 ? 1.0 : 0.0;
   v_mat = a_info.y;
   float alb = a_info.z;
+  if ((flags & ${F.light}) != 0) {
+    v_shade = fract(alb - u_time * 0.9) < 0.3 ? 1.0 : 0.38;
+    return;
+  }
   if ((flags & ${F.emissive}) != 0) {
     float tw = (flags & ${F.star}) != 0 ? sin(u_time * (1.3 + fract(float(gl_VertexID) * 0.618) * 2.5) + float(gl_VertexID)) * 0.12 : sin(u_time * 2.0 + float(gl_VertexID) * 0.37) * 0.05;
     v_shade = clamp(alb + tw, 0.0, 1.0);
@@ -114,18 +124,33 @@ void main() {
   vec4 r0 = texelFetch(u_obj, ivec2(o, 0), 0);
   vec4 r1 = texelFetch(u_obj, ivec2(o + 1, 0), 0);
   vec4 r2 = texelFetch(u_obj, ivec2(o + 2, 0), 0);
+  vec4 st = texelFetch(u_obj, ivec2(o + 4, 0), 0);
   int flags = int(a_info.x + 0.5);
   vec3 p = a_pos;
   float k = 1.0;
   float radius = a_rad;
-  if ((flags & ${G.stream}) != 0) {
-    // Tail particles stream out from the head, spreading and fading as they go.
-    float u = fract(u_time * (0.05 + a_info.y * 0.06) + a_info.y * 7.0);
-    p.x += u * a_info.z;
-    p.yz *= 1.0 + u * 4.0;
-    radius *= 1.0 + u * 2.5;
-    k = (1.0 - u) * (1.0 - u) * smoothstep(0.0, 0.08, u);
+  bool beam = (flags & ${G.beam}) != 0;
+  if (beam) {
+    k = st.z;
+    if (k < 0.01) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   }
+  if ((flags & ${G.stream}) != 0) {
+    if (beam) {
+      // Motes rising up the beam to the saucer, the beam widening below.
+      float u = 1.0 - fract(u_time * (0.35 + a_info.y * 0.3) + a_info.y * 7.0);
+      p.x += u * a_info.z;
+      p.yz *= 1.0 + u * 2.2;
+      k *= sin(u * 3.14159);
+    } else {
+      // Tail particles stream out from the head, spreading and fading as they go.
+      float u = fract(u_time * (0.05 + a_info.y * 0.06) + a_info.y * 7.0);
+      p.x += u * a_info.z;
+      p.yz *= 1.0 + u * 4.0;
+      radius *= 1.0 + u * 2.5;
+      k *= (1.0 - u) * (1.0 - u) * smoothstep(0.0, 0.08, u);
+    }
+  }
+  if ((flags & ${G.wobble}) != 0) p.x += sin(u_time * 4.0 + st.w) * st.x * max(0.0, -p.y - st.y);
   if ((flags & ${G.flicker}) != 0) k *= 0.75 + 0.25 * sin(u_time * (2.0 + a_info.y * 3.0) + a_info.y * 40.0);
   vec3 w = vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w);
   float d = u_cam.z - w.z;
@@ -245,8 +270,11 @@ export interface SpaceFrame {
   /** Camera offset for parallax, CSS pixels. */
   offX: number;
   offY: number;
-  /** Seconds. */
+  /** Seconds, and the step since the last frame (0 when motion is reduced). */
   time: number;
+  dt: number;
+  /** The cursor in the window, if there is one. */
+  pointer: { x: number; y: number } | null;
 }
 
 export class SpaceView {
@@ -385,6 +413,7 @@ export class SpaceView {
     const gl = this.gl;
     const scene = this.scene;
     if (!scene || !this.solidFbo || !this.glowFbo) return;
+    stepAliens(scene, fr.time, fr.dt, fr, fr.pointer);
     poseBodies(scene, fr.time, this.pose);
     gl.bindTexture(gl.TEXTURE_2D, this.objTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, scene.bodies.length * OBJ_TEXELS, 1, 0, gl.RGBA, gl.FLOAT, this.pose);

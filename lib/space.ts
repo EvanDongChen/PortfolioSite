@@ -11,13 +11,15 @@
  * the plane z = 0 scrolls exactly with the content and deeper things parallax.
  */
 
+import { AlienLife, populateAliens } from './spaceAliens';
+
 export const FOV_Y = (45 * Math.PI) / 180;
 export const focalFor = (viewH: number) => viewH / 2 / Math.tan(FOV_Y / 2);
 
 /** Surfel spacing, in CSS pixels as seen on screen. */
-const SPACING = 3;
+export const SPACING = 3;
 /** Disc radius as a share of the spacing, so neighbours overlap. */
-const DISC = 0.85;
+export const DISC = 0.85;
 
 // ---------------------------------------------------------------- palette ---
 
@@ -39,11 +41,18 @@ export const RAMPS: string[][] = [
   /* 13 teal  */ ['#0c1a28', '#123040', '#1a5058', '#26806e', '#4ab08a', '#9ae0b0'],
   /* 14 ash   */ ['#0e0a12', '#1c1218', '#2e1c1e', '#44282a', '#5e3a34', '#7a5040'],
   /* 15 moon  */ ['#121420', '#262a38', '#444a58', '#6a7080', '#9aa2ae', '#d0d6dc'],
+  /* 16 blip  */ ['#0e2420', '#1a4030', '#2a6a3e', '#4aa04a', '#86d060', '#d0f490'],
+  /* 17 eye   */ ['#3a3a5a', '#7a7c9a', '#b8bccc', '#e4e8ee', '#f8faff', '#ffffff'],
+  /* 18 pupil */ ['#0a0812', '#120e1e', '#1a1428', '#241c36', '#2e2444', '#3a2e52'],
+  /* 19 pink  */ ['#2a1028', '#4a1a44', '#7a2a68', '#b44a8e', '#e07ab0', '#ffb8d4'],
+  /* 20 metal */ ['#141828', '#262c40', '#44506a', '#6e7c96', '#a4b0c4', '#e0e8f0'],
+  /* 21 light */ ['#4a2a10', '#8a5010', '#d09020', '#ffd040', '#fff080', '#ffffe0'],
 ];
 export const SHADES = 6;
 export const M = {
   rock: 0, rust: 1, ice: 2, tan: 3, amber: 4, ocean: 5, land: 6, cloud: 7,
   lava: 8, violet: 9, ring: 10, sun: 11, star: 12, teal: 13, ash: 14, moon: 15,
+  blip: 16, eye: 17, pupil: 18, pink: 19, metal: 20, light: 21,
 } as const;
 
 /** What empty space and its glows snap to: ink, nebula violets and pinks, teal, starlight. */
@@ -55,26 +64,43 @@ export const SKY_PALETTE = [
 ];
 
 /** Surfel flags. */
-export const F = { emissive: 1, twoSided: 2, star: 4 } as const;
+export const F = {
+  emissive: 1, twoSided: 2, star: 4,
+  /** Sways side to side with height above the object's wobble base (antennae). */
+  wobble: 8,
+  /** Hidden while the object blinks. */
+  eye: 16,
+  /** A chasing light: its albedo is its place in the chase. */
+  light: 32,
+} as const;
 /** Glow flags. */
-export const G = { stream: 1, flicker: 2 } as const;
+export const G = {
+  stream: 1, flicker: 2,
+  /** A tractor beam: streams towards its source, only while the object's state is on. */
+  beam: 4,
+  wobble: 8,
+} as const;
 
 /** Floats per surfel: x y z, nx ny nz, radius, material, albedo, object, flags. */
 export const SOLID_STRIDE = 11;
 /** Floats per glow: x y z, radius, r g b, object, flags, seed, stream length. */
 export const GLOW_STRIDE = 11;
-/** Texels (RGBA floats) per object in the transform texture. */
-export const OBJ_TEXELS = 4;
+/**
+ * Texels (RGBA floats) per object in the transform texture: three rows of a 3x4
+ * matrix, the sphere that can shadow it, then its state (wobble amount, wobble
+ * base, blink or beam, phase).
+ */
+export const OBJ_TEXELS = 5;
 
 // ------------------------------------------------------------------ maths ---
 
-type V3 = [number, number, number];
-const norm = (v: V3): V3 => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
-const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+export type V3 = [number, number, number];
+export const norm = (v: V3): V3 => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+export const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+export const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 
-const mulberry = (seed: number) => () => {
+export const mulberry = (seed: number) => () => {
   seed = (seed + 0x6d2b79f5) | 0;
   let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
@@ -88,7 +114,7 @@ const hash = (x: number, y: number, z: number, s: number) => {
   return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
 };
 const smooth = (t: number) => t * t * (3 - 2 * t);
-const vnoise = (x: number, y: number, z: number, s: number) => {
+export const vnoise = (x: number, y: number, z: number, s: number) => {
   const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
   const fx = smooth(x - ix), fy = smooth(y - iy), fz = smooth(z - iz);
   const l = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -100,33 +126,35 @@ const vnoise = (x: number, y: number, z: number, s: number) => {
   );
 };
 /** Fractal noise, about 0..1 with mean 0.5. */
-const fbm = (x: number, y: number, z: number, s: number, oct = 4) => {
+export const fbm = (x: number, y: number, z: number, s: number, oct = 4) => {
   let sum = 0, amp = 0.5, total = 0, fr = 1;
   for (let o = 0; o < oct; o++) { sum += vnoise(x * fr, y * fr, z * fr, s + o * 17) * amp; total += amp; amp *= 0.5; fr *= 2.03; }
   return sum / total;
 };
 
 /** A rotation (columns) taking local +Y to `axis`. */
-const basisFor = (axis: V3): number[] => {
+export const basisFor = (axis: V3): number[] => {
   const y = norm(axis);
   const ref: V3 = Math.abs(y[0]) < 0.9 ? [1, 0, 0] : [0, 0, 1];
   const z = norm(cross(ref, y));
   const x = cross(y, z);
   return [x[0], y[0], z[0], x[1], y[1], z[1], x[2], y[2], z[2]]; // row-major 3x3
 };
-const mul3 = (a: number[], b: number[]) => {
+export const mul3 = (a: number[], b: number[]) => {
   const r = new Array(9);
   for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) r[i * 3 + j] = a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j];
   return r;
 };
-const rotY = (t: number) => { const c = Math.cos(t), s = Math.sin(t); return [c, 0, s, 0, 1, 0, -s, 0, c]; };
-const IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+export const rotY = (t: number) => { const c = Math.cos(t), s = Math.sin(t); return [c, 0, s, 0, 1, 0, -s, 0, c]; };
+export const IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+export const rotX = (t: number) => { const c = Math.cos(t), s = Math.sin(t); return [1, 0, 0, 0, c, -s, 0, s, c]; };
+export const rotZ = (t: number) => { const c = Math.cos(t), s = Math.sin(t); return [c, -s, 0, s, c, 0, 0, 0, 1]; };
 
 // ---------------------------------------------------------------- objects ---
 
-export type BodyKind = 'stars' | 'sun' | 'planet' | 'ring' | 'clouds' | 'moon' | 'asteroid' | 'comet' | 'galaxy' | 'nebula';
+export type BodyKind = 'stars' | 'sun' | 'planet' | 'ring' | 'clouds' | 'moon' | 'asteroid' | 'comet' | 'galaxy' | 'nebula' | 'rock' | 'blip' | 'arm' | 'saucer' | 'beam';
 
-interface Body {
+export interface Body {
   kind: BodyKind;
   name: string;
   /** Centre at time 0. */
@@ -143,6 +171,16 @@ interface Body {
   shadow: number;
   /** Turn local +X away from the sun (comets). */
   faceAway?: boolean;
+  /** A gentle drift round its spot (the rocks the blips live on). */
+  bob?: { amp: number; rate: number; phase: number };
+  /** Set each frame by the aliens' behaviour; for an attached part, only `rot` is used, relative to its parent. */
+  live?: { c: V3; rot: number[] };
+  /** Squash and stretch along local x, y, z. */
+  scale?: V3;
+  /** Rides on another body, at `offset` in that body's frame. */
+  attach?: { parent: number; offset: V3 };
+  /** Wobble amount, wobble base, blink or beam, phase (see OBJ_TEXELS). */
+  params?: [number, number, number, number];
 }
 
 export interface SpaceScene {
@@ -153,9 +191,12 @@ export interface SpaceScene {
   bodies: Body[];
   sun: V3;
   focal: number;
+  life: AlienLife;
+  /** Every body's centre as last posed. */
+  centres?: V3[];
 }
 
-class Builder {
+export class Builder {
   solid: number[] = [];
   glow: number[] = [];
   bodies: Body[] = [];
@@ -174,10 +215,10 @@ class Builder {
   }
 }
 
-type Surface = (d: V3) => { mat: number; alb: number; n?: V3; h?: number; flags?: number } | null;
+export type Surface = (d: V3) => { mat: number; alb: number; n?: V3; h?: number; flags?: number } | null;
 
 /** Cover a sphere of radius R with surfels spaced `sp` apart. */
-const sphere = (B: Builder, obj: number, R: number, sp: number, surface: Surface, flags = 0) => {
+export const sphere = (B: Builder, obj: number, R: number, sp: number, surface: Surface, flags = 0) => {
   const N = Math.max(24, Math.round((4 * Math.PI * R * R) / (sp * sp)));
   for (let i = 0; i < N; i++) {
     const y = 1 - (2 * (i + 0.5)) / N;
@@ -293,7 +334,7 @@ const ring = (B: Builder, obj: number, r1: number, r2: number, sp: number, seed:
 };
 
 /** A lumpy rock: a sphere pushed in and out by noise, its normals taken from the bumps. */
-const lumpy = (B: Builder, obj: number, R: number, sp: number, seed: number, mat: number, rough = 0.38) => {
+export const lumpy = (B: Builder, obj: number, R: number, sp: number, seed: number, mat: number, rough = 0.38) => {
   const h = (d: V3) => 1 + (fbm(d[0] * 1.6 + 3, d[1] * 1.6, d[2] * 1.6, seed, 3) - 0.5) * 2 * rough;
   const at = (d: V3): V3 => { const k = R * h(d); return [d[0] * k, d[1] * k, d[2] * k]; };
   const N = Math.max(16, Math.round((4 * Math.PI * R * R) / (sp * sp)));
@@ -316,9 +357,9 @@ const lumpy = (B: Builder, obj: number, R: number, sp: number, seed: number, mat
   }
 };
 
-const hexToRgb = (hex: string): V3 => [parseInt(hex.slice(1, 3), 16) / 255, parseInt(hex.slice(3, 5), 16) / 255, parseInt(hex.slice(5, 7), 16) / 255];
-const scaleRgb = (c: V3, k: number): V3 => [c[0] * k, c[1] * k, c[2] * k];
-const mixRgb = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+export const hexToRgb = (hex: string): V3 => [parseInt(hex.slice(1, 3), 16) / 255, parseInt(hex.slice(3, 5), 16) / 255, parseInt(hex.slice(5, 7), 16) / 255];
+export const scaleRgb = (c: V3, k: number): V3 => [c[0] * k, c[1] * k, c[2] * k];
+export const mixRgb = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 const PLANET_KINDS = ['ringed', 'rust', 'icegiant', 'earth', 'lava', 'violet', 'ice'] as const;
 
@@ -511,6 +552,10 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
     }
   }
 
+  // The cute ones: blips on their rocks, and saucers visiting them.
+  const planets = B.bodies.map((b, i) => (b.kind === 'planet' ? i : -1)).filter(i => i >= 0);
+  const life = populateAliens(B, { rand, at, k, sp, s, f, viewW, pageH, planets, seed });
+
   return {
     solid: new Float32Array(B.solid),
     solidCount: B.solid.length / SOLID_STRIDE,
@@ -519,37 +564,68 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
     bodies: B.bodies,
     sun: sunPos,
     focal: f,
+    life,
   };
 };
 
+/** Where a free body (not attached, not driven by behaviour) is at time `t`. */
+export const centreAt = (scene: SpaceScene, i: number, t: number, centres?: V3[]): V3 => {
+  const b = scene.bodies[i];
+  if (b.orbit) {
+    const pc = centres ? centres[b.orbit.parent] : centreAt(scene, b.orbit.parent, t);
+    const a = b.orbit.phase + t * b.orbit.rate;
+    const o = b.orbit.base;
+    const lx = Math.cos(a) * b.orbit.radius, lz = Math.sin(a) * b.orbit.radius;
+    return [pc[0] + o[0] * lx + o[2] * lz, pc[1] + o[3] * lx + o[5] * lz, pc[2] + o[6] * lx + o[8] * lz];
+  }
+  if (b.drift) {
+    const span = b.drift.max - b.drift.min;
+    const x = b.drift.min + ((((b.pos[0] - b.drift.min + t * b.drift.vx) % span) + span) % span);
+    return [x, b.pos[1], b.pos[2]];
+  }
+  if (b.path) {
+    const u = (((t / b.path.period + b.path.phase) % 1) + 1) % 1;
+    return [
+      b.path.from[0] + (b.path.to[0] - b.path.from[0]) * u,
+      b.path.from[1] + (b.path.to[1] - b.path.from[1]) * u,
+      b.path.from[2] + (b.path.to[2] - b.path.from[2]) * u,
+    ];
+  }
+  if (b.bob) {
+    const a = t * b.bob.rate + b.bob.phase;
+    return [b.pos[0] + Math.sin(a * 0.7) * b.bob.amp * 0.6, b.pos[1] + Math.sin(a) * b.bob.amp, b.pos[2] + Math.cos(a * 0.8) * b.bob.amp * 0.5];
+  }
+  return b.pos;
+};
+
+export const rotate = (m: number[], v: V3): V3 => [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
+
 /**
  * Writes every body's transform at time `t` (seconds) into `out`: per body,
- * three rows of a 3x4 matrix, then the sphere that can shadow it (centre, radius).
+ * three rows of a 3x4 matrix, the sphere that can shadow it (centre, radius),
+ * and its state. Attached parts ride their parents, which come first.
  */
 export const poseBodies = (scene: SpaceScene, t: number, out: Float32Array) => {
   const { bodies } = scene;
   const centres: V3[] = [];
+  const rots: number[][] = [];
   for (let i = 0; i < bodies.length; i++) {
     const b = bodies[i];
-    let c: V3 = b.pos;
-    let rot = b.spin ? mul3(b.base, rotY(b.spin0 + t * b.spin)) : b.base;
-    if (b.orbit) {
-      const pc = centres[b.orbit.parent];
-      const a = b.orbit.phase + t * b.orbit.rate;
-      const o = b.orbit.base;
-      const lx = Math.cos(a) * b.orbit.radius, lz = Math.sin(a) * b.orbit.radius;
-      c = [pc[0] + o[0] * lx + o[2] * lz, pc[1] + o[3] * lx + o[5] * lz, pc[2] + o[6] * lx + o[8] * lz];
-    } else if (b.drift) {
-      const span = b.drift.max - b.drift.min;
-      const x = b.drift.min + ((((b.pos[0] - b.drift.min + t * b.drift.vx) % span) + span) % span);
-      c = [x, b.pos[1], b.pos[2]];
-    } else if (b.path) {
-      const u = (((t / b.path.period + b.path.phase) % 1) + 1) % 1;
-      c = [
-        b.path.from[0] + (b.path.to[0] - b.path.from[0]) * u,
-        b.path.from[1] + (b.path.to[1] - b.path.from[1]) * u,
-        b.path.from[2] + (b.path.to[2] - b.path.from[2]) * u,
-      ];
+    let c: V3;
+    let rot: number[];
+    if (b.attach) {
+      const pr = rots[b.attach.parent];
+      const ps = bodies[b.attach.parent].scale ?? [1, 1, 1];
+      const off = rotate(pr, [b.attach.offset[0] * ps[0], b.attach.offset[1] * ps[1], b.attach.offset[2] * ps[2]]);
+      const pc = centres[b.attach.parent];
+      c = [pc[0] + off[0], pc[1] + off[1], pc[2] + off[2]];
+      rot = mul3(pr, b.live?.rot ?? b.base);
+    } else if (b.live) {
+      c = b.live.c;
+      rot = b.live.rot;
+    } else {
+      c = centreAt(scene, i, t, centres);
+      rot = b.spin ? mul3(b.base, rotY(b.spin0 + t * b.spin)) : b.base;
     }
     if (b.faceAway) {
       const x = norm([c[0] - scene.sun[0], c[1] - scene.sun[1], c[2] - scene.sun[2]]);
@@ -558,11 +634,15 @@ export const poseBodies = (scene: SpaceScene, t: number, out: Float32Array) => {
       rot = [x[0], y[0], z[0], x[1], y[1], z[1], x[2], y[2], z[2]];
     }
     centres.push(c);
+    rots.push(rot);
+    const sc = b.scale ?? [1, 1, 1];
     const o = i * OBJ_TEXELS * 4;
-    out[o] = rot[0]; out[o + 1] = rot[1]; out[o + 2] = rot[2]; out[o + 3] = c[0];
-    out[o + 4] = rot[3]; out[o + 5] = rot[4]; out[o + 6] = rot[5]; out[o + 7] = c[1];
-    out[o + 8] = rot[6]; out[o + 9] = rot[7]; out[o + 10] = rot[8]; out[o + 11] = c[2];
+    out[o] = rot[0] * sc[0]; out[o + 1] = rot[1] * sc[1]; out[o + 2] = rot[2] * sc[2]; out[o + 3] = c[0];
+    out[o + 4] = rot[3] * sc[0]; out[o + 5] = rot[4] * sc[1]; out[o + 6] = rot[5] * sc[2]; out[o + 7] = c[1];
+    out[o + 8] = rot[6] * sc[0]; out[o + 9] = rot[7] * sc[1]; out[o + 10] = rot[8] * sc[2]; out[o + 11] = c[2];
     out[o + 12] = 0; out[o + 13] = 0; out[o + 14] = 0; out[o + 15] = 0;
+    const p = b.params;
+    out[o + 16] = p ? p[0] : 0; out[o + 17] = p ? p[1] : 0; out[o + 18] = p ? p[2] : 0; out[o + 19] = p ? p[3] : 0;
   }
   // Shadow spheres last, once every centre is known.
   for (let i = 0; i < bodies.length; i++) {
@@ -571,4 +651,5 @@ export const poseBodies = (scene: SpaceScene, t: number, out: Float32Array) => {
     const o = i * OBJ_TEXELS * 4 + 12;
     out[o] = centres[sh][0]; out[o + 1] = centres[sh][1]; out[o + 2] = centres[sh][2]; out[o + 3] = bodies[sh].radius;
   }
+  scene.centres = centres;
 };
