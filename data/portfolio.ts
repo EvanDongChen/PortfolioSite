@@ -30,6 +30,14 @@ export const projects: Project[] = [
     featured: true,
   },
   {
+    title: 'One Bad Apple',
+    description: 'A village of little fruits with legs plays Werewolf in 3D while you watch. Each fruit has its own personality, memories and running suspicions, gossips in private, lies (sometimes badly) and votes. Runs on Gemini AI or on built-in personality rules.',
+    image: `${BASE_URL}images/one_bad_apple.webp`,
+    tags: ['React', 'TypeScript', 'three.js', 'React Three Fiber', 'Rapier', 'Gemini', 'AI Agents'],
+    codeUrl: 'https://evandongchen.github.io/OneBadApple/',
+    linkLabel: 'Play',
+  },
+  {
     title: 'HangyoPlop',
     description: 'A pixel-art Hangyodon desktop pet for Windows. He watches your cursor, types along with you, naps when you are away, reminds you to stretch and drink water, and thinks along while your coding agent works. Fully offline.',
     image: `${BASE_URL}images/hangyoplop.webp`,
