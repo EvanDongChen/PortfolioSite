@@ -30,6 +30,14 @@ export const projects: Project[] = [
     featured: true,
   },
   {
+    title: 'Rotten to the Core',
+    description: 'A spectator sim in the style of Among Us: eight fruits do chores in a lab while one of them, the Rotten, slices the others when nobody is looking. Fruits remember only what they saw, memories fade and bend, and meetings fall apart. Heuristic, Bayesian and LLM brains, benchmarked over thousands of seeded games.',
+    image: `${BASE_URL}images/rotten_to_the_core.webp`,
+    tags: ['React', 'TypeScript', 'three.js', 'React Three Fiber', 'Simulation', 'Bayesian Inference', 'Gemini', 'AI Agents'],
+    codeUrl: 'https://evandongchen.github.io/RottenToTheCore/',
+    linkLabel: 'Play',
+  },
+  {
     title: 'One Bad Apple',
     description: 'A village of little fruits with legs plays Werewolf in 3D while you watch. Each fruit has its own personality, memories and running suspicions, gossips in private, lies (sometimes badly) and votes. Runs on Gemini AI or on built-in personality rules.',
     image: `${BASE_URL}images/one_bad_apple.webp`,
