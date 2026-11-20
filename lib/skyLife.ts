@@ -8,9 +8,10 @@ import { Critters, populateCritters, stepCritters } from './skyCritters';
  * The sky's creatures. The stars are two long dragons in the old Chinese manner
  * (serpents' bodies of scaled segments with plated bellies, crests of spines and
  * four clawed legs, antlered heads with long whiskers and flowing manes): a red
- * and gold one and an azure one with a white belly, playing with one flaming
- * pearl as the two dragons of the old paintings do. The red one goes straight
- * for it, the azure one circles round it, so they spiral about each other. The pearl wanders between islands,
+ * and gold one and an azure one with a white belly. They take turns with one
+ * flaming pearl: one chases it while the other roams the sky on its own, keeping
+ * clear of the chase, and when the chaser catches the pearl (or tires of it) the
+ * two swap. The pearl wanders between islands,
  * circles one now and then (so the dragon loops round it, passing behind and in
  * front), follows the cursor when it moves, and darts off whenever the dragon's
  * jaws come close, which the dragon answers with a barrel roll.
@@ -67,7 +68,14 @@ export interface Pearl {
   orbitA: number;
 }
 
-export interface SkyLife { dragons: Dragon[]; pearl: Pearl; critters: Critters; lastPointer: { x: number; y: number; t: number } | null; time: number }
+export interface SkyLife {
+  dragons: Dragon[]; pearl: Pearl; critters: Critters; lastPointer: { x: number; y: number; t: number } | null; time: number;
+  /** Which dragon has the pearl's turn, and for how long it has had it. */
+  chaser: number;
+  turn: number;
+  /** Where each dragon not chasing is making for, and how long it has been on its way. */
+  roam: { target: V3; t: number }[];
+}
 
 interface Ctx {
   rand: () => number;
@@ -279,7 +287,7 @@ export const populateLife = (B: Builder, ctx: Ctx): SkyLife => {
   const pearl: Pearl = { body: pearlBody, pos: pearlPos, vel: [0, 0, 0], target: pearlPos, mode: 'wander', t: 0, dur: 4, island: -1, orbitA: 0, arch: -1, through: [[0, 0, 0], [0, 0, 0]] };
   void viewW;
   const critters = populateCritters(B, ctx);
-  return { dragons, pearl, critters, lastPointer: null, time: 0 };
+  return { dragons, pearl, critters, lastPointer: null, time: 0, chaser: 0, turn: 0, roam: dragons.map(d => ({ target: [...d.pos] as V3, t: 99 })) };
 };
 
 // -------------------------------------------------------------- behaviour ---
@@ -386,13 +394,17 @@ const stepPearl = (scene: SkyScene, life: SkyLife, dt: number, cam: SkyCamera, p
     }
   }
   // Caught (by either): the pearl darts off somewhere far across the view, and the catcher rolls.
-  const catcher = dragons.find(d => len(sub(add(d.pos, scl(d.dir, d.R * 2.2)), pearl.pos)) < d.R * 2.4);
+  // Only the dragon whose turn it is can catch it.
+  const chaser = dragons[life.chaser];
+  const catcher = chaser && len(sub(add(chaser.pos, scl(chaser.dir, chaser.R * 2.2)), pearl.pos)) < chaser.R * 2.4 ? chaser : null;
   if (catcher && pearl.mode !== 'dart' && pearl.mode !== 'thread') {
     let best = viewSpot(scene, cam, rng, pearl.pos);
     for (let i = 0; i < 6; i++) { const c = viewSpot(scene, cam, rng, pearl.pos); if (len(sub(c, pearl.pos)) > len(sub(best, pearl.pos))) best = c; }
     pearl.mode = 'dart'; pearl.t = 0; pearl.dur = 2.5; pearl.target = best;
     if (catcher.spin >= 1) catcher.spin = 0;
     if (life.lastPointer) life.lastPointer.t = -99;
+    // Caught it: the other's turn, once this one has had a good go.
+    if (life.turn > 12) passTurn(life);
   }
   // A spring towards the target, quick when darting, and a little bob as it floats.
   const stiff = pearl.mode === 'dart' ? 5 : pearl.mode === 'cursor' || pearl.mode === 'thread' ? 3.2 : 1.4;
@@ -405,11 +417,40 @@ const stepPearl = (scene: SkyScene, life: SkyLife, dt: number, cam: SkyCamera, p
   scene.bodies[pearl.body].live = { c: [pearl.pos[0], pearl.pos[1] + bob, pearl.pos[2]], rot: rotZ(life.time * 0.8) };
 };
 
+/** Hands the pearl to the next dragon; the one that had it goes off on its own. */
+const passTurn = (life: SkyLife) => {
+  if (life.dragons.length < 2) return;
+  life.roam[life.chaser].t = 99;
+  life.chaser = (life.chaser + 1) % life.dragons.length;
+  life.turn = 0;
+};
+
+/** Somewhere in view for a roaming dragon: the open spot furthest from the chase. */
+const roamSpot = (scene: SkyScene, life: SkyLife, cam: SkyCamera): V3 => {
+  const chase = life.dragons[life.chaser]?.pos ?? life.pearl.pos;
+  let best = viewSpot(scene, cam, rng), bestD = -1;
+  for (let i = 0; i < 6; i++) {
+    const c = viewSpot(scene, cam, rng);
+    const d = Math.min(len(sub(c, chase)), len(sub(c, life.pearl.pos)));
+    if (d > bestD) { bestD = d; best = c; }
+  }
+  return best;
+};
+
 const stepDragon = (scene: SkyScene, life: SkyLife, dr: Dragon, n: number, dt: number, cam: SkyCamera) => {
   const { pearl } = life;
   const t = life.time;
-  // The first makes straight for the pearl; the other circles round it, so they spiral about each other.
-  const aim: V3 = n === 0 || pearl.mode === 'thread' ? pearl.pos : add(pearl.pos, [Math.cos(t * 0.6 + n * 2) * dr.R * 6, Math.sin(t * 0.8) * dr.R * 3, Math.sin(t * 0.6 + n * 2) * dr.R * 5]);
+  // The chaser makes for the pearl; the other roams from spot to spot, away from the chase.
+  let aim: V3;
+  if (n === life.chaser) aim = pearl.pos;
+  else {
+    const ro = life.roam[n];
+    ro.t += dt;
+    const chase = life.dragons[life.chaser];
+    const crowded = chase && len(sub(ro.target, chase.pos)) < dr.R * 10;
+    if (ro.t > 9 || len(sub(ro.target, dr.pos)) < dr.R * 4 || crowded || !inView(scene, cam, ro.target, 0)) { ro.target = roamSpot(scene, life, cam); ro.t = 0; }
+    aim = ro.target;
+  }
   // Steer for it, weaving up and down as it goes.
   let want = norm(sub(aim, dr.pos));
   // Never head-on into the other: shy off when their heads come close.
@@ -478,6 +519,9 @@ export const stepLife = (scene: SkyScene, _t: number, dt: number, cam: SkyCamera
   rng = rand;
   const life = scene.life;
   life.time += dt;
+  // A chaser that hasn't caught it in a good while gives the other a go.
+  life.turn += dt;
+  if (life.turn > 35) passTurn(life);
   if (dt <= 0) {
     // Still pose everything once, so a frozen page still shows the dragon.
     life.dragons.forEach((d, n) => { if (!scene.bodies[d.head].live) stepDragon(scene, life, d, n, 0.001, cam); });
