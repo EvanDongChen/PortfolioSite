@@ -38,7 +38,10 @@ const preparePage = async (page: Page) => {
   } else if (page === 'shrine') {
     await loadShrine();
     await Promise.all([document.fonts?.load("16px 'Shrine Display'"), document.fonts?.load("16px 'Shrine Label'")]);
-  } else if (page === 'space') await loadSpace();
+  } else if (page === 'space') {
+    await loadSpace();
+    await document.fonts?.load("16px 'Space Display'");
+  }
   else if (page === 'aquarium') await loadAquarium();
 };
 
@@ -60,6 +63,8 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const setPage = useCallback((next: Page, origin?: { x: number; y: number }) => {
     const swap = () => {
       pendingScrollY = window.scrollY;
+      // No page's look may outlive it (a hot reload can leave one behind); the next page adds its own.
+      document.documentElement.classList.remove('pond-theme', 'shrine-theme', 'space-theme');
       setIsPondMode(next === 'pond');
       setIsShrineMode(next === 'shrine');
       setIsSpaceMode(next === 'space');

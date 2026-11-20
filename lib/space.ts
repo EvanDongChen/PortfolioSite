@@ -479,7 +479,8 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
   const count = Math.max(2, Math.floor((pageH - first + 400) / step));
   for (let i = 0; i < count; i++) {
     const kind = PLANET_KINDS[i % PLANET_KINDS.length];
-    const left = i % 2 === 0;
+    // The first on the right, leaving the hero's left margin to the blips.
+    const left = i % 2 === 1;
     const z = -(0.25 + rand() * 0.6) * f;
     const kz = k(z);
     const spz = sp(z);
@@ -566,11 +567,13 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
   {
     const z = -1.2 * f;
     const kz = k(z);
-    const y = pageH * (pageH > 4000 ? 0.7 : 0.6);
-    const nearest = B.bodies.filter(b => b.kind === 'planet').sort((a, b) => Math.abs(a.pos[1] - y) - Math.abs(b.pos[1] - y))[0];
-    const left = nearest ? nearest.pos[0] > viewW / 2 : true;
     const rh = 24 * s * kz;
-    const bh = B.body({ kind: 'blackhole', name: 'black hole', pos: at(left ? 0.1 : 0.88, y, z), radius: rh * 4.2, base: basisFor(norm([0.12, -1, 0.32])), spin: 0.55 });
+    // Somewhere in a margin no planet ever passes over.
+    const y0 = pageH * (pageH > 4000 ? 0.7 : 0.6);
+    const cands: Disc[] = [];
+    for (const dy of [0, -350, 350, -700, 700, -1050, 1050]) for (const sx of [0.1, 0.88]) cands.push({ pos: at(sx, Math.min(pageH - 300, Math.max(900, y0 + dy)), z), r: rh * 5 });
+    const spot = pickClear(cands, obstaclesOf(B.bodies), f, viewW, viewH);
+    const bh = B.body({ kind: 'blackhole', name: 'black hole', pos: spot.pos, radius: rh * 4.2, base: basisFor(norm([0.12, -1, 0.32])), spin: 0.55 });
     const spd = sp(z) * 0.7;
     const r1 = rh * 1.7, r2 = rh * 4.2;
     const N = Math.round((Math.PI * (r2 * r2 - r1 * r1)) / (spd * spd));
@@ -614,7 +617,7 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
 
   // The cute ones: blips on their rocks, and saucers visiting them.
   const planets = B.bodies.map((b, i) => (b.kind === 'planet' ? i : -1)).filter(i => i >= 0);
-  const life = populateAliens(B, { rand, at, k, sp, s, f, viewW, pageH, planets, seed });
+  const life = populateAliens(B, { rand, at, k, sp, s, f, viewW, viewH, pageH, planets, seed });
   const events = populateEvents(B, { rand, k, sp, s, f, sunR, sunZ });
 
   return {
@@ -629,6 +632,46 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
     events,
     blackHole,
   };
+};
+
+/** A circle in the world, for keeping things from piling up on screen. */
+export interface Disc { pos: V3; r: number }
+
+/**
+ * How far apart two discs ever come on screen, edge to edge, over any scroll
+ * where both are in view (negative: they overlap). Deeper things scroll slower,
+ * so two that look apart at one scroll can meet at another.
+ */
+export const screenClearance = (a: Disc, b: Disc, f: number, viewW: number, viewH: number) => {
+  const ka = (f - a.pos[2]) / f, kb = (f - b.pos[2]) / f;
+  const ra = a.r / ka, rb = b.r / kb;
+  const dx = Math.abs((a.pos[0] - viewW / 2) / ka - (b.pos[0] - viewW / 2) / kb);
+  // Scrolls (camera centre y) where each is at least partly in view.
+  const lo = Math.max(a.pos[1] - (viewH / 2 + ra) * ka, b.pos[1] - (viewH / 2 + rb) * kb);
+  const hi = Math.min(a.pos[1] + (viewH / 2 + ra) * ka, b.pos[1] + (viewH / 2 + rb) * kb);
+  if (lo > hi) return Infinity;
+  const gap = (c: number) => (a.pos[1] - c) / ka - (b.pos[1] - c) / kb;
+  const g0 = gap(lo), g1 = gap(hi);
+  const dy = g0 * g1 <= 0 ? 0 : Math.min(Math.abs(g0), Math.abs(g1));
+  return Math.hypot(dx, dy) - ra - rb;
+};
+
+/** Everything big already in the scene: the sun, planets with their rings and moons' orbits, the black hole. */
+export const obstaclesOf = (bodies: Body[]): Disc[] => bodies.flatMap(b => {
+  if (b.kind === 'planet' || b.kind === 'ring' || b.kind === 'sun' || b.kind === 'blackhole' || b.kind === 'gardenmoon') return [{ pos: b.pos, r: b.radius * 1.1 }];
+  if (b.kind === 'moon' && b.orbit) return [{ pos: bodies[b.orbit.parent].pos, r: b.orbit.radius + b.radius * 1.5 }];
+  return [];
+});
+
+/** The first candidate clear of every obstacle, or failing that the one with the most room (`room` says how much). */
+export const pickClear = (cands: Disc[], obstacles: Disc[], f: number, viewW: number, viewH: number, margin = 24): Disc & { room: number } => {
+  let best = cands[0], bestRoom = -Infinity;
+  for (const c of cands) {
+    const room = Math.min(Infinity, ...obstacles.map(o => screenClearance(c, o, f, viewW, viewH)));
+    if (room >= margin) return { ...c, room };
+    if (room > bestRoom) { bestRoom = room; best = c; }
+  }
+  return { ...best, room: bestRoom };
 };
 
 /** The camera, as the view draws with it. */

@@ -114,6 +114,8 @@ const SpaceSky: React.FC<SpaceSkyProps> = ({ onReady, debug }) => {
       };
     }
     let first = true;
+    let shownSize = '';
+    let shownShift = NaN;
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       if (!hasScene) return;
@@ -126,14 +128,15 @@ const SpaceSky: React.FC<SpaceSkyProps> = ({ onReady, debug }) => {
       const w = window.innerWidth, h = window.innerHeight;
       const px = pixelFor(t, w);
       const { w: aw, h: ah } = view.resize(w, h, px);
-      canvas.style.width = `${aw * px}px`;
-      canvas.style.height = `${ah * px}px`;
+      // Style writes only when something changed, so the page isn't restyled every frame.
+      const size = `${aw * px}x${ah * px}`;
+      if (size !== shownSize) { shownSize = size; canvas.style.width = `${aw * px}px`; canvas.style.height = `${ah * px}px`; }
       const ease = still ? 1 : 1 - Math.exp(-dt * 3);
       lean.x += (lean.tx + (still ? 0 : Math.sin(time * 0.13) * 6) - lean.x) * ease;
       lean.y += (lean.ty + (still ? 0 : Math.cos(time * 0.11) * 4) - lean.y) * ease;
       const scroll = window.scrollY;
       const snapped = Math.floor(scroll / px) * px;
-      canvas.style.transform = `translate3d(0, ${snapped - scroll}px, 0)`;
+      if (snapped - scroll !== shownShift) { shownShift = snapped - scroll; canvas.style.transform = `translate3d(0, ${shownShift}px, 0)`; }
       view.draw({ viewW: w, viewH: h, scrollY: snapped, offX: lean.x, offY: lean.y, time, dt: still ? 0 : dt, pointer });
       if (first) { first = false; readyRef.current(); }
     };

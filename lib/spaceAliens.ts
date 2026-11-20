@@ -1,5 +1,5 @@
 import {
-  Builder, F, G, M, SpaceCamera, SpaceScene, V3, centreAt, lumpy, mul3, norm, dot, rotX, rotY, rotZ, sphere, toScreen, uprightOn,
+  Builder, Disc, F, G, M, SpaceCamera, obstaclesOf, pickClear, SpaceScene, V3, centreAt, lumpy, mul3, norm, dot, rotX, rotY, rotZ, sphere, toScreen, uprightOn,
 } from './space';
 
 /**
@@ -84,6 +84,7 @@ interface Ctx {
   s: number;
   f: number;
   viewW: number;
+  viewH: number;
   pageH: number;
   planets: number[];
   seed: number;
@@ -240,14 +241,26 @@ export const populateAliens = (B: Builder, ctx: Ctx): AlienLife => {
   // Colonies down the margins, the first beside the hero so they're there on arrival.
   const count = Math.max(2, Math.round((pageH - 400) / 1600) + 1);
   for (let c = 0; c < count; c++) {
-    const y = c === 0 ? 520 : 520 + c * 1600 + (rand() - 0.5) * 300;
-    if (y > pageH - 200) break;
-    // The margin across from the nearest planet, so the two don't pile up.
-    const nearest = ctx.planets.map(i => B.bodies[i]).sort((a, b) => Math.abs(a.pos[1] - y) - Math.abs(b.pos[1] - y))[0];
-    const left = c === 0 || !nearest || Math.abs(nearest.pos[1] - y) > 900 ? c % 2 === 0 : nearest.pos[0] > ctx.viewW / 2;
+    const y0 = c === 0 ? 520 : 520 + c * 1600 + (rand() - 0.5) * 300;
+    if (y0 > pageH - 200) break;
     const z = -rand() * 0.08 * ctx.f;
     const kz = k(z);
-    const anchor = at(left ? 0.075 : 0.885, y, z);
+    // A spot in a margin that no planet, ring, moon or other colony ever crosses on screen;
+    // the first stays beside the hero, on the left.
+    const cands: Disc[] = [];
+    const shifts = c === 0 ? [0, 120, -80] : [0, -250, 250, -500, 500, -750, 750, -1000, 1000];
+    const sides = c === 0 ? [0.075] : c % 2 ? [0.885, 0.075] : [0.075, 0.885];
+    for (const dy of shifts) for (const sx of sides) {
+      const yy = y0 + dy;
+      if (yy > 300 && yy < pageH - 200) cands.push({ pos: at(sx, yy, z), r: 220 * s * kz });
+    }
+    if (!cands.length) break;
+    const placed: Disc[] = colonies.map(col => ({ pos: [B.bodies[col.rocks[0].body].pos[0], col.y, z] as V3, r: 220 * s * kz }));
+    const spot = pickClear(cands, [...obstaclesOf(B.bodies), ...placed], ctx.f, ctx.viewW, ctx.viewH);
+    // Nowhere clear: better one colony fewer than one half hidden behind a planet.
+    if (spot.room < 0 && c > 0) continue;
+    const anchor = spot.pos;
+    const y = anchor[1];
     const rocks: Rock[] = [];
     const spots: [number, number][] = [];
     for (let tries = 0; spots.length < 5 && tries < 80; tries++) {
@@ -297,14 +310,17 @@ export const populateAliens = (B: Builder, ctx: Ctx): AlienLife => {
 /** The garden moon: a grey moon in a margin where two blips with watering cans grow glowing flowers. */
 const plantGarden = (B: Builder, ctx: Ctx, blips: Blip[]): Garden | null => {
   const { rand, at, k, s } = ctx;
-  const y = Math.min(ctx.pageH * 0.4, 1550);
-  if (y < 900) return null;
-  const nearest = ctx.planets.map(i => B.bodies[i]).sort((a, b) => Math.abs(a.pos[1] - y) - Math.abs(b.pos[1] - y))[0];
-  const left = nearest ? nearest.pos[0] > ctx.viewW / 2 : false;
+  const y0 = Math.min(ctx.pageH * 0.4, 1550);
+  if (y0 < 900) return null;
   const z = -0.05 * ctx.f;
   const kz = k(z);
   const R = 82 * s * kz;
-  const moon = B.body({ kind: 'gardenmoon', name: 'garden moon', pos: at(left ? 0.09 : 0.9, y, z), radius: R });
+  // Clear of the planets and of every colony (rocks and blips included).
+  const cands: Disc[] = [];
+  for (const dy of [0, 300, -300, 600, -600, 900, 1200]) for (const sx of [0.9, 0.09]) cands.push({ pos: at(sx, y0 + dy, z), r: R * 1.6 });
+  const rocks: Disc[] = B.bodies.filter(b => b.kind === 'rock').map(b => ({ pos: b.pos, r: b.radius * 2.4 }));
+  const spot = pickClear(cands, [...obstaclesOf(B.bodies), ...rocks], ctx.f, ctx.viewW, ctx.viewH);
+  const moon = B.body({ kind: 'gardenmoon', name: 'garden moon', pos: spot.pos, radius: R });
   const craters = Array.from({ length: 10 }, () => ({ c: norm([rand() - 0.5, rand() - 0.5, rand() - 0.5]), r: 0.12 + rand() * 0.2 }));
   sphere(B, moon, R, ctx.sp(z) * 0.7, d => {
     let alb = 0.5 + (Math.sin(d[0] * 7 + 1) * Math.sin(d[1] * 5) * Math.sin(d[2] * 6)) * 0.12;

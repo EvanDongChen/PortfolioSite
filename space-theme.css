@@ -59,3 +59,94 @@ html.space-theme {
 .space-theme .footer-note::before { content: 'End of transmission  \00B7  '; }
 .space-theme .profile-frame { box-shadow: 10px 10px 0 rgba(2, 2, 8, 0.6); }
 .space-theme .px-meter > span { background: #161236; }
+
+/* --- retro disco lettering ------------------------------------------------------ */
+
+/* Titan One, a heavy rounded face, in cream with a dark rim, over a stack of
+   rainbow stripes (sunset orange down to cyan) like a 70s disco sign. Each
+   stripe is a text-shadow with a thin dark one just beneath it, so they read as
+   separate bands. Labels inside these headings (their ::before) stay plain. */
+@font-face {
+  font-family: 'Space Display';
+  src: url('/fonts/titan-one.woff2') format('woff2');
+  font-display: swap;
+}
+html.space-theme {
+  --px-display: 'Space Display', 'Press Start 2P', sans-serif;
+  --disco-ink: #140a22;
+  --disco-face: #fbf4de;
+  --disco-stripes:
+    0 0.045em 0 #ffb321, 0 0.06em 0 var(--disco-ink),
+    0 0.105em 0 #ff7a21, 0 0.12em 0 var(--disco-ink),
+    0 0.165em 0 #f5423a, 0 0.18em 0 var(--disco-ink),
+    0 0.225em 0 #ec2c7e, 0 0.24em 0 var(--disco-ink),
+    0 0.285em 0 #c42cc4, 0 0.3em 0 var(--disco-ink),
+    0 0.345em 0 #8a32dc, 0 0.36em 0 var(--disco-ink),
+    0 0.405em 0 #4c44e4, 0 0.42em 0 var(--disco-ink),
+    0 0.465em 0 #2c78ec, 0 0.48em 0 var(--disco-ink),
+    0 0.525em 0 #18aee2;
+}
+.space-theme .hero-name,
+.space-theme .section-title,
+.space-theme .site-logo {
+  color: var(--disco-face);
+  -webkit-text-fill-color: var(--disco-face);
+  -webkit-text-stroke: 0.07em var(--disco-ink);
+  paint-order: stroke fill;
+  text-shadow: var(--disco-stripes);
+  letter-spacing: 0.015em;
+  font-weight: 400;
+}
+.space-theme .hero-name {
+  position: relative;
+  font-size: clamp(3rem, 10vw, 7rem);
+  line-height: 1.05;
+  padding-bottom: 0.45em;
+}
+.space-theme .section-title {
+  font-size: clamp(1.9rem, 4.4vw, 3rem);
+  line-height: 1.1;
+  padding-bottom: 0.4em;
+  /* Fewer stripes at heading size, so they stay crisp. */
+  text-shadow:
+    0 0.06em 0 #ffb321, 0 0.08em 0 var(--disco-ink),
+    0 0.14em 0 #f5423a, 0 0.16em 0 var(--disco-ink),
+    0 0.22em 0 #c42cc4, 0 0.24em 0 var(--disco-ink),
+    0 0.30em 0 #4c44e4, 0 0.32em 0 var(--disco-ink),
+    0 0.38em 0 #18aee2;
+}
+.space-theme .site-logo {
+  font-size: 1.5rem;
+  -webkit-text-stroke-width: 0.08em;
+  text-shadow: 0 0.09em 0 #ff7a21, 0 0.18em 0 #c42cc4, 0 0.27em 0 #18aee2;
+}
+.space-theme .site-logo::after,
+.space-theme .hero-name::before,
+.space-theme .section-title::before {
+  -webkit-text-stroke: 0;
+  -webkit-text-fill-color: currentColor;
+  text-shadow: none;
+}
+.space-theme .hero-name::before { color: var(--px-sand-color); }
+.space-theme .section-title::before { color: var(--px-mute); }
+
+/* Four-point sparkles on the name, as on a disco sign. */
+.space-theme .hero-name::after {
+  content: '\2726';
+  position: absolute;
+  left: -0.32em;
+  top: 0.95em;
+  font-size: 0.42em;
+  color: var(--disco-face);
+  -webkit-text-fill-color: var(--disco-face);
+  -webkit-text-stroke: 0.09em var(--disco-ink);
+  text-shadow: none;
+  animation: disco-twinkle 2.4s ease-in-out infinite;
+}
+@keyframes disco-twinkle {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  50% { transform: scale(0.7) rotate(20deg); opacity: 0.75; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .space-theme .hero-name::after { animation: none; }
+}
