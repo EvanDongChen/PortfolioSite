@@ -40,7 +40,7 @@ const preparePage = async (page: Page) => {
     await Promise.all([document.fonts?.load("16px 'Shrine Display'"), document.fonts?.load("16px 'Shrine Label'")]);
   } else if (page === 'space') {
     await loadSpace();
-    await document.fonts?.load("16px 'Space Display'");
+    await Promise.all([document.fonts?.load("16px 'Space Display'"), document.fonts?.load("16px 'Space Label'")]);
   }
   else if (page === 'aquarium') await loadAquarium();
 };

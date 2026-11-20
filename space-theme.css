@@ -71,8 +71,17 @@ html.space-theme {
   src: url('/fonts/titan-one.woff2') format('woff2');
   font-display: swap;
 }
+/* Labels, nav, dates, tags and buttons in the same face, scaled down: the theme's type sizes
+   were set for VT323, which runs small. Only the body text stays in Poppins, as on the other pages. */
+@font-face {
+  font-family: 'Space Label';
+  src: url('/fonts/titan-one.woff2') format('woff2');
+  font-display: swap;
+  size-adjust: 70%;
+}
 html.space-theme {
   --px-display: 'Space Display', 'Press Start 2P', sans-serif;
+  --px-mono: 'Space Label', 'VT323', monospace;
   --disco-ink: #140a22;
   --disco-face: #fbf4de;
   --disco-stripes:
