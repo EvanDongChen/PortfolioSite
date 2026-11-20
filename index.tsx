@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import PixelApp from './PixelApp';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { PerformanceProvider } from './contexts/PerformanceContext';
-import { loadAquarium, loadPond, loadShrine } from './lib/pageLoaders';
+import { loadAquarium, loadPond, loadShrine, loadSpace } from './lib/pageLoaders';
 import './index.css';
 
 // The pixel reef is the default page; the aquarium, the pond and the shrine are fetched
@@ -11,9 +11,17 @@ import './index.css';
 const App = lazy(loadAquarium);
 const PondApp = lazy(loadPond);
 const ShrineApp = lazy(loadShrine);
+const SpaceApp = lazy(loadSpace);
 
 const Page: React.FC = () => {
-  const { isPixelMode, isPondMode, isShrineMode } = useTheme();
+  const { isPixelMode, isPondMode, isShrineMode, isSpaceMode } = useTheme();
+  if (isSpaceMode) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#04030a]" />}>
+        <SpaceApp />
+      </Suspense>
+    );
+  }
   if (isShrineMode) {
     return (
       <Suspense fallback={<div className="min-h-screen bg-[#0a1022]" />}>

@@ -7,6 +7,8 @@ description: Build and improve the living pixel-art simulations on Evan's portfo
 
 The site's backgrounds are small living worlds that a visitor scrolls through. What follows comes from building two of them with Evan, including everything they rejected and why. CLAUDE.md has the code map; this skill holds the taste and the working method.
 
+The deep-space page is different under the hood: a real 3D scene rendered as pixel art. For it, or for any 3D theme, also load the **pixel-3d** skill, which holds that technique; the taste and working rules here still apply.
+
 Read [references/architecture.md](references/architecture.md) before adding anything to a simulation or starting a new one. When something looks or behaves wrong, check [references/known-problems.md](references/known-problems.md) first, because most of these bugs have happened before.
 
 ## What makes a good one

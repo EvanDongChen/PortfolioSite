@@ -26,6 +26,7 @@ const COLOURS: Record<Page, { ink: string; edge: string; glint: string }> = {
   reef: { ink: '#050d14', edge: '#124558', glint: '#8fe3dc' },
   pond: { ink: '#0b1a14', edge: '#25533c', glint: '#f2b8cc' },
   shrine: { ink: '#0a1022', edge: '#3a2348', glint: '#ffc978' },
+  space: { ink: '#04030a', edge: '#301c5a', glint: '#ec84a0' },
   aquarium: { ink: '#000428', edge: '#0d3a6e', glint: '#7fdcff' },
 };
 
