@@ -89,3 +89,65 @@ html.hotpot-theme[data-hotpot-food] main,
 html.hotpot-theme[data-hotpot-food] section {
   cursor: var(--px-hand) 6 0, pointer;
 }
+
+/* --- signboard lettering ---------------------------------------------------------- */
+
+/* Bungee, a face made for shop signs: the Inline cut for the logo and headings, like
+   a painted board over a hot pot restaurant, and plain Bungee, scaled down, for the
+   labels, nav, dates, tags and buttons (the theme's type sizes were set for VT323,
+   which runs small). Body text stays in Poppins, as on the other pages. */
+@font-face {
+  font-family: 'Hotpot Display';
+  src: url('/fonts/bungee-inline.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Hotpot Label';
+  src: url('/fonts/bungee.woff2') format('woff2');
+  font-display: swap;
+  size-adjust: 62%;
+}
+html.hotpot-theme {
+  --px-display: 'Hotpot Display', 'Press Start 2P', sans-serif;
+  --px-mono: 'Hotpot Label', 'VT323', monospace;
+}
+.hotpot-theme .hero-name,
+.hotpot-theme .section-title,
+.hotpot-theme .site-logo {
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+.hotpot-theme .hero-name {
+  font-size: clamp(3rem, 9vw, 6.5rem);
+  line-height: 1.05;
+}
+.hotpot-theme .section-title {
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  line-height: 1.1;
+}
+.hotpot-theme .site-logo {
+  color: #ffcc6a;
+  -webkit-text-stroke: 0.06em #2a0604;
+  paint-order: stroke fill;
+  text-shadow: 0.07em 0.07em 0 #a02612;
+}
+.hotpot-theme .site-logo::after {
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  color: #fff2d0;
+}
+/* Sub-headings in plain Bungee: the line under the name, job and degree titles, project titles. */
+html.pixel-theme.hotpot-theme .hero-tagline,
+html.pixel-theme.hotpot-theme .content-card h3,
+html.pixel-theme.hotpot-theme .project-title,
+html.pixel-theme.hotpot-theme .card-heading,
+html.pixel-theme.hotpot-theme .eyebrow {
+  font-family: 'Hotpot Label', sans-serif;
+  font-size-adjust: none;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+}
+html.pixel-theme.hotpot-theme .hero-tagline { font-size: clamp(1.4rem, 3vw, 2rem); }
+html.pixel-theme.hotpot-theme .content-card h3 { font-size: 1.6rem; color: #ffcc6a; }
+html.pixel-theme.hotpot-theme .project-title { font-size: 1.7rem; color: #ffcc6a; }

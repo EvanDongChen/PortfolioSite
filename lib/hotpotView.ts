@@ -132,7 +132,7 @@ void main() {
     p.xy += vec2(sin(seed * 40.0 + u_time * 0.3), cos(seed * 30.0 + u_time * 0.23)) * 40.0 * u;
     radius *= 1.0 + u * 2.2;
     k *= pow(sin(u * 3.14159), 1.5) * u_steam;
-    v_over = 0.6;
+    v_over = 0.25;
   }
   if ((flags & ${G.splash}) != 0) {
     float age = u_time - st.w;
@@ -367,7 +367,7 @@ void main() {
         float bd = 1e9;
         vec3 pk = oc;
         for (int i = 0; i < ${BROTH_PALETTE.length}; i++) { vec3 e = u_pal[i] - oc; float dd = dot(e, e); if (dd < bd) { bd = dd; pk = u_pal[i]; } }
-        if (clamp(ov.a * 1.6, 0.0, 0.4) > bay) col = pk;
+        if (clamp(ov.a * 1.2, 0.0, 0.22) > bay) col = pk;
       }
       o = vec4(col, 1.0);
       return;

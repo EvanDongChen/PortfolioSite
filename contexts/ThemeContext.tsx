@@ -50,6 +50,7 @@ const preparePage = async (page: Page) => {
     await Promise.all([document.fonts?.load("italic 600 16px 'Sky Display'"), document.fonts?.load("italic 600 16px 'Sky Label'")]);
   } else if (page === 'hotpot') {
     await loadHotpot();
+    await Promise.all([document.fonts?.load("16px 'Hotpot Display'"), document.fonts?.load("16px 'Hotpot Label'")]);
   }
   else if (page === 'aquarium') await loadAquarium();
 };
