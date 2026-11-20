@@ -236,10 +236,13 @@ void main() {
   } else {
     c += g.rgb * 0.25;
   }
-  // Nearest two sky colours, and a Bayer choice between them.
+  // Nearest two sky colours, and a Bayer choice between them. Plain sky keeps to the sky's own
+  // colours (blues, haze, mist); the jewels and storm greys are only for light and weather.
+  bool plain = g.a < 0.01 && dot(g.rgb, g.rgb) < 0.0004 && u_gloom < 0.01 && u_flash < 0.01;
+  int count = plain ? ${SKY_PALETTE.indexOf('#cfdcee') + 1} : ${SKY_PALETTE.length};
   float d1 = 1e9, d2 = 1e9;
   vec3 c1 = sky, c2 = sky;
-  for (int i = 0; i < ${SKY_PALETTE.length}; i++) {
+  for (int i = 0; i < count; i++) {
     vec3 e = (u_sky[i] - c) * vec3(0.8, 1.0, 0.6);
     float dd = dot(e, e);
     if (dd < d1) { d2 = d1; c2 = c1; d1 = dd; c1 = u_sky[i]; }

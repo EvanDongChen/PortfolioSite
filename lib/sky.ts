@@ -47,12 +47,13 @@ export const RAMPS: string[][] = [
   /* 22 jade    */ ['#0e3440', '#14504c', '#1e7058', '#2e9468', '#52b88a', '#98dcb4'],
   /* 23 crystal */ ['#3a3a8a', '#4e5ab0', '#6a86d4', '#8cb4ec', '#bcdcf8', '#f0faff'],
   /* 24 azure   */ ['#0a1a34', '#0d2c50', '#11426c', '#185c88', '#2a7ea4', '#58a8c4'],
+  /* 25 wisteria*/ ['#3a2a6a', '#5a3e94', '#7c5cb8', '#a084d4', '#c6aee8', '#eee4fa'],
 ];
 export const SHADES = 6;
 export const M = {
   grass: 0, soil: 1, stone: 2, sand: 3, cloud: 4, water: 5, leaf: 6, blossom: 7, bark: 8, sun: 9,
   far: 10, fargrass: 11, dragon: 12, gold: 13, cream: 14, eye: 15, pupil: 16, pearl: 17, storm: 18,
-  whale: 19, coral: 20, face: 21, jade: 22, crystal: 23, azure: 24,
+  whale: 19, coral: 20, face: 21, jade: 22, crystal: 23, azure: 24, wisteria: 25,
 } as const;
 
 /** What open sky and its glows snap to: the blues, the warm haze low down, mist, and the jewels. */
@@ -112,7 +113,8 @@ export const OBJ_TEXELS = 5;
 
 export type SkyKind =
   | 'sun' | 'island' | 'far' | 'cloud' | 'sea' | 'dragon' | 'head' | 'leg' | 'pearl'
-  | 'bird' | 'wing' | 'sheep' | 'whale' | 'fin' | 'rainbow' | 'storm' | 'bolt';
+  | 'bird' | 'wing' | 'sheep' | 'whale' | 'fin' | 'rainbow' | 'storm' | 'bolt'
+  | 'vine' | 'pillar' | 'arch' | 'kite' | 'puff' | 'flower' | 'dog';
 
 export interface Body {
   kind: SkyKind;
@@ -140,7 +142,14 @@ export interface Island {
   body: number; R: number; z: number; far: boolean; perches: V3[]; falls: V3 | null; nests: V3[];
   /** Its solid shape, in its own frame: how deep the underside hangs, and the edge's radius at 24 angles round it. */
   H: number; edge: number[];
+  /** A rock pillar rather than an island: its sides drop nearly straight before tapering. */
+  pillar?: boolean;
+  /** Strands of vine and wisteria hanging from its rim, each its own body so it can swing. */
+  vines: { body: number; root: V3; len: number }[];
 }
+
+/** A floating rock arch: its body, the radius of its curve, and the middle of its opening (in its own frame). */
+export interface Arch { body: number; R: number; opening: V3 }
 
 export interface SkyScene {
   solid: Float32Array;
@@ -154,6 +163,7 @@ export interface SkyScene {
   viewH: number;
   pageH: number;
   islands: Island[];
+  arches: Arch[];
   life: SkyLife;
   events: SkyEvents;
   /** Every body's centre and rotation as last posed. */
@@ -311,7 +321,7 @@ export const tree = (B: Builder, obj: number, p: V3, h: number, sp: number, kind
 };
 
 /** `outward`: +1 on the right of the page, -1 on the left, so waterfalls pour away from the cards. */
-interface IslandOpts { far: boolean; seed: number; falls: boolean; trees: number; crystals: boolean; outward: number }
+interface IslandOpts { far: boolean; seed: number; falls: boolean; trees: number; crystals: boolean; outward: number; garden?: boolean }
 
 /**
  * A floating island: a grassy top with an irregular edge, planted with trees and
@@ -396,10 +406,12 @@ const island = (B: Builder, ctx: Ctx, pos: V3, Rapp: number, z: number, o: Islan
     const r = edge(a) * P(t) * (t < 0.04 ? 1 : lump);
     return [Math.cos(a) * r, R * 0.04 + t * H, Math.sin(a) * r];
   };
-  const rows = Math.ceil((H * 1.25) / sp);
+  // A touch coarser than the top: it's mostly in shade, where detail counts for less.
+  const usp = sp * 1.15;
+  const rows = Math.ceil((H * 1.25) / usp);
   for (let j = 0; j < rows; j++) {
     const t = (j + 0.5) / rows;
-    const ring = Math.max(6, Math.round((2 * Math.PI * R * P(t) * 0.95) / sp));
+    const ring = Math.max(6, Math.round((2 * Math.PI * R * P(t) * 0.95) / usp));
     for (let i = 0; i < ring; i++) {
       const a = ((i + (j % 2) * 0.5) / ring) * Math.PI * 2;
       const p = under(t, a);
@@ -412,7 +424,7 @@ const island = (B: Builder, ctx: Ctx, pos: V3, Rapp: number, z: number, o: Islan
       if (t < 0.03) { mat = grass; alb = 0.42; }
       else if (t < 0.11 + (fbm(Math.cos(a) * 3, Math.sin(a) * 3, 0, ns + 3, 2) - 0.5) * 0.08) { mat = soil; alb = 0.5 - t; }
       if (o.crystals && t > 0.55 && hash2(i * 0.37 + j, ns) > 0.9) { mat = M.crystal; alb = 0.75; }
-      B.surfel(p, n, sp * DISC, mat, alb, body, mat === M.crystal ? F.emissive : 0);
+      B.surfel(p, n, usp * DISC, mat, alb, body, mat === M.crystal ? F.emissive : 0);
     }
   }
   if (o.crystals && !o.far) {
@@ -435,6 +447,7 @@ const island = (B: Builder, ctx: Ctx, pos: V3, Rapp: number, z: number, o: Islan
 
   // Mud nests stuck under the rim on the side facing the viewer, for the puffball birds.
   const nests: V3[] = [];
+  let front = 0;
   if (!o.far) {
     let best = 0, bestZ = -Infinity;
     for (let i = 0; i < 24; i++) {
@@ -443,6 +456,7 @@ const island = (B: Builder, ctx: Ctx, pos: V3, Rapp: number, z: number, o: Islan
       const score = w[2] - w[0] * o.outward * 0.4;
       if (score > bestZ && Math.abs(a - fallA) > 0.6) { bestZ = score; best = a; }
     }
+    front = best;
     for (const da of [-0.45, 0.4]) {
       const a = best + da;
       const p = under(0.16, a);
@@ -506,8 +520,122 @@ const island = (B: Builder, ctx: Ctx, pos: V3, Rapp: number, z: number, o: Islan
     falls = foot;
   }
 
+  // A hanging garden: curtains of vine and wisteria down the front of the rim.
+  const vines: Island['vines'] = [];
+  if (o.garden && !o.far) {
+    const angDist = (a: number, b: number) => { const d = Math.abs(((a - b) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI); return d; };
+    for (let k = 0; k < 11; k++) {
+      const a = front + Math.PI * 0.55 + (k / 10 - 0.5) * 2.6;
+      if (o.falls && angDist(a, fallA) < 0.3) continue;
+      if (angDist(a, front - 0.45) < 0.22 || angDist(a, front + 0.4) < 0.22) continue;
+      const rootP = under(0.06, a);
+      const rootOut: V3 = [rootP[0] + Math.cos(a) * sp, rootP[1], rootP[2] + Math.sin(a) * sp];
+      const len = R * (0.4 + rand() * 0.75);
+      const vb = B.body({ kind: 'vine', name: 'wisteria', pos: [0, 0, 0], attach: { parent: body, offset: rootOut }, params: [0, 0, 0, rand() * 6] });
+      const path: V3[] = [];
+      const wig = rand() * 6;
+      for (let y = 0; y <= len; y += sp) path.push([Math.sin(y / len * 3 + wig) * R * 0.025, y, 0]);
+      tube(B, vb, path, () => sp * 0.5, sp, () => ({ mat: M.leaf, alb: 0.4 }), F.twoSided);
+      // Racemes of wisteria hanging off it, pale at their tips, with a few leaves.
+      for (let y = len * 0.15; y < len; y += R * (0.12 + rand() * 0.07)) {
+        const side = (rand() - 0.5) * R * 0.05;
+        const rl = R * (0.09 + rand() * 0.05);
+        const c: V3 = [side, y + rl * 0.6, (rand() - 0.5) * R * 0.03];
+        ellipsoid(B, vb, [R * 0.04, rl, R * 0.04], sp * 1.1, d => ({ mat: rand() < 0.08 ? M.cream : M.wisteria, alb: 0.45 + d[1] * 0.3 }), c);
+        if (rand() < 0.5) sphere(B, vb, R * 0.025, sp * 0.8, () => ({ mat: M.leaf, alb: 0.55 }), [side + R * 0.04, y, 0]);
+      }
+      vines.push({ body: vb, root: rootOut, len });
+    }
+  }
+
   const edges = Array.from({ length: 24 }, (_, i) => edge((i / 24) * Math.PI * 2));
-  return { body, R, z, far: o.far, perches, falls, nests, H, edge: edges };
+  return { body, R, z, far: o.far, perches, falls, nests, H, edge: edges, vines };
+};
+
+// -------------------------------------------------------- pillars, arches ---
+
+/**
+ * A floating rock pillar: a tall column of banded rock, nearly straight-sided,
+ * tapering to a point far below, with a cap of grass and pines on top.
+ */
+const pillar = (B: Builder, ctx: Ctx, pos: V3, Rapp: number, Happ: number, z: number, seed: number): Island => {
+  const { k, rand } = ctx;
+  const R = Rapp * k(z), H = Happ * k(z);
+  const sp = ctx.sp(z);
+  const base = mul3(rotX(-0.22), rotY(rand() * Math.PI * 2));
+  const body = B.body({ kind: 'pillar', name: 'rock pillar', pos, radius: H * 0.6, base, bob: { amp: 5 * k(z), rate: 0.2 + rand() * 0.1, phase: rand() * 6 } });
+  const edge = (a: number) => R * (0.9 + (fbm(Math.cos(a) * 1.6 + 2, Math.sin(a) * 1.6 + 2, 0.5, seed, 3) - 0.5) * 0.5);
+  const prof = (t: number) => (t < 0.85 ? 1 - 0.15 * t : 0.8725 * ((1 - t) / 0.15) ** 0.6);
+  const at = (t: number, a: number): V3 => {
+    const lump = 1 + (fbm(Math.cos(a) * 2 + t * 3, Math.sin(a) * 2, t * 9, seed + 5, 3) - 0.5) * 0.35;
+    const r = edge(a) * prof(t) * (t < 0.02 ? 1 : lump);
+    return [Math.cos(a) * r, t * H, Math.sin(a) * r];
+  };
+  const rows = Math.ceil(H / sp);
+  for (let j = 0; j < rows; j++) {
+    const t = (j + 0.5) / rows;
+    const ring = Math.max(6, Math.round((2 * Math.PI * R * prof(t)) / sp));
+    for (let i = 0; i < ring; i++) {
+      const a = ((i + (j % 2) * 0.5) / ring) * Math.PI * 2;
+      const p = at(t, a);
+      const pa = at(t, a + 0.03), pt = at(Math.min(1, t + 0.01), a);
+      let n = norm(cross([pt[0] - p[0], pt[1] - p[1], pt[2] - p[2]], [pa[0] - p[0], pa[1] - p[1], pa[2] - p[2]]));
+      if (n[0] * Math.cos(a) + n[2] * Math.sin(a) < 0) n = [-n[0], -n[1], -n[2]];
+      const band = Math.floor(t * H / (R * 0.35) + fbm(Math.cos(a) * 2, Math.sin(a) * 2, t * 4, seed + 8, 2) * 1.4);
+      let mat: number = band % 3 === 1 ? M.stone : M.sand;
+      if (t < 0.025) mat = M.grass;
+      // Moss streaking down the shaded side.
+      else if (fbm(Math.cos(a) * 3, t * 12, Math.sin(a) * 3, seed + 11, 2) > 0.66) mat = M.leaf;
+      B.surfel(p, n, sp * DISC, mat, 0.5 + (fbm(Math.cos(a) * 6, Math.sin(a) * 6, t * 20, seed + 6, 2) - 0.5) * 0.7, body);
+    }
+  }
+  // The grassy cap.
+  const perches: V3[] = [];
+  const span = R * 1.1;
+  const N = Math.round((Math.PI * span * span) / (sp * sp));
+  for (let i = 0; i < N; i++) {
+    const rr = span * Math.sqrt((i + 0.5) / N);
+    const a = i * GOLDEN;
+    if (rr > edge(a)) continue;
+    const x = Math.cos(a) * rr, zz = Math.sin(a) * rr;
+    const flower = rand() < 0.05;
+    B.surfel([x, -R * 0.04 * (1 - (rr / edge(a)) ** 2), zz], [0, -1, 0], sp * DISC, flower ? M.blossom : M.grass, flower ? 0.75 : 0.5 + (rand() - 0.5) * 0.3, body);
+    if (i % 41 === 0 && rr < edge(a) * 0.6) perches.push([x, -R * 0.04, zz]);
+  }
+  tree(B, body, [R * 0.15, -R * 0.03, -R * 0.1], R * 0.95, sp, 'pine', false, rand);
+  tree(B, body, [-R * 0.35, -R * 0.02, R * 0.25], R * 0.6, sp, rand() < 0.5 ? 'round' : 'blossom', false, rand);
+  const edges = Array.from({ length: 24 }, (_, i) => edge((i / 24) * Math.PI * 2));
+  return { body, R, z, far: false, perches, falls: null, nests: [], H, edge: edges, pillar: true, vines: [] };
+};
+
+/** A floating arch of rock: a lumpy bow of banded stone, grassed on top, its feet tapering away below. */
+const arch = (B: Builder, ctx: Ctx, pos: V3, Rapp: number, z: number, seed: number, yaw: number): Arch => {
+  const { k, rand } = ctx;
+  const R = Rapp * k(z);
+  const sp = ctx.sp(z);
+  const body = B.body({ kind: 'arch', name: 'stone arch', pos, radius: R * 1.4, base: mul3(rotY(yaw), rotX(-0.12)), bob: { amp: 5 * k(z), rate: 0.18 + rand() * 0.1, phase: rand() * 6 } });
+  const thick = (u: number) => R * (0.2 + (1 - Math.sin(Math.PI * u)) * 0.1) * (1 + (fbm(u * 5, 0.5, 0.5, seed, 2) - 0.5) * 0.5);
+  const band = (u: number, n: V3) => (Math.floor(u * 11 + n[0] * 0.8 + fbm(u * 3, n[1], n[2], seed + 4, 2) * 1.5) % 3 === 1 ? M.stone : M.sand);
+  const path: V3[] = [];
+  for (let i = 0; i <= 48; i++) { const a = Math.PI * (i / 48); path.push([-Math.cos(a) * R, -Math.sin(a) * R, 0]); }
+  tube(B, body, path, thick, sp, (u, n) => (n[1] < -0.55 && u > 0.06 && u < 0.94 ? { mat: M.grass, alb: 0.5 + (fbm(u * 20, n[0], n[2], seed + 2, 2) - 0.5) * 0.6 } : { mat: band(u, n), alb: 0.5 + n[1] * 0.1 + (fbm(u * 30, n[0] * 3, n[2] * 3, seed + 3, 2) - 0.5) * 0.6 }));
+  // The feet, hanging away to points below.
+  for (const side of [-1, 1]) {
+    const foot: V3[] = [];
+    for (let i = 0; i <= 10; i++) foot.push([side * R * (1 + i * 0.006), (i / 10) * R * 0.85, 0]);
+    tube(B, body, foot, u => thick(side < 0 ? 0 : 1) * 1.05 * (1 - u) ** 0.7 + sp * 0.3, sp, (u, n) => ({ mat: band(u + 0.3, n), alb: 0.45 - u * 0.15 + n[1] * 0.1 }));
+  }
+  // A pine leaning off the crown, and moss trailing from the inside of the curve.
+  tree(B, body, [R * 0.12, -R - thick(0.5) * 0.85, 0], R * 0.42, sp, 'pine', false, rand);
+  for (let v = 0; v < 7; v++) {
+    const a = Math.PI * (0.2 + rand() * 0.6);
+    const r0 = R - thick(a / Math.PI) * 0.9;
+    const len = R * (0.12 + rand() * 0.25);
+    const strand: V3[] = [];
+    for (let y = 0; y <= len; y += sp) strand.push([-Math.cos(a) * r0, -Math.sin(a) * r0 + y, (rand() - 0.5) * thick(0.5) * 0.6]);
+    if (strand.length > 1) tube(B, body, strand, () => sp * 0.45, sp, () => ({ mat: M.leaf, alb: 0.45 }), F.twoSided);
+  }
+  return { body, R, opening: [0, -R * 0.45, 0] };
 };
 
 // ----------------------------------------------------------------- clouds ---
@@ -587,6 +715,9 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 1
   const islands: Island[] = [];
   const discs: Disc[] = [];
   const clear = (d: Disc, margin: number) => discs.every(o => screenClearance(d, o, f, viewW, viewH) > margin);
+  // Near things only: what pillars and arches must keep clear of (the far islands are well behind them).
+  const nearDiscs: Disc[] = [];
+  const clearNear = (d: Disc, margin: number) => nearDiscs.every(o => screenClearance(d, o, f, viewW, viewH) > margin);
   // Keep the hero's words clear: nothing big in the opening view's left and middle.
   const heroClear = (d: Disc) => {
     const kz = k(d.pos[2]);
@@ -624,14 +755,49 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 1
       const pos = at(sx, first + i * step + (rand() - 0.5) * 220 + tries * 30, z);
       const d: Disc = { pos: [pos[0], pos[1] + Rapp * k(z) * 0.45, z], r: Rapp * k(z) * 1.35 };
       if ((!clear(d, 20) || !heroClear(d)) && tries < 13) continue;
-      discs.push(d);
-      const isl = island(B, ctx, pos, Rapp, z, { far: false, seed: seed * 10 + i, falls: i % 3 !== 2, trees: 3 + Math.floor(rand() * 3), crystals: i % 3 === 2, outward: right ? 1 : -1 });
+      discs.push(d); nearDiscs.push(d);
+      const isl = island(B, ctx, pos, Rapp, z, { far: false, seed: seed * 10 + i, falls: i % 3 !== 2, trees: 3 + Math.floor(rand() * 3), crystals: i % 3 === 2, outward: right ? 1 : -1, garden: i % 2 === 1 || i % 5 === 0 });
       islands.push(isl);
       // A cloud at the foot of the falls, a little nearer, so the water pours into it.
       if (isl.falls) {
         const foot = rotate(B.bodies[isl.body].base, isl.falls);
         const cz = z + 0.05 * f;
         cloud(B, ctx, [pos[0] + foot[0], pos[1] + foot[1] + Rapp * 0.35 * k(cz), cz], Rapp * 1.15, cz, { flat: 0.05 });
+      }
+      break;
+    }
+  }
+
+  // Rock pillars and arches in the gaps between the islands, clear of them and of the hero.
+  const arches: Arch[] = [];
+  const pillarCount = Math.max(2, Math.round(pageH / 1700));
+  const archCount = Math.max(1, Math.round(pageH / 3000));
+  for (let i = 0; i < pillarCount + archCount; i++) {
+    const isArch = i % 3 === 1 && arches.length < archCount;
+    for (let tries = 0; tries < 40; tries++) {
+      // Near ones first; failing that, further back among the islands, where a little overlap on screen is only depth.
+      const deeper = tries >= 20;
+      const z = -(deeper ? 0.65 + rand() * 0.5 : 0.18 + rand() * 0.4) * f;
+      const margin = deeper ? -40 : 12;
+      const right = rand() < 0.5;
+      const sx = right ? 0.86 + rand() * 0.08 : 0.06 + rand() * 0.08;
+      const y = viewH + rand() * (pageH - viewH * 1.6);
+      if (isArch) {
+        const Ra = (phone ? 64 : 92) * s;
+        // Arches may reach in behind the cards' edges: the dragons threading them still show in the gutter.
+        const pos = at(right ? sx - 0.06 : sx + 0.06, y, z);
+        const d: Disc = { pos: [pos[0], pos[1] - Ra * k(z) * 0.2, z], r: Ra * k(z) * 1.45 };
+        if (!clearNear(d, deeper ? -20 : 30) || !heroClear(d)) continue;
+        nearDiscs.push(d);
+        arches.push(arch(B, ctx, pos, Ra, z, seed * 3 + i, (right ? -1 : 1) * (0.55 + rand() * 0.3)));
+      } else {
+        const Rp = (phone ? 30 : 42) * s, Hp = (phone ? 190 : 270) * s;
+        const pos = at(sx, y, z);
+        // A tall, narrow thing: its room is checked as three small discs down its length.
+        const ds: Disc[] = [0.05, 0.4, 0.75].map(u => ({ pos: [pos[0], pos[1] + Hp * k(z) * u, z], r: Math.max(Rp * 1.6, Hp * 0.2) * k(z) }));
+        if (!ds.every(d => clearNear(d, margin) && heroClear(d))) continue;
+        nearDiscs.push(...ds);
+        islands.push(pillar(B, ctx, pos, Rp, Hp, z, seed * 7 + i));
       }
       break;
     }
@@ -678,6 +844,7 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 1
     focal: f,
     viewW, viewH, pageH,
     islands,
+    arches,
     life,
     events,
   };
@@ -735,7 +902,8 @@ export const outOfIsland = (isl: Island, c: V3, rot: number[], p: V3, pad: numbe
   const i = Math.floor(f) % 24;
   const e = isl.edge[i] + (isl.edge[(i + 1) % 24] - isl.edge[i]) * (f - Math.floor(f));
   const t = Math.max(0, Math.min(1, ly / isl.H));
-  const rr = e * (1 - t) ** 0.72 * (1 - 0.12 * t) * 1.08 + pad;
+  const prof = isl.pillar ? (t < 0.85 ? 1 - 0.15 * t : 0.8725 * ((1 - t) / 0.15) ** 0.6) * 1.12 : (1 - t) ** 0.72 * (1 - 0.12 * t) * 1.08;
+  const rr = e * prof + pad;
   if (radial > rr) return null;
   // Out by the shorter way: up over the top, or out through the side.
   let ox = lx, oy = ly, oz = lz;

@@ -57,7 +57,10 @@ export interface Pearl {
   pos: V3;
   vel: V3;
   target: V3;
-  mode: 'wander' | 'orbit' | 'cursor' | 'dart';
+  mode: 'wander' | 'orbit' | 'cursor' | 'dart' | 'thread';
+  /** Threading an arch: which, and the way through it (from, to). */
+  arch: number;
+  through: [V3, V3];
   t: number;
   dur: number;
   island: number;
@@ -248,7 +251,8 @@ export const populateLife = (B: Builder, ctx: Ctx): SkyLife => {
     // A big head for its body, as the old paintings have it.
     const head = buildHead(B, coat, R * 1.5, sp);
     const segs: number[] = [];
-    for (let i = 0; i < SEGMENTS; i++) segs.push(buildSegment(B, coat, R * girth(i / (SEGMENTS - 1)), R, sp, i, i % 9 === 4));
+    // The body is smooth, so it can be a little sparser than the head's detail.
+    for (let i = 0; i < SEGMENTS; i++) segs.push(buildSegment(B, coat, R * girth(i / (SEGMENTS - 1)), R, sp * 1.2, i, i % 9 === 4));
     const legs: Dragon['legs'] = [];
     for (const [seg, phase] of [[6, 0], [27, Math.PI * 0.6]] as const) {
       const r = R * girth(seg / (SEGMENTS - 1));
@@ -272,7 +276,7 @@ export const populateLife = (B: Builder, ctx: Ctx): SkyLife => {
   });
   const pearlBody = buildPearl(B, R * 0.7, sp, rand);
   const pearlPos = ctx.at(0.9, viewH * 0.32, z);
-  const pearl: Pearl = { body: pearlBody, pos: pearlPos, vel: [0, 0, 0], target: pearlPos, mode: 'wander', t: 0, dur: 4, island: -1, orbitA: 0 };
+  const pearl: Pearl = { body: pearlBody, pos: pearlPos, vel: [0, 0, 0], target: pearlPos, mode: 'wander', t: 0, dur: 4, island: -1, orbitA: 0, arch: -1, through: [[0, 0, 0], [0, 0, 0]] };
   void viewW;
   const critters = populateCritters(B, ctx);
   return { dragons, pearl, critters, lastPointer: null, time: 0 };
@@ -349,7 +353,14 @@ const stepPearl = (scene: SkyScene, life: SkyLife, dt: number, cam: SkyCamera, p
   } else if (pearl.mode === 'cursor') {
     pearl.mode = 'wander'; pearl.t = 0; pearl.dur = 3;
   }
-  if (pearl.mode === 'orbit') {
+  if (pearl.mode === 'thread') {
+    // Straight through the arch's opening and out the other side, the dragons on its tail.
+    const u = Math.min(1, pearl.t / pearl.dur);
+    const [a, b] = pearl.through;
+    const e = u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+    pearl.target = [a[0] + (b[0] - a[0]) * e, a[1] + (b[1] - a[1]) * e, a[2] + (b[2] - a[2]) * e];
+    if (u >= 1) { pearl.mode = 'wander'; pearl.t = 0; pearl.dur = 2.5; }
+  } else if (pearl.mode === 'orbit') {
     const isl = scene.islands[pearl.island];
     const c = scene.centres?.[isl.body] ?? scene.bodies[isl.body].pos;
     pearl.orbitA += dt * 0.55;
@@ -360,7 +371,10 @@ const stepPearl = (scene: SkyScene, life: SkyLife, dt: number, cam: SkyCamera, p
     if (pearl.mode === 'dart' && pearl.t < pearl.dur) { /* still darting */ } else {
       // Next: circle an island in view now and then, else make for another spot.
       const near = scene.islands.map((isl, i) => ({ isl, i })).filter(({ isl }) => !isl.far && inView(scene, cam, scene.centres?.[isl.body] ?? scene.bodies[isl.body].pos, -60));
-      if (near.length && rng() < 0.45) {
+      const arches = scene.arches.map((_, i) => i).filter(i => inView(scene, cam, scene.centres?.[scene.arches[i].body] ?? scene.bodies[scene.arches[i].body].pos, -80));
+      if (arches.length && rng() < 0.5) {
+        threadArch(scene, arches[Math.floor(rng() * arches.length)]);
+      } else if (near.length && rng() < 0.45) {
         const pick = near[Math.floor(rng() * near.length)];
         const c = scene.centres?.[pick.isl.body] ?? scene.bodies[pick.isl.body].pos;
         pearl.mode = 'orbit'; pearl.island = pick.i; pearl.t = 0; pearl.dur = 9 + rng() * 5;
@@ -373,7 +387,7 @@ const stepPearl = (scene: SkyScene, life: SkyLife, dt: number, cam: SkyCamera, p
   }
   // Caught (by either): the pearl darts off somewhere far across the view, and the catcher rolls.
   const catcher = dragons.find(d => len(sub(add(d.pos, scl(d.dir, d.R * 2.2)), pearl.pos)) < d.R * 2.4);
-  if (catcher && pearl.mode !== 'dart') {
+  if (catcher && pearl.mode !== 'dart' && pearl.mode !== 'thread') {
     let best = viewSpot(scene, cam, rng, pearl.pos);
     for (let i = 0; i < 6; i++) { const c = viewSpot(scene, cam, rng, pearl.pos); if (len(sub(c, pearl.pos)) > len(sub(best, pearl.pos))) best = c; }
     pearl.mode = 'dart'; pearl.t = 0; pearl.dur = 2.5; pearl.target = best;
@@ -381,7 +395,7 @@ const stepPearl = (scene: SkyScene, life: SkyLife, dt: number, cam: SkyCamera, p
     if (life.lastPointer) life.lastPointer.t = -99;
   }
   // A spring towards the target, quick when darting, and a little bob as it floats.
-  const stiff = pearl.mode === 'dart' ? 5 : pearl.mode === 'cursor' ? 3.2 : 1.4;
+  const stiff = pearl.mode === 'dart' ? 5 : pearl.mode === 'cursor' || pearl.mode === 'thread' ? 3.2 : 1.4;
   const damp = 2 * Math.sqrt(stiff);
   const d = sub(pearl.target, pearl.pos);
   pearl.vel = add(pearl.vel, scl(sub(scl(d, stiff), scl(pearl.vel, damp)), dt));
@@ -395,7 +409,7 @@ const stepDragon = (scene: SkyScene, life: SkyLife, dr: Dragon, n: number, dt: n
   const { pearl } = life;
   const t = life.time;
   // The first makes straight for the pearl; the other circles round it, so they spiral about each other.
-  const aim: V3 = n === 0 ? pearl.pos : add(pearl.pos, [Math.cos(t * 0.6 + n * 2) * dr.R * 6, Math.sin(t * 0.8) * dr.R * 3, Math.sin(t * 0.6 + n * 2) * dr.R * 5]);
+  const aim: V3 = n === 0 || pearl.mode === 'thread' ? pearl.pos : add(pearl.pos, [Math.cos(t * 0.6 + n * 2) * dr.R * 6, Math.sin(t * 0.8) * dr.R * 3, Math.sin(t * 0.6 + n * 2) * dr.R * 5]);
   // Steer for it, weaving up and down as it goes.
   let want = norm(sub(aim, dr.pos));
   // Never head-on into the other: shy off when their heads come close.
@@ -478,6 +492,33 @@ export const stepLife = (scene: SkyScene, _t: number, dt: number, cam: SkyCamera
     stepPearl(scene, life, dt / n, cam, pointer);
     life.dragons.forEach((d, k) => stepDragon(scene, life, d, k, dt / n, cam));
   }
+};
+
+/**
+ * Sends the pearl through arch `i` (the nearest in view if not given), from whichever side
+ * it's on, so the dragons follow it through.
+ */
+export const threadArch = (scene: SkyScene, i = -1, cam?: SkyCamera) => {
+  const { pearl } = scene.life;
+  if (i < 0) {
+    let best = Infinity;
+    scene.arches.forEach((a, k) => {
+      const c = scene.centres?.[a.body] ?? scene.bodies[a.body].pos;
+      const d = cam ? Math.abs(c[1] - (cam.scrollY + cam.viewH / 2)) : len(sub(c, pearl.pos));
+      if (d < best) { best = d; i = k; }
+    });
+  }
+  const arch = scene.arches[i];
+  if (!arch) return;
+  const c = scene.centres?.[arch.body] ?? scene.bodies[arch.body].pos;
+  const rot = scene.rots?.[arch.body] ?? scene.bodies[arch.body].base;
+  const o = arch.opening;
+  const mid: V3 = [c[0] + rot[0] * o[0] + rot[1] * o[1] + rot[2] * o[2], c[1] + rot[3] * o[0] + rot[4] * o[1] + rot[5] * o[2], c[2] + rot[6] * o[0] + rot[7] * o[1] + rot[8] * o[2]];
+  // The way through is square to the arch's face.
+  let n: V3 = [rot[2], rot[5], rot[8]];
+  if (dot(n, sub(pearl.pos, mid)) > 0) n = scl(n, -1);
+  pearl.through = [add(mid, scl(n, arch.R * 3.2)), add(mid, scl(n, -arch.R * 3.2))];
+  pearl.mode = 'thread'; pearl.arch = i; pearl.t = 0; pearl.dur = 6;
 };
 
 /** Puts the pearl (and so the dragons) somewhere in the visitor's view at once, one dragon coming in from each side. */

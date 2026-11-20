@@ -2,6 +2,7 @@ import { V3, norm, rotX, rotY, rotZ, mul3 } from './space';
 import {
   Builder, F, G, Island, M, SkyCamera, SkyScene, clearOfIslands, ellipsoid, frameAlong, onIsland, outOfIsland, sphere, toScreen, tree, tube,
 } from './sky';
+import { Folk, populateFolk, stepFolk } from './skyFolk';
 
 /**
  * The sky's smaller residents, alongside the dragon (lib/skyLife.ts).
@@ -49,6 +50,8 @@ export interface Bird {
 
 export interface Sheep {
   body: number;
+  /** Its herd; it slowly wanders from the herd's spot until the dog brings it back. */
+  herd: number;
   r: number;
   pos: V3;
   home: V3;
@@ -75,7 +78,7 @@ export interface Whale {
   spoutIn: number;
 }
 
-export interface Critters { birds: Bird[]; sheep: Sheep[]; whale: Whale; nestTaken: Map<string, number> }
+export interface Critters { birds: Bird[]; sheep: Sheep[]; herds: { anchor: V3 }[]; whale: Whale; nestTaken: Map<string, number>; folk: Folk }
 
 interface Ctx {
   rand: () => number;
@@ -142,7 +145,7 @@ const buildSheep = (B: Builder, r: number, sp: number, rand: () => number) => {
   }
   for (const [mat, flag] of [[M.cloud, F.dry], [M.storm, F.wet]] as const) {
     for (const [c, pr] of puffs) {
-      sphere(B, body, pr, sp * 1.3, d => {
+      sphere(B, body, pr, sp * 1.7, d => {
         const p: V3 = [c[0] + d[0] * pr, c[1] + d[1] * pr, c[2] + d[2] * pr];
         for (const [c2, r2] of puffs) if (c2 !== c && (p[0] - c2[0]) ** 2 + (p[1] - c2[1]) ** 2 + (p[2] - c2[2]) ** 2 < r2 * r2 * 0.9) return null;
         return { mat, alb: 0.55 - d[1] * 0.25 };
@@ -249,22 +252,27 @@ export const populateCritters = (B: Builder, ctx: Ctx): Critters => {
   const z = -0.22 * f;
   const r = 30 * s * ctx.k(z);
   const sp = ctx.sp(z) * 0.6;
-  const herds = Math.max(2, Math.round(pageH / 1300));
-  for (let h = 0; h < herds; h++) {
-    const left = h % 2 === 1;
-    const y = h === 0 ? viewH * 0.95 : viewH * 0.95 + (h / herds) * (pageH - viewH * 1.5);
+  const herdCount = Math.max(2, Math.round(pageH / 1300));
+  const herds: { anchor: V3 }[] = [];
+  for (let h = 0; h < herdCount; h++) {
+    const first = sheep.length;
+    // The first herd on the left, below the hero; the rest alternate.
+    const left = h % 2 === 0;
+    const y = h === 0 ? viewH * 0.95 : viewH * 0.95 + (h / herdCount) * (pageH - viewH * 1.5);
     const n = 3 + Math.floor(rand() * 2);
     for (let i = 0; i < n; i++) {
       // Somewhere in the margin with room to amble, clear of any island.
       let home = ctx.at(left ? 0.04 + rand() * 0.14 : 0.82 + rand() * 0.14, y + (rand() - 0.5) * 120, z + (rand() - 0.5) * 0.1 * f);
-      for (let tries = 0; tries < 12; tries++) {
+      for (let tries = 0; tries < 30; tries++) {
         const blocked = ctx.islands.some(isl => !isl.far && [-4, 0, 4].some(dx => outOfIsland(isl, B.bodies[isl.body].pos, B.bodies[isl.body].base, [home[0] + dx * r, home[1], home[2]], r * 1.8)));
         if (!blocked) break;
         home = ctx.at(left ? 0.04 + rand() * 0.14 : 0.82 + rand() * 0.14, y + (rand() - 0.5) * 120 + (tries + 1) * 70 * (tries % 2 ? -1 : 1), z + (rand() - 0.5) * 0.1 * f);
       }
       const body = buildSheep(B, r * (0.85 + rand() * 0.3), sp, rand);
-      sheep.push({ body, r, pos: [...home] as V3, home, heading: rand() < 0.5 ? 1 : -1, wet: rand() * 0.8, raining: 0, hop: 0, hopV: 0, sq: 1, sqv: 0, phase: rand() * 6, blinkIn: rand() * 4 });
+      sheep.push({ body, herd: h, r, pos: [...home] as V3, home, heading: rand() < 0.5 ? 1 : -1, wet: rand() * 0.8, raining: 0, hop: 0, hopV: 0, sq: 1, sqv: 0, phase: rand() * 6, blinkIn: rand() * 4 });
     }
+    const mine = sheep.slice(first);
+    herds.push({ anchor: [mine.reduce((t, m) => t + m.home[0], 0) / mine.length, mine.reduce((t, m) => t + m.home[1], 0) / mine.length, mine.reduce((t, m) => t + m.home[2], 0) / mine.length] });
   }
 
   // The whale, cruising across the first stretch below the hero.
@@ -276,7 +284,8 @@ export const populateCritters = (B: Builder, ctx: Ctx): Critters => {
     pos: ctx.at(-0.1, viewH * 1.35, wz), dir: [1, 0, 0], turning: 0, spout: 0, spoutIn: 6,
   };
   void viewW;
-  return { birds, sheep, whale, nestTaken };
+  const folk = populateFolk(B, ctx, herds);
+  return { birds, sheep, herds, whale, nestTaken, folk };
 };
 
 // -------------------------------------------------------------- behaviour ---
@@ -422,10 +431,19 @@ const stepBirds = (scene: SkyScene, cr: Critters, t: number, dt: number, cam: Sk
 const stepSheep = (scene: SkyScene, cr: Critters, t: number, dt: number, cam: SkyCamera, pointer: { x: number; y: number } | null, rand: () => number) => {
   const gloom = scene.events.light.gloom;
   for (const sh of cr.sheep) {
-    // Grazing: an amble along the margin, turning back now and then, and at any island in the way.
-    const next: V3 = [sh.pos[0] + sh.heading * (sh.r * 0.35 * dt + sh.r * 0.8), sh.pos[1], sh.pos[2]];
+    // Drifting from the herd, a little at a time, while grazing.
+    const anchor = cr.herds[sh.herd].anchor;
+    const out = Math.sign(sh.home[0] - anchor[0]) || (sh.phase > 3 ? 1 : -1);
+    const drift: V3 = [sh.home[0] + ((rand() - 0.5) * sh.r * 0.8 + out * sh.r * 0.07) * dt, sh.home[1] + (rand() - 0.5) * sh.r * 0.5 * dt, sh.home[2]];
+    if (len(sub(drift, anchor)) < sh.r * 7 && clearOfIslands(scene, drift, sh.r * 1.8) === drift) sh.home = drift;
+    // Grazing: an amble about its spot, turning back now and then, and at any island in the way; well away from it, a trot back.
+    const off = sh.home[0] - sh.pos[0];
+    if (Math.abs(off) > sh.r * 2.5) sh.heading = Math.sign(off);
+    const pace = Math.abs(off) > sh.r * 2.5 ? 1.6 : 0.35;
+    const next: V3 = [sh.pos[0] + sh.heading * (sh.r * pace * dt + sh.r * 0.8), sh.pos[1], sh.pos[2]];
     if (clearOfIslands(scene, next, sh.r * 1.3) !== next) sh.heading = -sh.heading;
-    else sh.pos[0] += sh.heading * sh.r * 0.35 * dt;
+    else sh.pos[0] += sh.heading * sh.r * pace * dt;
+    sh.pos[1] += (sh.home[1] - sh.pos[1]) * Math.min(1, dt * 0.8);
     if (Math.abs(sh.pos[0] - sh.home[0]) > sh.r * 4) sh.heading = Math.sign(sh.home[0] - sh.pos[0]);
     else if (rand() < dt * 0.05) sh.heading = -sh.heading;
     // Damp air soaks in; a storm soaks them through at once.
@@ -502,6 +520,7 @@ export const stepCritters = (scene: SkyScene, t: number, dt: number, cam: SkyCam
   stepBirds(scene, cr, t, dt, cam, rand);
   stepSheep(scene, cr, t, dt, cam, pointer, rand);
   stepWhale(scene, cr, t, dt, cam);
+  stepFolk(scene, t, dt, cam, rand);
 };
 
 /** Brings the whale into view, just off the nearer edge. */

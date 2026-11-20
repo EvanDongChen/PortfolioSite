@@ -10,6 +10,12 @@ export interface SkyDebugActions {
   callWhale: () => void;
   /** Soaks every cloud-sheep so they all rain. */
   soakSheep: () => void;
+  /** Scatters the sheep for the dog to round up. */
+  scatterSheep: () => void;
+  /** Sets the seed puffs drifting down onto the islands. */
+  dropSeeds: () => void;
+  /** Leads the dragons through the nearest arch. */
+  threadArch: () => void;
   setSpeed: (speed: number) => void;
 }
 
@@ -63,6 +69,9 @@ const SkyDebugPanel: React.FC<SkyDebugPanelProps> = ({ actions }) => {
         <button type="button" onClick={() => act?.callDragon()}>Call the dragon</button>
         <button type="button" onClick={() => act?.callWhale()}>Call the whale</button>
         <button type="button" onClick={() => act?.soakSheep()}>Rain out the sheep</button>
+        <button type="button" onClick={() => act?.scatterSheep()}>Scatter the sheep</button>
+        <button type="button" onClick={() => act?.dropSeeds()}>Plant seed puffs</button>
+        <button type="button" onClick={() => act?.threadArch()}>Through the arch</button>
       </div>
       <p className="reef-debug-label">Simulation speed</p>
       <div className="reef-debug-speed" role="radiogroup" aria-label="Simulation speed">

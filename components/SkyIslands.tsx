@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { SkyScene, buildScene } from '../lib/sky';
 import { startEvent } from '../lib/skyEvents';
-import { callDragon } from '../lib/skyLife';
+import { callDragon, threadArch } from '../lib/skyLife';
+import { dropSeeds, scatterSheep } from '../lib/skyFolk';
 import { callWhale, soakSheep } from '../lib/skyCritters';
 import { SkyDebugActions } from './SkyDebugPanel';
 import { SkyView } from '../lib/skyView';
@@ -114,6 +115,12 @@ const SkyIslands: React.FC<SkyIslandsProps> = ({ onReady, debug }) => {
           if (sc) callWhale(sc, { viewW: window.innerWidth, viewH: window.innerHeight, scrollY: window.scrollY, offX: 0, offY: 0 });
         },
         soakSheep: () => { if (view.scene) soakSheep(view.scene); },
+        scatterSheep: () => { if (view.scene) scatterSheep(view.scene); },
+        dropSeeds: () => { if (view.scene) dropSeeds(view.scene); },
+        threadArch: () => {
+          const sc = view.scene;
+          if (sc) threadArch(sc, -1, { viewW: window.innerWidth, viewH: window.innerHeight, scrollY: window.scrollY, offX: 0, offY: 0 });
+        },
         setSpeed: s => { speed = s; },
       };
     }
