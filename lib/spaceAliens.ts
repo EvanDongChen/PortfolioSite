@@ -19,7 +19,8 @@ import {
 type Mode = 'sit' | 'crouch' | 'hop' | 'beamed' | 'falling';
 
 export interface Rock { body: number; r: number; occupant: number }
-export interface Colony { rocks: Rock[]; y: number }
+/** A colony's rocks, and a circle round all of it (rocks and the blips on them). */
+export interface Colony { rocks: Rock[]; y: number; disc: Disc }
 export interface Blip {
   body: number;
   arms: [number, number];
@@ -95,6 +96,9 @@ const HOP_HEIGHT = 3.2;
 const HOP_TIME = 0.85;
 const BEAM_LENGTH = 4.6;
 const NOTICE_PX = 170;
+/** How far a colony reaches from its centre (rocks spread about ±85 by ±210, plus a rock and a blip on top), and the gap kept between two. */
+const COLONY_R = 265;
+const COLONY_GAP = 90;
 
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const lerp3 = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
@@ -251,14 +255,15 @@ export const populateAliens = (B: Builder, ctx: Ctx): AlienLife => {
     // A spot in a margin that no planet, ring, moon or other colony ever crosses on screen;
     // the first stays beside the hero, on the left.
     const cands: Disc[] = [];
-    const shifts = c === 0 ? [0, 120, -80] : [0, -250, 250, -500, 500, -750, 750, -1000, 1000];
+    const shifts = c === 0 ? [0, 120, -80] : [0, -200, 200, -400, 400, -600, 600, -800, 800, -1000, 1000, -1200, 1200];
     const sides = c === 0 ? [0.075] : c % 2 ? [0.885, 0.075] : [0.075, 0.885];
     for (const dy of shifts) for (const sx of sides) {
       const yy = y0 + dy;
-      if (yy > 300 && yy < pageH - 200) cands.push({ pos: at(sx, yy, z), r: 220 * s * kz });
+      if (yy > 300 && yy < pageH - 200) cands.push({ pos: at(sx, yy, z), r: COLONY_R * s * kz });
     }
     if (!cands.length) break;
-    const placed: Disc[] = colonies.map(col => ({ pos: [B.bodies[col.rocks[0].body].pos[0], col.y, z] as V3, r: 220 * s * kz }));
+    // Other colonies, with room to spare so two never read as one clump.
+    const placed: Disc[] = colonies.map(col => ({ pos: col.disc.pos, r: col.disc.r + COLONY_GAP * s }));
     const spot = pickClear(cands, [...obstaclesOf(B.bodies), ...placed], ctx.f, ctx.viewW, ctx.viewH);
     // Nowhere clear: better one colony fewer than one half hidden behind a planet.
     if (spot.room < 0 && c > 0) continue;
@@ -280,7 +285,7 @@ export const populateAliens = (B: Builder, ctx: Ctx): AlienLife => {
       lumpy(B, body, R, ctx.sp(z) * 0.7, ctx.seed * 13 + body, rand() < 0.4 ? M.rust : M.rock, 0.22);
       rocks.push({ body, r: R, occupant: -1 });
     }
-    colonies.push({ rocks, y });
+    colonies.push({ rocks, y, disc: { pos: anchor, r: COLONY_R * s * kz } });
     const residents = Math.min(rocks.length - 1, 3);
     for (let i = 0; i < residents; i++) {
       const r = (27 + rand() * 5) * s * kz;
