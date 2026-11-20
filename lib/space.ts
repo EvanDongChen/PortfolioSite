@@ -659,7 +659,9 @@ export const screenClearance = (a: Disc, b: Disc, f: number, viewW: number, view
 
 /** Everything big already in the scene: the sun, planets with their rings and moons' orbits, the black hole. */
 export const obstaclesOf = (bodies: Body[]): Disc[] => bodies.flatMap(b => {
-  if (b.kind === 'planet' || b.kind === 'ring' || b.kind === 'sun' || b.kind === 'blackhole' || b.kind === 'gardenmoon') return [{ pos: b.pos, r: b.radius * 1.1 }];
+  if (b.kind === 'planet' || b.kind === 'ring' || b.kind === 'sun' || b.kind === 'blackhole') return [{ pos: b.pos, r: b.radius * 1.1 }];
+  // The garden moon with its flowers and gardeners on top.
+  if (b.kind === 'gardenmoon') return [{ pos: b.pos, r: b.radius * 1.75 }];
   if (b.kind === 'moon' && b.orbit) return [{ pos: bodies[b.orbit.parent].pos, r: b.orbit.radius + b.radius * 1.5 }];
   return [];
 });

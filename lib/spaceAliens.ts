@@ -238,6 +238,9 @@ export const populateAliens = (B: Builder, ctx: Ctx): AlienLife => {
   const blips: Blip[] = [];
   const saucers: Saucer[] = [];
 
+  // The garden moon first, since there's only one: the colonies then keep clear of it.
+  const garden = plantGarden(B, ctx, blips);
+
   // Colonies down the margins, the first beside the hero so they're there on arrival.
   const count = Math.max(2, Math.round((pageH - 400) / 1600) + 1);
   for (let c = 0; c < count; c++) {
@@ -303,7 +306,6 @@ export const populateAliens = (B: Builder, ctx: Ctx): AlienLife => {
       beamOn: 0, lifting: -1, bank: 0, happy: 0,
     });
   }
-  const garden = plantGarden(B, ctx, blips);
   return { colonies, blips, saucers, garden };
 };
 
@@ -317,7 +319,12 @@ const plantGarden = (B: Builder, ctx: Ctx, blips: Blip[]): Garden | null => {
   const R = 82 * s * kz;
   // Clear of the planets and of every colony (rocks and blips included).
   const cands: Disc[] = [];
-  for (const dy of [0, 300, -300, 600, -600, 900, 1200]) for (const sx of [0.9, 0.09]) cands.push({ pos: at(sx, y0 + dy, z), r: R * 1.6 });
+  for (const dy of [0, 300, -300, 600, 900, 1200, 1500, 1800, 2100, 2400]) for (const sx of [0.9, 0.09]) {
+    const y = y0 + dy;
+    // Well below the hero's colony, and above the page's end.
+    if (y >= 1150 && y <= ctx.pageH - 400) cands.push({ pos: at(sx, y, z), r: R * 1.7 });
+  }
+  if (!cands.length) return null;
   const rocks: Disc[] = B.bodies.filter(b => b.kind === 'rock').map(b => ({ pos: b.pos, r: b.radius * 2.4 }));
   const spot = pickClear(cands, [...obstaclesOf(B.bodies), ...rocks], ctx.f, ctx.viewW, ctx.viewH);
   const moon = B.body({ kind: 'gardenmoon', name: 'garden moon', pos: spot.pos, radius: R });
