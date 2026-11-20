@@ -54,6 +54,18 @@ export const SHRINE_COLORS: ThemeColors = {
   heroGradient: 'from-amber-300 to-orange-400', contactIcon: 'text-amber-300',
 };
 
+// Sky: content on deep porcelain blue, with gold and cloud-white accents.
+export const SKY_COLORS: ThemeColors = {
+  ...UNDERWATER_COLORS,
+  text: 'text-sky-50', textLighter: 'text-sky-50/90', highlight: 'text-amber-200',
+  highlightStrong: 'text-amber-100', border: 'border-amber-200/25', timeline: 'bg-amber-200/35',
+  timelineDot: 'bg-amber-300', timelineDotBorder: 'border-[#14284e]',
+  cardBg: 'bg-[#14284e]/80', tagBg: 'bg-[#1e3c70]/70', tagHoverBg: 'hover:bg-[#2a5090]/80',
+  searchBg: 'bg-[#14284e]/85', searchBorder: 'border-amber-200/30', searchRing: 'focus:ring-amber-300',
+  searchPlaceholder: 'placeholder-sky-100/50', periodBg: 'bg-[#2a5090]',
+  heroGradient: 'from-amber-100 to-amber-300', contactIcon: 'text-amber-200',
+};
+
 // Space: content on deep ink, with starlight violet and comet-teal accents.
 export const SPACE_COLORS: ThemeColors = {
   ...UNDERWATER_COLORS,

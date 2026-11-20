@@ -6,3 +6,4 @@ export const loadAquarium = () => import('../App');
 export const loadPond = () => import('../PondApp');
 export const loadShrine = () => import('../ShrineApp');
 export const loadSpace = () => import('../SpaceApp');
+export const loadSky = () => import('../SkyApp');

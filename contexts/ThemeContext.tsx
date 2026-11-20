@@ -1,10 +1,10 @@
 import React, { createContext, useState, useContext, useCallback, useLayoutEffect, ReactNode } from 'react';
-import { loadAquarium, loadPond, loadShrine, loadSpace } from '../lib/pageLoaders';
+import { loadAquarium, loadPond, loadShrine, loadSky, loadSpace } from '../lib/pageLoaders';
 import { movePage } from '../lib/pageTransition';
 
 type Theme = 'underwater' | 'deepsea';
-/** The pages: the aquarium, the pixel reef, the pixel pond, the shrine forest and deep space. */
-export type Page = 'aquarium' | 'reef' | 'pond' | 'shrine' | 'space';
+/** The pages: the aquarium, the pixel reef, the pixel pond, the shrine forest, deep space and the sky islands. */
+export type Page = 'aquarium' | 'reef' | 'pond' | 'shrine' | 'space' | 'sky';
 
 // Keep deep-sea support available while it is temporarily disabled in the UI.
 export const DEEP_SEA_MODE_ENABLED = false;
@@ -20,6 +20,8 @@ interface ThemeContextType {
   isShrineMode: boolean;
   /** Deep space replaces whichever page was showing while on. */
   isSpaceMode: boolean;
+  /** The sky islands replace whichever page was showing while on. */
+  isSkyMode: boolean;
   /** Which page is showing, and switching to another; the transition ripples out from `origin` if given. */
   page: Page;
   setPage: (page: Page, origin?: { x: number; y: number }) => void;
@@ -41,6 +43,9 @@ const preparePage = async (page: Page) => {
   } else if (page === 'space') {
     await loadSpace();
     await Promise.all([document.fonts?.load("16px 'Space Display'"), document.fonts?.load("16px 'Space Label'")]);
+  } else if (page === 'sky') {
+    await loadSky();
+    await Promise.all([document.fonts?.load("italic 600 16px 'Sky Display'"), document.fonts?.load("italic 600 16px 'Sky Label'")]);
   }
   else if (page === 'aquarium') await loadAquarium();
 };
@@ -52,22 +57,24 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [isPondMode, setIsPondMode] = useState(false);
   const [isShrineMode, setIsShrineMode] = useState(false);
   const [isSpaceMode, setIsSpaceMode] = useState(false);
+  const [isSkyMode, setIsSkyMode] = useState(false);
 
   const toggleTheme = () => {
     if (!DEEP_SEA_MODE_ENABLED) return;
     setTheme(prevTheme => (prevTheme === 'underwater' ? 'deepsea' : 'underwater'));
   };
 
-  const page: Page = isSpaceMode ? 'space' : isShrineMode ? 'shrine' : isPondMode ? 'pond' : isPixelMode ? 'reef' : 'aquarium';
+  const page: Page = isSkyMode ? 'sky' : isSpaceMode ? 'space' : isShrineMode ? 'shrine' : isPondMode ? 'pond' : isPixelMode ? 'reef' : 'aquarium';
 
   const setPage = useCallback((next: Page, origin?: { x: number; y: number }) => {
     const swap = () => {
       pendingScrollY = window.scrollY;
       // No page's look may outlive it (a hot reload can leave one behind); the next page adds its own.
-      document.documentElement.classList.remove('pond-theme', 'shrine-theme', 'space-theme');
+      document.documentElement.classList.remove('pond-theme', 'shrine-theme', 'space-theme', 'sky-theme');
       setIsPondMode(next === 'pond');
       setIsShrineMode(next === 'shrine');
       setIsSpaceMode(next === 'space');
+      setIsSkyMode(next === 'sky');
       if (next === 'reef' || next === 'aquarium') setIsPixelMode(next === 'reef');
     };
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { swap(); return; }
@@ -75,7 +82,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, isPixelMode, isPondMode, isShrineMode, isSpaceMode, page, setPage }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, isPixelMode, isPondMode, isShrineMode, isSpaceMode, isSkyMode, page, setPage }}>
       {children}
     </ThemeContext.Provider>
   );
