@@ -5,10 +5,12 @@ import {
 import { Critters, populateCritters, stepCritters } from './skyCritters';
 
 /**
- * The sky's creatures. The star is a long dragon in the old Chinese manner: a
- * serpent's body of scaled segments with a gold belly, a crest of spines and
- * four clawed legs, an antlered head with long whiskers and a flowing mane. It
- * chases a flaming pearl across the sky. The pearl wanders between islands,
+ * The sky's creatures. The stars are two long dragons in the old Chinese manner
+ * (serpents' bodies of scaled segments with plated bellies, crests of spines and
+ * four clawed legs, antlered heads with long whiskers and flowing manes): a red
+ * and gold one and an azure one with a white belly, playing with one flaming
+ * pearl as the two dragons of the old paintings do. The red one goes straight
+ * for it, the azure one circles round it, so they spiral about each other. The pearl wanders between islands,
  * circles one now and then (so the dragon loops round it, passing behind and in
  * front), follows the cursor when it moves, and darts off whenever the dragon's
  * jaws come close, which the dragon answers with a barrel roll.
@@ -21,7 +23,17 @@ const SEGMENTS = 44;
 /** Space between body segments along the trail, in dragon radii. */
 const GAP = 1.0;
 
+/** A dragon's colours, as materials. */
+export interface Coat { body: number; belly: number; fringe: number; crest: number; root: number; horn: number; mane: [number, number]; whisker: number; claw: number; ridge: number; iris: number; mouth: number }
+
+/** Built as functions: sky.ts and this module import each other, so nothing imported is touched at load. */
+const COATS = (): Coat[] => [
+  { body: M.dragon, belly: M.gold, fringe: M.gold, crest: M.cream, root: M.gold, horn: M.gold, mane: [M.gold, M.cream], whisker: M.cream, claw: M.cream, ridge: M.gold, iris: M.gold, mouth: M.coral },
+  { body: M.azure, belly: M.cloud, fringe: M.blossom, crest: M.cloud, root: M.crystal, horn: M.cream, mane: [M.cloud, M.crystal], whisker: M.cloud, claw: M.cloud, ridge: M.crystal, iris: M.gold, mouth: M.blossom },
+];
+
 export interface Dragon {
+  coat: Coat;
   head: number;
   segs: number[];
   legs: { body: number; seg: number; phase: number }[];
@@ -52,7 +64,7 @@ export interface Pearl {
   orbitA: number;
 }
 
-export interface SkyLife { dragon: Dragon; pearl: Pearl; critters: Critters; lastPointer: { x: number; y: number; t: number } | null; time: number }
+export interface SkyLife { dragons: Dragon[]; pearl: Pearl; critters: Critters; lastPointer: { x: number; y: number; t: number } | null; time: number }
 
 interface Ctx {
   rand: () => number;
@@ -88,61 +100,63 @@ const turn = (v: V3, u: V3, a: number): V3 => {
 const girth = (u: number) => (u < 0.12 ? 0.78 + u * 1.8 : 1 - Math.max(0, u - 0.35) * 1.0);
 
 /** A body segment: a scaled barrel, red above and gold-plated beneath, with a spine on top. */
-const buildSegment = (B: Builder, r: number, R: number, sp: number, i: number, mane: boolean) => {
+const buildSegment = (B: Builder, coat: Coat, r: number, R: number, sp: number, i: number, mane: boolean) => {
   const body = B.body({ kind: 'dragon', name: 'dragon', pos: [0, -1e6, 0], radius: r * 1.6 });
   // Long enough to overlap its neighbours even where the tail thins, so it never parts into beads.
   ellipsoid(B, body, [Math.max(r * 0.82, R * GAP * 0.68), r, r], sp, d => {
     if (d[1] > 0.42) {
       // Belly plates, ridged crosswise.
       const ridge = ((d[0] + 1) * 1.6 + i * 0.5) % 1 < 0.25;
-      return { mat: M.gold, alb: 0.7 + (ridge ? -0.2 : 0.04) };
+      return { mat: coat.belly, alb: 0.7 + (ridge ? -0.2 : 0.04) };
     }
+    // A fringe where the belly meets the scales.
+    if (d[1] > 0.3) return { mat: coat.fringe, alb: 0.62 };
     // Scales: offset rows of little scallops.
     const ang = Math.atan2(d[2], -d[1]);
     const row = Math.floor(ang * 2.4);
     const sc = (((d[0] + 1) * 1.8 + row * 0.5 + i * 0.25) % 1 + 1) % 1;
     const edge = sc > 0.72;
-    return { mat: M.dragon, alb: 0.56 + (edge ? -0.2 : 0.05) - d[1] * 0.12 };
+    return { mat: coat.body, alb: 0.56 + (edge ? -0.2 : 0.05) - d[1] * 0.12 };
   });
   // The crest: a backward-raked spine, cream with a gold root.
   const h = r * 0.95;
   for (let y = 0; y < h; y += sp * 0.7) {
     const w = (1 - y / h) * r * 0.6;
     for (let x = -w; x <= w * 0.4; x += sp * 0.7) {
-      B.surfel([x - y * 0.45, -r * 0.92 - y, 0], [0, 0, 1], sp * 0.85, y < h * 0.35 ? M.gold : M.cream, 0.6 + y / h * 0.2, body, F.twoSided);
+      B.surfel([x - y * 0.45, -r * 0.92 - y, 0], [0, 0, 1], sp * 0.85, y < h * 0.35 ? coat.root : coat.crest, 0.6 + y / h * 0.2, body, F.twoSided);
     }
   }
   if (mane) {
     // A tuft of mane, flowing back.
     for (let j = 0; j < 3; j++) {
-      ellipsoid(B, body, [r * 0.55, r * 0.22, r * 0.3], sp, d => ({ mat: M.cream, alb: 0.6 - d[1] * 0.2 }), [-r * 0.4 - j * r * 0.25, -r * 0.85 + j * r * 0.08, (j - 1) * r * 0.35]);
+      ellipsoid(B, body, [r * 0.55, r * 0.22, r * 0.3], sp, d => ({ mat: coat.mane[1], alb: 0.6 - d[1] * 0.2 }), [-r * 0.4 - j * r * 0.25, -r * 0.85 + j * r * 0.08, (j - 1) * r * 0.35]);
     }
   }
   return body;
 };
 
 /** A leg: a stout limb with a gold, three-clawed foot, hung below the body. */
-const buildLeg = (B: Builder, r: number, sp: number, seg: number, side: number) => {
+const buildLeg = (B: Builder, coat: Coat, r: number, sp: number, seg: number, side: number) => {
   const body = B.body({ kind: 'leg', name: 'leg', pos: [0, 0, 0], attach: { parent: seg, offset: [0, r * 0.55, side * r * 0.75] } });
-  ellipsoid(B, body, [r * 0.4, r * 0.72, r * 0.36], sp, d => ({ mat: d[0] > 0.35 ? M.gold : M.dragon, alb: 0.55 - d[1] * 0.1 }), [0, r * 0.55, 0]);
+  ellipsoid(B, body, [r * 0.4, r * 0.72, r * 0.36], sp, d => ({ mat: d[0] > 0.35 ? coat.belly : coat.body, alb: 0.55 - d[1] * 0.1 }), [0, r * 0.55, 0]);
   for (let c = -1; c <= 1; c++) {
-    ellipsoid(B, body, [r * 0.34, r * 0.13, r * 0.13], sp, () => ({ mat: M.cream, alb: 0.8 }), [r * 0.3, r * 1.25, c * r * 0.22]);
+    ellipsoid(B, body, [r * 0.34, r * 0.13, r * 0.13], sp, () => ({ mat: coat.claw, alb: 0.8 }), [r * 0.3, r * 1.25, c * r * 0.22]);
   }
   return body;
 };
 
 /** The head, facing local +x: antlers, big eyes, snout and open jaw, whiskers and mane trailing back. */
-const buildHead = (B: Builder, R: number, sp: number) => {
+const buildHead = (B: Builder, coat: Coat, R: number, sp: number) => {
   const head = B.body({ kind: 'head', name: 'dragon', pos: [0, -1e6, 0], radius: R * 4, params: [0.07, R * 0.3, 0, 0] });
-  const red = (alb: number) => ({ mat: M.dragon, alb });
+  const red = (alb: number) => ({ mat: coat.body, alb });
   // Cranium, with heavy brows.
   sphere(B, head, R * 1.15, sp, d => red(0.58 - d[1] * 0.15));
   // Snout, its top gold where the nose ridge runs.
-  ellipsoid(B, head, [R * 1.15, R * 0.58, R * 0.72], sp, d => (d[1] < -0.55 && Math.abs(d[2]) < 0.4 ? { mat: M.gold, alb: 0.6 } : red(0.6 - d[1] * 0.12)), [R * 1.25, R * 0.12, 0]);
+  ellipsoid(B, head, [R * 1.15, R * 0.58, R * 0.72], sp, d => (d[1] < -0.55 && Math.abs(d[2]) < 0.4 ? { mat: coat.ridge, alb: 0.6 } : red(0.6 - d[1] * 0.12)), [R * 1.25, R * 0.12, 0]);
   // A bulb of a nose.
   ellipsoid(B, head, [R * 0.38, R * 0.32, R * 0.55], sp, d => red(0.7 - d[1] * 0.2), [R * 2.3, -R * 0.05, 0]);
   // The lower jaw, dropped a little: cream inside, gold beneath, a row of teeth.
-  ellipsoid(B, head, [R * 1.05, R * 0.26, R * 0.6], sp, d => ({ mat: d[1] < 0 ? M.coral : M.gold, alb: 0.55 }), [R * 1.15, R * 0.78, 0]);
+  ellipsoid(B, head, [R * 1.05, R * 0.26, R * 0.6], sp, d => ({ mat: d[1] < 0 ? coat.mouth : coat.belly, alb: 0.55 }), [R * 1.15, R * 0.78, 0]);
   for (const zs of [-1, 1]) {
     for (let t = 0; t < 4; t++) sphere(B, head, R * 0.11, sp, () => ({ mat: M.cream, alb: 0.85 }), [R * (1.4 + t * 0.25), R * 0.52, zs * R * 0.4]);
   }
@@ -150,7 +164,7 @@ const buildHead = (B: Builder, R: number, sp: number) => {
   for (const zs of [-1, 1]) {
     const c: V3 = [R * 0.45, -R * 0.42, zs * R * 0.86];
     sphere(B, head, R * 0.44, sp, d => (d[2] * zs < 0 ? null : { mat: M.eye, alb: 0.8 }), c);
-    sphere(B, head, R * 0.3, sp, d => (d[2] * zs < 0.2 ? null : Math.abs(d[0]) < 0.32 ? { mat: M.pupil, alb: 0.3, flags: F.eye } : { mat: M.gold, alb: 0.75, flags: F.eye }), [c[0] + R * 0.06, c[1] + R * 0.02, c[2] + zs * R * 0.2]);
+    sphere(B, head, R * 0.3, sp, d => (d[2] * zs < 0.2 ? null : Math.abs(d[0]) < 0.32 ? { mat: M.pupil, alb: 0.3, flags: F.eye } : { mat: coat.iris, alb: 0.75, flags: F.eye }), [c[0] + R * 0.06, c[1] + R * 0.02, c[2] + zs * R * 0.2]);
     sphere(B, head, R * 0.08, sp, () => ({ mat: M.eye, alb: 1, flags: F.emissive | F.eye }), [c[0] + R * 0.15, c[1] - R * 0.12, c[2] + zs * R * 0.46]);
     // The brow ridge.
     ellipsoid(B, head, [R * 0.55, R * 0.16, R * 0.3], sp, () => red(0.72), [c[0] - R * 0.05, c[1] - R * 0.38, c[2] * 0.9]);
@@ -158,7 +172,7 @@ const buildHead = (B: Builder, R: number, sp: number) => {
   // Antlers: a gold beam sweeping back and up, with two tines.
   const branch = (from: V3, dir: V3, length: number, thick: number) => {
     const to = add(from, scl(norm(dir), length));
-    tube(B, head, [from, to], u => thick * (1 - u * 0.45), sp, (u, n) => ({ mat: M.gold, alb: 0.55 - n[1] * 0.25 + u * 0.15 }));
+    tube(B, head, [from, to], u => thick * (1 - u * 0.45), sp, (u, n) => ({ mat: coat.horn, alb: 0.55 - n[1] * 0.25 + u * 0.15 }));
     return to;
   };
   for (const zs of [-1, 1]) {
@@ -179,10 +193,10 @@ const buildHead = (B: Builder, R: number, sp: number) => {
       p = add(p, scl(d, sp * 0.5));
       path.push(p);
     }
-    tube(B, head, path, u => R * 0.12 * (1 - u * 0.35), sp, () => ({ mat: M.cream, alb: 0.8 }), F.trail);
+    tube(B, head, path, u => R * 0.12 * (1 - u * 0.35), sp, () => ({ mat: coat.whisker, alb: 0.8 }), F.trail);
   }
   // The beard, under the chin.
-  for (let j = 0; j < 3; j++) ellipsoid(B, head, [R * 0.5, R * 0.18, R * 0.2], sp, () => ({ mat: M.cream, alb: 0.65 }), [R * 0.5 - j * R * 0.35, R * 1.05 + j * R * 0.12, (j - 1) * R * 0.22], F.trail);
+  for (let j = 0; j < 3; j++) ellipsoid(B, head, [R * 0.5, R * 0.18, R * 0.2], sp, () => ({ mat: coat.whisker, alb: 0.65 }), [R * 0.5 - j * R * 0.35, R * 1.05 + j * R * 0.12, (j - 1) * R * 0.22], F.trail);
   // The mane: separate locks streaming back from the crown like flames, gold and cream in turn.
   for (let j = 0; j < 6; j++) {
     const zc = (j % 2 ? 1 : -1) * R * (0.55 + (j >> 1) * 0.12);
@@ -195,17 +209,17 @@ const buildHead = (B: Builder, R: number, sp: number) => {
       p = add(p, scl(d, sp * 0.55));
       path.push(p);
     }
-    tube(B, head, path, u => R * 0.2 * (1 - u * 0.7), sp, (_u, n) => ({ mat: j % 2 ? M.gold : M.cream, alb: 0.66 - n[1] * 0.2 }), F.trail);
+    tube(B, head, path, u => R * 0.2 * (1 - u * 0.7), sp, (_u, n) => ({ mat: coat.mane[j % 2], alb: 0.66 - n[1] * 0.2 }), F.trail);
   }
   return head;
 };
 
 /** The tail's end: a flame-like tuft of cream and gold, flicking behind. */
-const buildTail = (B: Builder, R: number, sp: number, parent: number) => {
+const buildTail = (B: Builder, coat: Coat, R: number, sp: number, parent: number) => {
   const tail = B.body({ kind: 'dragon', name: 'dragon', pos: [0, 0, 0], attach: { parent, offset: [-R * 0.2, 0, 0] }, params: [0.1, 0, 0, 1] });
   for (let j = 0; j < 5; j++) {
     const a = (j / 4 - 0.5) * 2;
-    ellipsoid(B, tail, [R * 1.0, R * 0.2, R * 0.26], sp, dd => ({ mat: j % 2 ? M.gold : M.cream, alb: 0.6 - dd[1] * 0.2 }), [-R * 0.9 - Math.abs(a) * R * 0.2, Math.sin(a) * R * 0.5, Math.cos(a) * R * 0.35 - R * 0.1], F.trail);
+    ellipsoid(B, tail, [R * 1.0, R * 0.2, R * 0.26], sp, dd => ({ mat: coat.mane[j % 2], alb: 0.6 - dd[1] * 0.2 }), [-R * 0.9 - Math.abs(a) * R * 0.2, Math.sin(a) * R * 0.5, Math.cos(a) * R * 0.35 - R * 0.1], F.trail);
   }
   return tail;
 };
@@ -227,36 +241,41 @@ export const populateLife = (B: Builder, ctx: Ctx): SkyLife => {
   const { rand, s, f, viewW, viewH } = ctx;
   const R = 26 * s;
   const sp = ctx.sp(0) * 0.75;
-  // A big head for its body, as the old paintings have it.
-  const head = buildHead(B, R * 1.5, sp);
-  const segs: number[] = [];
-  for (let i = 0; i < SEGMENTS; i++) segs.push(buildSegment(B, R * girth(i / (SEGMENTS - 1)), R, sp, i, i % 9 === 4));
-  const legs: Dragon['legs'] = [];
-  for (const [seg, phase] of [[6, 0], [27, Math.PI * 0.6]] as const) {
-    const r = R * girth(seg / (SEGMENTS - 1));
-    for (const side of [-1, 1]) legs.push({ body: buildLeg(B, r, sp, segs[seg], side), seg, phase: phase + (side > 0 ? Math.PI : 0) });
-  }
-  const tail = buildTail(B, R * girth(1), sp, segs[SEGMENTS - 1]);
-  const pearlBody = buildPearl(B, R * 0.7, sp, rand);
-
-  // On arrival it's already mid-flight across the opening view, its body trailing in waves off the left.
   const z = -0.1 * f;
-  const start = ctx.at(0.72, viewH * 0.2, z);
-  const trail: Dragon['trail'] = [];
-  const total = (SEGMENTS + 4) * GAP * R;
-  for (let u = total; u >= 0; u -= 3) {
-    trail.push({ p: [start[0] - u, start[1] + Math.sin(u / (R * 6)) * R * 2.2, z + Math.sin(u / (R * 9)) * R * 3], s: total - u, roll: 0 });
-  }
-  const dragon: Dragon = {
-    head, segs, legs, tail, R,
-    pos: [start[0], start[1], z], dir: [1, 0, 0], speed: 160 * s,
-    trail, roll: 0, spin: 1, blinkIn: 2, blinking: 0, phase: rand() * 6,
-  };
+  // On arrival they're already mid-flight in the opening view, their bodies trailing in waves off the edges.
+  const starts: [V3, V3][] = [[ctx.at(0.72, viewH * 0.2, z), [1, 0, 0]], [ctx.at(0.92, viewH * 0.75, z), [-0.3, -1, 0]]];
+  const dragons = COATS().map((coat, n): Dragon => {
+    // A big head for its body, as the old paintings have it.
+    const head = buildHead(B, coat, R * 1.5, sp);
+    const segs: number[] = [];
+    for (let i = 0; i < SEGMENTS; i++) segs.push(buildSegment(B, coat, R * girth(i / (SEGMENTS - 1)), R, sp, i, i % 9 === 4));
+    const legs: Dragon['legs'] = [];
+    for (const [seg, phase] of [[6, 0], [27, Math.PI * 0.6]] as const) {
+      const r = R * girth(seg / (SEGMENTS - 1));
+      for (const side of [-1, 1]) legs.push({ body: buildLeg(B, coat, r, sp, segs[seg], side), seg, phase: phase + (side > 0 ? Math.PI : 0) });
+    }
+    const tail = buildTail(B, coat, R * girth(1), sp, segs[SEGMENTS - 1]);
+    const [start, dir0] = starts[n];
+    const dir = norm(dir0);
+    const trail: Dragon['trail'] = [];
+    const total = (SEGMENTS + 4) * GAP * R;
+    const side = norm(cross(dir, [0, 0, 1]));
+    for (let u = total; u >= 0; u -= 3) {
+      const w = Math.sin(u / (R * 6)) * R * 2.2;
+      trail.push({ p: [start[0] - dir[0] * u + side[0] * w, start[1] - dir[1] * u + side[1] * w, z + Math.sin(u / (R * 9)) * R * 3], s: total - u, roll: 0 });
+    }
+    return {
+      coat, head, segs, legs, tail, R,
+      pos: [start[0], start[1], z], dir, speed: 160 * s,
+      trail, roll: 0, spin: 1, blinkIn: 2 + n, blinking: 0, phase: rand() * 6,
+    };
+  });
+  const pearlBody = buildPearl(B, R * 0.7, sp, rand);
   const pearlPos = ctx.at(0.9, viewH * 0.32, z);
   const pearl: Pearl = { body: pearlBody, pos: pearlPos, vel: [0, 0, 0], target: pearlPos, mode: 'wander', t: 0, dur: 4, island: -1, orbitA: 0 };
   void viewW;
   const critters = populateCritters(B, ctx);
-  return { dragon, pearl, critters, lastPointer: null, time: 0 };
+  return { dragons, pearl, critters, lastPointer: null, time: 0 };
 };
 
 // -------------------------------------------------------------- behaviour ---
@@ -315,7 +334,8 @@ const inView = (scene: SkyScene, cam: SkyCamera, p: V3, margin: number) => {
 let rng = Math.random;
 
 const stepPearl = (scene: SkyScene, life: SkyLife, dt: number, cam: SkyCamera, pointer: { x: number; y: number } | null) => {
-  const { pearl, dragon } = life;
+  const { pearl, dragons } = life;
+  const dragon = dragons[0];
   const f = scene.focal;
   pearl.t += dt;
   // A moving cursor calls the pearl over; it lingers there a while after the cursor stops.
@@ -351,13 +371,13 @@ const stepPearl = (scene: SkyScene, life: SkyLife, dt: number, cam: SkyCamera, p
       }
     }
   }
-  // Caught: the pearl darts off somewhere far across the view.
-  const gap = len(sub(add(dragon.pos, scl(dragon.dir, dragon.R * 2.2)), pearl.pos));
-  if (gap < dragon.R * 2.4 && pearl.mode !== 'dart') {
+  // Caught (by either): the pearl darts off somewhere far across the view, and the catcher rolls.
+  const catcher = dragons.find(d => len(sub(add(d.pos, scl(d.dir, d.R * 2.2)), pearl.pos)) < d.R * 2.4);
+  if (catcher && pearl.mode !== 'dart') {
     let best = viewSpot(scene, cam, rng, pearl.pos);
     for (let i = 0; i < 6; i++) { const c = viewSpot(scene, cam, rng, pearl.pos); if (len(sub(c, pearl.pos)) > len(sub(best, pearl.pos))) best = c; }
     pearl.mode = 'dart'; pearl.t = 0; pearl.dur = 2.5; pearl.target = best;
-    if (dragon.spin >= 1) dragon.spin = 0;
+    if (catcher.spin >= 1) catcher.spin = 0;
     if (life.lastPointer) life.lastPointer.t = -99;
   }
   // A spring towards the target, quick when darting, and a little bob as it floats.
@@ -371,15 +391,24 @@ const stepPearl = (scene: SkyScene, life: SkyLife, dt: number, cam: SkyCamera, p
   scene.bodies[pearl.body].live = { c: [pearl.pos[0], pearl.pos[1] + bob, pearl.pos[2]], rot: rotZ(life.time * 0.8) };
 };
 
-const stepDragon = (scene: SkyScene, life: SkyLife, dt: number, cam: SkyCamera) => {
-  const { dragon: dr, pearl } = life;
+const stepDragon = (scene: SkyScene, life: SkyLife, dr: Dragon, n: number, dt: number, cam: SkyCamera) => {
+  const { pearl } = life;
   const t = life.time;
-  // Steer for just behind the pearl, weaving up and down as it goes.
-  let want = norm(sub(pearl.pos, dr.pos));
+  // The first makes straight for the pearl; the other circles round it, so they spiral about each other.
+  const aim: V3 = n === 0 ? pearl.pos : add(pearl.pos, [Math.cos(t * 0.6 + n * 2) * dr.R * 6, Math.sin(t * 0.8) * dr.R * 3, Math.sin(t * 0.6 + n * 2) * dr.R * 5]);
+  // Steer for it, weaving up and down as it goes.
+  let want = norm(sub(aim, dr.pos));
+  // Never head-on into the other: shy off when their heads come close.
+  for (const o of life.dragons) {
+    if (o === dr) continue;
+    const away = sub(dr.pos, o.pos);
+    const dd = len(away);
+    if (dd < dr.R * 5) want = norm(add(want, scl(away, (1 - dd / (dr.R * 5)) * 1.5 / Math.max(dd, 1e-3))));
+  }
   // Heading over the hero's words: swerve out of them, right on a desktop, up on a phone.
   const [hx, hy] = toScreen(scene, cam, add(dr.pos, scl(dr.dir, dr.R * 4)));
   if (overHero(cam, hx, hy)) want = norm(add(want, cam.viewW < 640 ? [0, -1.6, 0] : [1.6, 0, 0]));
-  const dist = len(sub(pearl.pos, dr.pos));
+  const dist = len(sub(aim, dr.pos));
   const side = norm(cross(dr.dir, [0, -1, 0]));
   const upv = norm(cross(side, dr.dir));
   const weave = add(want, add(scl(upv, Math.sin(t * 1.6 + dr.phase) * 0.45), scl(side, Math.sin(t * 0.9) * 0.2)));
@@ -437,7 +466,7 @@ export const stepLife = (scene: SkyScene, _t: number, dt: number, cam: SkyCamera
   life.time += dt;
   if (dt <= 0) {
     // Still pose everything once, so a frozen page still shows the dragon.
-    if (!scene.bodies[life.dragon.head].live) stepDragon(scene, life, 0.001, cam);
+    life.dragons.forEach((d, n) => { if (!scene.bodies[d.head].live) stepDragon(scene, life, d, n, 0.001, cam); });
     if (!scene.bodies[life.pearl.body].live) stepPearl(scene, life, 0.001, cam, null);
     if (!scene.bodies[life.critters.whale.body].live) stepCritters(scene, life.time, 0.001, cam, null, rng);
     return;
@@ -447,17 +476,19 @@ export const stepLife = (scene: SkyScene, _t: number, dt: number, cam: SkyCamera
   const n = Math.ceil(dt / 0.034);
   for (let i = 0; i < n; i++) {
     stepPearl(scene, life, dt / n, cam, pointer);
-    stepDragon(scene, life, dt / n, cam);
+    life.dragons.forEach((d, k) => stepDragon(scene, life, d, k, dt / n, cam));
   }
 };
 
-/** Puts the pearl (and so the dragon) somewhere in the visitor's view at once. */
+/** Puts the pearl (and so the dragons) somewhere in the visitor's view at once, one dragon coming in from each side. */
 export const callDragon = (scene: SkyScene, cam: SkyCamera) => {
-  const { pearl, dragon } = scene.life;
+  const { pearl, dragons } = scene.life;
   const spot = viewSpot(scene, cam, Math.random);
   pearl.pos = spot; pearl.target = spot; pearl.vel = [0, 0, 0]; pearl.mode = 'wander'; pearl.t = 0;
-  const from = fromScreen(scene, cam, -200, cam.viewH * 0.5, spot[2]);
-  dragon.pos = from;
-  dragon.dir = norm(sub(spot, from));
-  dragon.trail = [{ p: sub(from, scl(dragon.dir, (SEGMENTS + 4) * GAP * dragon.R)), s: 0, roll: 0 }, { p: [...from] as V3, s: (SEGMENTS + 4) * GAP * dragon.R, roll: 0 }];
+  dragons.forEach((dragon, n) => {
+    const from = fromScreen(scene, cam, n ? cam.viewW + 200 : -200, cam.viewH * (0.4 + n * 0.25), spot[2]);
+    dragon.pos = from;
+    dragon.dir = norm(sub(spot, from));
+    dragon.trail = [{ p: sub(from, scl(dragon.dir, (SEGMENTS + 4) * GAP * dragon.R)), s: 0, roll: 0 }, { p: [...from] as V3, s: (SEGMENTS + 4) * GAP * dragon.R, roll: 0 }];
+  });
 };

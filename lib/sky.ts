@@ -46,12 +46,13 @@ export const RAMPS: string[][] = [
   /* 21 face    */ ['#2a2440', '#382e4c', '#4a3c58', '#5e4c66', '#766078', '#94788e'],
   /* 22 jade    */ ['#0e3440', '#14504c', '#1e7058', '#2e9468', '#52b88a', '#98dcb4'],
   /* 23 crystal */ ['#3a3a8a', '#4e5ab0', '#6a86d4', '#8cb4ec', '#bcdcf8', '#f0faff'],
+  /* 24 azure   */ ['#0a1a34', '#0d2c50', '#11426c', '#185c88', '#2a7ea4', '#58a8c4'],
 ];
 export const SHADES = 6;
 export const M = {
   grass: 0, soil: 1, stone: 2, sand: 3, cloud: 4, water: 5, leaf: 6, blossom: 7, bark: 8, sun: 9,
   far: 10, fargrass: 11, dragon: 12, gold: 13, cream: 14, eye: 15, pupil: 16, pearl: 17, storm: 18,
-  whale: 19, coral: 20, face: 21, jade: 22, crystal: 23,
+  whale: 19, coral: 20, face: 21, jade: 22, crystal: 23, azure: 24,
 } as const;
 
 /** What open sky and its glows snap to: the blues, the warm haze low down, mist, and the jewels. */
@@ -135,7 +136,11 @@ export interface Body {
 
 /** An island, for the creatures: where it is and where on it they can land (in its own frame). */
 /** An island, for the creatures: where it is, where on it they can land, and the nests under its rim (in its own frame). */
-export interface Island { body: number; R: number; z: number; far: boolean; perches: V3[]; falls: V3 | null; nests: V3[] }
+export interface Island {
+  body: number; R: number; z: number; far: boolean; perches: V3[]; falls: V3 | null; nests: V3[];
+  /** Its solid shape, in its own frame: how deep the underside hangs, and the edge's radius at 24 angles round it. */
+  H: number; edge: number[];
+}
 
 export interface SkyScene {
   solid: Float32Array;
@@ -501,7 +506,8 @@ const island = (B: Builder, ctx: Ctx, pos: V3, Rapp: number, z: number, o: Islan
     falls = foot;
   }
 
-  return { body, R, z, far: o.far, perches, falls, nests };
+  const edges = Array.from({ length: 24 }, (_, i) => edge((i / 24) * Math.PI * 2));
+  return { body, R, z, far: o.far, perches, falls, nests, H, edge: edges };
 };
 
 // ----------------------------------------------------------------- clouds ---
@@ -709,6 +715,49 @@ export const centreAt = (b: Body, t: number): V3 => {
 };
 
 /** A point in an island's own frame, in the world, now. */
+/**
+ * If `p` is inside island `isl` (padded by `pad`), the nearest point just outside it,
+ * over its top or out through its side; otherwise null. `c` and `rot` are where the
+ * island is and how it's turned (posed, or as built).
+ */
+export const outOfIsland = (isl: Island, c: V3, rot: number[], p: V3, pad: number): V3 | null => {
+  const d: V3 = [p[0] - c[0], p[1] - c[1], p[2] - c[2]];
+  // Into the island's own frame (the rotation's transpose).
+  const lx = rot[0] * d[0] + rot[3] * d[1] + rot[6] * d[2];
+  const ly = rot[1] * d[0] + rot[4] * d[1] + rot[7] * d[2];
+  const lz = rot[2] * d[0] + rot[5] * d[1] + rot[8] * d[2];
+  const top = -isl.R * 0.08 - pad;
+  if (ly < top || ly > isl.H + pad) return null;
+  const radial = Math.hypot(lx, lz);
+  if (radial > isl.R * 1.25 + pad) return null;
+  const a = (Math.atan2(lz, lx) + Math.PI * 2) % (Math.PI * 2);
+  const f = (a / (Math.PI * 2)) * 24;
+  const i = Math.floor(f) % 24;
+  const e = isl.edge[i] + (isl.edge[(i + 1) % 24] - isl.edge[i]) * (f - Math.floor(f));
+  const t = Math.max(0, Math.min(1, ly / isl.H));
+  const rr = e * (1 - t) ** 0.72 * (1 - 0.12 * t) * 1.08 + pad;
+  if (radial > rr) return null;
+  // Out by the shorter way: up over the top, or out through the side.
+  let ox = lx, oy = ly, oz = lz;
+  if (ly - top < rr - radial) oy = top;
+  else { const k = rr / Math.max(radial, 1e-3); ox = lx * k; oz = lz * k; }
+  return [c[0] + rot[0] * ox + rot[1] * oy + rot[2] * oz, c[1] + rot[3] * ox + rot[4] * oy + rot[5] * oz, c[2] + rot[6] * ox + rot[7] * oy + rot[8] * oz];
+};
+
+/** `p` moved out of any near island it's inside (padded by `pad`), skipping island `skip`. */
+export const clearOfIslands = (scene: SkyScene, p: V3, pad: number, skip = -1): V3 => {
+  let q = p;
+  for (let i = 0; i < scene.islands.length; i++) {
+    const isl = scene.islands[i];
+    if (isl.far || i === skip) continue;
+    const c = scene.centres?.[isl.body] ?? scene.bodies[isl.body].pos;
+    if (Math.abs(q[2] - c[2]) > isl.R * 1.3 + pad || Math.abs(q[0] - c[0]) > isl.R * 1.3 + pad || Math.abs(q[1] - c[1] - isl.H * 0.4) > isl.H + pad) continue;
+    const out = outOfIsland(isl, c, scene.rots?.[isl.body] ?? scene.bodies[isl.body].base, q, pad);
+    if (out) q = out;
+  }
+  return q;
+};
+
 export const onIsland = (scene: SkyScene, isl: Island, local: V3): V3 => {
   const c = scene.centres?.[isl.body] ?? scene.bodies[isl.body].pos;
   const w = rotate(scene.rots?.[isl.body] ?? scene.bodies[isl.body].base, local);

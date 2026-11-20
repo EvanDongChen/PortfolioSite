@@ -1,6 +1,6 @@
 import { V3, norm, rotX, rotY, rotZ, mul3 } from './space';
 import {
-  Builder, F, G, Island, M, SkyCamera, SkyScene, ellipsoid, frameAlong, onIsland, sphere, toScreen, tree, tube,
+  Builder, F, G, Island, M, SkyCamera, SkyScene, clearOfIslands, ellipsoid, frameAlong, onIsland, outOfIsland, sphere, toScreen, tree, tube,
 } from './sky';
 
 /**
@@ -8,8 +8,10 @@ import {
  *
  * Puffball birds: round, fluffy and bright, living in mud nests stuck under
  * the islands' rims. They sit and blink, flutter out in little sorties round
- * their island and home again, now and then move house to another island in
- * view, scatter when the dragon swims close, and hurry home when a storm comes.
+ * their island, fly over to other islands (often in pairs) to land on the
+ * grass and hop about, then fly home or move into a free nest there; they
+ * scatter when a dragon swims close and hurry home when a storm comes. In
+ * flight they climb over islands rather than through them (clearOfIslands).
  *
  * Cloud-sheep: woolly clouds with dark faces and dangling legs, grazing in
  * herds along the margins. They soak up the damp air, slowly going grey, until
@@ -29,7 +31,10 @@ export interface Bird {
   r: number;
   island: number;
   nest: number;
-  mode: 'nest' | 'out' | 'home';
+  mode: 'nest' | 'out' | 'travel' | 'perch' | 'home';
+  /** The island it's visiting, and which spot on its top it lands on. */
+  visit: number;
+  perch: number;
   pos: V3;
   vel: V3;
   target: V3;
@@ -231,9 +236,11 @@ export const populateCritters = (B: Builder, ctx: Ctx): Critters => {
     const r = 16 * s * ctx.k(z);
     const sp = ctx.sp(z) * 0.55;
     isl.nests.forEach((_, ni) => {
+      // Every third island keeps a nest free, so there's somewhere to move into.
+      if (ni === 1 && ii % 3 === 0) return;
       const { body, wings } = buildBird(B, r, sp, birdColours()[(ii * 2 + ni) % 5], rand);
       nestTaken.set(`${ii}:${ni}`, birds.length);
-      birds.push({ body, wings, r, island: ii, nest: ni, mode: 'nest', pos: [...PARKED] as V3, vel: [0, 0, 0], target: [0, 0, 0], t: 0, wait: 2 + rand() * 10, flap: 0, blinkIn: rand() * 3, blink: 0, phase: rand() * 6, hop: 0 });
+      birds.push({ body, wings, r, island: ii, nest: ni, visit: -1, perch: 0, mode: 'nest', pos: [...PARKED] as V3, vel: [0, 0, 0], target: [0, 0, 0], t: 0, wait: 2 + rand() * 10, flap: 0, blinkIn: rand() * 3, blink: 0, phase: rand() * 6, hop: 0 });
     });
   });
 
@@ -248,7 +255,13 @@ export const populateCritters = (B: Builder, ctx: Ctx): Critters => {
     const y = h === 0 ? viewH * 0.95 : viewH * 0.95 + (h / herds) * (pageH - viewH * 1.5);
     const n = 3 + Math.floor(rand() * 2);
     for (let i = 0; i < n; i++) {
-      const home = ctx.at(left ? 0.04 + rand() * 0.14 : 0.82 + rand() * 0.14, y + (rand() - 0.5) * 120, z + (rand() - 0.5) * 0.1 * f);
+      // Somewhere in the margin with room to amble, clear of any island.
+      let home = ctx.at(left ? 0.04 + rand() * 0.14 : 0.82 + rand() * 0.14, y + (rand() - 0.5) * 120, z + (rand() - 0.5) * 0.1 * f);
+      for (let tries = 0; tries < 12; tries++) {
+        const blocked = ctx.islands.some(isl => !isl.far && [-4, 0, 4].some(dx => outOfIsland(isl, B.bodies[isl.body].pos, B.bodies[isl.body].base, [home[0] + dx * r, home[1], home[2]], r * 1.8)));
+        if (!blocked) break;
+        home = ctx.at(left ? 0.04 + rand() * 0.14 : 0.82 + rand() * 0.14, y + (rand() - 0.5) * 120 + (tries + 1) * 70 * (tries % 2 ? -1 : 1), z + (rand() - 0.5) * 0.1 * f);
+      }
       const body = buildSheep(B, r * (0.85 + rand() * 0.3), sp, rand);
       sheep.push({ body, r, pos: [...home] as V3, home, heading: rand() < 0.5 ? 1 : -1, wet: rand() * 0.8, raining: 0, hop: 0, hopV: 0, sq: 1, sqv: 0, phase: rand() * 6, blinkIn: rand() * 4 });
     }
@@ -281,63 +294,116 @@ const islandInView = (scene: SkyScene, cam: SkyCamera, i: number) => {
   return x > -100 && x < cam.viewW + 100 && y > -100 && y < cam.viewH + 100;
 };
 
+/** Where a bird lands on top of the island it's visiting. */
+const perchPoint = (scene: SkyScene, b: Bird) => {
+  const isl = scene.islands[b.visit];
+  const p = onIsland(scene, isl, isl.perches[b.perch % isl.perches.length]);
+  return [p[0], p[1] - b.r * 0.95, p[2]] as V3;
+};
+
+/** A near island with somewhere to land, within reach of island `from` down the page (ones in view more likely). */
+const pickVisit = (scene: SkyScene, cam: SkyCamera, from: number, rand: () => number) => {
+  const c0 = scene.centres?.[scene.islands[from].body];
+  if (!c0) return -1;
+  const options: number[] = [];
+  scene.islands.forEach((isl, i) => {
+    if (i === from || isl.far || !isl.perches.length) return;
+    const c = scene.centres?.[isl.body];
+    if (!c || Math.abs(c[1] - c0[1]) > cam.viewH * 1.3) return;
+    options.push(i);
+    if (islandInView(scene, cam, i)) options.push(i, i);
+  });
+  return options.length ? options[Math.floor(rand() * options.length)] : -1;
+};
+
+const takeFlight = (b: Bird) => { b.vel = [b.vel[0], -b.r * 5, b.r * 2]; b.t = 0; };
+
 const stepBirds = (scene: SkyScene, cr: Critters, t: number, dt: number, cam: SkyCamera, rand: () => number) => {
-  const dragon = scene.life.dragon;
+  const dragons = scene.life.dragons;
   const stormy = scene.events.light.gloom > 0.25;
+  const bodies = scene.bodies;
   for (const b of cr.birds) {
-    const bodies = scene.bodies;
     b.t += dt;
     const home = nestPoint(scene, b);
-    const near = len(sub(dragon.pos, b.mode === 'nest' ? home : b.pos)) < dragon.R * 7;
+    const here = b.mode === 'nest' ? home : b.pos;
+    const near = dragons.some(d => len(sub(d.pos, here)) < d.R * 7);
     if (b.mode === 'nest') {
       b.pos = home;
       b.wait -= dt;
-      // The dragon's too close: everybody out! (unless it's raining, when they huddle in).
-      if ((near && !stormy) || (b.wait <= 0 && !stormy)) {
-        b.mode = 'out'; b.t = 0;
+      // A dragon's too close: everybody out! (Unless it's raining, when they huddle in.)
+      if (!stormy && (near || b.wait <= 0)) {
+        takeFlight(b);
         const isl = scene.islands[b.island];
-        const c = scene.centres?.[isl.body] ?? home;
-        const ang = rand() * Math.PI * 2;
-        const reach = isl.R * (near ? 2.2 : 1.1 + rand() * 0.8);
-        b.target = [c[0] + Math.cos(ang) * reach, c[1] - isl.R * (0.2 + rand() * 0.6), c[2] + Math.sin(ang) * reach * 0.6];
-        b.vel = [0, -b.r * 4, b.r * 2];
-        // Now and then a bird moves house to a free nest on another island in view.
-        if (!near && rand() < 0.3) {
-          const free: [number, number][] = [];
-          scene.islands.forEach((is2, ii) => { if (ii !== b.island && !is2.far && islandInView(scene, cam, ii)) is2.nests.forEach((_, ni) => { if (!cr.nestTaken.has(`${ii}:${ni}`)) free.push([ii, ni]); }); });
-          if (free.length) {
-            const [ii, ni] = free[Math.floor(rand() * free.length)];
-            cr.nestTaken.delete(`${b.island}:${b.nest}`);
-            b.island = ii; b.nest = ni;
-            cr.nestTaken.set(`${ii}:${ni}`, cr.birds.indexOf(b));
-          }
+        const visit = near ? -1 : rand() < 0.6 ? pickVisit(scene, cam, b.island, rand) : -1;
+        if (visit >= 0) {
+          // Off to another island, often with a nest-mate tagging along.
+          b.mode = 'travel'; b.visit = visit; b.perch = Math.floor(rand() * 1000);
+          const mate = cr.birds.find(o => o !== b && o.island === b.island && o.mode === 'nest');
+          if (mate && rand() < 0.5) { takeFlight(mate); mate.mode = 'travel'; mate.visit = visit; mate.perch = b.perch + 1; }
+        } else {
+          b.mode = 'out';
+          const c = scene.centres?.[isl.body] ?? home;
+          const ang = rand() * Math.PI * 2;
+          const reach = isl.R * (near ? 2.4 : 1.4 + rand() * 0.8);
+          b.target = [c[0] + Math.cos(ang) * reach, c[1] - isl.R * (0.3 + rand() * 0.6), c[2] + Math.sin(ang) * reach * 0.6];
         }
       }
+    } else if (b.mode === 'perch') {
+      // Sat on another island's grass, hopping about now and then.
+      const spot = perchPoint(scene, b);
+      b.wait -= dt;
+      if (b.hop <= 0 && rand() < dt * 0.8) b.hop = 1;
+      b.hop = Math.max(0, b.hop - dt * 2.2);
+      b.pos = [spot[0], spot[1] - Math.sin(b.hop * Math.PI) * b.r * 1.2, spot[2]];
+      if (stormy || near || b.wait <= 0) {
+        // Home again, or move in here if there's a free nest.
+        const isl = scene.islands[b.visit];
+        const free = isl.nests.findIndex((_, ni) => !cr.nestTaken.has(b.visit + ':' + ni));
+        if (!near && free >= 0 && rand() < 0.35) {
+          cr.nestTaken.delete(b.island + ':' + b.nest);
+          b.island = b.visit; b.nest = free;
+          cr.nestTaken.set(b.island + ':' + b.nest, cr.birds.indexOf(b));
+        }
+        b.mode = 'home';
+        takeFlight(b);
+      }
     } else {
-      // Out on a sortie, then home; storms send them straight back.
       if (b.mode === 'out' && (stormy || b.t > 7 || (b.t > 2.5 && len(sub(b.target, b.pos)) < b.r * 6))) { b.mode = 'home'; b.t = 0; }
-      const goal = b.mode === 'home' ? home : b.target;
+      if (b.mode === 'travel' && (stormy || b.t > 25)) { b.mode = 'home'; b.t = 0; }
+      const goal = b.mode === 'home' ? home : b.mode === 'travel' ? perchPoint(scene, b) : b.target;
       const to = sub(goal, b.pos);
       const dist = len(to);
-      const speed = b.r * (b.mode === 'home' ? 9 : 11) * (near ? 1.6 : 1);
+      const speed = b.r * (b.mode === 'out' ? 11 : 14) * (near ? 1.6 : 1);
       const want = scl(to, Math.min(1, dist / (b.r * 3)) * speed / Math.max(dist, 1e-3));
+      // On a long flight, keep high: up and over, then down onto the spot.
+      if (dist > b.r * 8) want[1] -= speed * 0.3;
       // Fluttery: a little bounce on every wingbeat.
       want[1] += Math.sin(t * 9 + b.phase) * b.r * 2.5;
+      // Looking ahead: an island in the way means climb and veer round it.
+      const ahead = add(b.pos, scl(b.vel, 0.5));
+      const clear = clearOfIslands(scene, ahead, b.r * 1.5);
+      if (clear !== ahead && dist > b.r * 4) {
+        const push = sub(clear, ahead);
+        want[0] += push[0] * 4; want[1] += push[1] * 4 - speed * 0.6; want[2] += push[2] * 4;
+      }
       b.vel = add(b.vel, scl(sub(want, b.vel), Math.min(1, dt * 3)));
       b.pos = add(b.pos, scl(b.vel, dt));
-      if (b.mode === 'home' && dist < b.r * 0.6) {
-        b.mode = 'nest'; b.wait = 6 + rand() * 14; b.hop = 1;
-      }
+      // Never inside the rock, except tucking into its own nest or onto the grass.
+      if (dist > b.r * 4) b.pos = clearOfIslands(scene, b.pos, b.r * 1.1);
+      if (b.mode === 'home' && dist < b.r * 0.6) { b.mode = 'nest'; b.wait = 6 + rand() * 14; b.hop = 1; }
+      if (b.mode === 'travel' && dist < b.r * 0.8) { b.mode = 'perch'; b.wait = 4 + rand() * 7; b.hop = 1; }
     }
-    // Pose: in the nest it faces out at the viewer and bobs; flying, it turns towards where it's going.
+    // Pose: sitting, it faces out at the viewer and bobs; flying, it turns towards where it's going.
     let rot: number[];
     let flap: number;
-    if (b.mode === 'nest') {
-      b.hop = Math.max(0, b.hop - dt * 2.5);
+    if (b.mode === 'nest' || b.mode === 'perch') {
+      if (b.mode === 'nest') {
+        b.hop = Math.max(0, b.hop - dt * 2.5);
+        b.pos = [home[0], home[1] - Math.sin(b.hop * Math.PI) * b.r * 0.8, home[2]];
+      }
       const bob = Math.sin(t * 2 + b.phase) * 0.06;
       rot = mul3(rotZ(bob), rotX(-0.15));
       flap = b.hop > 0 ? Math.sin(t * 30) * 0.8 : Math.max(0, Math.sin(t * 0.7 + b.phase) - 0.92) * 8 * Math.sin(t * 25);
-      b.pos = [home[0], home[1] - Math.sin(b.hop * Math.PI) * b.r * 0.8, home[2]];
     } else {
       const yaw = clamp(b.vel[0] / (b.r * 8), -1, 1) * 1.1;
       rot = mul3(rotY(yaw), rotX(clamp(-b.vel[1] / (b.r * 20), -0.5, 0.5)));
@@ -356,8 +422,10 @@ const stepBirds = (scene: SkyScene, cr: Critters, t: number, dt: number, cam: Sk
 const stepSheep = (scene: SkyScene, cr: Critters, t: number, dt: number, cam: SkyCamera, pointer: { x: number; y: number } | null, rand: () => number) => {
   const gloom = scene.events.light.gloom;
   for (const sh of cr.sheep) {
-    // Grazing: an amble along the margin, turning back now and then.
-    sh.pos[0] += sh.heading * sh.r * 0.35 * dt;
+    // Grazing: an amble along the margin, turning back now and then, and at any island in the way.
+    const next: V3 = [sh.pos[0] + sh.heading * (sh.r * 0.35 * dt + sh.r * 0.8), sh.pos[1], sh.pos[2]];
+    if (clearOfIslands(scene, next, sh.r * 1.3) !== next) sh.heading = -sh.heading;
+    else sh.pos[0] += sh.heading * sh.r * 0.35 * dt;
     if (Math.abs(sh.pos[0] - sh.home[0]) > sh.r * 4) sh.heading = Math.sign(sh.home[0] - sh.pos[0]);
     else if (rand() < dt * 0.05) sh.heading = -sh.heading;
     // Damp air soaks in; a storm soaks them through at once.
@@ -382,7 +450,8 @@ const stepSheep = (scene: SkyScene, cr: Critters, t: number, dt: number, cam: Sk
     sh.sqv += (1 - sh.sq) * 60 * dt - sh.sqv * 6 * dt;
     sh.sq += sh.sqv * dt;
     const bob = Math.sin(t * 1.3 + sh.phase) * sh.r * 0.15;
-    const c: V3 = [sh.pos[0], sh.pos[1] + bob + sh.hop + (sh.raining > 0 ? sh.r * 0.2 : 0), sh.pos[2]];
+    // However the islands bob, never inside one.
+    const c = clearOfIslands(scene, [sh.pos[0], sh.pos[1] + bob + sh.hop + (sh.raining > 0 ? sh.r * 0.2 : 0), sh.pos[2]], sh.r * 1.1);
     const b = scene.bodies[sh.body];
     // Three-quarter view, towards the way it's walking.
     b.live = { c, rot: mul3(rotY(sh.heading > 0 ? -0.6 : Math.PI + 0.6), rotZ(Math.sin(t * 2 + sh.phase) * 0.05)) };
