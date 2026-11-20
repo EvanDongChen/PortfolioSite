@@ -13,6 +13,7 @@
  */
 
 import { HotpotLife, populateLife } from './hotpotLife';
+import { HotpotEvents, populateEvents } from './hotpotEvents';
 
 export const FOV_Y = (45 * Math.PI) / 180;
 export const focalFor = (viewH: number) => viewH / 2 / Math.tan(FOV_Y / 2);
@@ -216,7 +217,7 @@ export const frameAlong = (x: V3): number[] => {
 
 // ---------------------------------------------------------------- objects ---
 
-export type BodyKind = 'wall' | 'steam' | 'splash' | 'chopstick' | Ingredient;
+export type BodyKind = 'wall' | 'steam' | 'splash' | 'chopstick' | 'ladle' | 'egg' | 'ribbon' | Ingredient;
 
 /** Everything that goes into the pot. */
 export type Ingredient =
@@ -267,6 +268,7 @@ export interface HotpotScene {
   wall: Wall;
   plumes: Plume[];
   life: HotpotLife;
+  events: HotpotEvents;
 }
 
 export class Builder {
@@ -807,6 +809,7 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, clear: C
   }
 
   const life = populateLife(B, { rand, s, f, viewW, viewH, pageH, wall, plumes, clear });
+  const events = populateEvents(B, { rand, s });
 
   return {
     solid: new Float32Array(B.solid),
@@ -821,6 +824,7 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, clear: C
     wall,
     plumes,
     life,
+    events,
   };
 };
 

@@ -1,4 +1,5 @@
 import { BUBBLE_GROW, stepLife } from './hotpotLife';
+import { stepEvents } from './hotpotEvents';
 import { BROTH_PALETTE, F, G, PALETTE_SIDE, GLOW_STRIDE, HotpotScene, OBJ_TEXELS, RAMPS, SHADES, SOLID_STRIDE, poseBodies } from './hotpot';
 
 /**
@@ -219,6 +220,8 @@ uniform int u_nRipples;
 // Big bubbles beside the food: x, y, age, radius.
 uniform vec4 u_bubbles[${MAX_BUBBLES}];
 uniform int u_nBubbles;
+// The ladle's whirlpool: centre, strength, size (strength 0: none).
+uniform vec4 u_vortex;
 uniform vec3 u_light;
 out vec4 o;
 const float BAYER[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
@@ -258,8 +261,19 @@ vec3 broth(vec2 w) {
     heat += exp(-dot(e, e) / (sig * sig)) * u_plumes[i].z;
   }
   heat = min(heat, 1.3) * u_boil;
+  // In the ladle's whirlpool the broth's pattern is wound round its middle, tighter near the centre, and turning.
+  vec2 wv = w;
+  float swirl = 0.0;
+  if (u_vortex.z > 0.01) {
+    vec2 e = w - u_vortex.xy;
+    float d = length(e);
+    swirl = u_vortex.z * exp(-d / u_vortex.w);
+    float a = swirl * (2.5 + t * 1.3);
+    float ca = cos(a), sa = sin(a);
+    wv = u_vortex.xy + vec2(ca * e.x - sa * e.y, sa * e.x + ca * e.y);
+  }
   // Slow currents: everything is drawn through a drifting warp, faster where it boils.
-  vec2 q = w / (120.0 * u_s);
+  vec2 q = wv / (120.0 * u_s);
   vec2 warp = vec2(vn(q * 0.6 + vec2(t * 0.05, 0.0)), vn(q * 0.6 + vec2(5.2, -t * 0.045))) - 0.5;
   vec2 r = q + warp * (1.4 + heat * 0.8);
   vec3 col;
@@ -314,6 +328,14 @@ vec3 broth(vec2 w) {
       float l = length(wc - ctr);
       if (l < rr) col = l > rr - 1.8 * u_s ? hex(246., 214., 144.) : hex(242., 234., 212.);
     }
+  }
+  // Spiral arms of light round the whirlpool, and a dimple at its middle.
+  if (swirl > 0.02) {
+    vec2 e = w - u_vortex.xy;
+    float d = length(e) + 1.0;
+    float arm = sin(atan(e.y, e.x) * 3.0 + log(d) * 5.0 - t * 5.0);
+    if (arm > 0.55) col *= 1.0 + swirl * (mala ? 0.6 : 0.12);
+    if (d < u_vortex.w * 0.12 * u_vortex.z) col *= mala ? 0.6 : 0.85;
   }
   // The broth climbs the divider a little and catches the light there.
   float ad = abs(dist) - u_wallHalf;
@@ -641,6 +663,7 @@ export class HotpotView {
     const gl = this.gl;
     const scene = this.scene;
     if (!scene || !this.solidFbo || !this.glowFbo) return;
+    stepEvents(scene, fr.time, fr.dt, fr);
     stepLife(scene, fr.time, fr.dt, fr, fr.pointer);
     const life = scene.life;
     poseBodies(scene, this.pose);
@@ -735,6 +758,8 @@ export class HotpotView {
       nb++;
     }
     gl.uniform4fv(this.u(post, 'u_bubbles'), this.bubbleBuf);
+    const vt = life.vortex;
+    gl.uniform4f(this.u(post, 'u_vortex'), vt ? vt.x : 0, vt ? vt.y : 0, vt ? vt.k : 0, vt ? vt.R : 1);
     gl.uniform1i(this.u(post, 'u_nBubbles'), nb);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.solidTex);

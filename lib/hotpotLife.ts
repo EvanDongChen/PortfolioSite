@@ -10,7 +10,7 @@
 
 import {
   Body, Builder, Clear, G, HotpotCamera, HotpotScene, INGREDIENTS, Ingredient, Plume, V3, Wall,
-  IDENTITY, buildChopstick, buildIngredient, frameAlong, mul3, norm, rotAxis, rotX, rotY, rotZ, vnoise, wallDist,
+  IDENTITY, buildChopstick, buildIngredient, frameAlong, mul3, norm, rotAxis, rotZ, wallDist,
 } from './hotpot';
 
 export type Side = -1 | 1; // -1: the mala, 1: the bone broth
@@ -38,6 +38,8 @@ export interface Item {
   stuck: Item[];
   /** A meatball that has come up. */
   popped: boolean;
+  /** How hot the broth is where it is, as of this frame. */
+  heat: number;
 }
 
 export interface Chopsticks {
@@ -83,6 +85,9 @@ export interface HotpotLife {
   viewW: number;
   pageH: number;
   stickLen: number;
+  /** A whirlpool the ladle left: centre, strength 0..1 and size (see hotpotEvents). */
+  vortex: { x: number; y: number; k: number; R: number } | null;
+  frame: number;
 }
 
 /** What each broth is stocked with, and how often (relative). */
@@ -137,7 +142,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
       // Some already done, some just in.
       cook: rand() * 1.3,
       state: 'float', fz: 0, vz: 0, bump: 0, vb: 0,
-      tx: 0, ty: 0, vtx: 0, vty: 0, roll: IDENTITY, stuck: [], popped: false,
+      tx: 0, ty: 0, vtx: 0, vty: 0, roll: IDENTITY, stuck: [], popped: false, heat: 0.5,
     };
     items.push(it);
     poseItem(B.bodies[body], it, 0, 0.5, s);
@@ -182,10 +187,11 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
     splashes.push({ body, t0: -99 });
   }
 
+  ctx.plumes.sort((a, b) => a[1] - b[1]);
   return {
     items, sticks, splashes, ripples: [], bubbles: [], drops: [], time: 0, boil: 1, boilUntil: -1,
     nextPluck: 3.5, eager: false, lastPointer: null,
-    wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen,
+    wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen, vortex: null, frame: 0,
   };
 };
 
@@ -220,15 +226,25 @@ const overOf = (it: Item) => {
   }
 };
 
+/** rotX(a) · rotY(b) · rotZ(c), in one go (this runs for every ingredient every frame). */
+const tiltXY = (a: number, b: number, c: number) => {
+  const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), cc = Math.cos(c), sc = Math.sin(c);
+  return [
+    cb * cc, -cb * sc, sb,
+    sa * sb * cc + ca * sc, -sa * sb * sc + ca * cc, -sa * cb,
+    -ca * sb * cc + sa * sc, ca * sb * sc + sa * cc, ca * cb,
+  ];
+};
+
 const poseItem = (b: Body, it: Item, t: number, heat: number, s: number) => {
   const wob = 0.06 + heat * 0.06;
-  const tilt = mul3(rotX(Math.sin(t * 1.3 + it.phase) * wob + it.tx), rotY(Math.cos(t * 1.1 + it.phase * 1.7) * wob + it.ty));
+  const ax = Math.sin(t * 1.3 + it.phase) * wob + it.tx, ay = Math.cos(t * 1.1 + it.phase * 1.7) * wob + it.ty;
   const cook = shownCook(it);
   let z: number;
   if (it.state === 'falling' || it.state === 'held') z = it.fz;
   else z = -sinkOf(it) * s + Math.sin(t * 1.7 + it.phase) * 1.2 * heat + it.bump;
   it.z = z;
-  b.live = { c: [it.x, it.y, z], rot: mul3(tilt, it.kind === 'meatball' ? it.roll : rotZ(it.ang)) };
+  b.live = { c: [it.x, it.y, z], rot: it.kind === 'meatball' ? mul3(tiltXY(ax, ay, 0), it.roll) : tiltXY(ax, ay, it.ang) };
   const over = overOf(it);
   const done = Math.min(1, it.cook);
   // Beef and squid curl as they cook; greens and napa droop as they wilt.
@@ -245,12 +261,17 @@ const poseItem = (b: Body, it: Item, t: number, heat: number, s: number) => {
 };
 
 /** The boil's currents at (x, y): out from each plume and turning a little, plus a slow wander. Also how hot it is there. */
-const flowAt = (life: HotpotLife, x: number, y: number, t: number, out: { vx: number; vy: number; heat: number }) => {
+export const flowAt = (life: HotpotLife, x: number, y: number, t: number, out: { vx: number; vy: number; heat: number }) => {
   const sig = 120 * life.s;
   let vx = 0, vy = 0, heat = 0.25;
-  for (const [px, py, st] of life.plumes) {
+  const plumes = life.plumes;
+  // The first plume within reach above, by bisection (they're sorted by y).
+  let lo = 0, hi = plumes.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (plumes[mid][1] < y - sig * 3) lo = mid + 1; else hi = mid; }
+  for (let i = lo; i < plumes.length; i++) {
+    const [px, py, st] = plumes[i];
     const dy = y - py;
-    if (dy > sig * 3 || dy < -sig * 3) continue;
+    if (dy < -sig * 3) break;
     const dx = x - px;
     if (dx > sig * 3 || dx < -sig * 3) continue;
     const g = Math.exp(-(dx * dx + dy * dy) / (sig * sig)) * st * (0.75 + 0.25 * Math.sin(t * 0.7 + px * 0.01));
@@ -259,11 +280,21 @@ const flowAt = (life: HotpotLife, x: number, y: number, t: number, out: { vx: nu
     heat += g;
   }
   const w = 22 * life.s;
-  vx += (vnoise(x / 260, y / 260, t * 0.06, 5) - 0.5) * w * 2;
-  vy += (vnoise(x / 260, y / 260, t * 0.06 + 9, 6) - 0.5) * w * 2;
+  vx += Math.sin(y * 0.0123 + t * 0.11) * Math.cos(x * 0.0071 - t * 0.07) * w;
+  vy += Math.sin(x * 0.0109 - t * 0.09) * Math.cos(y * 0.0083 + t * 0.13) * w;
   out.vx = vx * life.boil;
   out.vy = vy * life.boil;
   out.heat = Math.min(1.4, heat) * life.boil;
+  // Round and round the ladle's whirlpool, drawn a little in towards its middle.
+  const vt = life.vortex;
+  if (vt && vt.k > 0.01) {
+    const dx = x - vt.x, dy = y - vt.y;
+    const d = Math.hypot(dx, dy) + 1;
+    const u = d / vt.R;
+    const sp = vt.k * 120 * life.s * u * Math.exp(1 - u);
+    out.vx += (-dy / d) * sp - (dx / d) * sp * 0.15;
+    out.vy += (dx / d) * sp - (dy / d) * sp * 0.15;
+  }
 };
 
 const ease = (u: number) => 1 - (1 - u) ** 3;
@@ -275,7 +306,7 @@ export const addRipple = (life: HotpotLife, x: number, y: number, a: number) => 
   if (life.ripples.length > 12) life.ripples.shift();
 };
 
-const splashAt = (scene: HotpotScene, x: number, y: number) => {
+export const splashAt = (scene: HotpotScene, x: number, y: number) => {
   const life = scene.life;
   const sp = life.splashes.reduce((a, b) => (a.t0 < b.t0 ? a : b));
   sp.t0 = life.time;
@@ -490,7 +521,9 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
   for (const sp of life.splashes) if (sp.t0 > -50 && t - sp.t0 > 1.2) { scene.bodies[sp.body].params![2] = 0; sp.t0 = -99; }
 
   const viewY = cam.scrollY + cam.viewH / 2;
-  const near = cam.viewH * 1.1 + 200;
+  const near = cam.viewH * 0.75 + 150;
+  // Little garnish is moved on alternate frames, to halve its cost.
+  life.frame = (life.frame + 1) & 1;
   // A coarse grid for keeping things apart.
   const cell = 90 * s;
   const grid = new Map<number, Item[]>();
@@ -499,6 +532,7 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
     if (it.state === 'gone') { scene.bodies[it.body].live = { c: PARKED, rot: scene.bodies[it.body].base }; continue; }
     const cookTime = INGREDIENTS[it.kind].cook || VEG_DONE;
     if (Math.abs(it.y - viewY) > near && it.state === 'float') { it.cook += (dt * 0.6) / cookTime; continue; }
+    if (it.state === 'float' && it.R < 10 * s && (it.body & 1) !== life.frame) continue;
     active.push(it);
     if (it.state !== 'float') continue;
     const key = Math.floor(it.x / cell) + Math.floor(it.y / cell) * 4096;
@@ -525,7 +559,7 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
     if (it.state === 'held') { poseItem(b, it, t, 0.3, s); continue; }
 
     flowAt(life, it.x, it.y, t, flow);
-    // Light things follow the current closely, big ones lag.
+    it.heat = flow.heat;
     // Light things follow the current closely, big ones lag; the noodles drift along slowly.
     const k = Math.min(1, dt * (it.kind === 'noodles' ? 0.6 : it.R < 10 * s ? 2.5 : 1.2));
     it.vx += (flow.vx - it.vx) * k;
@@ -544,6 +578,12 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
     it.x += it.vx * dt;
     it.y += it.vy * dt;
     it.ang += (it.spin + (flow.vx * 0.002)) * dt;
+    // Things in the whirlpool spin as they go round.
+    const vt = life.vortex;
+    if (vt && vt.k > 0.05) {
+      const dv = Math.hypot(it.x - vt.x, it.y - vt.y);
+      if (dv < vt.R * 2) it.ang += vt.k * 1.6 * Math.exp(-dv / vt.R) * dt;
+    }
     it.spin *= 1 - Math.min(1, dt * 0.3);
     it.vb += (-it.bump * 40 - it.vb * 6) * dt;
     it.bump += it.vb * dt;
@@ -565,11 +605,16 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
     if (it.x > life.viewW - it.R * 0.5) it.vx -= 40 * dt * s;
     if (it.y < it.R) it.vy += 40 * dt * s;
     if (it.y > life.pageH - it.R) it.vy -= 40 * dt * s;
+    // However hard it's pushed (a whirlpool, the spoon), never off the page.
+    it.x = Math.min(life.viewW, Math.max(0, it.x));
+    it.y = Math.min(life.pageH, Math.max(0, it.y));
     for (const c of life.clear) {
       if (it.x > c.x - it.R && it.x < c.x + c.w + it.R && it.y > c.y - it.R && it.y < c.y + c.h + it.R) {
         const out = [it.x - (c.x - it.R), c.x + c.w + it.R - it.x, it.y - (c.y - it.R), c.y + c.h + it.R - it.y];
         const m = Math.min(...out);
-        const push = 50 * s * dt;
+        // Firmly, so a whirlpool or a spoon can't leave anything over the lettering.
+        const push = 160 * s * dt;
+        it.vx *= 0.9; it.vy *= 0.9;
         if (m === out[0]) it.x -= push; else if (m === out[1]) it.x += push; else if (m === out[2]) it.y -= push; else it.y += push;
       }
     }
@@ -605,8 +650,7 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
   if (dt > 0) {
     for (const it of active) {
       if (it.state !== 'float' || it.R < 9 * s || life.bubbles.length >= 16) continue;
-      flowAt(life, it.x, it.y, t, flow);
-      if (Math.random() > dt * 0.05 * flow.heat) continue;
+      if (Math.random() > dt * 0.05 * it.heat) continue;
       const a = Math.random() * Math.PI * 2;
       const r = (18 + Math.random() * 12) * s;
       life.bubbles.push({ x: it.x + Math.cos(a) * (it.R * 0.8 + r * 0.3), y: it.y + Math.sin(a) * (it.R * 0.8 + r * 0.3), t0: t, r, popped: false });
@@ -648,10 +692,7 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
     }
   }
 
-  for (const it of active) if (it.state === 'float') {
-    flowAt(life, it.x, it.y, t, flow);
-    poseItem(scene.bodies[it.body], it, t, flow.heat, s);
-  }
+  for (const it of active) if (it.state === 'float') poseItem(scene.bodies[it.body], it, t, it.heat, s);
 
   // Old rings fade out.
   if (life.ripples.length && t - life.ripples[0].t0 > 3) life.ripples.shift();

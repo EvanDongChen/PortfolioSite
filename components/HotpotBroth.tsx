@@ -3,6 +3,7 @@ import { Clear, HotpotScene, buildScene } from '../lib/hotpot';
 import { foodAt, grabAt, pluckNow, pourIn, rollingBoil } from '../lib/hotpotLife';
 import { HotpotDebugActions } from './HotpotDebugPanel';
 import { HotpotView } from '../lib/hotpotView';
+import { startEvent } from '../lib/hotpotEvents';
 import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext';
 
 // Screen pixels per art pixel; phones get a finer grid so the ingredients keep their detail.
@@ -132,6 +133,8 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
         pour: () => { if (view.scene) pourIn(view.scene, camNow()); },
         pluck: () => { if (view.scene) pluckNow(view.scene, camNow()); },
         boil: () => { if (view.scene) rollingBoil(view.scene); },
+        ladle: () => { if (view.scene) startEvent(view.scene, 'ladle', camNow()); },
+        egg: () => { if (view.scene) startEvent(view.scene, 'egg', camNow()); },
         setSpeed: s => { speed = s; },
       };
     }
@@ -168,7 +171,7 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
     };
     document.addEventListener('visibilitychange', onVisibility);
     raf = requestAnimationFrame(frame);
-    if (import.meta.env.DEV) (window as unknown as { __hotpot: unknown }).__hotpot = { view, build, setSpeed: (s: number) => { speed = s; } };
+    if (import.meta.env.DEV) (window as unknown as { __hotpot: unknown }).__hotpot = { view, build, setSpeed: (s: number) => { speed = s; }, event: (k: 'ladle' | 'egg') => view.scene && startEvent(view.scene, k, camNow()) };
 
     return () => {
       cancelAnimationFrame(raf);
