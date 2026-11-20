@@ -56,11 +56,17 @@ export interface Chopsticks {
 
 export interface Ripple { x: number; y: number; t0: number; a: number }
 
+/** A big bubble coming up beside something; when it pops, it knocks it about. */
+export interface Bubble { x: number; y: number; t0: number; r: number; popped: boolean }
+/** Seconds a bubble grows before it pops. */
+export const BUBBLE_GROW = 0.9;
+
 export interface HotpotLife {
   items: Item[];
   sticks: Chopsticks[];
   splashes: { body: number; t0: number }[];
   ripples: Ripple[];
+  bubbles: Bubble[];
   drops: { item: Item; at: number }[];
   time: number;
   /** Boil strength; a rolling boil raises it for a while. */
@@ -177,7 +183,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
   }
 
   return {
-    items, sticks, splashes, ripples: [], drops: [], time: 0, boil: 1, boilUntil: -1,
+    items, sticks, splashes, ripples: [], bubbles: [], drops: [], time: 0, boil: 1, boilUntil: -1,
     nextPluck: 3.5, eager: false, lastPointer: null,
     wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen,
   };
@@ -593,6 +599,37 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
         o.x += (dx / d) * over * (1 - wa); o.y += (dy / d) * over * (1 - wa);
       }
     }
+  }
+
+  // Big bubbles come up beside things where it's hot, and when they pop the things next to them get knocked about.
+  if (dt > 0) {
+    for (const it of active) {
+      if (it.state !== 'float' || it.R < 9 * s || life.bubbles.length >= 16) continue;
+      flowAt(life, it.x, it.y, t, flow);
+      if (Math.random() > dt * 0.05 * flow.heat) continue;
+      const a = Math.random() * Math.PI * 2;
+      const r = (18 + Math.random() * 12) * s;
+      life.bubbles.push({ x: it.x + Math.cos(a) * (it.R * 0.8 + r * 0.3), y: it.y + Math.sin(a) * (it.R * 0.8 + r * 0.3), t0: t, r, popped: false });
+    }
+    for (const b of life.bubbles) {
+      if (b.popped || t - b.t0 < BUBBLE_GROW) continue;
+      b.popped = true;
+      addRipple(life, b.x, b.y, 0.4);
+      for (const it of active) {
+        if (it.state !== 'float') continue;
+        const dx = it.x - b.x, dy = it.y - b.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const reach = it.R + b.r * 2;
+        if (d > reach) continue;
+        const k = 1 - d / reach;
+        // Up, away and tipped over away from it.
+        it.vb += 60 * s * k;
+        it.vx += (dx / d) * 45 * s * k; it.vy += (dy / d) * 45 * s * k;
+        it.vtx += (dy / d) * 2.2 * k; it.vty -= (dx / d) * 2.2 * k;
+        it.spin += (Math.random() - 0.5) * 1.5 * k;
+      }
+    }
+    life.bubbles = life.bubbles.filter(b => t - b.t0 < BUBBLE_GROW + 0.6);
   }
 
   // Stuck rice cakes keep touching and move as one.

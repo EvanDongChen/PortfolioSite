@@ -1,4 +1,4 @@
-import { stepLife } from './hotpotLife';
+import { BUBBLE_GROW, stepLife } from './hotpotLife';
 import { BROTH_PALETTE, F, G, PALETTE_SIDE, GLOW_STRIDE, HotpotScene, OBJ_TEXELS, RAMPS, SHADES, SOLID_STRIDE, poseBodies } from './hotpot';
 
 /**
@@ -22,6 +22,7 @@ import { BROTH_PALETTE, F, G, PALETTE_SIDE, GLOW_STRIDE, HotpotScene, OBJ_TEXELS
 
 const MAX_PLUMES = 24;
 const MAX_RIPPLES = 12;
+const MAX_BUBBLES = 16;
 
 const SOLID_VS = `#version 300 es
 precision highp float;
@@ -215,6 +216,9 @@ uniform int u_nPlumes;
 // Rings: x, y, age, strength.
 uniform vec4 u_ripples[${MAX_RIPPLES}];
 uniform int u_nRipples;
+// Big bubbles beside the food: x, y, age, radius.
+uniform vec4 u_bubbles[${MAX_BUBBLES}];
+uniform int u_nBubbles;
 uniform vec3 u_light;
 out vec4 o;
 const float BAYER[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
@@ -277,11 +281,19 @@ vec3 broth(vec2 w) {
       vec2 rel = (wc - ctr) / rr;
       float l = length(rel);
       if (l < 1.0) {
-        vec2 ld = normalize(-u_light.xy);
+        vec2 ld = normalize(u_light.xy);
         col = hex(160., 38., 18.);
         if (l > 0.68 && dot(rel, ld) > 0.25) col = hex(220., 84., 24.);
         if (length(rel - ld * 0.42) < 0.2) col = hex(255., 160., 64.);
       }
+    }
+    // The lamp glinting off the oil: sparks that come and go, drifting with it.
+    bool oily = oil > 0.64 || col == hex(160., 38., 18.) || col == hex(220., 84., 24.);
+    if (oily) {
+      vec2 gc = floor(wc / (7.0 * u_s));
+      float gh = h21(gc + 17.0);
+      float on = fract(t * (0.5 + gh * 0.6) + gh * 13.0);
+      if (gh > 0.9 && on < 0.12) col = on < 0.05 ? hex(255., 204., 106.) : hex(255., 160., 64.);
     }
     // A few flakes of chili and sesame seeds.
     vec2 fc = floor((w + warp * 60.0) / (6.0 * u_s));
@@ -321,16 +333,42 @@ vec3 broth(vec2 w) {
       float rr = rad * smoothstep(0.0, 0.7, ph);
       if (l < rr) {
         vec2 u = rel / max(rr, 0.01);
-        float lit = dot(u, normalize(-u_light.xy));
+        float lit = dot(u, normalize(u_light.xy));
         if (l > rr * 0.62 && lit > 0.35) col = mala ? hex(220., 84., 24.) : hex(252., 246., 232.);
         else if (l > rr * 0.7 && lit < -0.3) col = mala ? hex(50., 8., 8.) : hex(158., 140., 112.);
         else col = mala ? hex(128., 26., 14.) : hex(212., 196., 162.);
-        if (length(u - normalize(-u_light.xy) * 0.38) < 0.2) col = mala ? hex(255., 160., 64.) : vec3(1.0);
+        if (length(u - normalize(u_light.xy) * 0.38) < 0.2) col = mala ? hex(255., 160., 64.) : vec3(1.0);
       }
     } else {
       // A popped bubble leaves a ring that spreads and fades.
       float rr = rad * (1.0 + (ph - 0.86) / 0.14 * 1.2);
       if (abs(l - rr) < 2.4 * u_s && h21(floor(rel * 0.25)) > (ph - 0.86) / 0.14 * 0.8) col *= mala ? 1.35 : 1.06;
+    }
+  }
+
+  // The big bubbles that knock the food about: a dome swelling up beside it, then a burst ring.
+  for (int i = 0; i < ${MAX_BUBBLES}; i++) {
+    if (i >= u_nBubbles) break;
+    vec4 bb = u_bubbles[i];
+    vec2 rel = w - bb.xy;
+    float l = length(rel);
+    if (l > bb.w * 2.6) continue;
+    if (bb.z < ${BUBBLE_GROW.toFixed(2)}) {
+      float rr = bb.w * (0.4 + 0.6 * smoothstep(0.0, ${(BUBBLE_GROW * 0.8).toFixed(2)}, bb.z));
+      if (l < rr) {
+        vec2 u = rel / rr;
+        vec2 ld = normalize(u_light.xy);
+        float lit = dot(u, ld);
+        // A glossy dome: brighter than the broth, a lit rim towards the lamp, a dark crescent away from it.
+        col = mala ? hex(192., 56., 20.) : hex(242., 234., 212.);
+        if (l > rr * 0.6 && lit > 0.2) col = mala ? hex(255., 160., 64.) : hex(252., 246., 232.);
+        else if (l > rr * 0.68 && lit < -0.2) col = mala ? hex(50., 8., 8.) : hex(158., 140., 112.);
+        if (length(u - ld * 0.38) < 0.22) col = mala ? hex(255., 204., 106.) : vec3(1.0);
+      }
+    } else {
+      float k = (bb.z - ${BUBBLE_GROW.toFixed(2)}) / 0.6;
+      float rr = bb.w * (1.0 + k * 1.6);
+      if (abs(l - rr) < 2.4 * u_s && h21(floor(rel * 0.25)) > k * 0.8) col *= mala ? 1.4 : 1.07;
     }
   }
 
@@ -488,6 +526,7 @@ export class HotpotView {
   private maxPoint: number;
   private plumeBuf = new Float32Array(MAX_PLUMES * 3);
   private rippleBuf = new Float32Array(MAX_RIPPLES * 4);
+  private bubbleBuf = new Float32Array(MAX_BUBBLES * 4);
   private uniforms = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>();
 
   constructor(private canvas: HTMLCanvasElement | OffscreenCanvas, public pixel: number) {
@@ -689,6 +728,14 @@ export class HotpotView {
     }
     gl.uniform4fv(this.u(post, 'u_ripples'), this.rippleBuf);
     gl.uniform1i(this.u(post, 'u_nRipples'), nr);
+    let nb = 0;
+    for (const b of life.bubbles) {
+      if (nb >= MAX_BUBBLES || b.y < top || b.y > bottom) continue;
+      this.bubbleBuf.set([b.x, b.y, fr.time - b.t0, b.r], nb * 4);
+      nb++;
+    }
+    gl.uniform4fv(this.u(post, 'u_bubbles'), this.bubbleBuf);
+    gl.uniform1i(this.u(post, 'u_nBubbles'), nb);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.solidTex);
     gl.activeTexture(gl.TEXTURE1);
