@@ -1,7 +1,7 @@
 // Compares the pixel pages' running cost while scrolling: frame rate, the 95th-percentile frame
 // gap, frames slower than 34 ms, main-thread long tasks, and script and task milliseconds per second.
 // Needs the dev server on port 3000 and Chrome. Run from the repo root:
-//   node .claude/skills/pixel-3d/scripts/pages-perf.mjs [--throttle 4] [--pages reef,pond,shrine,space]
+//   node .claude/skills/pixel-3d/scripts/pages-perf.mjs [--throttle 4] [--pages reef,pond,shrine,space,hotpot] [--port 3000]
 // --throttle slows the CPU (4 stands in for a modest laptop). Run it twice: a scene rebuild landing
 // in the 8-second window makes one sample look worse than the page is.
 import { spawn } from 'node:child_process';
@@ -27,7 +27,7 @@ const measure = async page => {
   const send = (method, params = {}) => new Promise(r => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
   const run = async expression => (await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
   await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-  await send('Page.navigate', { url: 'http://localhost:3000/' });
+  await send('Page.navigate', { url: `http://localhost:${opt('--port', 3000)}/` });
   await sleep(7000);
   if (page !== 'reef') {
     await run(`[...document.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') || '').toLowerCase().includes(${JSON.stringify(page)}))?.click()`);
