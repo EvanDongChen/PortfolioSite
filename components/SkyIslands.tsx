@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { SkyScene, buildScene } from '../lib/sky';
 import { startEvent } from '../lib/skyEvents';
 import { callDragon } from '../lib/skyLife';
+import { callWhale, soakSheep } from '../lib/skyCritters';
 import { SkyDebugActions } from './SkyDebugPanel';
 import { SkyView } from '../lib/skyView';
 import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext';
@@ -108,6 +109,11 @@ const SkyIslands: React.FC<SkyIslandsProps> = ({ onReady, debug }) => {
           const sc = view.scene;
           if (sc) callDragon(sc, { viewW: window.innerWidth, viewH: window.innerHeight, scrollY: window.scrollY, offX: 0, offY: 0 });
         },
+        callWhale: () => {
+          const sc = view.scene;
+          if (sc) callWhale(sc, { viewW: window.innerWidth, viewH: window.innerHeight, scrollY: window.scrollY, offX: 0, offY: 0 });
+        },
+        soakSheep: () => { if (view.scene) soakSheep(view.scene); },
         setSpeed: s => { speed = s; },
       };
     }

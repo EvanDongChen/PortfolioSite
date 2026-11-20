@@ -6,6 +6,10 @@ export interface SkyDebugActions {
   event: (kind: SkyEventKind) => void;
   /** Brings the dragon (and its pearl) into view. */
   callDragon: () => void;
+  /** Brings the whale into view. */
+  callWhale: () => void;
+  /** Soaks every cloud-sheep so they all rain. */
+  soakSheep: () => void;
   setSpeed: (speed: number) => void;
 }
 
@@ -49,9 +53,16 @@ const SkyDebugPanel: React.FC<SkyDebugPanelProps> = ({ actions }) => {
         <span>Sky debug</span>
         <button type="button" onClick={() => setOpen(false)} aria-label="Close debug tools">×</button>
       </header>
+      <p className="reef-debug-label">Events</p>
+      <div className="reef-debug-events">
+        <button type="button" onClick={() => act?.event('storm')}>Thunderstorm</button>
+        <button type="button" onClick={() => act?.event('rainbow')}>Rainbow</button>
+      </div>
       <p className="reef-debug-label">Creatures</p>
       <div className="reef-debug-events">
         <button type="button" onClick={() => act?.callDragon()}>Call the dragon</button>
+        <button type="button" onClick={() => act?.callWhale()}>Call the whale</button>
+        <button type="button" onClick={() => act?.soakSheep()}>Rain out the sheep</button>
       </div>
       <p className="reef-debug-label">Simulation speed</p>
       <div className="reef-debug-speed" role="radiogroup" aria-label="Simulation speed">

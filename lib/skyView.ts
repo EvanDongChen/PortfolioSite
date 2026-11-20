@@ -34,7 +34,7 @@ void main() {
   vec4 r2 = texelFetch(u_obj, ivec2(o + 2, 0), 0);
   vec4 st = texelFetch(u_obj, ivec2(o + 4, 0), 0);
   int flags = int(a_flags + 0.5);
-  if ((flags & ${F.eye}) != 0 && st.z > 0.5) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  if (((flags & (${F.eye} | ${F.dry})) != 0 && st.z > 0.5) || ((flags & ${F.wet}) != 0 && st.z <= 0.5)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   vec3 lp = a_pos;
   if ((flags & ${F.wobble}) != 0) {
     float h = max(0.0, -lp.y - st.y);
@@ -107,6 +107,7 @@ uniform vec2 u_off, u_half, u_canvas;
 uniform float u_f, u_tpx, u_time, u_near, u_far, u_maxPoint;
 uniform float u_glowGain;
 out vec3 v_col;
+out float v_paint;
 void main() {
   int o = int(a_col.w) * ${OBJ_TEXELS};
   vec4 r0 = texelFetch(u_obj, ivec2(o, 0), 0);
@@ -122,6 +123,11 @@ void main() {
     if (k < 0.01) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   } else {
     k *= u_glowGain;
+  }
+  if ((flags & ${G.rain}) != 0) {
+    float u = fract(u_time * (0.9 + a_info.y * 0.6) + a_info.y * 7.0);
+    p.y += u * a_info.z;
+    k *= (1.0 - u) * smoothstep(0.0, 0.1, u);
   }
   if ((flags & ${G.stream}) != 0) {
     float u = fract(u_time * (0.3 + a_info.y * 0.4) + a_info.y * 7.0);
@@ -140,18 +146,24 @@ void main() {
   float big = min(size, u_maxPoint);
   gl_PointSize = max(big, 1.0);
   v_col = a_col.rgb * k * min(4.0, (size * size) / (big * big));
+  // Painted glows fade by covering less, not by darkening.
+  v_paint = 0.0;
+  if ((flags & ${G.paint}) != 0) { v_paint = max(k, 0.001); v_col = a_col.rgb; }
 }`;
 
 const GLOW_FS = `#version 300 es
 precision highp float;
 in vec3 v_col;
+in float v_paint;
 out vec4 o;
 void main() {
   vec2 q = (gl_PointCoord - 0.5) * 2.0;
   float r2 = dot(q, q);
   if (r2 > 1.0) discard;
   float a = exp(-r2 * 3.2) * (1.0 - r2);
-  o = vec4(v_col * a, 0.0);
+  // Painted glows carry their coverage in alpha, so the sky pass can lay their colour over the sky.
+  float cov = v_paint * min(1.0, (1.0 - r2) * 1.6);
+  o = v_paint > 0.0 ? vec4(v_col * cov, cov) : vec4(v_col * a, 0.0);
 }`;
 
 const POST_VS = `#version 300 es
@@ -210,12 +222,20 @@ void main() {
     o = vec4(texelFetch(u_ramps, ivec2(shade, mat), 0).rgb, 1.0);
     return;
   }
-  vec3 g = vec3(0.0);
-  for (int i = 0; i < 4; i++) g += texelFetch(u_glow, p * 2 + ivec2(i & 1, i >> 1), 0).rgb;
+  vec4 g = vec4(0.0);
+  for (int i = 0; i < 4; i++) g += texelFetch(u_glow, p * 2 + ivec2(i & 1, i >> 1), 0);
   float y = 1.0 - gl_FragCoord.y / u_artH;
   vec3 sky = mix(u_top, u_bottom, pow(clamp(y, 0.0, 1.0), 1.25));
-  sky = mix(sky, vec3(0.32, 0.36, 0.5), u_gloom * 0.75);
-  vec3 c = sky + g * 0.25 + vec3(u_flash * 0.8);
+  sky = mix(sky, vec3(0.32, 0.36, 0.5), u_gloom);
+  vec3 c = sky + vec3(u_flash * 0.8);
+  if (g.a > 0.01) {
+    // Painted light (the rainbow): its own colour over the sky, as much as it covers.
+    vec3 paint = g.rgb / g.a;
+    float cov = clamp(g.a * 0.25, 0.0, 1.0);
+    c = mix(c, paint, cov);
+  } else {
+    c += g.rgb * 0.25;
+  }
   // Nearest two sky colours, and a Bayer choice between them.
   float d1 = 1e9, d2 = 1e9;
   vec3 c1 = sky, c2 = sky;

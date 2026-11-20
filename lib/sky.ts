@@ -41,7 +41,7 @@ export const RAMPS: string[][] = [
   /* 16 pupil   */ ['#0a0812', '#120e1e', '#1a1428', '#241c36', '#2e2444', '#3a2e52'],
   /* 17 pearl   */ ['#a07ab8', '#c498cc', '#e2b8dc', '#f6d6e6', '#fff0f2', '#ffffff'],
   /* 18 storm   */ ['#262844', '#363a5a', '#4a4c6e', '#626484', '#7e7e9c', '#a2a0b8'],
-  /* 19 whale   */ ['#1e2a5a', '#2a3e78', '#3e5a98', '#5a7eb8', '#80a6d4', '#b4d0ec'],
+  /* 19 whale   */ ['#1a1840', '#2a2660', '#3e3a80', '#5852a0', '#7a70bc', '#a294d4'],
   /* 20 coral   */ ['#5a2a4a', '#8a3e56', '#c45a5a', '#ec8a6a', '#ffb88a', '#ffe0b8'],
   /* 21 face    */ ['#2a2440', '#382e4c', '#4a3c58', '#5e4c66', '#766078', '#94788e'],
   /* 22 jade    */ ['#0e3440', '#14504c', '#1e7058', '#2e9468', '#52b88a', '#98dcb4'],
@@ -84,12 +84,20 @@ export const F = {
   flow: 128,
   /** Streams out behind (local -x) and ripples, more the further back it reaches past the object's wobble base (whiskers, mane, tail). */
   trail: 256,
+  /** Shown only while the object's state is off (dry wool). */
+  dry: 512,
+  /** Shown only while the object's state is on (wet wool, a lightning bolt). */
+  wet: 1024,
 } as const;
 /** Glow flags. */
 export const G = {
   stream: 1, flicker: 2,
   /** Only as bright as the object's state (lightning, the rainbow). */
   gate: 16,
+  /** Falls down (local +y) its stream length, fading: rain, or spray rising if the length is negative. */
+  rain: 32,
+  /** Paints its own colour over the sky rather than adding light (the rainbow's bands). */
+  paint: 64,
 } as const;
 
 /** Floats per surfel: x y z, nx ny nz, radius, material, albedo, object, flags. */
@@ -126,7 +134,8 @@ export interface Body {
 }
 
 /** An island, for the creatures: where it is and where on it they can land (in its own frame). */
-export interface Island { body: number; R: number; z: number; far: boolean; perches: V3[]; falls: V3 | null }
+/** An island, for the creatures: where it is, where on it they can land, and the nests under its rim (in its own frame). */
+export interface Island { body: number; R: number; z: number; far: boolean; perches: V3[]; falls: V3 | null; nests: V3[] }
 
 export interface SkyScene {
   solid: Float32Array;
@@ -226,7 +235,8 @@ export const tube = (B: Builder, obj: number, path: V3[], radius: (u: number) =>
         const ang = (k / n) * Math.PI * 2;
         const d: V3 = [e1[0] * Math.cos(ang) + e2[0] * Math.sin(ang), e1[1] * Math.cos(ang) + e2[1] * Math.sin(ang), e1[2] * Math.cos(ang) + e2[2] * Math.sin(ang)];
         const s = surface(u, d);
-        B.surfel([c[0] + d[0] * r, c[1] + d[1] * r, c[2] + d[2] * r], d, Math.max(sp, r) * DISC, s.mat, s.alb, obj, flags);
+        // Discs as wide as the gap to their neighbours round the ring (at least the spacing along it).
+        B.surfel([c[0] + d[0] * r, c[1] + d[1] * r, c[2] + d[2] * r], d, Math.max(sp, (2 * Math.PI * r) / n) * DISC, s.mat, s.alb, obj, flags);
       }
       next += sp * 0.8;
     }
@@ -247,7 +257,7 @@ interface Ctx {
 // ---------------------------------------------------------------- islands ---
 
 /** A round tree (or a blossom tree, or a pine) standing at `p` on an island, `h` tall. */
-const tree = (B: Builder, obj: number, p: V3, h: number, sp: number, kind: 'round' | 'blossom' | 'pine', far: boolean, rand: () => number) => {
+export const tree = (B: Builder, obj: number, p: V3, h: number, sp: number, kind: 'round' | 'blossom' | 'pine', far: boolean, rand: () => number) => {
   const bark = far ? M.far : M.bark;
   const trunkR = h * 0.09;
   const trunkH = kind === 'pine' ? h * 0.3 : h * 0.5;
@@ -360,7 +370,8 @@ const island = (B: Builder, ctx: Ctx, pos: V3, Rapp: number, z: number, o: Islan
     const lip = u > 0.82 ? (u - 0.82) * 4 : 0;
     const n = norm([Math.cos(a) * lip + (rand() - 0.5) * 0.15, -1, Math.sin(a) * lip + (rand() - 0.5) * 0.15]);
     if (inWater(x, zz)) {
-      B.surfel([x, y + R * 0.01, zz], [0, -1, 0], sp * DISC, M.water, 0.5 + (rand() - 0.5) * 0.2, body, u > 0.6 ? F.flow : 0);
+      // Darker than the sky it reflects, so it reads as water rather than snow; the stream to the lip runs.
+      B.surfel([x, y + R * 0.01, zz], [0, -1, 0], sp * DISC, M.water, 0.12 + (rand() - 0.5) * 0.2, body, u > 0.6 ? F.flow : 0);
       continue;
     }
     const patch = fbm(x / R * 5, zz / R * 5, 7, ns + 9, 2);
@@ -417,6 +428,28 @@ const island = (B: Builder, ctx: Ctx, pos: V3, Rapp: number, z: number, o: Islan
     }
   }
 
+  // Mud nests stuck under the rim on the side facing the viewer, for the puffball birds.
+  const nests: V3[] = [];
+  if (!o.far) {
+    let best = 0, bestZ = -Infinity;
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      const w = rotate(base, [Math.cos(a), 0, Math.sin(a)]);
+      const score = w[2] - w[0] * o.outward * 0.4;
+      if (score > bestZ && Math.abs(a - fallA) > 0.6) { bestZ = score; best = a; }
+    }
+    for (const da of [-0.45, 0.4]) {
+      const a = best + da;
+      const p = under(0.16, a);
+      const out: V3 = [Math.cos(a), 0, Math.sin(a)];
+      const cr = R * 0.11;
+      const c: V3 = [p[0] + out[0] * cr * 0.6, p[1] + cr * 0.2, p[2] + out[2] * cr * 0.6];
+      // A cup of mud and twigs, open at the top.
+      sphere(B, body, cr, sp * 0.8, d => (d[1] < -0.25 ? null : { mat: (d[0] * 7 + d[2] * 5) % 1 > 0.5 ? M.bark : M.soil, alb: 0.5 + d[1] * 0.15 + (hash2(d[0] * 30, d[2] * 30) - 0.5) * 0.3 }), c);
+      nests.push([c[0], c[1] - cr * 0.3, c[2]]);
+    }
+  }
+
   // Trees and boulders on top, clear of the pond.
   const kinds: ('round' | 'blossom' | 'pine')[] = ['round', 'blossom', 'pine', 'round'];
   let planted = 0;
@@ -468,7 +501,7 @@ const island = (B: Builder, ctx: Ctx, pos: V3, Rapp: number, z: number, o: Islan
     falls = foot;
   }
 
-  return { body, R, z, far: o.far, perches, falls };
+  return { body, R, z, far: o.far, perches, falls, nests };
 };
 
 // ----------------------------------------------------------------- clouds ---

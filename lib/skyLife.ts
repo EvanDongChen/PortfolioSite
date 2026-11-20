@@ -2,6 +2,7 @@ import { V3, dot, norm, rotZ, rotX, cross } from './space';
 import {
   Builder, F, G, Island, M, SkyCamera, SkyScene, ellipsoid, frameAlong, fromScreen, sphere, toScreen, tube,
 } from './sky';
+import { Critters, populateCritters, stepCritters } from './skyCritters';
 
 /**
  * The sky's creatures. The star is a long dragon in the old Chinese manner: a
@@ -51,7 +52,7 @@ export interface Pearl {
   orbitA: number;
 }
 
-export interface SkyLife { dragon: Dragon; pearl: Pearl; lastPointer: { x: number; y: number; t: number } | null; time: number }
+export interface SkyLife { dragon: Dragon; pearl: Pearl; critters: Critters; lastPointer: { x: number; y: number; t: number } | null; time: number }
 
 interface Ctx {
   rand: () => number;
@@ -254,7 +255,8 @@ export const populateLife = (B: Builder, ctx: Ctx): SkyLife => {
   const pearlPos = ctx.at(0.9, viewH * 0.32, z);
   const pearl: Pearl = { body: pearlBody, pos: pearlPos, vel: [0, 0, 0], target: pearlPos, mode: 'wander', t: 0, dur: 4, island: -1, orbitA: 0 };
   void viewW;
-  return { dragon, pearl, lastPointer: null, time: 0 };
+  const critters = populateCritters(B, ctx);
+  return { dragon, pearl, critters, lastPointer: null, time: 0 };
 };
 
 // -------------------------------------------------------------- behaviour ---
@@ -437,8 +439,10 @@ export const stepLife = (scene: SkyScene, _t: number, dt: number, cam: SkyCamera
     // Still pose everything once, so a frozen page still shows the dragon.
     if (!scene.bodies[life.dragon.head].live) stepDragon(scene, life, 0.001, cam);
     if (!scene.bodies[life.pearl.body].live) stepPearl(scene, life, 0.001, cam, null);
+    if (!scene.bodies[life.critters.whale.body].live) stepCritters(scene, life.time, 0.001, cam, null, rng);
     return;
   }
+  stepCritters(scene, life.time, dt, cam, pointer, rng);
   // Long frames are split so the chase stays smooth.
   const n = Math.ceil(dt / 0.034);
   for (let i = 0; i < n; i++) {
