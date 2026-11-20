@@ -16,7 +16,7 @@ import {
  * them by setting `live`, `scale` and `params` on their bodies.
  */
 
-type Mode = 'sit' | 'crouch' | 'hop' | 'beamed' | 'falling';
+type Mode = 'sit' | 'crouch' | 'hop' | 'beamed' | 'carried' | 'falling';
 
 export interface Rock { body: number; r: number; occupant: number }
 /** A colony's rocks, and a circle round all of it (rocks and the blips on them). */
@@ -55,6 +55,9 @@ export interface Blip {
   tagCool: number;
   /** Hands over its eyes (meteors!), 0 to 1. */
   cover: number;
+  /** Swinging under a saucer: angle and speed. */
+  swing: number;
+  swingV: number;
 }
 export interface Saucer {
   body: number;
@@ -69,6 +72,12 @@ export interface Saucer {
   target: { kind: 'planet' | 'colony'; index: number };
   beamOn: number;
   lifting: number;
+  /** The blip it's taking for a ride (-1: none), how many sights are left before dropping it off, and where it came from. */
+  carrying: number;
+  tour: number;
+  origin: number;
+  /** Sideways speed, for the passenger's swing. */
+  vx: number;
   bank: number;
   happy: number;
 }
@@ -178,7 +187,7 @@ const buildBlip = (B: Builder, ctx: Ctx, r: number, z: number, mat: number, rand
 const newBlip = (body: number, arms: [number, number], r: number, colony: number, rock: number, rand: () => number): Blip => ({
   body, arms, r, colony, rock, mode: 'sit', t: 0, wait: 0.5 + rand() * 4, from: [0, 0, 0], to: -1, dur: HOP_TIME, pos: [0, 0, 0],
   sq: 0, sqv: 0, yaw: 0, pitch: 0, lookYaw: (rand() - 0.5) * 0.8, lookPitch: 0, lookTimer: rand() * 3, blinkIn: rand() * 4, blinking: 0,
-  wave: 0, flip: 0, flipDir: 1, phase: rand() * 6, saucer: -1, chase: -1, tagCool: 0, cover: 0,
+  wave: 0, flip: 0, flipDir: 1, phase: rand() * 6, saucer: -1, chase: -1, tagCool: 0, cover: 0, swing: 0, swingV: 0,
 });
 
 /** An open-top saucer: a metal hull with a bright rim, chasing lights, an engine glow beneath, a pink pilot, and its beam. */
@@ -308,7 +317,7 @@ export const populateAliens = (B: Builder, ctx: Ctx): AlienLife => {
     saucers.push({
       ...parts, R, mode: startColony >= 0 ? 'hover' : 'fly', t: startColony >= 0 ? 0.8 : 0, dur: startColony >= 0 ? 14 : 5,
       from: pos, pos, target: startColony >= 0 ? { kind: 'colony', index: 0 } : { kind: 'planet', index: Math.floor(rand() * ctx.planets.length) },
-      beamOn: 0, lifting: -1, bank: 0, happy: 0,
+      beamOn: 0, lifting: -1, carrying: -1, tour: 0, origin: -1, vx: 0, bank: 0, happy: 0,
     });
   }
   return { colonies, blips, saucers, garden };
@@ -423,6 +432,27 @@ const pickTarget = (scene: SpaceScene, sc: Saucer): Saucer['target'] => {
   return { kind: o.kind, index: o.index };
 };
 
+/** Somewhere to drop a passenger off: a colony with a free rock, ideally not the one it came from. */
+const dropColony = (scene: SpaceScene, sc: Saucer): number => {
+  const { colonies } = scene.life;
+  const open = colonies.map((c, i) => (c.rocks.some(r => r.occupant < 0) ? i : -1)).filter(i => i >= 0);
+  if (!open.length) return sc.origin >= 0 ? sc.origin : 0;
+  const near = open.filter(i => Math.abs(colonies[i].y - sc.pos[1]) < 2400);
+  const pool = near.length ? near : open;
+  const moving = pool.filter(i => i !== sc.origin);
+  // Mostly a new home, sometimes back where it started.
+  const choice = moving.length && Math.random() < 0.7 ? moving : pool;
+  return choice[Math.floor(Math.random() * choice.length)];
+};
+
+/** A planet near the saucer, to show the passenger. */
+const nearbyPlanet = (scene: SpaceScene, sc: Saucer): number => {
+  const planets = scene.bodies.map((b, i) => (b.kind === 'planet' ? i : -1)).filter(i => i >= 0);
+  const near = planets.filter(i => Math.abs(scene.bodies[i].pos[1] - sc.pos[1]) < 1800 && !(sc.target.kind === 'planet' && sc.target.index === i));
+  const pool = near.length ? near : planets;
+  return pool[Math.floor(Math.random() * pool.length)];
+};
+
 /** Moves every blip and saucer on by `dt` seconds. `pointer` is the cursor in the window, if there is one. */
 export const stepAliens = (scene: SpaceScene, t: number, dt: number, cam: SpaceCamera, pointer: { x: number; y: number } | null) => {
   const { life, bodies } = scene;
@@ -436,28 +466,66 @@ export const stepAliens = (scene: SpaceScene, t: number, dt: number, cam: SpaceC
       const u = clamp(sc.t / sc.dur, 0, 1);
       const e = ease(u);
       const prev = sc.pos;
-      sc.pos = add(lerp3(sc.from, hover, e), [0, -Math.sin(Math.PI * u) * 120, Math.sin(Math.PI * u) * 0.3 * f]);
-      const vx = dt > 0 ? (sc.pos[0] - prev[0]) / dt : 0;
-      sc.bank += (clamp(-vx * 0.0025, -0.5, 0.5) - sc.bank) * Math.min(1, dt * 4);
-      if (u >= 1) { sc.mode = 'hover'; sc.t = 0; sc.dur = 6 + Math.random() * 4; }
+      // With a passenger aboard it flies a touch gentler, and keeps the beam on to hold it.
+      const swoop = sc.carrying >= 0 ? 0.6 : 1;
+      sc.pos = add(lerp3(sc.from, hover, e), [0, -Math.sin(Math.PI * u) * 120 * swoop, Math.sin(Math.PI * u) * 0.3 * f * swoop]);
+      sc.vx = dt > 0 ? (sc.pos[0] - prev[0]) / dt : 0;
+      sc.bank += (clamp(-sc.vx * 0.0025, -0.5, 0.5) - sc.bank) * Math.min(1, dt * 4);
+      sc.beamOn += ((sc.carrying >= 0 ? 1 : 0) - sc.beamOn) * Math.min(1, dt * 3);
+      if (u >= 1) {
+        sc.mode = 'hover'; sc.t = 0;
+        // A short stop to show the passenger a planet; a long one anywhere else.
+        sc.dur = sc.carrying >= 0 ? (sc.target.kind === 'planet' ? 3.5 + Math.random() * 2 : 4) : 6 + Math.random() * 4;
+      }
     } else {
+      const prev = sc.pos;
       sc.pos = add(hover, [Math.sin(t * 0.9 + si) * 6, Math.sin(t * 1.7 + si) * 5, 0]);
+      sc.vx = dt > 0 ? (sc.pos[0] - prev[0]) / dt : 0;
       sc.bank *= 1 - Math.min(1, dt * 3);
-      const on = sc.t > 1 && sc.t < sc.dur - 1.2;
+      const on = sc.carrying >= 0 || (sc.t > 1 && sc.t < sc.dur - 1.2);
       sc.beamOn += ((on ? 1 : 0) - sc.beamOn) * Math.min(1, dt * 3);
-      // Over a colony, the beam lifts one of its blips.
-      if (on && sc.lifting < 0 && sc.target.kind === 'colony' && sc.t > 1.6) {
+      // Over a colony, the beam lifts one of its blips...
+      if (on && sc.carrying < 0 && sc.lifting < 0 && sc.target.kind === 'colony' && sc.t > 1.6) {
         const pick = life.blips.findIndex(b => b.colony === sc.target.index && b.mode === 'sit');
         if (pick >= 0) { const b = life.blips[pick]; b.mode = 'beamed'; b.t = 0; b.saucer = si; b.from = b.pos; sc.lifting = pick; }
       }
-      if (!on && sc.lifting >= 0) {
+      // ...and once it's up, takes it for a ride: a planet or two, then a colony with room.
+      if (sc.lifting >= 0) {
         const b = life.blips[sc.lifting];
-        if (b.mode === 'beamed') { b.mode = 'falling'; b.t = 0; b.from = b.pos; }
-        sc.lifting = -1;
+        if (b.mode === 'beamed' && b.t > 2.4) {
+          const col = life.colonies[b.colony];
+          if (col && b.rock >= 0) col.rocks[b.rock].occupant = -1;
+          sc.origin = b.colony;
+          b.mode = 'carried'; b.t = 0; b.rock = -1; b.swing = 0; b.swingV = 0;
+          sc.carrying = sc.lifting; sc.lifting = -1;
+          sc.tour = 1 + (Math.random() < 0.45 ? 1 : 0);
+          sc.dur = sc.t + 0.6;
+        } else if (!on) {
+          if (b.mode === 'beamed') { b.mode = 'falling'; b.t = 0; b.from = b.pos; }
+          sc.lifting = -1;
+        }
+      }
+      // Arrived at its new home: lowered gently onto a free rock.
+      if (sc.carrying >= 0 && sc.target.kind === 'colony' && sc.t > 1.2 && sc.tour <= 0) {
+        const b = life.blips[sc.carrying];
+        const col = life.colonies[sc.target.index];
+        const free = col.rocks.map((r, i) => (r.occupant < 0 ? i : -1)).filter(i => i >= 0);
+        if (free.length) {
+          const me = life.blips.indexOf(b);
+          b.colony = sc.target.index;
+          b.rock = free[Math.floor(Math.random() * free.length)];
+          col.rocks[b.rock].occupant = me;
+          b.mode = 'falling'; b.t = 0; b.from = b.pos;
+          sc.carrying = -1;
+          sc.dur = sc.t + 2.2;
+        } else sc.dur = Math.min(sc.dur, sc.t + 0.5);
       }
       if (sc.t >= sc.dur) {
         sc.mode = 'fly'; sc.t = 0; sc.from = sc.pos;
-        sc.target = pickTarget(scene, sc);
+        if (sc.carrying >= 0) {
+          if (sc.tour > 0) { sc.target = { kind: 'planet', index: nearbyPlanet(scene, sc) }; sc.tour--; }
+          else sc.target = { kind: 'colony', index: dropColony(scene, sc) };
+        } else sc.target = pickTarget(scene, sc);
         const to = hoverPoint(scene, sc, t);
         sc.dur = clamp(Math.hypot(to[0] - sc.pos[0], to[1] - sc.pos[1], to[2] - sc.pos[2]) / 230, 3, 9);
       }
@@ -492,7 +560,19 @@ export const stepAliens = (scene: SpaceScene, t: number, dt: number, cam: SpaceC
     let airborne = false;
     let handsUp = 0;
 
-    if (!pilot && !gardener) {
+    if (!pilot && !gardener && b.mode === 'carried') {
+      // Dangling in the beam under the saucer, swinging as it banks and turns.
+      const sc = life.saucers[b.saucer];
+      // It hangs down the beam (which tilts as the saucer banks), lagging a little on turns.
+      b.swingV += (-14 * b.swing - 2.2 * b.swingV + clamp(-sc.vx * 0.006, -2, 2)) * dt;
+      b.swing = clamp(b.swing + b.swingV * dt, -0.3, 0.3);
+      const ang = sc.bank + b.swing;
+      const D = sc.R * 2.1 + b.r + Math.sin(t * 3) * b.r * 0.15;
+      b.pos = [sc.pos[0] - Math.sin(ang) * D, sc.pos[1] + Math.cos(ang) * D, sc.pos[2]];
+      b.flip = ang + Math.sin(t * 1.3) * 0.15;
+      airborne = true;
+      handsUp = 1;
+    } else if (!pilot && !gardener) {
       const col = life.colonies[b.colony];
       home = rockTop(scene, col.rocks[b.rock], b.r, t);
       if (b.mode === 'sit') {
