@@ -12,6 +12,7 @@
  */
 
 import { AlienLife, populateAliens } from './spaceAliens';
+import { SpaceEvents, populateEvents } from './spaceEvents';
 
 export const FOV_Y = (45 * Math.PI) / 180;
 export const focalFor = (viewH: number) => viewH / 2 / Math.tan(FOV_Y / 2);
@@ -61,6 +62,10 @@ export const SKY_PALETTE = [
   '#7c3288', '#a0408e', '#c85a96', '#ec84a0', '#ffb4aa', '#ffdcbc', '#fff4e0',
   '#0a1a30', '#0f2c48', '#164866', '#1e6a84', '#3a98a8', '#86d2cc',
   '#18245a', '#2a3c8e', '#4a64c0',
+  // Flame, for the solar flare.
+  '#c8461e', '#ff8a32', '#ffc456',
+  // Aurora green.
+  '#1f8a58', '#46d48a', '#a4f4b8',
 ];
 
 /** Surfel flags. */
@@ -72,6 +77,8 @@ export const F = {
   eye: 16,
   /** A chasing light: its albedo is its place in the chase. */
   light: 32,
+  /** The black hole's disk: marks the parts nearer than the hole, which the lensing leaves alone. */
+  front: 64,
 } as const;
 /** Glow flags. */
 export const G = {
@@ -79,6 +86,12 @@ export const G = {
   /** A tractor beam: streams towards its source, only while the object's state is on. */
   beam: 4,
   wobble: 8,
+  /** Only as bright as the object's state (meteors, the flare, watering). */
+  gate: 16,
+  /** Travels up and over an arc as wide as its length (the solar flare's loop). */
+  arc: 32,
+  /** A ripple of the aurora: brightness rolls round the pole. */
+  aurora: 64,
 } as const;
 
 /** Floats per surfel: x y z, nx ny nz, radius, material, albedo, object, flags. */
@@ -152,7 +165,7 @@ export const rotZ = (t: number) => { const c = Math.cos(t), s = Math.sin(t); ret
 
 // ---------------------------------------------------------------- objects ---
 
-export type BodyKind = 'stars' | 'sun' | 'planet' | 'ring' | 'clouds' | 'moon' | 'asteroid' | 'comet' | 'galaxy' | 'nebula' | 'rock' | 'blip' | 'arm' | 'saucer' | 'beam';
+export type BodyKind = 'stars' | 'sun' | 'planet' | 'ring' | 'clouds' | 'moon' | 'asteroid' | 'comet' | 'galaxy' | 'nebula' | 'rock' | 'blip' | 'arm' | 'saucer' | 'beam' | 'blackhole' | 'aurora' | 'meteor' | 'flare' | 'eclipse' | 'gardenmoon' | 'flower' | 'can' | 'water';
 
 export interface Body {
   kind: BodyKind;
@@ -192,6 +205,9 @@ export interface SpaceScene {
   sun: V3;
   focal: number;
   life: AlienLife;
+  events: SpaceEvents;
+  /** The black hole: its body and the radius nothing comes back from. */
+  blackHole: { body: number; r: number } | null;
   /** Every body's centre as last posed. */
   centres?: V3[];
 }
@@ -491,6 +507,20 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
       const cl = B.body({ kind: 'clouds', name: 'clouds', pos, radius: R * 1.04, base, spin: 0.09, shadow: -1 });
       sphere(B, cl, R * 1.04, spz, cloudShell(ps));
       B.glowAt([0, 0, 0], R * 1.25, [0.12, 0.3, 0.55], planet, 0, 0);
+      // Aurorae: curtains round both poles, green at their feet and pink above.
+      const au = B.body({ kind: 'aurora', name: 'aurora', pos, radius: R * 1.5, base });
+      const green: V3 = [0.25, 1, 0.55], pink: V3 = [1, 0.35, 0.75];
+      for (const pole of [-1, 1]) {
+        for (let i = 0; i < 64; i++) {
+          const a = (i / 64) * Math.PI * 2 + rand() * 0.05;
+          const colat = 0.36 + Math.sin(a * 3 + pole) * 0.05;
+          for (let h = 0; h < 5; h++) {
+            const lift = 1.04 + h * 0.1;
+            const d: V3 = [Math.sin(colat) * Math.cos(a), pole * Math.cos(colat), Math.sin(colat) * Math.sin(a)];
+            B.glowAt([d[0] * R * lift, d[1] * R * lift, d[2] * R * lift], R * 0.12, scaleRgb(mixRgb(green, pink, h / 4), 0.3), au, G.aurora, i / 64);
+          }
+        }
+      }
     } else if (kind === 'rust') {
       sphere(B, planet, R, spz, rocky(ps, M.rust, crater(26, 0.32), M.rock));
     } else if (kind === 'lava') {
@@ -531,6 +561,36 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
   // A few big ones close to the camera, drifting past in front of everything.
   for (let i = 0; i < Math.round(pageH / 1800) + 1; i++) rock(rand() * pageH, 0.25 * f + rand() * 0.15 * f, 18 + rand() * 14, false);
 
+  // A black hole, far back, its disk swirling and everything behind it bent into a ring.
+  let blackHole: SpaceScene['blackHole'] = null;
+  {
+    const z = -1.2 * f;
+    const kz = k(z);
+    const y = pageH * (pageH > 4000 ? 0.7 : 0.6);
+    const nearest = B.bodies.filter(b => b.kind === 'planet').sort((a, b) => Math.abs(a.pos[1] - y) - Math.abs(b.pos[1] - y))[0];
+    const left = nearest ? nearest.pos[0] > viewW / 2 : true;
+    const rh = 24 * s * kz;
+    const bh = B.body({ kind: 'blackhole', name: 'black hole', pos: at(left ? 0.1 : 0.88, y, z), radius: rh * 4.2, base: basisFor(norm([0.12, -1, 0.32])), spin: 0.55 });
+    const spd = sp(z) * 0.7;
+    const r1 = rh * 1.7, r2 = rh * 4.2;
+    const N = Math.round((Math.PI * (r2 * r2 - r1 * r1)) / (spd * spd));
+    for (let i = 0; i < N; i++) {
+      const rr = Math.sqrt(r1 * r1 + ((r2 * r2 - r1 * r1) * (i + 0.5)) / N);
+      const a = i * GOLDEN;
+      const u = (rr - r1) / (r2 - r1);
+      const streak = fbm(Math.cos(a) * 2 + u * 6, Math.sin(a) * 2 + u * 6, a * 0.3, seed + 77, 3);
+      const hot = 1 - u;
+      const mat = hot > 0.62 ? M.sun : M.lava;
+      B.surfel([Math.cos(a) * rr, 0, Math.sin(a) * rr], [0, 1, 0], spd * DISC, mat, Math.min(1, 0.2 + hot * 0.6 + (streak - 0.5) * 0.9), bh, F.emissive | F.twoSided | F.front);
+    }
+    for (let i = 0; i < 26; i++) {
+      const a = (i / 26) * Math.PI * 2;
+      const rr = rh * (2 + rand() * 1.8);
+      B.glowAt([Math.cos(a) * rr, 0, Math.sin(a) * rr], rh * 1.2, [0.55, 0.22, 0.08], bh, G.flicker, rand());
+    }
+    blackHole = { body: bh, r: rh };
+  }
+
   // A comet sweeping across, its tails streaming away from the sun.
   {
     const z = -0.35 * f;
@@ -555,6 +615,7 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
   // The cute ones: blips on their rocks, and saucers visiting them.
   const planets = B.bodies.map((b, i) => (b.kind === 'planet' ? i : -1)).filter(i => i >= 0);
   const life = populateAliens(B, { rand, at, k, sp, s, f, viewW, pageH, planets, seed });
+  const events = populateEvents(B, { rand, k, sp, s, f, sunR, sunZ });
 
   return {
     solid: new Float32Array(B.solid),
@@ -565,7 +626,32 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
     sun: sunPos,
     focal: f,
     life,
+    events,
+    blackHole,
   };
+};
+
+/** The camera, as the view draws with it. */
+export interface SpaceCamera { viewW: number; viewH: number; scrollY: number; offX: number; offY: number }
+
+/** Where a world point lands in the window, in CSS pixels. */
+export const toScreen = (scene: SpaceScene, cam: SpaceCamera, w: V3): [number, number] => {
+  const sc = scene.focal / (scene.focal - w[2]);
+  return [cam.viewW / 2 + (w[0] - cam.viewW / 2 - cam.offX) * sc + cam.offX, cam.viewH / 2 + (w[1] - cam.scrollY - cam.viewH / 2 - cam.offY) * sc + cam.offY];
+};
+
+/** The world point at depth `z` that lands on window point (`sx`, `sy`). */
+export const fromScreen = (scene: SpaceScene, cam: SpaceCamera, sx: number, sy: number, z: number): V3 => {
+  const sc = scene.focal / (scene.focal - z);
+  return [(sx - cam.viewW / 2 - cam.offX) / sc + cam.viewW / 2 + cam.offX, (sy - cam.viewH / 2 - cam.offY) / sc + cam.scrollY + cam.viewH / 2 + cam.offY, z];
+};
+
+/** A rotation whose local up (-y) points along `n`, its face (+z) as near the viewer as it can. */
+export const uprightOn = (n: V3): number[] => {
+  const y: V3 = [-n[0], -n[1], -n[2]];
+  const x = norm(cross(y, [0, 0, 1]));
+  const z = cross(x, y);
+  return [x[0], y[0], z[0], x[1], y[1], z[1], x[2], y[2], z[2]];
 };
 
 /** Where a free body (not attached, not driven by behaviour) is at time `t`. */

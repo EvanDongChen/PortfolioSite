@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { SpaceScene, buildScene } from '../lib/space';
+import { startEvent } from '../lib/spaceEvents';
+import { SpaceDebugActions } from './SpaceDebugPanel';
 import { SpaceView } from '../lib/spaceView';
 import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext';
 
@@ -12,6 +14,8 @@ const REBUILD_MS = 250;
 
 interface SpaceSkyProps {
   onReady: () => void;
+  /** Filled in with what the debug panel can do. */
+  debug?: React.MutableRefObject<SpaceDebugActions | null>;
 }
 
 /**
@@ -21,13 +25,15 @@ interface SpaceSkyProps {
  * over, so things at the content's depth scroll exactly with it and the rest
  * parallax behind. The pointer leans the camera a little, to show it's 3D.
  */
-const SpaceSky: React.FC<SpaceSkyProps> = ({ onReady }) => {
+const SpaceSky: React.FC<SpaceSkyProps> = ({ onReady, debug }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { tier, reducedMotion, frameRate } = usePerformance();
   const settings = useRef({ tier, reducedMotion, frameRate });
   settings.current = { tier, reducedMotion, frameRate };
   const readyRef = useRef(onReady);
   readyRef.current = onReady;
+  const debugRef = useRef(debug);
+  debugRef.current = debug;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -93,13 +99,27 @@ const SpaceSky: React.FC<SpaceSkyProps> = ({ onReady }) => {
     let last = performance.now();
     let lastDraw = 0;
     let time = 40; // start part-way in, so orbits and the comet are already somewhere interesting
+    let speed = 1;
+    if (debugRef.current) {
+      debugRef.current.current = {
+        event: kind => { if (view.scene) startEvent(view.scene.events, kind); },
+        goTo: kind => {
+          const sc = view.scene;
+          if (!sc) return;
+          const i = sc.bodies.findIndex(b => b.kind === (kind === 'colony' ? 'rock' : kind));
+          const c = sc.centres?.[i];
+          if (c) window.scrollTo({ top: c[1] - window.innerHeight / 2, behavior: 'smooth' });
+        },
+        setSpeed: s => { speed = s; },
+      };
+    }
     let first = true;
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       if (!hasScene) return;
       const { tier: t, reducedMotion: still, frameRate: fps } = settings.current;
       if (now - lastDraw < 1000 / fps - 2) return;
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.min(0.1, (now - last) / 1000) * speed;
       last = now;
       lastDraw = now;
       if (!still) time += dt;
@@ -135,6 +155,7 @@ const SpaceSky: React.FC<SpaceSkyProps> = ({ onReady }) => {
       document.removeEventListener('visibilitychange', onVisibility);
       worker?.terminate();
       view.dispose();
+      if (debugRef.current) debugRef.current.current = null;
     };
   }, []);
 

@@ -1,6 +1,7 @@
-import React, { useEffect, useLayoutEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import PortfolioContent from './components/PortfolioContent';
 import SpaceSky from './components/SpaceSky';
+import SpaceDebugPanel, { SpaceDebugActions } from './components/SpaceDebugPanel';
 import BackToTopButton from './components/BackToTopButton';
 import ThemeSwitch from './components/ThemeSwitch';
 import PerformanceButton from './components/PerformanceButton';
@@ -37,6 +38,7 @@ const SpaceApp: React.FC = () => {
     };
   }, []);
   const [searchTerm, setSearchTerm] = useState('');
+  const debug = useRef<SpaceDebugActions | null>(null);
   const [isPerformancePanelOpen, setIsPerformancePanelOpen] = useState(false);
   const filteredProjects = useMemo(() => filterProjects(searchTerm), [searchTerm]);
   const togglePerformancePanel = useCallback(() => setIsPerformancePanelOpen(open => !open), []);
@@ -44,7 +46,7 @@ const SpaceApp: React.FC = () => {
 
   return (
     <div className="relative min-h-screen text-white overflow-x-hidden bg-[#04030a]">
-      <SpaceSky onReady={markPageReady} />
+      <SpaceSky onReady={markPageReady} debug={debug} />
       <PortfolioContent
         theme="underwater"
         colors={SPACE_COLORS}
@@ -61,6 +63,7 @@ const SpaceApp: React.FC = () => {
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
       <ThemeSwitch />
+      <SpaceDebugPanel actions={debug} />
     </div>
   );
 };

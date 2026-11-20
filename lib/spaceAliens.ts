@@ -1,5 +1,5 @@
 import {
-  Builder, F, G, M, SpaceScene, V3, centreAt, lumpy, mul3, norm, dot, rotX, rotY, rotZ, sphere,
+  Builder, F, G, M, SpaceCamera, SpaceScene, V3, centreAt, lumpy, mul3, norm, dot, rotX, rotY, rotZ, sphere, toScreen, uprightOn,
 } from './space';
 
 /**
@@ -49,6 +49,11 @@ export interface Blip {
   phase: number;
   /** The saucer lifting it, while beamed. */
   saucer: number;
+  /** The rock it means to hop to next, chasing the cursor. */
+  chase: number;
+  tagCool: number;
+  /** Hands over its eyes (meteors!), 0 to 1. */
+  cover: number;
 }
 export interface Saucer {
   body: number;
@@ -66,7 +71,10 @@ export interface Saucer {
   bank: number;
   happy: number;
 }
-export interface AlienLife { colonies: Colony[]; blips: Blip[]; saucers: Saucer[] }
+export interface Flower { body: number; n: V3; g: number; state: 'bare' | 'growing' | 'bloom' | 'wilting'; life: number }
+export interface Gardener { blip: number; n: V3; target: number; mode: 'walk' | 'water' | 'admire'; t: number; can: number; water: number; pour: number; heading: number }
+export interface Garden { moon: number; R: number; flowers: Flower[]; gardeners: Gardener[] }
+export interface AlienLife { colonies: Colony[]; blips: Blip[]; saucers: Saucer[]; garden: Garden | null }
 
 interface Ctx {
   rand: () => number;
@@ -165,7 +173,7 @@ const buildBlip = (B: Builder, ctx: Ctx, r: number, z: number, mat: number, rand
 const newBlip = (body: number, arms: [number, number], r: number, colony: number, rock: number, rand: () => number): Blip => ({
   body, arms, r, colony, rock, mode: 'sit', t: 0, wait: 0.5 + rand() * 4, from: [0, 0, 0], to: -1, dur: HOP_TIME, pos: [0, 0, 0],
   sq: 0, sqv: 0, yaw: 0, pitch: 0, lookYaw: (rand() - 0.5) * 0.8, lookPitch: 0, lookTimer: rand() * 3, blinkIn: rand() * 4, blinking: 0,
-  wave: 0, flip: 0, flipDir: 1, phase: rand() * 6, saucer: -1,
+  wave: 0, flip: 0, flipDir: 1, phase: rand() * 6, saucer: -1, chase: -1, tagCool: 0, cover: 0,
 });
 
 /** An open-top saucer: a metal hull with a bright rim, chasing lights, an engine glow beneath, a pink pilot, and its beam. */
@@ -236,14 +244,14 @@ export const populateAliens = (B: Builder, ctx: Ctx): AlienLife => {
     if (y > pageH - 200) break;
     // The margin across from the nearest planet, so the two don't pile up.
     const nearest = ctx.planets.map(i => B.bodies[i]).sort((a, b) => Math.abs(a.pos[1] - y) - Math.abs(b.pos[1] - y))[0];
-    const left = !nearest || Math.abs(nearest.pos[1] - y) > 900 ? c % 2 === 0 : nearest.pos[0] > ctx.viewW / 2;
+    const left = c === 0 || !nearest || Math.abs(nearest.pos[1] - y) > 900 ? c % 2 === 0 : nearest.pos[0] > ctx.viewW / 2;
     const z = -rand() * 0.08 * ctx.f;
     const kz = k(z);
     const anchor = at(left ? 0.075 : 0.885, y, z);
     const rocks: Rock[] = [];
     const spots: [number, number][] = [];
-    for (let tries = 0; spots.length < 4 && tries < 60; tries++) {
-      const dx = (rand() - 0.5) * 160, dy = (rand() - 0.5) * 340;
+    for (let tries = 0; spots.length < 5 && tries < 80; tries++) {
+      const dx = (rand() - 0.5) * 170, dy = (rand() - 0.5) * 420;
       if (spots.every(([x, yy]) => Math.hypot(x - dx, yy - dy) > 105)) spots.push([dx, dy]);
     }
     const colony = colonies.length;
@@ -282,19 +290,76 @@ export const populateAliens = (B: Builder, ctx: Ctx): AlienLife => {
       beamOn: 0, lifting: -1, bank: 0, happy: 0,
     });
   }
-  return { colonies, blips, saucers };
+  const garden = plantGarden(B, ctx, blips);
+  return { colonies, blips, saucers, garden };
+};
+
+/** The garden moon: a grey moon in a margin where two blips with watering cans grow glowing flowers. */
+const plantGarden = (B: Builder, ctx: Ctx, blips: Blip[]): Garden | null => {
+  const { rand, at, k, s } = ctx;
+  const y = Math.min(ctx.pageH * 0.4, 1550);
+  if (y < 900) return null;
+  const nearest = ctx.planets.map(i => B.bodies[i]).sort((a, b) => Math.abs(a.pos[1] - y) - Math.abs(b.pos[1] - y))[0];
+  const left = nearest ? nearest.pos[0] > ctx.viewW / 2 : false;
+  const z = -0.05 * ctx.f;
+  const kz = k(z);
+  const R = 82 * s * kz;
+  const moon = B.body({ kind: 'gardenmoon', name: 'garden moon', pos: at(left ? 0.09 : 0.9, y, z), radius: R });
+  const craters = Array.from({ length: 10 }, () => ({ c: norm([rand() - 0.5, rand() - 0.5, rand() - 0.5]), r: 0.12 + rand() * 0.2 }));
+  sphere(B, moon, R, ctx.sp(z) * 0.7, d => {
+    let alb = 0.5 + (Math.sin(d[0] * 7 + 1) * Math.sin(d[1] * 5) * Math.sin(d[2] * 6)) * 0.12;
+    for (const c of craters) { const a = Math.acos(Math.min(1, dot(d, c.c))) / c.r; if (a < 1) alb -= 0.14; else if (a < 1.3) alb += 0.08; }
+    return { mat: M.moon, alb };
+  });
+
+  // Flower beds over the moon's top and front, where they can be seen.
+  const flowers: Flower[] = [];
+  const fr = 26 * s * kz;
+  const sp = ctx.sp(z) * 0.45;
+  const blooms = [M.pink, M.light, M.teal, M.violet, M.pink];
+  const glowOf: Record<number, V3> = { [M.pink]: [1, 0.4, 0.7], [M.light]: [1, 0.85, 0.35], [M.teal]: [0.3, 1, 0.75], [M.violet]: [0.7, 0.45, 1] };
+  for (let tries = 0; flowers.length < 7 && tries < 300; tries++) {
+    const n = norm([(rand() - 0.5) * 2.2, -1, 0.15 + rand() * 0.6]);
+    if (n[1] > -0.38 || flowers.some(f => dot(f.n, n) > Math.cos(0.3))) continue;
+    const body = B.body({ kind: 'flower', name: 'flower', pos: [0, -1e6, 0], params: [0.05, 0, 0, rand() * 6] });
+    const steps = Math.ceil(fr / sp);
+    for (let i = 0; i <= steps; i++) B.surfel([Math.sin(i / steps * 2) * fr * 0.05, -(i / steps) * fr, 0], [0, 0, 1], sp * 0.9, M.land, 0.55, body, F.twoSided | F.wobble);
+    for (const [lx, ly] of [[-0.22, -0.38], [0.22, -0.55]]) {
+      const start = B.solid.length;
+      sphere(B, body, 0.17 * fr, sp * 0.7, () => ({ mat: M.land, alb: 0.62 }));
+      for (let i = start; i < B.solid.length; i += 11) { B.solid[i] += lx * fr; B.solid[i + 1] += ly * fr; }
+    }
+    const mat = blooms[flowers.length % blooms.length];
+    const start = B.solid.length;
+    sphere(B, body, 0.3 * fr, sp * 0.6, d => ({ mat, alb: dot(d, norm([-0.4, -0.6, 0.7])) > 0.6 ? 1 : 0.7, flags: F.emissive | F.wobble }));
+    for (let i = start; i < B.solid.length; i += 11) B.solid[i + 1] -= fr;
+    B.glowAt([0, -fr, 0], fr * 1.2, (glowOf[mat] ?? [1, 1, 1]).map(c => c * 0.45) as V3, body, G.gate | G.wobble, rand());
+    // A few start in bloom, so the garden is something on arrival.
+    const blooming = flowers.length % 3 === 0;
+    flowers.push({ body, n, g: blooming ? 1 : 0, state: blooming ? 'bloom' : 'bare', life: 20 + rand() * 40 });
+  }
+
+  const gardeners: Gardener[] = [];
+  for (const mat of [M.blip, M.teal]) {
+    const r = 22 * s * kz;
+    const parts = buildBlip(B, ctx, r, z, mat, rand);
+    const blip = blips.length;
+    blips.push({ ...newBlip(parts.body, parts.arms, r, -2, -1, rand), mode: 'sit' });
+    // A watering can in its right hand, its spout pouring a stream when tipped.
+    const can = B.body({ kind: 'can', name: 'watering can', pos: [0, 0, 0], attach: { parent: parts.arms[1], offset: [0.48 * r, 0.24 * r, 0.14 * r] } });
+    sphere(B, can, 0.21 * r, sp * 0.6, d => ({ mat: M.metal, alb: d[1] < -0.6 ? 0.9 : 0.6 }));
+    for (let i = 0; i < 5; i++) B.surfel([0.14 * r + i * 0.07 * r, -0.04 * r - i * 0.045 * r, 0], [0, 0, 1], sp * 0.8, M.metal, 0.7, can, F.twoSided);
+    const water = B.body({ kind: 'water', name: 'water', pos: [0, 0, 0], base: rotZ(1.15), attach: { parent: can, offset: [0.44 * r, -0.24 * r, 0] }, params: [0, 0, 0, 0] });
+    for (let i = 0; i < 16; i++) B.glowAt([0, (rand() - 0.5) * r * 0.06, (rand() - 0.5) * r * 0.06], r * 0.08, [0.45, 0.75, 1], water, G.stream | G.gate, rand(), r * 1.1);
+    const n = norm([(rand() - 0.5) * 0.9, -1, 0.35]);
+    gardeners.push({ blip, n, target: -1, mode: 'admire', t: 1 + rand() * 2, can, water, pour: 0, heading: 0 });
+  }
+  return { moon, R, flowers, gardeners };
 };
 
 // ------------------------------------------------------------- behaviour ---
 
-export interface AlienCamera { viewW: number; viewH: number; scrollY: number; offX: number; offY: number }
-
-/** Where a world point lands in the window, in CSS pixels. */
-const screenOf = (scene: SpaceScene, cam: AlienCamera, w: V3): [number, number] => {
-  const d = scene.focal - w[2];
-  const sc = scene.focal / d;
-  return [cam.viewW / 2 + (w[0] - cam.viewW / 2 - cam.offX) * sc + cam.offX, cam.viewH / 2 + (w[1] - cam.scrollY - cam.viewH / 2 - cam.offY) * sc + cam.offY];
-};
+const screenOf = (scene: SpaceScene, cam: SpaceCamera, w: V3) => toScreen(scene, cam, w);
 
 const rockTop = (scene: SpaceScene, rock: Rock, blipR: number, t: number): V3 => {
   const c = centreAt(scene, rock.body, t);
@@ -331,7 +396,7 @@ const pickTarget = (scene: SpaceScene, sc: Saucer): Saucer['target'] => {
 };
 
 /** Moves every blip and saucer on by `dt` seconds. `pointer` is the cursor in the window, if there is one. */
-export const stepAliens = (scene: SpaceScene, t: number, dt: number, cam: AlienCamera, pointer: { x: number; y: number } | null) => {
+export const stepAliens = (scene: SpaceScene, t: number, dt: number, cam: SpaceCamera, pointer: { x: number; y: number } | null) => {
   const { life, bodies } = scene;
   const f = scene.focal;
 
@@ -378,24 +443,53 @@ export const stepAliens = (scene: SpaceScene, t: number, dt: number, cam: AlienC
     bodies[sc.beam].params = [0, 0, sc.beamOn, 0];
   });
 
+  const garden = life.garden;
+  if (garden) stepGarden(scene, garden, dt);
+  const shower = scene.events.shower > 0;
+
   for (const b of life.blips) {
     b.t += dt;
     const body = bodies[b.body];
-    const pilot = b.colony < 0;
+    const pilot = b.colony === -1;
+    const gardener = b.colony === -2 && garden ? garden.gardeners.find(g => g.blip === life.blips.indexOf(b)) ?? null : null;
+    let basis: number[] | null = null;
+    if (gardener && garden) {
+      const mc = centreAt(scene, garden.moon, t);
+      const step = gardener.mode === 'walk' ? Math.abs(Math.sin(t * 9 + b.phase)) * b.r * 0.35 : 0;
+      const lift = garden.R + b.r * 0.95 + step;
+      b.pos = [mc[0] + gardener.n[0] * lift, mc[1] + gardener.n[1] * lift, mc[2] + gardener.n[2] * lift];
+      basis = uprightOn(gardener.n);
+    }
     let home: V3 = b.pos;
     let airborne = false;
     let handsUp = 0;
 
-    if (!pilot) {
+    if (!pilot && !gardener) {
       const col = life.colonies[b.colony];
       home = rockTop(scene, col.rocks[b.rock], b.r, t);
       if (b.mode === 'sit') {
         b.pos = home;
         b.wait -= dt;
-        if (b.wait <= 0) {
+        b.tagCool -= dt;
+        // Tag: with the cursor about, hop to whichever free rock is nearest it.
+        b.chase = -1;
+        if (pointer && !shower) {
+          const at = (i: number) => { const p = screenOf(scene, cam, centreAt(scene, col.rocks[i].body, t)); return Math.hypot(p[0] - pointer.x, p[1] - pointer.y); };
+          const mine = at(b.rock);
+          let best = -1, bestD = Math.min(mine - 45, 360);
+          col.rocks.forEach((r, i) => { if (r.occupant < 0) { const d = at(i); if (d < bestD) { bestD = d; best = i; } } });
+          if (best >= 0) { b.chase = best; b.wait = Math.min(b.wait, 0.15 + Math.random() * 0.35); }
+          // Touched: a happy flip on the spot.
+          const [bx, by] = screenOf(scene, cam, b.pos);
+          const reach = b.r * scene.focal / (scene.focal - b.pos[2]);
+          if (b.tagCool <= 0 && Math.hypot(bx - pointer.x, by - pointer.y) < reach) {
+            b.tagCool = 2.5; b.to = b.rock; b.mode = 'crouch'; b.t = 0;
+          }
+        }
+        if (b.mode === 'sit' && b.wait <= 0) {
           const free = col.rocks.map((r, i) => (r.occupant < 0 ? i : -1)).filter(i => i >= 0);
           if (free.length) {
-            b.to = free[Math.floor(Math.random() * free.length)];
+            b.to = b.chase >= 0 && col.rocks[b.chase].occupant < 0 ? b.chase : free[Math.floor(Math.random() * free.length)];
             col.rocks[b.to].occupant = life.blips.indexOf(b);
             b.mode = 'crouch';
             b.t = 0;
@@ -407,9 +501,10 @@ export const stepAliens = (scene: SpaceScene, t: number, dt: number, cam: AlienC
         b.sqv = 0;
         if (b.t > 0.2) {
           b.mode = 'hop'; b.t = 0; b.from = home; b.sq = -0.28; b.sqv = 0;
-          col.rocks[b.rock].occupant = -1;
+          const inPlace = b.to === b.rock;
+          if (!inPlace) col.rocks[b.rock].occupant = -1;
           b.flip = 0;
-          b.flipDir = Math.random() < 0.3 ? (Math.random() < 0.5 ? -1 : 1) : 0;
+          b.flipDir = inPlace || Math.random() < 0.3 ? (Math.random() < 0.5 ? -1 : 1) : 0;
         }
       } else if (b.mode === 'hop') {
         const u = clamp(b.t / HOP_TIME, 0, 1);
@@ -421,7 +516,7 @@ export const stepAliens = (scene: SpaceScene, t: number, dt: number, cam: AlienC
         if (u >= 1) {
           b.rock = b.to; b.mode = 'sit'; b.t = 0; b.flip = 0;
           b.sq = 0.38; b.sqv = 0;
-          b.wait = 2 + Math.random() * 6;
+          b.wait = b.chase >= 0 ? 0.2 : 2 + Math.random() * 6;
         }
       } else if (b.mode === 'beamed') {
         const sc = life.saucers[b.saucer];
@@ -468,20 +563,99 @@ export const stepAliens = (scene: SpaceScene, t: number, dt: number, cam: AlienC
     // Blinks, now and then a double.
     if (b.blinking > 0) b.blinking -= dt;
     else if ((b.blinkIn -= dt) <= 0) { b.blinking = 0.13; b.blinkIn = Math.random() < 0.2 ? 0.28 : 2 + Math.random() * 4; }
+    // Meteors overhead: hands over eyes, squeezed shut, with the odd peek.
+    b.cover += ((shower ? 1 : 0) - b.cover) * Math.min(1, dt * 4);
+    const peeking = Math.sin(t * 1.1 + b.phase * 3) > 0.88;
+    const shut = b.blinking > 0 || (b.cover > 0.5 && !peeking);
 
-    const rot = mul3(rotY(b.yaw), mul3(rotX(b.pitch), rotZ(b.flip)));
+    if (gardener) {
+      // Turned towards where it's going, or towards the flower it's watering.
+      b.yaw += (gardener.heading - b.yaw) * Math.min(1, dt * 4);
+      b.flip = gardener.mode === 'water' ? -0.22 * Math.sign(gardener.heading || 1) : 0;
+    }
+    let rot = mul3(rotY(b.yaw), mul3(rotX(b.pitch), rotZ(b.flip)));
+    if (basis) rot = mul3(basis, rot);
     if (pilot) body.live = { c: [0, 0, 0], rot };
     else body.live = { c: [b.pos[0], b.pos[1] + (airborne ? 0 : b.r * sq * 0.9), b.pos[2]], rot };
     body.scale = [1 + sq * 0.55, 1 - sq, 1 + sq * 0.55];
     const wob = 0.1 + Math.min(0.5, Math.abs(b.sqv) * 0.08) + (airborne ? 0.25 : 0);
-    body.params = [wob, b.r * 0.88, b.blinking > 0 ? 1 : 0, b.phase];
+    body.params = [wob, b.r * 0.88, shut ? 1 : 0, b.phase];
 
     // Arms: a gentle sway, up in the air while flying, and a wave (with the right) when noticed.
     const sway = Math.sin(t * 2 + b.phase) * 0.15;
     const up = Math.max(handsUp, 0);
     const waveR = b.wave * (1.5 + Math.sin(t * 13) * 0.55);
-    bodies[b.arms[0]].live = { c: [0, 0, 0], rot: rotZ(sway + up * 1.6) };
-    bodies[b.arms[1]].live = { c: [0, 0, 0], rot: rotZ(-sway - Math.max(up * 1.6, waveR)) };
+    let left = rotZ(sway + up * 1.6);
+    let right = rotZ(-sway - Math.max(up * 1.6, waveR));
+    if (gardener) {
+      // The can stays in the right hand; the left does the waving.
+      left = rotZ(sway + waveR);
+      right = rotZ(-0.35 - gardener.pour * 0.55);
+    }
+    if (b.cover > 0.02) {
+      left = mul3(rotY(b.cover * 1.0), rotZ(b.cover * 2.3));
+      right = mul3(rotY(-b.cover * 1.0), rotZ(-b.cover * 2.3));
+    }
+    bodies[b.arms[0]].live = { c: [0, 0, 0], rot: left };
+    bodies[b.arms[1]].live = { c: [0, 0, 0], rot: right };
+  }
+};
+
+const angle = (a: V3, b: V3) => Math.acos(Math.max(-1, Math.min(1, dot(a, b))));
+
+/** The gardeners walk to bare ground, water it until a flower comes up, and admire what they've grown; old flowers wilt. */
+const stepGarden = (scene: SpaceScene, garden: Garden, dt: number) => {
+  const { bodies } = scene;
+  const mc = centreAt(scene, garden.moon, 0);
+  for (const fl of garden.flowers) {
+    if (fl.state === 'growing') { fl.g = Math.min(1, fl.g + dt / 3.5); if (fl.g >= 1) { fl.state = 'bloom'; fl.life = 35 + Math.random() * 30; } }
+    else if (fl.state === 'bloom') { if ((fl.life -= dt) <= 0) fl.state = 'wilting'; }
+    else if (fl.state === 'wilting') { fl.g = Math.max(0, fl.g - dt / 4); if (fl.g <= 0) fl.state = 'bare'; }
+    const b = bodies[fl.body];
+    if (fl.g < 0.03) { b.live = { c: [0, -1e6, 0], rot: b.base }; b.params = [0.05, 0, 0, b.params?.[3] ?? 0]; continue; }
+    const grow = fl.state === 'growing' ? 1 - (1 - fl.g) ** 2 : fl.g;
+    const droop = fl.state === 'wilting' ? (1 - fl.g) * 0.9 : 0;
+    b.live = { c: [mc[0] + fl.n[0] * garden.R, mc[1] + fl.n[1] * garden.R, mc[2] + fl.n[2] * garden.R], rot: mul3(uprightOn(fl.n), rotZ(droop)) };
+    b.scale = [grow, grow, grow];
+    b.params = [0.05, 0, grow * (fl.state === 'wilting' ? 0.5 : 1), b.params?.[3] ?? 0];
+  }
+
+  for (const gd of garden.gardeners) {
+    gd.t -= dt;
+    const tended = garden.gardeners.filter(o => o !== gd).map(o => o.target);
+    const fl = gd.target >= 0 ? garden.flowers[gd.target] : null;
+    // Stand just beside the flower, on the side it came from.
+    const aim = (f: Flower): V3 => {
+      const side = norm([gd.n[0] - f.n[0], gd.n[1] - f.n[1], gd.n[2] - f.n[2]]);
+      return norm([f.n[0] + side[0] * 0.16, f.n[1] + side[1] * 0.16, f.n[2] + side[2] * 0.16]);
+    };
+    if (gd.mode === 'walk' && fl) {
+      const to = aim(fl);
+      const a = angle(gd.n, to);
+      const stepA = 0.32 * dt;
+      if (a <= stepA) {
+        gd.n = to;
+        gd.mode = fl.state === 'bare' ? 'water' : 'admire';
+        gd.t = fl.state === 'bare' ? 2.6 : 2.5;
+      } else {
+        const u = stepA / a;
+        gd.n = norm([gd.n[0] + (to[0] - gd.n[0]) * u, gd.n[1] + (to[1] - gd.n[1]) * u, gd.n[2] + (to[2] - gd.n[2]) * u]);
+        gd.heading = Math.sign(to[0] - gd.n[0]) * 0.75;
+      }
+    } else if (gd.mode === 'water' && fl) {
+      gd.heading = Math.sign(fl.n[0] - gd.n[0]) * 0.55;
+      if (gd.t <= 0) { gd.mode = 'admire'; gd.t = 1.5 + Math.random() * 2; if (fl.state === 'bare') { fl.state = 'growing'; fl.g = 0.04; } }
+    } else if (gd.t <= 0) {
+      // Next: bare ground first, else go and admire a bloom.
+      const bare = garden.flowers.map((f, i) => (f.state === 'bare' && !tended.includes(i) ? i : -1)).filter(i => i >= 0);
+      const any = garden.flowers.map((f, i) => (!tended.includes(i) ? i : -1)).filter(i => i >= 0);
+      const pool = bare.length ? bare : any;
+      gd.target = pool.length ? pool[Math.floor(Math.random() * pool.length)] : -1;
+      gd.mode = gd.target >= 0 ? 'walk' : 'admire';
+      gd.t = 2;
+    }
+    gd.pour += ((gd.mode === 'water' && gd.t < 2.2 ? 1 : 0) - gd.pour) * Math.min(1, dt * 5);
+    bodies[gd.water].params = [0, 0, gd.pour, 0];
   }
 };
 

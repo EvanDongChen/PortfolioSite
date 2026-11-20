@@ -1,4 +1,6 @@
 import { stepAliens } from './spaceAliens';
+import { stepEvents } from './spaceEvents';
+import { toScreen } from './space';
 import { F, G, GLOW_STRIDE, OBJ_TEXELS, RAMPS, SHADES, SKY_PALETTE, SOLID_STRIDE, SpaceScene, poseBodies } from './space';
 
 /**
@@ -28,9 +30,11 @@ uniform vec3 u_cam;
 uniform vec2 u_off, u_half, u_canvas;
 uniform float u_f, u_tpx, u_time, u_near, u_far;
 uniform vec3 u_sun;
+uniform float u_sunGain, u_frizz;
 out float v_shade;
 flat out float v_mat;
 flat out float v_round;
+flat out float v_front;
 void main() {
   int o = int(a_info.w) * ${OBJ_TEXELS};
   vec4 r0 = texelFetch(u_obj, ivec2(o, 0), 0);
@@ -42,7 +46,11 @@ void main() {
   // Closed eyes: the body behind shows through.
   if ((flags & ${F.eye}) != 0 && st.z > 0.5) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   vec3 lp = a_pos;
-  if ((flags & ${F.wobble}) != 0) lp.x += sin(u_time * 4.0 + st.w) * st.x * max(0.0, -lp.y - st.y);
+  if ((flags & ${F.wobble}) != 0) {
+    float h = max(0.0, -lp.y - st.y);
+    lp.x += sin(u_time * 4.0 + st.w) * st.x * h + sin(u_time * 37.0 + lp.y * 0.9 + st.w * 5.0) * u_frizz * h * 0.45;
+    lp.z += cos(u_time * 29.0 + lp.y * 1.3) * u_frizz * h * 0.25;
+  }
   vec3 w = vec3(dot(r0.xyz, lp) + r0.w, dot(r1.xyz, lp) + r1.w, dot(r2.xyz, lp) + r2.w);
   vec3 n = normalize(vec3(dot(r0.xyz, a_nrm), dot(r1.xyz, a_nrm), dot(r2.xyz, a_nrm)));
   float d = u_cam.z - w.z;
@@ -65,6 +73,8 @@ void main() {
   gl_PointSize = max(size, 1.0);
   v_round = size > 3.0 ? 1.0 : 0.0;
   v_mat = a_info.y;
+  // The black hole's disk: nearer than the hole, it is drawn over it rather than bent round it.
+  v_front = (flags & ${F.front}) != 0 && w.z > r2.w ? 1.0 : 0.0;
   float alb = a_info.z;
   if ((flags & ${F.light}) != 0) {
     v_shade = fract(alb - u_time * 0.9) < 0.3 ? 1.0 : 0.38;
@@ -89,7 +99,7 @@ void main() {
     float disc = b * b - c;
     if (disc > 0.0 && -b - sqrt(disc) > 0.0) lam *= 0.12;
   }
-  v_shade = clamp(0.1 + pow(lam, 0.85) * 0.92 + (alb - 0.5) * 0.45, 0.0, 1.0);
+  v_shade = clamp(0.1 + pow(lam, 0.85) * 0.92 * u_sunGain + (alb - 0.5) * 0.45, 0.0, 1.0);
 }`;
 
 const SOLID_FS = `#version 300 es
@@ -97,6 +107,7 @@ precision highp float;
 in float v_shade;
 flat in float v_mat;
 flat in float v_round;
+flat in float v_front;
 out vec4 o;
 const float BAYER[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
 void main() {
@@ -105,7 +116,7 @@ void main() {
   float b = (BAYER[a.y * 4 + a.x] + 0.5) / 16.0;
   float x = v_shade * ${SHADES - 1}.0;
   float idx = floor(x) + (fract(x) > 0.5 + (b - 0.5) * 0.35 ? 1.0 : 0.0);
-  o = vec4(v_mat / 255.0, min(idx, ${SHADES - 1}.0) / 255.0, 0.0, 1.0);
+  o = vec4(v_mat / 255.0, min(idx, ${SHADES - 1}.0) / 255.0, v_front, 1.0);
 }`;
 
 const GLOW_VS = `#version 300 es
@@ -118,7 +129,9 @@ uniform sampler2D u_obj;
 uniform vec3 u_cam;
 uniform vec2 u_off, u_half, u_canvas;
 uniform float u_f, u_tpx, u_time, u_near, u_far, u_maxPoint;
+uniform float u_glowGain, u_antenna, u_aurora, u_frizz;
 out vec3 v_col;
+out float v_over;
 void main() {
   int o = int(a_col.w) * ${OBJ_TEXELS};
   vec4 r0 = texelFetch(u_obj, ivec2(o, 0), 0);
@@ -126,13 +139,31 @@ void main() {
   vec4 r2 = texelFetch(u_obj, ivec2(o + 2, 0), 0);
   vec4 st = texelFetch(u_obj, ivec2(o + 4, 0), 0);
   int flags = int(a_info.x + 0.5);
+  v_over = 0.0;
   vec3 p = a_pos;
   float k = 1.0;
   float radius = a_rad;
   bool beam = (flags & ${G.beam}) != 0;
-  if (beam) {
+  bool gate = (flags & ${G.gate}) != 0;
+  if (beam || gate) {
     k = st.z;
     if (k < 0.01) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  }
+  if ((flags & ${G.arc}) != 0) {
+    // Up and over the loop, from one foot to the other.
+    float u = fract(u_time * (0.16 + a_info.y * 0.22) + a_info.y * 7.0);
+    float ang = 3.14159 * u;
+    p.x += -cos(ang) * a_info.z;
+    p.y += -sin(ang) * a_info.z * 1.35;
+    k *= 0.75 + 0.25 * sin(u_time * 6.0 + a_info.y * 30.0);
+  }
+  if ((flags & ${G.aurora}) != 0) {
+    // Brightness rolling round the pole, the curtains swaying.
+    float a = a_info.y * 6.28318;
+    k *= u_aurora * (0.25 + 0.75 * pow(0.5 + 0.5 * sin(a * 5.0 - u_time * 0.9) * sin(a * 2.0 + u_time * 0.37), 1.5));
+    p.xz += vec2(sin(u_time * 0.8 + a * 7.0), cos(u_time * 0.6 + a * 5.0)) * a_rad * 0.4;
+    // Aurora light also falls over the planet's face (see the pixel pass).
+    v_over = 1.0;
   }
   if ((flags & ${G.stream}) != 0) {
     if (beam) {
@@ -142,15 +173,21 @@ void main() {
       p.yz *= 1.0 + u * 2.2;
       k *= sin(u * 3.14159);
     } else {
-      // Tail particles stream out from the head, spreading and fading as they go.
-      float u = fract(u_time * (0.05 + a_info.y * 0.06) + a_info.y * 7.0);
+      // Tail particles stream out from the head, spreading and fading as they go (water, much faster).
+      float u = fract(u_time * (gate ? 1.1 + a_info.y : 0.05 + a_info.y * 0.06) + a_info.y * 7.0);
       p.x += u * a_info.z;
       p.yz *= 1.0 + u * 4.0;
       radius *= 1.0 + u * 2.5;
       k *= (1.0 - u) * (1.0 - u) * smoothstep(0.0, 0.08, u);
     }
   }
-  if ((flags & ${G.wobble}) != 0) p.x += sin(u_time * 4.0 + st.w) * st.x * max(0.0, -p.y - st.y);
+  if ((flags & ${G.wobble}) != 0) {
+    float h = max(0.0, -p.y - st.y);
+    p.x += sin(u_time * 4.0 + st.w) * st.x * h + sin(u_time * 37.0 + p.y * 0.9 + st.w * 5.0) * u_frizz * h * 0.45;
+    if (!gate) k *= u_antenna;
+  } else if (!beam && !gate && (flags & ${G.arc}) == 0) {
+    k *= u_glowGain;
+  }
   if ((flags & ${G.flicker}) != 0) k *= 0.75 + 0.25 * sin(u_time * (2.0 + a_info.y * 3.0) + a_info.y * 40.0);
   vec3 w = vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w);
   float d = u_cam.z - w.z;
@@ -168,13 +205,15 @@ void main() {
 const GLOW_FS = `#version 300 es
 precision highp float;
 in vec3 v_col;
+in float v_over;
 out vec4 o;
 void main() {
   vec2 q = (gl_PointCoord - 0.5) * 2.0;
   float r2 = dot(q, q);
   if (r2 > 1.0) discard;
   float a = exp(-r2 * 3.2) * (1.0 - r2);
-  o = vec4(v_col * a, 1.0);
+  // Alpha carries how much of this light may fall over solid things.
+  o = vec4(v_col * a, v_over * a * max(v_col.r, max(v_col.g, v_col.b)));
 }`;
 
 const POST_VS = `#version 300 es
@@ -190,6 +229,9 @@ uniform sampler2D u_glow;
 uniform sampler2D u_ramps;
 uniform vec3 u_sky[${SKY_PALETTE.length}];
 uniform vec3 u_ink;
+uniform vec3 u_tint;
+// The black hole on the canvas: centre and horizon radius, in art pixels (radius 0: none).
+uniform vec3 u_bh;
 out vec4 o;
 const float BAYER[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
 
@@ -203,6 +245,23 @@ int cover(ivec2 p) {
 void main() {
   // The canvas's rows run bottom-up; the targets were drawn the same way.
   ivec2 p = ivec2(gl_FragCoord.xy);
+  if (u_bh.z > 0.0) {
+    vec2 rel = gl_FragCoord.xy - u_bh.xy;
+    float r = length(rel);
+    if (r < u_bh.z * 9.0) {
+      bool front = false;
+      for (int i = 0; i < 4; i++) { vec4 q = texelFetch(u_solid, p * 2 + ivec2(i & 1, i >> 1), 0); if (q.a > 0.5 && q.b > 0.5) front = true; }
+      if (!front) {
+        if (r < u_bh.z) { o = vec4(0.0, 0.0, 0.0, 1.0); return; }
+        // Light from behind bends round the hole: what is just outside its edge came from right behind it.
+        float rs = r - u_bh.z * u_bh.z * 1.15 / r;
+        vec2 src = u_bh.xy + rel / r * rs;
+        p = ivec2(floor(src));
+        // A thin bright ring where the light skims the horizon.
+        if (r < u_bh.z * 1.18) { o = vec4(1.0, 0.86, 0.62, 1.0); return; }
+      }
+    }
+  }
   vec4 s[4];
   int n = 0;
   for (int i = 0; i < 4; i++) { s[i] = texelFetch(u_solid, p * 2 + ivec2(i & 1, i >> 1), 0); if (s[i].a > 0.5) n++; }
@@ -224,12 +283,25 @@ void main() {
     if (cover(p + ivec2(0, 1)) < 2) open++;
     if (cover(p - ivec2(0, 1)) < 2) open++;
     if (open > 0 && open < 4 && mat != 12) shade = shade >= 3 ? min(shade + 1, ${SHADES - 1}) : max(shade - 1, 0);
-    o = vec4(texelFetch(u_ramps, ivec2(shade, mat), 0).rgb, 1.0);
+    vec3 col = texelFetch(u_ramps, ivec2(shade, mat), 0).rgb;
+    // Light that falls over solids (the aurora): dithered in as its own sky colour.
+    vec4 ov = vec4(0.0);
+    for (int i = 0; i < 4; i++) ov += texelFetch(u_glow, p * 2 + ivec2(i & 1, i >> 1), 0);
+    ov *= 0.25;
+    if (ov.a > 0.02) {
+      vec3 oc = ov.rgb / max(ov.a, 1e-3) * 0.75;
+      float best = 1e9;
+      vec3 pick = oc;
+      for (int i = 0; i < ${SKY_PALETTE.length}; i++) { vec3 e = u_sky[i] - oc; float dd = dot(e, e); if (dd < best) { best = dd; pick = u_sky[i]; } }
+      ivec2 ab = p % 4;
+      if (clamp(ov.a * 2.0, 0.0, 0.55) > (BAYER[ab.y * 4 + ab.x] + 0.5) / 16.0) col = pick;
+    }
+    o = vec4(col, 1.0);
     return;
   }
   vec3 g = vec3(0.0);
   for (int i = 0; i < 4; i++) g += texelFetch(u_glow, p * 2 + ivec2(i & 1, i >> 1), 0).rgb;
-  vec3 c = u_ink + g * 0.25;
+  vec3 c = u_ink + g * 0.25 + u_tint;
   // Nearest two sky colours, and a Bayer choice between them.
   float d1 = 1e9, d2 = 1e9;
   vec3 c1 = u_ink, c2 = u_ink;
@@ -292,7 +364,8 @@ export class SpaceView {
   private depth: WebGLRenderbuffer | null = null;
   private solidFbo: WebGLFramebuffer | null = null;
   private glowFbo: WebGLFramebuffer | null = null;
-  private scene: SpaceScene | null = null;
+  /** The scene being drawn, for the debug tools. */
+  scene: SpaceScene | null = null;
   private pose = new Float32Array(0);
   private artW = 0;
   private artH = 0;
@@ -413,7 +486,9 @@ export class SpaceView {
     const gl = this.gl;
     const scene = this.scene;
     if (!scene || !this.solidFbo || !this.glowFbo) return;
+    stepEvents(scene, fr.dt, fr);
     stepAliens(scene, fr.time, fr.dt, fr, fr.pointer);
+    const light = scene.events.light;
     poseBodies(scene, fr.time, this.pose);
     gl.bindTexture(gl.TEXTURE_2D, this.objTex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, scene.bodies.length * OBJ_TEXELS, 1, 0, gl.RGBA, gl.FLOAT, this.pose);
@@ -447,6 +522,8 @@ export class SpaceView {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     camera(this.solidProg);
     gl.uniform3f(this.u(this.solidProg, 'u_sun'), scene.sun[0], scene.sun[1], scene.sun[2]);
+    gl.uniform1f(this.u(this.solidProg, 'u_sunGain'), light.sun);
+    gl.uniform1f(this.u(this.solidProg, 'u_frizz'), light.frizz);
     gl.bindVertexArray(this.solidVao);
     gl.drawArrays(gl.POINTS, 0, scene.solidCount);
 
@@ -458,6 +535,10 @@ export class SpaceView {
     gl.blendFunc(gl.ONE, gl.ONE);
     camera(this.glowProg);
     gl.uniform1f(this.u(this.glowProg, 'u_maxPoint'), this.maxPoint);
+    gl.uniform1f(this.u(this.glowProg, 'u_glowGain'), light.glow);
+    gl.uniform1f(this.u(this.glowProg, 'u_antenna'), light.antenna);
+    gl.uniform1f(this.u(this.glowProg, 'u_aurora'), light.aurora);
+    gl.uniform1f(this.u(this.glowProg, 'u_frizz'), light.frizz);
     gl.bindVertexArray(this.glowVao);
     gl.drawArrays(gl.POINTS, 0, scene.glowCount);
 
@@ -468,6 +549,14 @@ export class SpaceView {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.artW, this.artH);
     gl.useProgram(this.postProg);
+    gl.uniform3f(this.u(this.postProg, 'u_tint'), 0.05 * light.warm, 0.018 * light.warm, 0);
+    const bh = scene.blackHole;
+    const bc = bh && scene.centres?.[bh.body];
+    if (bh && bc) {
+      const [sx, sy] = toScreen(scene, fr, bc);
+      const r = (bh.r * scene.focal) / (scene.focal - bc[2]) / this.pixel;
+      gl.uniform3f(this.u(this.postProg, 'u_bh'), sx / this.pixel, this.artH - sy / this.pixel, r);
+    } else gl.uniform3f(this.u(this.postProg, 'u_bh'), 0, 0, 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.solidTex);
     gl.activeTexture(gl.TEXTURE1);
