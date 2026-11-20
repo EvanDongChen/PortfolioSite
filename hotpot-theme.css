@@ -81,3 +81,11 @@ html.hotpot-theme {
   color: #fff4e0;
   text-shadow: 2px 2px 0 #2a0604, -1px -1px 0 #2a0604, 1px -1px 0 #2a0604, -1px 1px 0 #2a0604;
 }
+
+/* Over food in the broth: the hand, since a click sends the chopsticks for it. */
+html.hotpot-theme[data-hotpot-food],
+html.hotpot-theme[data-hotpot-food] body,
+html.hotpot-theme[data-hotpot-food] main,
+html.hotpot-theme[data-hotpot-food] section {
+  cursor: var(--px-hand) 6 0, pointer;
+}

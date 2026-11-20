@@ -42,6 +42,8 @@ export interface Chopsticks {
   tip: V3;
   gap: number;
   from: V3;
+  /** Seconds to come down: quicker when someone asked for it. */
+  dur: number;
 }
 
 export interface Ripple { x: number; y: number; t0: number; a: number }
@@ -147,12 +149,12 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
 
   const stickLen = 360 * s;
   const sticks: Chopsticks[] = [];
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     const a = B.body({ kind: 'chopstick', pos: PARKED });
     buildChopstick(B, a, stickLen, s);
     const b = B.body({ kind: 'chopstick', pos: PARKED });
     buildChopstick(B, b, stickLen, s);
-    sticks.push({ a, b, state: 'idle', t: 0, item: null, dir: [0, 0, 1], tip: PARKED, gap: 0, from: PARKED });
+    sticks.push({ a, b, state: 'idle', t: 0, item: null, dir: [0, 0, 1], tip: PARKED, gap: 0, from: PARKED, dur: 1.4 });
   }
 
   // Splashes: droplets thrown out and back down where something lands.
@@ -297,15 +299,46 @@ const startPluck = (scene: HotpotScene, cam: HotpotCamera) => {
     if (score > bestScore) { bestScore = score; best = it; }
   }
   if (!best) return false;
-  const sx = best.x < life.viewW / 2 ? -1 : 1;
+  sendSticks(life, pair, best, 1.4);
+  life.eager = false;
+  return true;
+};
+
+/** Sends `pair` down for `it`, coming in from the nearer side of the page. */
+const sendSticks = (life: HotpotLife, pair: Chopsticks, it: Item, dur: number) => {
+  const sx = it.x < life.viewW / 2 ? -1 : 1;
   pair.dir = norm([sx * 0.55, -0.3, 0.78]);
-  pair.item = best;
+  pair.item = it;
   pair.state = 'down';
   pair.t = 0;
-  pair.from = [best.x + pair.dir[0] * 520, best.y + pair.dir[1] * 520, best.z + pair.dir[2] * 520];
+  pair.dur = dur;
+  pair.from = [it.x + pair.dir[0] * 520, it.y + pair.dir[1] * 520, it.z + pair.dir[2] * 520];
   pair.tip = pair.from;
   pair.gap = 20 * life.s;
-  life.eager = false;
+};
+
+/** The ingredient floating under page point (x, y), if any (garnish too small to pick up doesn't count). */
+export const foodAt = (scene: HotpotScene, x: number, y: number): Item | null => {
+  const life = scene.life;
+  let best: Item | null = null, bestD = Infinity;
+  for (const it of life.items) {
+    if (it.state !== 'float' || it.R < 9 * life.s) continue;
+    const d = Math.hypot(it.x - x, it.y - y) / it.R;
+    if (d < 1 && d < bestD) { bestD = d; best = it; }
+  }
+  return best;
+};
+
+/** Someone clicked the food at page point (x, y): a free pair of chopsticks comes straight down for it, cooked or not. */
+export const grabAt = (scene: HotpotScene, x: number, y: number) => {
+  const life = scene.life;
+  const it = foodAt(scene, x, y);
+  if (!it || life.sticks.some(p => p.item === it)) return false;
+  // A free pair, or failing that the one that has furthest to go.
+  const pair = life.sticks.find(p => p.state === 'idle') ?? life.sticks.find(p => p.state === 'down' && p.t < 0.5);
+  if (!pair) return false;
+  if (pair.item && pair.item.state === 'held') pair.item.state = 'float';
+  sendSticks(life, pair, it, 0.9);
   return true;
 };
 
@@ -345,7 +378,7 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
   p.t += dt;
   const top = it.R * 0.35 + 4 * life.s;
   if (p.state === 'down') {
-    const u = Math.min(1, p.t / 1.4);
+    const u = Math.min(1, p.t / p.dur);
     const goal: V3 = [it.x, it.y, it.z + top];
     const e = ease(u);
     p.tip = [p.from[0] + (goal[0] - p.from[0]) * e, p.from[1] + (goal[1] - p.from[1]) * e, p.from[2] + (goal[2] - p.from[2]) * e];

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Clear, HotpotScene, buildScene } from '../lib/hotpot';
-import { pluckNow, pourIn, rollingBoil } from '../lib/hotpotLife';
+import { foodAt, grabAt, pluckNow, pourIn, rollingBoil } from '../lib/hotpotLife';
 import { HotpotDebugActions } from './HotpotDebugPanel';
 import { HotpotView } from '../lib/hotpotView';
 import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext';
@@ -105,6 +105,20 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
     };
     window.addEventListener('pointermove', onPointer, { passive: true });
     const onLeave = () => { pointer = null; };
+    // Food under the cursor (not under a card or a control) can be clicked to send the chopsticks for it.
+    const OVER_UI = 'a, button, input, textarea, select, label, header, .content-card, .project-card, [data-reef-ui], [role="dialog"]';
+    const overBroth = (e: MouseEvent) => !(e.target as Element | null)?.closest?.(OVER_UI);
+    let showingFood = false;
+    const onHover = (e: PointerEvent) => {
+      const food = !!view.scene && overBroth(e) && !!foodAt(view.scene, e.clientX, e.clientY + window.scrollY);
+      if (food !== showingFood) { showingFood = food; document.documentElement.toggleAttribute('data-hotpot-food', food); }
+    };
+    const onClick = (e: MouseEvent) => {
+      if (!view.scene || !overBroth(e)) return;
+      grabAt(view.scene, e.clientX, e.clientY + window.scrollY);
+    };
+    window.addEventListener('pointermove', onHover, { passive: true });
+    window.addEventListener('click', onClick);
     document.documentElement.addEventListener('mouseleave', onLeave);
 
     let raf = 0;
@@ -162,6 +176,9 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
       observer.disconnect();
       window.removeEventListener('resize', maybeRebuild);
       window.removeEventListener('pointermove', onPointer);
+      window.removeEventListener('pointermove', onHover);
+      window.removeEventListener('click', onClick);
+      document.documentElement.removeAttribute('data-hotpot-food');
       document.documentElement.removeEventListener('mouseleave', onLeave);
       document.removeEventListener('visibilitychange', onVisibility);
       worker?.terminate();
