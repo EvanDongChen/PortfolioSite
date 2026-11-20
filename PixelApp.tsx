@@ -6,7 +6,6 @@ import BackToTopButton from './components/BackToTopButton';
 import ThemeSwitch from './components/ThemeSwitch';
 import PerformanceButton from './components/PerformanceButton';
 import PerformancePanel from './components/PerformancePanel';
-import DiveGauge from './components/DiveGauge';
 import DiveCard from './components/DiveCard';
 import { OceanStats } from './lib/pixelOcean';
 import { PIXEL_COLORS } from './lib/themeColors';
@@ -66,7 +65,6 @@ const PixelApp: React.FC = () => {
         showSandDune={false}
         heroExtra={HERO_EXTRA}
       />
-      <DiveGauge />
       <BackToTopButton />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
