@@ -150,3 +150,32 @@ html.space-theme {
 @media (prefers-reduced-motion: reduce) {
   .space-theme .hero-name::after { animation: none; }
 }
+
+/* Sub-headings in the same face: the line under the name, job and degree titles, project
+   titles and the skills' group headings. Smaller, with just two stripes so they echo the
+   headings without competing with them. Dates, tags, buttons and nav stay in the pixel face.
+   (html.pixel-theme.space-theme outranks pixel-theme.css's own rules for these.) */
+html.pixel-theme.space-theme .hero-tagline,
+html.pixel-theme.space-theme .content-card h3,
+html.pixel-theme.space-theme .project-title,
+html.pixel-theme.space-theme .card-heading,
+html.pixel-theme.space-theme .eyebrow {
+  font-family: var(--px-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  -webkit-text-stroke: 0;
+  text-shadow: 0 0.07em 0 #ff7a21, 0 0.14em 0 #c42cc4;
+}
+html.pixel-theme.space-theme .hero-tagline {
+  font-size: clamp(1.15rem, 2.4vw, 1.6rem);
+  text-shadow: 0 0.07em 0 #44226c;
+}
+html.pixel-theme.space-theme .content-card h3 { font-size: 1.3rem; }
+html.pixel-theme.space-theme .project-title { font-size: 1.4rem; }
+html.pixel-theme.space-theme .card-heading,
+html.pixel-theme.space-theme .eyebrow {
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0.08em 0 #44226c;
+}
