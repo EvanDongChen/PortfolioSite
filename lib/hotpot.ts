@@ -26,44 +26,74 @@ export const DISC = 0.85;
 
 /**
  * Material ramps, darkest first (6 shades each). A surfel flagged `F.cook`
- * turns into the ramp right after its own as its ingredient cooks, so raw and
- * cooked pairs sit next to each other.
+ * turns into the ramp right after its own as its ingredient cooks, and one
+ * flagged `F.over` into the one after that if it's left in too long, so raw,
+ * cooked and overcooked sit next to each other.
  */
 export const RAMPS: string[][] = [
   /* 0 steel        */ ['#1a1414', '#3a3434', '#5e5a58', '#8a8682', '#bab6ae', '#f0ece2'],
   /* 1 beef raw     */ ['#3a0a12', '#5e1018', '#861c24', '#ac2c34', '#cc4448', '#ec6c6a'],
   /* 2 beef cooked  */ ['#2a1410', '#3e221a', '#563428', '#6e4836', '#8a5e48', '#a87a5c'],
-  /* 3 fat raw      */ ['#5a3a40', '#946e74', '#c4a2a4', '#e6cac8', '#f8e8e6', '#ffffff'],
-  /* 4 fat cooked   */ ['#4a3a30', '#6a5444', '#8a725a', '#a89072', '#c6ae8c', '#e2cca8'],
-  /* 5 shrimp raw   */ ['#26283a', '#46485e', '#6c7086', '#989eac', '#c6cad2', '#eef0f2'],
-  /* 6 shrimp done  */ ['#5a1410', '#982a16', '#d44e28', '#f27e48', '#ffb486', '#ffe6cc'],
-  /* 7 tofu         */ ['#4a4030', '#887a5e', '#c2b28c', '#e4d8b6', '#f6eed6', '#fffcf0'],
-  /* 8 tofu stained */ ['#5a2010', '#923e1c', '#c4682e', '#e6944a', '#f8be78', '#ffecc4'],
-  /* 9 dough raw    */ ['#5a5450', '#98928a', '#ccc6ba', '#ebe5d8', '#f9f5ec', '#ffffff'],
-  /* 10 dough done  */ ['#3e4234', '#767c62', '#aab292', '#d0d6b6', '#e8ecd2', '#f8faea'],
-  /* 11 leaf        */ ['#0e2a14', '#1a4a1e', '#2a7028', '#4a9a34', '#7cc448', '#c0ec7a'],
-  /* 12 leaf cooked */ ['#082010', '#103a18', '#185a22', '#24802c', '#46a83a', '#8cd060'],
-  /* 13 stem        */ ['#3a4a2a', '#6a8a4a', '#a0c078', '#cce4a4', '#e8f6cc', '#fbfff0'],
-  /* 14 shiitake    */ ['#1e0e08', '#3a1e10', '#5e341c', '#86502e', '#b07a4c', '#d8a878'],
-  /* 15 enoki       */ ['#4a4030', '#80745a', '#b8aa84', '#ddd2ac', '#f2eccc', '#fffbea'],
-  /* 16 lotus       */ ['#4a3a34', '#8a766a', '#bca898', '#ddccbc', '#f2e6d8', '#fffaf2'],
-  /* 17 corn        */ ['#4a2a04', '#8a5a08', '#c89014', '#f0c030', '#ffe060', '#fff4a8'],
-  /* 18 chili       */ ['#2a0404', '#5a0a0a', '#9a140e', '#d02a14', '#f0502a', '#ff9060'],
-  /* 19 wood ear    */ ['#0e0608', '#1e0c10', '#321418', '#4a2024', '#683230', '#8c4c40'],
-  /* 20 anise       */ ['#1a0a04', '#3a1a0a', '#5e2e14', '#844420', '#a86434', '#cc8a54'],
-  /* 21 scallion    */ ['#123a10', '#1e5a16', '#2e8420', '#4cac2e', '#86d44a', '#cef68a'],
-  /* 22 wood        */ ['#2a1408', '#4a2410', '#74401c', '#a0642c', '#c88c48', '#ecbc78'],
-  /* 23 goji        */ ['#3a0806', '#6a120a', '#a8200e', '#e03e16', '#ff6e2a', '#ffb070'],
-  /* 24 pepper      */ ['#1a0806', '#2e100a', '#46180e', '#602414', '#7a321c', '#984428'],
-  /* 25 fishball    */ ['#4a4a50', '#88888e', '#c2c2c0', '#e2e0da', '#f6f4ee', '#ffffff'],
-  /* 26 fishball pf */ ['#4a4438', '#8a8270', '#c4baa0', '#e4dcc4', '#f6f0e0', '#fffcf4'],
-  /* 27 lacquer     */ ['#2a0408', '#520a10', '#86121a', '#b82026', '#e04434', '#ff8060'],
+  /* 3 beef over    */ ['#24181a', '#382a2a', '#4e403c', '#665850', '#807268', '#9c8e84'],
+  /* 4 fat raw      */ ['#5a3a40', '#946e74', '#c4a2a4', '#e6cac8', '#f8e8e6', '#ffffff'],
+  /* 5 fat cooked   */ ['#4a3a30', '#6a5444', '#8a725a', '#a89072', '#c6ae8c', '#e2cca8'],
+  /* 6 fat over     */ ['#3e3630', '#5a5048', '#766a5e', '#928676', '#aca08e', '#c6baa6'],
+  /* 7 shrimp raw   */ ['#26283a', '#46485e', '#6c7086', '#989eac', '#c6cad2', '#eef0f2'],
+  /* 8 shrimp done  */ ['#5a1410', '#982a16', '#d44e28', '#f27e48', '#ffb486', '#ffe6cc'],
+  /* 9 tofu         */ ['#4a4030', '#887a5e', '#c2b28c', '#e4d8b6', '#f6eed6', '#fffcf0'],
+  /* 10 tofu stained*/ ['#5a2010', '#923e1c', '#c4682e', '#e6944a', '#f8be78', '#ffecc4'],
+  /* 11 dough raw   */ ['#5a5450', '#98928a', '#ccc6ba', '#ebe5d8', '#f9f5ec', '#ffffff'],
+  /* 12 dough done  */ ['#3e4234', '#767c62', '#aab292', '#d0d6b6', '#e8ecd2', '#f8faea'],
+  /* 13 leaf        */ ['#0e2a14', '#1a4a1e', '#2a7028', '#4a9a34', '#7cc448', '#c0ec7a'],
+  /* 14 leaf cooked */ ['#082010', '#103a18', '#185a22', '#24802c', '#46a83a', '#8cd060'],
+  /* 15 leaf over   */ ['#0e1408', '#1a240e', '#2a3614', '#3c4a1c', '#526226', '#6c7c34'],
+  /* 16 stem        */ ['#3a4a2a', '#6a8a4a', '#a0c078', '#cce4a4', '#e8f6cc', '#fbfff0'],
+  /* 17 shiitake    */ ['#1e0e08', '#3a1e10', '#5e341c', '#86502e', '#b07a4c', '#d8a878'],
+  /* 18 enoki       */ ['#4a4030', '#80745a', '#b8aa84', '#ddd2ac', '#f2eccc', '#fffbea'],
+  /* 19 enoki       */ ['#4a4030', '#80745a', '#b8aa84', '#ddd2ac', '#f2eccc', '#fffbea'],
+  /* 20 enoki limp  */ ['#3a3424', '#5e5640', '#82785a', '#a49a78', '#c2b896', '#dcd4b4'],
+  /* 21 lotus       */ ['#4a3a34', '#8a766a', '#bca898', '#ddccbc', '#f2e6d8', '#fffaf2'],
+  /* 22 corn        */ ['#4a2a04', '#8a5a08', '#c89014', '#f0c030', '#ffe060', '#fff4a8'],
+  /* 23 chili       */ ['#2a0404', '#5a0a0a', '#9a140e', '#d02a14', '#f0502a', '#ff9060'],
+  /* 24 wood ear    */ ['#0e0608', '#1e0c10', '#321418', '#4a2024', '#683230', '#8c4c40'],
+  /* 25 anise       */ ['#1a0a04', '#3a1a0a', '#5e2e14', '#844420', '#a86434', '#cc8a54'],
+  /* 26 scallion    */ ['#123a10', '#1e5a16', '#2e8420', '#4cac2e', '#86d44a', '#cef68a'],
+  /* 27 wood        */ ['#2a1408', '#4a2410', '#74401c', '#a0642c', '#c88c48', '#ecbc78'],
+  /* 28 goji        */ ['#3a0806', '#6a120a', '#a8200e', '#e03e16', '#ff6e2a', '#ffb070'],
+  /* 29 pepper      */ ['#1a0806', '#2e100a', '#46180e', '#602414', '#7a321c', '#984428'],
+  /* 30 fishball    */ ['#4a4a50', '#88888e', '#c2c2c0', '#e2e0da', '#f6f4ee', '#ffffff'],
+  /* 31 fishball pf */ ['#4a4438', '#8a8270', '#c4baa0', '#e4dcc4', '#f6f0e0', '#fffcf4'],
+  /* 32 lacquer     */ ['#2a0408', '#520a10', '#86121a', '#b82026', '#e04434', '#ff8060'],
+  /* 33 fish raw    */ ['#2e2a34', '#4a4652', '#6e6a76', '#948e98', '#bab4bc', '#dcd8de'],
+  /* 34 fish cooked */ ['#4a4440', '#86807a', '#bcb6ae', '#e0dcd4', '#f4f2ec', '#ffffff'],
+  /* 35 fish over   */ ['#4a4438', '#867e6c', '#bab09a', '#dcd4be', '#f0ead8', '#fcf8ee'],
+  /* 36 noodle raw  */ ['#4a4640', '#86827a', '#bcb8ae', '#dedad0', '#f2f0ea', '#ffffff'],
+  /* 37 noodle clear*/ ['#2e3a3e', '#46585c', '#6a8284', '#94acac', '#c4dcd8', '#f4fffc'],
+  /* 38 quail shell */ ['#4a3826', '#7a6040', '#a8885e', '#cbaa7e', '#e2c69c', '#f4e0be'],
+  /* 39 shell speck */ ['#1e140c', '#2e2016', '#3e2c1e', '#4e3a28', '#5e4832', '#70583e'],
+  /* 40 meat raw    */ ['#3a1a18', '#5e2c28', '#86443c', '#a8604e', '#c47e66', '#dca088'],
+  /* 41 meat cooked */ ['#26140c', '#3e2414', '#5a381e', '#78502c', '#946c3e', '#b08a56'],
+  /* 42 tripe       */ ['#3a3830', '#5e5a4e', '#86806e', '#aaa48e', '#c8c2aa', '#e2dcc4'],
+  /* 43 rice raw    */ ['#4a4844', '#82807a', '#b6b2aa', '#d8d4cc', '#ece8e0', '#f8f6f0'],
+  /* 44 rice glossy */ ['#40444a', '#767c84', '#aab0b6', '#d2d8dc', '#eef2f4', '#ffffff'],
+  /* 45 tofu puff   */ ['#4a2a08', '#7e4a14', '#b47224', '#d8963a', '#eeb858', '#fcd884'],
+  /* 46 puff soaked */ ['#2a1406', '#46220c', '#663614', '#864c20', '#a4642e', '#c08040'],
+  /* 47 crab red    */ ['#3a0a0a', '#6a1410', '#a02418', '#cc3c24', '#ec6038', '#ff9060'],
+  /* 48 squid raw   */ ['#3a2c34', '#5c4a54', '#806c76', '#a49098', '#c6b4ba', '#e4d8dc'],
+  /* 49 squid done  */ ['#4a4644', '#86827e', '#bcb8b2', '#e0ddd6', '#f4f2ee', '#ffffff'],
+  /* 50 napa        */ ['#2a3a1a', '#4a6430', '#74904a', '#a2bc70', '#cce098', '#ecf8c4'],
+  /* 51 napa limp   */ ['#26301e', '#3e4c32', '#5a6a48', '#788a60', '#98aa7c', '#b8c89a'],
+  /* 52 napa rib    */ ['#4a4a3c', '#7e8068', '#b0b298', '#d6d8c0', '#eef0dc', '#fcfff2'],
+  /* 53 rib limp    */ ['#34382c', '#565c48', '#7a8266', '#9ea688', '#bec6a6', '#dae0c4'],
+  /* 54 egg ribbon  */ ['#5a4a1a', '#8a7430', '#bca24a', '#e2c86a', '#f6e294', '#fff6c8'],
 ];
 export const SHADES = 6;
 export const M = {
-  steel: 0, beef: 1, fat: 3, shrimp: 5, tofu: 7, dough: 9, leaf: 11, stem: 13,
-  shiitake: 14, enoki: 15, lotus: 16, corn: 17, chili: 18, woodear: 19, anise: 20,
-  scallion: 21, wood: 22, goji: 23, pepper: 24, fishball: 25, lacquer: 27,
+  steel: 0, beef: 1, fat: 4, shrimp: 7, tofu: 9, dough: 11, leaf: 13, stem: 16,
+  shiitake: 17, enoki: 18, lotus: 21, corn: 22, chili: 23, woodear: 24, anise: 25,
+  scallion: 26, wood: 27, goji: 28, pepper: 29, fishball: 30, lacquer: 32,
+  fish: 33, noodle: 36, shell: 38, speck: 39, meat: 40, tripe: 42, rice: 43, puff: 45,
+  crab: 47, squid: 48, napa: 50, rib: 52, yolk: 54,
 } as const;
 
 /** What the broth, steam and splashes snap to: chili-oil reds, oil gold, bone-broth creams, a few garnish greens. */
@@ -80,17 +110,31 @@ export const BROTH_PALETTE = [
 /** Which broth each palette colour belongs to (-1 mala, 1 bone, 0 either), so neither side dithers in the other's colours. */
 export const PALETTE_SIDE = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, 0, 0];
 
-/** Surfel flags. Bits 8–11 hold the surfel's place in its cooking order (0 cooks first). */
+/** Surfel flags. Bits 8–11 hold the surfel's place in its cooking order (0 cooks first), bits 12–15 the piece it breaks off with. */
 export const F = {
   emissive: 1, twoSided: 2,
   /** Turns into the next ramp as the body's cook state (params[2]) passes its place in the order. */
   cook: 4,
-  /** Curls up at both ends along local x by params[0] (beef as it cooks). */
+  /** Curls up at both ends along local x by params[0] (beef as it cooks; negative droops). */
   curl: 8,
   /** Wet and shiny: a highlight where it faces the lamp. */
   gloss: 16,
+  /** Turns into the ramp two after its own as the body's overcook state (params[1]) passes its place. */
+  over: 32,
+  /** Drifts away from the middle with its piece as params[1] rises (fish flaking, crab sticks unrolling, shell cracking). */
+  flake: 64,
+  /** With flake: sinks as it goes, and is gone by the end (eggshell). */
+  shed: 128,
+  /** Ripples along local x as time passes (tripe). */
+  ripple: 1 << 17,
+  /** Curls along local y too, into a dome (squid scoring opening into a pinecone). */
+  curl2: 1 << 18,
 } as const;
 export const cookOrder = (k: number) => Math.max(0, Math.min(15, Math.round(k * 15))) << 8;
+/** The piece a surfel breaks off with: 0 stays put; 1–8 head off at (piece - 1) × 45°. */
+export const piece = (p: number) => (p & 15) << 12;
+/** The piece heading outward at angle `a` (radians). */
+export const pieceAt = (a: number) => piece(1 + (Math.round((((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)) % 8));
 /** Glow flags. */
 export const G = {
   /** Rises towards the camera, spreading and fading (steam). */
@@ -104,7 +148,7 @@ export const G = {
 export const SOLID_STRIDE = 11;
 /** Floats per glow: x y z, radius, r g b, object, flags, seed, length. */
 export const GLOW_STRIDE = 11;
-/** Texels (RGBA floats) per object: three rows of a 3x4 matrix, then its state (curl, -, cook, phase). */
+/** Texels (RGBA floats) per object: three rows of a 3x4 matrix, then its state (curl, overcook, cook, phase). */
 export const OBJ_TEXELS = 4;
 
 // ------------------------------------------------------------------ maths ---
@@ -156,6 +200,12 @@ export const IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 export const rotX = (t: number) => { const c = Math.cos(t), s = Math.sin(t); return [1, 0, 0, 0, c, -s, 0, s, c]; };
 export const rotY = (t: number) => { const c = Math.cos(t), s = Math.sin(t); return [c, 0, s, 0, 1, 0, -s, 0, c]; };
 export const rotZ = (t: number) => { const c = Math.cos(t), s = Math.sin(t); return [c, -s, 0, s, c, 0, 0, 0, 1]; };
+/** A rotation by `t` about the unit axis `a` (row-major). */
+export const rotAxis = (a: V3, t: number) => {
+  const c = Math.cos(t), s = Math.sin(t), k = 1 - c;
+  const [x, y, z] = a;
+  return [c + x * x * k, x * y * k - z * s, x * z * k + y * s, y * x * k + z * s, c + y * y * k, y * z * k - x * s, z * x * k - y * s, z * y * k + x * s, c + z * z * k];
+};
 /** A rotation (row-major) whose local +x points along `x`, with local +z as near world +z as it can be. */
 export const frameAlong = (x: V3): number[] => {
   const ax = norm(x);
@@ -171,7 +221,8 @@ export type BodyKind = 'wall' | 'steam' | 'splash' | 'chopstick' | Ingredient;
 /** Everything that goes into the pot. */
 export type Ingredient =
   | 'beef' | 'shrimp' | 'tofu' | 'fishball' | 'dumpling' | 'egg' | 'bokchoy' | 'shiitake' | 'enoki'
-  | 'lotus' | 'corn' | 'woodear' | 'chili' | 'pepper' | 'anise' | 'goji' | 'scallion';
+  | 'lotus' | 'corn' | 'woodear' | 'chili' | 'pepper' | 'anise' | 'goji' | 'scallion'
+  | 'fish' | 'noodles' | 'quail' | 'meatball' | 'tripe' | 'ricecake' | 'puff' | 'crab' | 'squid' | 'napa';
 
 export interface Body {
   kind: BodyKind;
@@ -183,7 +234,7 @@ export interface Body {
   live?: { c: V3; rot: number[] };
   /** Squash and stretch along local x, y, z. */
   scale?: V3;
-  /** Curl, unused, cook, phase (see OBJ_TEXELS). */
+  /** Curl, overcook, cook, phase (see OBJ_TEXELS). */
   params?: [number, number, number, number];
 }
 
@@ -341,6 +392,16 @@ export const INGREDIENTS: Record<Ingredient, { r: number; sink: number; cook: nu
   anise: { r: 14, sink: 1, cook: 0 },
   goji: { r: 8, sink: 1, cook: 0 },
   scallion: { r: 9, sink: 1, cook: 0 },
+  fish: { r: 44, sink: 1, cook: 14 },
+  noodles: { r: 44, sink: 2, cook: 26 },
+  quail: { r: 16, sink: 5, cook: 30 },
+  meatball: { r: 22, sink: 6, cook: 34, rawSink: 36 },
+  tripe: { r: 44, sink: 1, cook: 0 },
+  ricecake: { r: 26, sink: 4, cook: 28 },
+  puff: { r: 26, sink: 6, cook: 30 },
+  crab: { r: 34, sink: 3, cook: 20 },
+  squid: { r: 34, sink: 2, cook: 14 },
+  napa: { r: 60, sink: -3, cook: 22 },
 };
 
 /** Builds one ingredient's surfels into `obj`, `s` times full size. */
@@ -360,7 +421,7 @@ export const buildIngredient = (B: Builder, obj: number, kind: Ingredient, s: nu
         const streak = Math.abs(Math.sin(u * 0.11 + v * 0.05 + (n2(u, v, 0.04, 3) - 0.5) * 7));
         const fat = streak > 0.9 || n2(u, v, 0.09, 5) > 0.7;
         const order = Math.min(1, e * 0.75 + n2(u, v, 0.08, 9) * 0.5);
-        return { h: 3 + Math.sin(u * 0.16 + v * 0.05) * 1.3, mat: fat ? M.fat : M.beef, alb: 0.5 + (n2(u, v, 0.2, 7) - 0.5) * 0.5 + (fat ? 0.1 : 0), flags: F.cook | cookOrder(1 - order) };
+        return { h: 3 + Math.sin(u * 0.16 + v * 0.05) * 1.3, mat: fat ? M.fat : M.beef, alb: 0.5 + (n2(u, v, 0.2, 7) - 0.5) * 0.5 + (fat ? 0.1 : 0), flags: F.cook | F.over | cookOrder(1 - order) };
       }, -1, F.curl | F.gloss);
       break;
     }
@@ -432,9 +493,9 @@ export const buildIngredient = (B: Builder, obj: number, kind: Ingredient, s: nu
           h: (leaf ? 2.5 : 5 - Math.abs(v) / w * 2.5) + (n2(u, v, 0.3, 4) - 0.5) * 1.8,
           mat: leaf ? M.leaf : M.stem,
           alb: leaf ? 0.5 + (vein ? 0.18 : 0) + (n2(u, v, 0.2, 3) - 0.5) * 0.35 : 0.55 + Math.cos(v * 0.9) * 0.1,
-          flags: leaf ? F.cook | cookOrder(1 - Math.abs(v) / w) : 0,
+          flags: leaf ? F.cook | F.over | cookOrder(1 - Math.abs(v) / w) : 0,
         };
-      }, -1, F.gloss);
+      }, -1, F.gloss | F.curl);
       break;
     }
     case 'shiitake': {
@@ -465,11 +526,11 @@ export const buildIngredient = (B: Builder, obj: number, kind: Ingredient, s: nu
           const ca = Math.cos(ang), sa = Math.sin(ang);
           // Along and across this stalk.
           const al = du * ca + v * sa, ac = -du * sa + v * ca;
-          if (Math.hypot(al - reach, ac) < 6 * s) return { h: 5.5, mat: M.enoki, alb: 0.78 };
-          if (al > 0 && al < reach && Math.abs(ac) < 3.4 * s) return { h: 3.5, mat: M.enoki, alb: 0.5 + (k % 2) * 0.08 };
+          if (Math.hypot(al - reach, ac) < 6 * s) return { h: 5.5, mat: M.enoki, alb: 0.78, flags: F.over | cookOrder(rand()) };
+          if (al > 0 && al < reach && Math.abs(ac) < 3.4 * s) return { h: 3.5, mat: M.enoki, alb: 0.5 + (k % 2) * 0.08, flags: F.over | cookOrder(1 - al / reach) };
         }
         return null;
-      }, 0, F.gloss);
+      }, 0, F.gloss | F.curl);
       break;
     }
     case 'lotus': {
@@ -542,6 +603,117 @@ export const buildIngredient = (B: Builder, obj: number, kind: Ingredient, s: nu
         if (r > 1 || r < 0.5) return null;
         return { h: 1.5, mat: M.scallion, alb: 0.45 + (r - 0.5) * 0.5 };
       }, 0);
+      break;
+    }
+    case 'fish': {
+      // A fillet: glassy grey going opaque white, with the lines of its flakes; left in, it falls apart along them.
+      const rx = R, ry = R * 0.48;
+      slab(B, obj, rx, ry, sp, (u, v) => {
+        const taper = 1 - 0.35 * Math.max(0, u / rx);
+        const e = (u / rx) ** 2 + (v / (ry * taper)) ** 2;
+        if (e > 1) return null;
+        const flake = Math.abs(Math.sin((u + v * v * 0.025) * 0.26));
+        const r = Math.sqrt(e);
+        return {
+          h: 3 + (1 - e) * 2.5, mat: M.fish, alb: 0.5 + (flake < 0.18 ? -0.16 : 0.04) + (n2(u, v, 0.2) - 0.5) * 0.2,
+          flags: F.cook | F.over | F.flake | cookOrder(r * 0.7 + rand() * 0.3) | (r < 0.45 || flake < 0.18 ? 0 : pieceAt(Math.atan2(v, u) + (n2(u, v, 0.08, 6) - 0.5) * 1.5)),
+        };
+      }, -1, F.gloss);
+      break;
+    }
+    case 'noodles': {
+      // A loose tangle of glass noodles, opaque while raw, clear once cooked.
+      // A loose skein: long wavy strands lying side by side, crossing now and then.
+      for (let k = 0; k < 4; k++) {
+        const off = (k - 1.5) * 8.5 * s, ph = rand() * 6, amp = (3 + rand() * 4) * s;
+        tube(B, obj, sp * 0.8, t => ({ x: (t - 0.5) * R * 2, y: off + Math.sin(t * 9 + ph) * amp + Math.sin(t * Math.PI) * 6 * s, z: Math.sin(t * 13 + k) * 1.2, r: 3.3 * s }),
+          () => ({ mat: M.noodle, alb: 0.6, flags: F.cook | cookOrder(rand()) }), F.gloss);
+      }
+      break;
+    }
+    case 'quail': {
+      // A quail egg still in its speckled shell; the boil cracks it and the shell falls away in pieces.
+      ellipsoid(B, obj, R * 0.9, R * 0.72, R * 0.64, sp * 0.8, () => ({ mat: M.tofu, alb: 0.62, flags: F.cook | cookOrder(rand()) }), [0, 0, 0], F.gloss);
+      ellipsoid(B, obj, R, R * 0.8, R * 0.72, sp * 0.8, d => {
+        const speck = fbm(d[0] * 6, d[1] * 6, d[2] * 6, seed) > 0.6;
+        return { mat: speck ? M.speck : M.shell, alb: speck ? 0.45 : 0.55 + (fbm(d[0] * 3, d[1] * 3, d[2] * 3, seed + 4) - 0.5) * 0.3, flags: F.flake | F.shed | pieceAt(Math.atan2(d[1], d[0]) + (rand() - 0.5) * 0.6) };
+      });
+      break;
+    }
+    case 'meatball':
+      // Bumpy, pink raw and browning as it cooks.
+      ellipsoid(B, obj, R, R, R * 0.95, sp, d => {
+        const bump = fbm(d[0] * 5, d[1] * 5, d[2] * 5, seed);
+        return { mat: M.meat, alb: 0.5 + (bump - 0.5) * 0.9, flags: F.cook | cookOrder(rand()) };
+      }, [0, 0, 0], 0, -1);
+      break;
+    case 'tripe': {
+      // A sheet of honeycomb tripe: raised ridges round sunken cells, rippling as it floats.
+      const cell = 12 * s;
+      slab(B, obj, R, R * 0.6, sp * 0.8, (u, v) => {
+        const m = Math.max(Math.abs(u) / R, Math.abs(v) / (R * 0.6));
+        if (m > 1 - n2(u, v, 0.05) * 0.12) return null;
+        // Nearest centre on a hexagonal lattice.
+        const row = Math.round(v / (cell * 0.866));
+        const cx = (Math.round(u / cell - (row & 1) * 0.5) + (row & 1) * 0.5) * cell;
+        const d = Math.hypot(u - cx, v - row * cell * 0.866) / cell;
+        const ridge = d > 0.34;
+        return { h: 2 + (ridge ? 2 : 0), mat: M.tripe, alb: ridge ? 0.72 : 0.12 };
+      }, -1, F.ripple | F.gloss);
+      break;
+    }
+    case 'ricecake': {
+      // A white oval of rice cake: matte raw, glossy once cooked.
+      slab(B, obj, R, R * 0.55, sp, (u, v) => {
+        const e = (u / R) ** 2 + (v / (R * 0.55)) ** 2;
+        if (e > 1) return null;
+        return { h: 3 + Math.sqrt(1 - e) * 6, mat: M.rice, alb: 0.55 + (n2(u, v, 0.2) - 0.5) * 0.15, flags: F.cook | cookOrder(rand()) };
+      }, -2, F.gloss);
+      break;
+    }
+    case 'puff': {
+      // A golden fried tofu puff, crinkled, darkening as it soaks up broth.
+      slab(B, obj, R, R, sp, (u, v) => {
+        const m = (Math.abs(u) / R) ** 4 + (Math.abs(v) / R) ** 4;
+        if (m > 1) return null;
+        const crinkle = n2(u, v, 0.25);
+        return { h: 4 + Math.sqrt(1 - m) * R * 0.45 + (crinkle - 0.5) * 3, mat: M.puff, alb: 0.5 + (crinkle - 0.5) * 0.6, flags: F.cook | cookOrder(m * 0.6 + rand() * 0.4) };
+      }, -2, F.gloss);
+      break;
+    }
+    case 'crab': {
+      // A crab stick, red along the top and white beneath, that loosens into ribbons as it heats.
+      tube(B, obj, sp * 0.8, t => ({ x: (t - 0.5) * R * 2, y: 0, r: 7 * s }), (t, around) => {
+        const top = around > 0.3 && around < 0.7;
+        const p = around < 0.33 ? piece(3) : around > 0.67 ? piece(7) : 0;
+        return { mat: top ? M.crab : M.fishball, alb: top ? 0.5 + Math.sin(t * 40) * 0.08 : 0.6, flags: F.flake | p };
+      }, F.gloss);
+      break;
+    }
+    case 'squid': {
+      // A piece of squid scored in a diamond grid, translucent raw; cooked it turns white and curls into a pinecone.
+      const ry = R * 0.62;
+      slab(B, obj, R, ry, sp * 0.8, (u, v) => {
+        const m = (Math.abs(u) / R) ** 3 + (Math.abs(v) / ry) ** 3;
+        if (m > 1) return null;
+        const score = Math.abs(Math.sin((u + v) * 0.24)) < 0.3 || Math.abs(Math.sin((u - v) * 0.24)) < 0.3;
+        return { h: 3 - (score ? 1.5 : 0), mat: M.squid, alb: score ? 0.12 : 0.62, flags: F.cook | cookOrder(m * 0.7 + rand() * 0.3) };
+      }, -1, F.curl | F.curl2 | F.gloss);
+      break;
+    }
+    case 'napa': {
+      // A big leaf of napa cabbage: a broad white rib and crinkled pale green, going limp and see-through.
+      const ry = R * 0.6;
+      slab(B, obj, R, ry, sp, (u, v) => {
+        const t = (u + R) / (2 * R);
+        const w = ry * Math.sin(Math.PI * Math.min(1, t * 1.05)) ** 0.7 * (1 + (n2(u, v, 0.09) - 0.5) * 0.25);
+        if (t < 0 || t > 1 || Math.abs(v) > w) return null;
+        const rib = Math.abs(v) < R * 0.17 * (1 - t * 0.7);
+        const crinkle = n2(u, v, 0.18, 4);
+        return rib
+          ? { h: 4, mat: M.rib, alb: 0.6 + Math.cos(v * 0.8) * 0.08, flags: F.cook | cookOrder(rand()) }
+          : { h: 2.5 + (crinkle - 0.5) * 4, mat: M.napa, alb: 0.5 + (crinkle - 0.5) * 0.6 + (Math.abs(Math.sin((u - Math.abs(v)) * 0.25)) < 0.12 ? 0.15 : 0), flags: F.cook | cookOrder(rand()) };
+      }, 0, F.curl | F.gloss);
       break;
     }
   }

@@ -10,7 +10,7 @@
 
 import {
   Body, Builder, Clear, G, HotpotCamera, HotpotScene, INGREDIENTS, Ingredient, Plume, V3, Wall,
-  buildChopstick, buildIngredient, frameAlong, mul3, norm, rotX, rotY, rotZ, vnoise, wallDist,
+  IDENTITY, buildChopstick, buildIngredient, frameAlong, mul3, norm, rotAxis, rotX, rotY, rotZ, vnoise, wallDist,
 } from './hotpot';
 
 export type Side = -1 | 1; // -1: the mala, 1: the bone broth
@@ -30,6 +30,14 @@ export interface Item {
   fz: number; vz: number;
   /** A dip after a splash, as a spring. */
   bump: number; vb: number;
+  /** A tilt knocked in by a bubble, as a spring. */
+  tx: number; ty: number; vtx: number; vty: number;
+  /** How a meatball has rolled. */
+  roll: number[];
+  /** Rice cakes stuck to this one. */
+  stuck: Item[];
+  /** A meatball that has come up. */
+  popped: boolean;
 }
 
 export interface Chopsticks {
@@ -73,8 +81,10 @@ export interface HotpotLife {
 
 /** What each broth is stocked with, and how often (relative). */
 const STOCK: Record<Side, [Ingredient, number][]> = {
-  [-1]: [['beef', 5], ['tofu', 3], ['fishball', 2], ['woodear', 2], ['lotus', 2], ['enoki', 3], ['bokchoy', 2], ['shrimp', 1], ['egg', 1]],
-  [1]: [['dumpling', 3], ['shrimp', 3], ['beef', 2], ['egg', 2], ['corn', 2], ['shiitake', 3], ['fishball', 2], ['bokchoy', 2], ['woodear', 1], ['lotus', 1], ['tofu', 1]],
+  [-1]: [['beef', 5], ['tofu', 2], ['fishball', 2], ['woodear', 2], ['lotus', 2], ['enoki', 3], ['bokchoy', 2], ['shrimp', 1], ['egg', 1],
+    ['tripe', 3], ['puff', 3], ['meatball', 2], ['noodles', 2], ['squid', 1], ['fish', 2], ['napa', 1], ['quail', 1]],
+  [1]: [['dumpling', 3], ['shrimp', 3], ['beef', 2], ['quail', 2], ['corn', 2], ['shiitake', 2], ['fishball', 2], ['bokchoy', 2], ['woodear', 1], ['lotus', 1], ['tofu', 1],
+    ['fish', 3], ['ricecake', 4], ['crab', 3], ['squid', 2], ['napa', 2], ['noodles', 1], ['meatball', 2]],
 };
 const GARNISH: Record<Side, [Ingredient, number][]> = {
   [-1]: [['chili', 6], ['pepper', 3], ['anise', 1]],
@@ -121,6 +131,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
       // Some already done, some just in.
       cook: rand() * 1.3,
       state: 'float', fz: 0, vz: 0, bump: 0, vb: 0,
+      tx: 0, ty: 0, vtx: 0, vty: 0, roll: IDENTITY, stuck: [], popped: false,
     };
     items.push(it);
     poseItem(B.bodies[body], it, 0, 0.5, s);
@@ -175,31 +186,56 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
 /** How far below the surface an item's centre sits: dumplings and fish balls lie low until they're cooked, then float up. */
 const sinkOf = (it: Item) => {
   const g = INGREDIENTS[it.kind];
+  // A tofu puff soaks up broth and settles lower.
+  if (it.kind === 'puff') return g.sink + Math.min(1, it.cook) * 8;
   if (g.rawSink === undefined) return g.sink;
-  const u = Math.min(1, Math.max(0, (it.cook - 0.55) / 0.3));
+  // Meatballs stay down until they're done, then come up all at once.
+  const u = it.kind === 'meatball' ? Math.min(1, Math.max(0, (it.cook - 1) / 0.06)) : Math.min(1, Math.max(0, (it.cook - 0.55) / 0.3));
   return g.rawSink + (g.sink - g.rawSink) * u * u * (3 - 2 * u);
 };
 
 /** The cook state the shader sees: tofu and eggs only take colour from the chili oil. */
 const shownCook = (it: Item) => {
   if (!INGREDIENTS[it.kind].cook) return 0;
-  if ((it.kind === 'tofu' || it.kind === 'egg') && it.side === 1) return 0;
+  if ((it.kind === 'tofu' || it.kind === 'egg' || it.kind === 'quail') && it.side === 1) return 0;
   return Math.min(1, it.cook);
+};
+
+/** How far gone it is, 0..1, for the things that change when left in too long; and for a few, how far along a change of shape is. */
+const overOf = (it: Item) => {
+  switch (it.kind) {
+    case 'beef': case 'bokchoy': case 'enoki': case 'fish':
+      return Math.min(1, Math.max(0, (it.cook - 1.7) / 0.9));
+    // The shell cracks and falls away part-way through.
+    case 'quail': return Math.min(1, Math.max(0, (it.cook - 0.45) / 0.45));
+    // The crab stick loosens into ribbons as it heats.
+    case 'crab': return Math.min(1, Math.max(0, (it.cook - 0.3) / 0.8));
+    default: return 0;
+  }
 };
 
 const poseItem = (b: Body, it: Item, t: number, heat: number, s: number) => {
   const wob = 0.06 + heat * 0.06;
-  const tilt = mul3(rotX(Math.sin(t * 1.3 + it.phase) * wob), rotY(Math.cos(t * 1.1 + it.phase * 1.7) * wob));
+  const tilt = mul3(rotX(Math.sin(t * 1.3 + it.phase) * wob + it.tx), rotY(Math.cos(t * 1.1 + it.phase * 1.7) * wob + it.ty));
   const cook = shownCook(it);
   let z: number;
   if (it.state === 'falling' || it.state === 'held') z = it.fz;
   else z = -sinkOf(it) * s + Math.sin(t * 1.7 + it.phase) * 1.2 * heat + it.bump;
   it.z = z;
-  b.live = { c: [it.x, it.y, z], rot: mul3(tilt, rotZ(it.ang)) };
-  // Beef curls as it cooks; fish balls puff up.
-  const curl = it.kind === 'beef' ? (Math.min(1, it.cook) * 0.32) / it.R : 0;
-  if (it.kind === 'fishball') { const p = 1 + Math.min(1, it.cook) * 0.14; b.scale = [p, p, p]; }
-  b.params = [curl, 0, cook, it.phase];
+  b.live = { c: [it.x, it.y, z], rot: mul3(tilt, it.kind === 'meatball' ? it.roll : rotZ(it.ang)) };
+  const over = overOf(it);
+  const done = Math.min(1, it.cook);
+  // Beef and squid curl as they cook; greens and napa droop as they wilt.
+  let curl = 0;
+  if (it.kind === 'beef') curl = (done * 0.32) / it.R;
+  else if (it.kind === 'squid') curl = (done * 0.6) / it.R;
+  else if (it.kind === 'napa') curl = (-done * 0.3) / it.R;
+  else if (it.kind === 'bokchoy' || it.kind === 'enoki') curl = (-over * 0.4) / it.R;
+  // Fish balls puff up; overcooked beef shrinks; glass noodles pulse like a jellyfish.
+  if (it.kind === 'fishball') { const p = 1 + done * 0.14; b.scale = [p, p, p]; }
+  else if (it.kind === 'beef') { const p = 1 - over * 0.16; b.scale = [p, p, 1]; }
+  else if (it.kind === 'noodles') { const p = Math.sin(t * 1.9 + it.phase) * 0.07; b.scale = [1 + p, 1 - p, 1]; }
+  b.params = [curl, over, cook, it.phase];
 };
 
 /** The boil's currents at (x, y): out from each plume and turning a little, plus a slow wander. Also how hot it is there. */
@@ -260,6 +296,9 @@ const dropIn = (scene: HotpotScene, it: Item, cam: HotpotCamera) => {
     if (inClear(life.clear, x, y, it.R)) continue;
     it.x = x; it.y = y;
     it.cook = 0;
+    it.popped = false;
+    for (const o of it.stuck) o.stuck = o.stuck.filter(q => q !== it);
+    it.stuck = [];
     it.state = 'falling';
     it.fz = 380 + Math.random() * 120;
     it.vz = 0;
@@ -481,7 +520,8 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
 
     flowAt(life, it.x, it.y, t, flow);
     // Light things follow the current closely, big ones lag.
-    const k = Math.min(1, dt * (it.R < 10 * s ? 2.5 : 1.2));
+    // Light things follow the current closely, big ones lag; the noodles drift along slowly.
+    const k = Math.min(1, dt * (it.kind === 'noodles' ? 0.6 : it.R < 10 * s ? 2.5 : 1.2));
     it.vx += (flow.vx - it.vx) * k;
     it.vy += (flow.vy - it.vy) * k;
     // The spoon.
@@ -502,6 +542,14 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
     it.vb += (-it.bump * 40 - it.vb * 6) * dt;
     it.bump += it.vb * dt;
     it.cook += (dt * (0.5 + flow.heat * 0.6)) / (INGREDIENTS[it.kind].cook || VEG_DONE);
+    if (it.kind === 'meatball') {
+      if (!it.popped && it.cook >= 1) { it.popped = true; it.vb = 70 * s; addRipple(life, it.x, it.y, 0.9); }
+      const sp = Math.hypot(it.vx, it.vy);
+      if (sp > 0.5 && dt > 0) it.roll = mul3(rotAxis([-it.vy / sp, it.vx / sp, 0], (sp * dt) / it.R), it.roll);
+    }
+    // The tilt a bubble knocked in settles.
+    it.vtx += (-it.tx * 30 - it.vtx * 5) * dt; it.tx += it.vtx * dt;
+    it.vty += (-it.ty * 30 - it.vty * 5) * dt; it.ty += it.vty * dt;
 
     // Keep to its own broth, off the page's edges and off the hero's lettering.
     const d = wallDist(wall, it.x, it.y);
@@ -530,16 +578,36 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
       if (!list) continue;
       for (const o of list) {
         if (o === it || o.body < it.body) continue;
+        if (it.kind === 'napa' || o.kind === 'napa') continue;
         const dx = o.x - it.x, dy = o.y - it.y;
         const min = (it.R + o.R) * 0.82;
         const d2 = dx * dx + dy * dy;
         if (d2 >= min * min || d2 < 1e-4) continue;
         const d = Math.sqrt(d2);
+        if (it.kind === 'ricecake' && o.kind === 'ricecake' && it.cook > 0.6 && o.cook > 0.6 && !it.stuck.includes(o) && it.stuck.length < 3 && o.stuck.length < 3) {
+          it.stuck.push(o); o.stuck.push(it);
+        }
         const over = (min - d) * Math.min(1, dt * 6);
         const wa = o.R * o.R / (it.R * it.R + o.R * o.R);
         it.x -= (dx / d) * over * wa; it.y -= (dy / d) * over * wa;
         o.x += (dx / d) * over * (1 - wa); o.y += (dy / d) * over * (1 - wa);
       }
+    }
+  }
+
+  // Stuck rice cakes keep touching and move as one.
+  for (const it of active) {
+    if (!it.stuck.length) continue;
+    for (const o of [...it.stuck]) {
+      if (o.state !== 'float' || it.state !== 'float') { it.stuck = it.stuck.filter(x => x !== o); o.stuck = o.stuck.filter(x => x !== it); continue; }
+      if (o.body < it.body) continue;
+      const dx = o.x - it.x, dy = o.y - it.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const pull = (d - (it.R + o.R) * 0.78) * Math.min(1, dt * 5) * 0.5;
+      it.x += (dx / d) * pull; it.y += (dy / d) * pull;
+      o.x -= (dx / d) * pull; o.y -= (dy / d) * pull;
+      const vx = (it.vx + o.vx) / 2, vy = (it.vy + o.vy) / 2;
+      it.vx = o.vx = vx; it.vy = o.vy = vy;
     }
   }
 

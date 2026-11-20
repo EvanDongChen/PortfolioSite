@@ -32,7 +32,7 @@ layout(location=3) in float a_flags;
 uniform sampler2D u_obj;
 uniform vec3 u_cam;
 uniform vec2 u_off, u_half, u_canvas;
-uniform float u_f, u_tpx, u_near, u_far;
+uniform float u_f, u_tpx, u_near, u_far, u_time;
 uniform vec3 u_light;
 out float v_shade;
 out float v_h;
@@ -48,9 +48,29 @@ void main() {
   vec3 lp = a_pos;
   vec3 ln = a_nrm;
   if ((flags & ${F.curl}) != 0) {
-    // Both ends lift as the slice cooks.
+    // Both ends lift as the slice cooks (or droop, when it's negative).
     lp.z += st.x * lp.x * lp.x;
     ln = normalize(vec3(ln.x - 2.0 * st.x * lp.x * ln.z, ln.y, ln.z));
+  }
+  if ((flags & ${F.curl2}) != 0) {
+    lp.z += st.x * lp.y * lp.y;
+    ln = normalize(vec3(ln.x, ln.y - 2.0 * st.x * lp.y * ln.z, ln.z));
+  }
+  if ((flags & ${F.ripple}) != 0) {
+    float ph = lp.x * 0.13 + u_time * 2.4 + st.w;
+    lp.z += sin(ph) * 2.6;
+    ln = normalize(vec3(ln.x - cos(ph) * 0.34 * ln.z, ln.y, ln.z));
+  }
+  int pc = (flags >> 12) & 15;
+  if ((flags & ${F.flake}) != 0 && pc > 0) {
+    // Its piece drifts off from the middle; a shed shell sinks as it goes and is gone by the end.
+    float a = float(pc - 1) * 0.785398;
+    lp.xy += vec2(cos(a), sin(a)) * st.y * 9.0;
+    if ((flags & ${F.shed}) != 0) {
+      if (st.y > 0.9) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+      lp.xy += vec2(cos(a), sin(a)) * st.y * 8.0;
+      lp.z -= st.y * st.y * 22.0;
+    }
   }
   vec3 w = vec3(dot(r0.xyz, lp) + r0.w, dot(r1.xyz, lp) + r1.w, dot(r2.xyz, lp) + r2.w);
   // The matrix carries scale; normals only want its direction.
@@ -68,11 +88,13 @@ void main() {
   v_round = size > 3.0 ? 1.0 : 0.0;
   v_h = w.z;
   float mat = a_info.y;
-  if ((flags & ${F.cook}) != 0) {
-    float order = float((flags >> 8) & 15);
-    if (st.z > (order + 0.5) / 16.0 * 0.92 + 0.04) mat += 1.0;
-  }
+  float order = (float((flags >> 8) & 15) + 0.5) / 16.0 * 0.92 + 0.04;
+  bool cooked = (flags & ${F.cook}) != 0 && st.z > order;
+  if (cooked) mat += 1.0;
+  // Left in too long: a third ramp, in the same order.
+  if ((flags & ${F.over}) != 0 && st.y > order) mat = a_info.y + 2.0;
   v_mat = mat;
+
   float alb = a_info.z;
   if ((flags & ${F.emissive}) != 0) { v_shade = alb; return; }
   float lam = dot(n, u_light);

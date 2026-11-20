@@ -168,7 +168,7 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
     };
     document.addEventListener('visibilitychange', onVisibility);
     raf = requestAnimationFrame(frame);
-    if (import.meta.env.DEV) (window as unknown as { __hotpot: unknown }).__hotpot = { view, build };
+    if (import.meta.env.DEV) (window as unknown as { __hotpot: unknown }).__hotpot = { view, build, setSpeed: (s: number) => { speed = s; } };
 
     return () => {
       cancelAnimationFrame(raf);
