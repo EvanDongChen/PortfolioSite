@@ -488,7 +488,9 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
     const R = apparent * kz;
     const sx = left ? 0.07 + rand() * 0.05 : 0.93 - rand() * 0.05;
     const pos = at(sx, first + i * step + (rand() - 0.5) * 200, z);
-    const axis = norm([(rand() - 0.5) * 0.6, -1, (rand() - 0.2) * 0.9]);
+    // The earthlike world leans its north pole towards the viewer, so its aurora shows as an oval over the cap.
+    const axisZ = (rand() - 0.2) * 0.9;
+    const axis = norm([(rand() - 0.5) * 0.6, -1, kind === 'earth' ? 0.6 : axisZ]);
     const base = basisFor(axis);
     const ps = seed * 100 + i * 7;
     const planet = B.body({ kind: 'planet', name: kind, pos, radius: R, base, spin: 0.04 + rand() * 0.05, spin0: rand() * 6 });
@@ -508,17 +510,16 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 7
       const cl = B.body({ kind: 'clouds', name: 'clouds', pos, radius: R * 1.04, base, spin: 0.09, shadow: -1 });
       sphere(B, cl, R * 1.04, spz, cloudShell(ps));
       B.glowAt([0, 0, 0], R * 1.25, [0.12, 0.3, 0.55], planet, 0, 0);
-      // Aurorae: curtains round both poles, green at their feet and pink above.
-      const au = B.body({ kind: 'aurora', name: 'aurora', pos, radius: R * 1.5, base });
-      const green: V3 = [0.25, 1, 0.55], pink: V3 = [1, 0.35, 0.75];
+      // Aurorae: a thin wavy ring of light hugging each pole, green, with a faint pink fringe on top.
+      const au = B.body({ kind: 'aurora', name: 'aurora', pos, radius: R * 1.2, base });
+      const green: V3 = [0.25, 1, 0.5], pink: V3 = [0.95, 0.4, 0.75];
       for (const pole of [-1, 1]) {
-        for (let i = 0; i < 64; i++) {
-          const a = (i / 64) * Math.PI * 2 + rand() * 0.05;
-          const colat = 0.36 + Math.sin(a * 3 + pole) * 0.05;
-          for (let h = 0; h < 5; h++) {
-            const lift = 1.04 + h * 0.1;
-            const d: V3 = [Math.sin(colat) * Math.cos(a), pole * Math.cos(colat), Math.sin(colat) * Math.sin(a)];
-            B.glowAt([d[0] * R * lift, d[1] * R * lift, d[2] * R * lift], R * 0.12, scaleRgb(mixRgb(green, pink, h / 4), 0.3), au, G.aurora, i / 64);
+        for (let i = 0; i < 120; i++) {
+          const a = (i / 120) * Math.PI * 2;
+          const colat = 0.4 + Math.sin(a * 4 + pole) * 0.04 + Math.sin(a * 9) * 0.015;
+          const d: V3 = [Math.sin(colat) * Math.cos(a), pole * Math.cos(colat), Math.sin(colat) * Math.sin(a)];
+          for (const [lift, col, k] of [[1.02, green, 0.42], [1.05, green, 0.36], [1.08, green, 0.26], [1.12, mixRgb(green, pink, 0.6), 0.14]] as [number, V3, number][]) {
+            B.glowAt([d[0] * R * lift, d[1] * R * lift, d[2] * R * lift], R * 0.07, scaleRgb(col, k), au, G.aurora, i / 120);
           }
         }
       }
