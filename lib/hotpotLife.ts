@@ -1,0 +1,520 @@
+/**
+ * What happens in the pot: ingredients drift on the boil's currents, bob,
+ * jostle and cook (beef browns from the edges in and curls, shrimp turn pink,
+ * tofu soaks up the chili oil, dumplings and fish balls rise once done);
+ * chopsticks come down for whatever is cooked and carry it off, and fresh
+ * ingredients are dropped back in with a splash. The cursor stirs the broth.
+ *
+ * Runs on the main thread every frame (`stepLife`), writing each body's pose.
+ */
+
+import {
+  Body, Builder, Clear, G, HotpotCamera, HotpotScene, INGREDIENTS, Ingredient, Plume, V3, Wall,
+  buildChopstick, buildIngredient, frameAlong, mul3, norm, rotX, rotY, rotZ, vnoise, wallDist,
+} from './hotpot';
+
+export type Side = -1 | 1; // -1: the mala, 1: the bone broth
+
+export interface Item {
+  body: number;
+  kind: Ingredient;
+  side: Side;
+  R: number;
+  x: number; y: number; z: number;
+  vx: number; vy: number;
+  ang: number; spin: number; phase: number;
+  /** 0 raw, 1 done; it keeps going past 1. */
+  cook: number;
+  state: 'float' | 'held' | 'gone' | 'falling';
+  /** Height while falling, and its speed. */
+  fz: number; vz: number;
+  /** A dip after a splash, as a spring. */
+  bump: number; vb: number;
+}
+
+export interface Chopsticks {
+  a: number; b: number;
+  state: 'idle' | 'down' | 'pinch' | 'lift';
+  t: number;
+  item: Item | null;
+  /** Up the sticks, from the tips towards the hand that isn't there. */
+  dir: V3;
+  tip: V3;
+  gap: number;
+  from: V3;
+}
+
+export interface Ripple { x: number; y: number; t0: number; a: number }
+
+export interface HotpotLife {
+  items: Item[];
+  sticks: Chopsticks[];
+  splashes: { body: number; t0: number }[];
+  ripples: Ripple[];
+  drops: { item: Item; at: number }[];
+  time: number;
+  /** Boil strength; a rolling boil raises it for a while. */
+  boil: number;
+  boilUntil: number;
+  nextPluck: number;
+  /** Let the next pluck take anything half cooked (the debug panel). */
+  eager: boolean;
+  lastPointer: { x: number; y: number; t: number } | null;
+  wall: Wall;
+  plumes: Plume[];
+  clear: Clear[];
+  s: number;
+  viewW: number;
+  pageH: number;
+  stickLen: number;
+}
+
+/** What each broth is stocked with, and how often (relative). */
+const STOCK: Record<Side, [Ingredient, number][]> = {
+  [-1]: [['beef', 5], ['tofu', 3], ['fishball', 2], ['woodear', 2], ['lotus', 2], ['enoki', 3], ['bokchoy', 2], ['shrimp', 1], ['egg', 1]],
+  [1]: [['dumpling', 3], ['shrimp', 3], ['beef', 2], ['egg', 2], ['corn', 2], ['shiitake', 3], ['fishball', 2], ['bokchoy', 2], ['woodear', 1], ['lotus', 1], ['tofu', 1]],
+};
+const GARNISH: Record<Side, [Ingredient, number][]> = {
+  [-1]: [['chili', 6], ['pepper', 3], ['anise', 1]],
+  [1]: [['goji', 4], ['scallion', 5], ['anise', 1]],
+};
+const pick = (list: [Ingredient, number][], rand: () => number) => {
+  let total = 0;
+  for (const [, w] of list) total += w;
+  let r = rand() * total;
+  for (const [k, w] of list) { r -= w; if (r <= 0) return k; }
+  return list[0][0];
+};
+
+const PARKED: V3 = [-1e5, -1e5, -2e4];
+/** Seconds a vegetable sits in the pot before it counts as done. */
+const VEG_DONE = 32;
+
+interface Ctx {
+  rand: () => number;
+  s: number;
+  f: number;
+  viewW: number;
+  viewH: number;
+  pageH: number;
+  wall: Wall;
+  plumes: Plume[];
+  clear: Clear[];
+}
+
+const inClear = (clear: Clear[], x: number, y: number, pad: number) =>
+  clear.some(c => x > c.x - pad && x < c.x + c.w + pad && y > c.y - pad && y < c.y + c.h + pad);
+
+/** Stocks the pot: ingredients spread over the whole page on both sides of the divider, garnish thick between them. */
+export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
+  const { rand, s, viewW, pageH, wall } = ctx;
+  const items: Item[] = [];
+  const place = (kind: Ingredient, side: Side, x: number, y: number) => {
+    const R = INGREDIENTS[kind].r * s;
+    const body = B.body({ kind, pos: [x, y, 0], radius: R });
+    buildIngredient(B, body, kind, s, rand);
+    const it: Item = {
+      body, kind, side, R, x, y, z: 0, vx: 0, vy: 0,
+      ang: rand() * Math.PI * 2, spin: (rand() - 0.5) * 0.3, phase: rand() * 10,
+      // Some already done, some just in.
+      cook: rand() * 1.3,
+      state: 'float', fz: 0, vz: 0, bump: 0, vb: 0,
+    };
+    items.push(it);
+    poseItem(B.bodies[body], it, 0, 0.5, s);
+  };
+  const scatter = (count: number, table: Record<Side, [Ingredient, number][]>, room: number) => {
+    for (let i = 0; i < count; i++) {
+      for (let tries = 0; tries < 12; tries++) {
+        // The cards cover the middle, so the margins get more than their share.
+        const g = rand();
+        const x = g < 0.5 ? (g < 0.25 ? rand() * 0.2 : 0.8 + rand() * 0.2) * viewW : rand() * viewW;
+        const y = rand() * pageH;
+        const d = wallDist(wall, x, y);
+        if (Math.abs(d) < wall.half + room) continue;
+        if (inClear(ctx.clear, x, y, room)) continue;
+        const side: Side = d < 0 ? -1 : 1;
+        place(pick(table[side], rand), side, x, y);
+        break;
+      }
+    }
+  };
+  const area = viewW * pageH;
+  scatter(Math.round(area / (205 * 205 * s * s)), STOCK, 40 * s);
+  scatter(Math.round(area / (190 * 190 * s * s)), GARNISH, 12 * s);
+  // Big things first in the list, so garnish gets pushed out of their way rather than the other way round.
+  items.sort((a, b) => b.R - a.R);
+
+  const stickLen = 360 * s;
+  const sticks: Chopsticks[] = [];
+  for (let i = 0; i < 2; i++) {
+    const a = B.body({ kind: 'chopstick', pos: PARKED });
+    buildChopstick(B, a, stickLen, s);
+    const b = B.body({ kind: 'chopstick', pos: PARKED });
+    buildChopstick(B, b, stickLen, s);
+    sticks.push({ a, b, state: 'idle', t: 0, item: null, dir: [0, 0, 1], tip: PARKED, gap: 0, from: PARKED });
+  }
+
+  // Splashes: droplets thrown out and back down where something lands.
+  const splashes: { body: number; t0: number }[] = [];
+  for (let i = 0; i < 4; i++) {
+    const body = B.body({ kind: 'splash', pos: PARKED, params: [0, 0, 0, -99] });
+    for (let k = 0; k < 26; k++) B.glowAt([0, 0, 0], (3 + rand() * 4) * s, [0.55, 0.42, 0.3], body, G.splash, rand(), (40 + rand() * 50) * s);
+    splashes.push({ body, t0: -99 });
+  }
+
+  return {
+    items, sticks, splashes, ripples: [], drops: [], time: 0, boil: 1, boilUntil: -1,
+    nextPluck: 3.5, eager: false, lastPointer: null,
+    wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen,
+  };
+};
+
+/** How far below the surface an item's centre sits: dumplings and fish balls lie low until they're cooked, then float up. */
+const sinkOf = (it: Item) => {
+  const g = INGREDIENTS[it.kind];
+  if (g.rawSink === undefined) return g.sink;
+  const u = Math.min(1, Math.max(0, (it.cook - 0.55) / 0.3));
+  return g.rawSink + (g.sink - g.rawSink) * u * u * (3 - 2 * u);
+};
+
+/** The cook state the shader sees: tofu and eggs only take colour from the chili oil. */
+const shownCook = (it: Item) => {
+  if (!INGREDIENTS[it.kind].cook) return 0;
+  if ((it.kind === 'tofu' || it.kind === 'egg') && it.side === 1) return 0;
+  return Math.min(1, it.cook);
+};
+
+const poseItem = (b: Body, it: Item, t: number, heat: number, s: number) => {
+  const wob = 0.06 + heat * 0.06;
+  const tilt = mul3(rotX(Math.sin(t * 1.3 + it.phase) * wob), rotY(Math.cos(t * 1.1 + it.phase * 1.7) * wob));
+  const cook = shownCook(it);
+  let z: number;
+  if (it.state === 'falling' || it.state === 'held') z = it.fz;
+  else z = -sinkOf(it) * s + Math.sin(t * 1.7 + it.phase) * 1.2 * heat + it.bump;
+  it.z = z;
+  b.live = { c: [it.x, it.y, z], rot: mul3(tilt, rotZ(it.ang)) };
+  // Beef curls as it cooks; fish balls puff up.
+  const curl = it.kind === 'beef' ? (Math.min(1, it.cook) * 0.32) / it.R : 0;
+  if (it.kind === 'fishball') { const p = 1 + Math.min(1, it.cook) * 0.14; b.scale = [p, p, p]; }
+  b.params = [curl, 0, cook, it.phase];
+};
+
+/** The boil's currents at (x, y): out from each plume and turning a little, plus a slow wander. Also how hot it is there. */
+const flowAt = (life: HotpotLife, x: number, y: number, t: number, out: { vx: number; vy: number; heat: number }) => {
+  const sig = 120 * life.s;
+  let vx = 0, vy = 0, heat = 0.25;
+  for (const [px, py, st] of life.plumes) {
+    const dy = y - py;
+    if (dy > sig * 3 || dy < -sig * 3) continue;
+    const dx = x - px;
+    if (dx > sig * 3 || dx < -sig * 3) continue;
+    const g = Math.exp(-(dx * dx + dy * dy) / (sig * sig)) * st * (0.75 + 0.25 * Math.sin(t * 0.7 + px * 0.01));
+    vx += (dx / sig) * g * 34 - (dy / sig) * g * 12;
+    vy += (dy / sig) * g * 34 + (dx / sig) * g * 12;
+    heat += g;
+  }
+  const w = 22 * life.s;
+  vx += (vnoise(x / 260, y / 260, t * 0.06, 5) - 0.5) * w * 2;
+  vy += (vnoise(x / 260, y / 260, t * 0.06 + 9, 6) - 0.5) * w * 2;
+  out.vx = vx * life.boil;
+  out.vy = vy * life.boil;
+  out.heat = Math.min(1.4, heat) * life.boil;
+};
+
+const ease = (u: number) => 1 - (1 - u) ** 3;
+const easeIn = (u: number) => u * u;
+
+/** Adds a ring to the broth. */
+export const addRipple = (life: HotpotLife, x: number, y: number, a: number) => {
+  life.ripples.push({ x, y, t0: life.time, a });
+  if (life.ripples.length > 12) life.ripples.shift();
+};
+
+const splashAt = (scene: HotpotScene, x: number, y: number) => {
+  const life = scene.life;
+  const sp = life.splashes.reduce((a, b) => (a.t0 < b.t0 ? a : b));
+  sp.t0 = life.time;
+  const b = scene.bodies[sp.body];
+  b.live = { c: [x, y, 0], rot: rotZ(Math.random() * 6) };
+  b.params = [0, 0, 1, life.time];
+  addRipple(life, x, y, 1);
+};
+
+/** Is page point (x, y) somewhere a visitor can see, clear of the middle column the cards cover? */
+const inGutter = (life: HotpotLife, x: number) => x < life.viewW * 0.2 || x > life.viewW * 0.8;
+
+/** Drops `it` back into the pot, raw, somewhere in view on its own side of the divider. */
+const dropIn = (scene: HotpotScene, it: Item, cam: HotpotCamera) => {
+  const life = scene.life;
+  for (let tries = 0; tries < 40; tries++) {
+    const gutter = tries < 25 && Math.random() < 0.7;
+    const x = gutter
+      ? (Math.random() < 0.5 ? Math.random() * 0.2 : 0.8 + Math.random() * 0.2) * life.viewW
+      : it.R + Math.random() * (life.viewW - it.R * 2);
+    const y = cam.scrollY + cam.viewH * (0.15 + Math.random() * 0.7);
+    const d = wallDist(life.wall, x, y);
+    if ((d < 0 ? -1 : 1) !== it.side || Math.abs(d) < life.wall.half + it.R) continue;
+    if (inClear(life.clear, x, y, it.R)) continue;
+    it.x = x; it.y = y;
+    it.cook = 0;
+    it.state = 'falling';
+    it.fz = 380 + Math.random() * 120;
+    it.vz = 0;
+    it.spin = (Math.random() - 0.5) * 5;
+    return true;
+  }
+  return false;
+};
+
+/** Pours a handful of fresh ingredients into the view (the debug panel's "drop in"). */
+export const pourIn = (scene: HotpotScene, cam: HotpotCamera, n = 6) => {
+  const life = scene.life;
+  const viewY = cam.scrollY + cam.viewH / 2;
+  // Ones nobody is watching: parked or far off screen.
+  const spare = life.items.filter(it => it.R > 9 * life.s && (it.state === 'gone' || (it.state === 'float' && Math.abs(it.y - viewY) > cam.viewH * 1.5)));
+  for (let i = 0; i < n && spare.length; i++) {
+    const it = spare.splice(Math.floor(Math.random() * spare.length), 1)[0];
+    life.drops = life.drops.filter(d => d.item !== it);
+    life.drops.push({ item: it, at: life.time + i * 0.25 });
+  }
+};
+
+/** Brings a pair of chopsticks down for something cooked in view. */
+const startPluck = (scene: HotpotScene, cam: HotpotCamera) => {
+  const life = scene.life;
+  const pair = life.sticks.find(p => p.state === 'idle');
+  if (!pair) return false;
+  const busy = new Set(life.sticks.map(p => p.item));
+  let best: Item | null = null, bestScore = -Infinity;
+  for (const it of life.items) {
+    if (it.state !== 'float' || busy.has(it) || it.R < 9 * life.s) continue;
+    const sy = it.y - cam.scrollY;
+    if (sy < 80 || sy > cam.viewH - 80) continue;
+    const done = INGREDIENTS[it.kind].cook ? it.cook : it.cook * (INGREDIENTS.beef.cook / VEG_DONE);
+    if (done < (life.eager ? 0.3 : 1)) continue;
+    const score = done + (inGutter(life, it.x) ? 2 : 0) + Math.random() * 0.5;
+    if (score > bestScore) { bestScore = score; best = it; }
+  }
+  if (!best) return false;
+  const sx = best.x < life.viewW / 2 ? -1 : 1;
+  pair.dir = norm([sx * 0.55, -0.3, 0.78]);
+  pair.item = best;
+  pair.state = 'down';
+  pair.t = 0;
+  pair.from = [best.x + pair.dir[0] * 520, best.y + pair.dir[1] * 520, best.z + pair.dir[2] * 520];
+  pair.tip = pair.from;
+  pair.gap = 20 * life.s;
+  life.eager = false;
+  return true;
+};
+
+/** Debug: send chopsticks for something now, cooked or not. */
+export const pluckNow = (scene: HotpotScene, cam: HotpotCamera) => {
+  scene.life.eager = true;
+  if (!startPluck(scene, cam)) scene.life.nextPluck = scene.life.time;
+};
+
+export const rollingBoil = (scene: HotpotScene, seconds = 16) => {
+  scene.life.boilUntil = scene.life.time + seconds;
+};
+
+const poseSticks = (scene: HotpotScene, p: Chopsticks) => {
+  const a = scene.bodies[p.a], b = scene.bodies[p.b];
+  if (p.state === 'idle') {
+    a.live = { c: PARKED, rot: a.base };
+    b.live = { c: PARKED, rot: b.base };
+    return;
+  }
+  const d = p.dir;
+  const side = norm([-d[1], d[0], 0]);
+  const L = scene.life.stickLen;
+  const butt: V3 = [p.tip[0] + d[0] * L, p.tip[1] + d[1] * L, p.tip[2] + d[2] * L];
+  const hand = 10 * scene.life.s;
+  for (const [body, sgn] of [[a, 1], [b, -1]] as const) {
+    const tip: V3 = [p.tip[0] + side[0] * sgn * p.gap * 0.5, p.tip[1] + side[1] * sgn * p.gap * 0.5, p.tip[2]];
+    const end: V3 = [butt[0] + side[0] * sgn * hand, butt[1] + side[1] * sgn * hand, butt[2]];
+    body.live = { c: tip, rot: frameAlong([end[0] - tip[0], end[1] - tip[1], end[2] - tip[2]]) };
+  }
+};
+
+const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
+  const life = scene.life;
+  const it = p.item;
+  if (p.state === 'idle' || !it) { p.state = 'idle'; poseSticks(scene, p); return; }
+  p.t += dt;
+  const top = it.R * 0.35 + 4 * life.s;
+  if (p.state === 'down') {
+    const u = Math.min(1, p.t / 1.4);
+    const goal: V3 = [it.x, it.y, it.z + top];
+    const e = ease(u);
+    p.tip = [p.from[0] + (goal[0] - p.from[0]) * e, p.from[1] + (goal[1] - p.from[1]) * e, p.from[2] + (goal[2] - p.from[2]) * e];
+    p.gap = 20 * life.s + (it.R * 2.2 + 10 * life.s - 20 * life.s) * Math.min(1, u * 1.5);
+    if (u >= 1) { p.state = 'pinch'; p.t = 0; it.state = 'held'; it.fz = it.z; addRipple(life, it.x, it.y, 0.5); }
+  } else if (p.state === 'pinch') {
+    const u = Math.min(1, p.t / 0.3);
+    p.gap = it.R * 2.2 + 10 * life.s - (it.R * 2.2 + 10 * life.s - it.R * 1.3) * ease(u);
+    if (u >= 1) { p.state = 'lift'; p.t = 0; p.from = [...p.tip] as V3; addRipple(life, it.x, it.y, 0.8); }
+  } else if (p.state === 'lift') {
+    const u = Math.min(1, p.t / 1.7);
+    const e = easeIn(u);
+    const reach = 760;
+    p.tip = [p.from[0] + p.dir[0] * reach * e, p.from[1] + p.dir[1] * reach * e, p.from[2] + p.dir[2] * reach * e];
+    it.x = p.tip[0]; it.y = p.tip[1]; it.fz = p.tip[2] - top;
+    if (u >= 1) {
+      it.state = 'gone';
+      p.state = 'idle';
+      p.item = null;
+      life.drops.push({ item: it, at: life.time + 1.5 + Math.random() * 2.5 });
+    }
+  }
+  poseSticks(scene, p);
+};
+
+const flow = { vx: 0, vy: 0, heat: 0 };
+
+/** One frame of the pot: `t` and `dt` in seconds, the camera, and the cursor in the window if there is one. */
+export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotCamera, pointer: { x: number; y: number } | null) => {
+  const life = scene.life;
+  life.time = t;
+  const { s, wall } = life;
+  const target = t < life.boilUntil ? 1.8 : 1;
+  life.boil += (target - life.boil) * Math.min(1, dt * 0.8);
+
+  // The cursor is a spoon: it pushes things aside and leaves rings behind it.
+  let px = 0, py = 0;
+  if (pointer) {
+    px = pointer.x; py = pointer.y + cam.scrollY;
+    const lp = life.lastPointer;
+    if (!lp || (Math.hypot(px - lp.x, py - lp.y) > 14 && t - lp.t > 0.09)) {
+      if (lp && dt > 0) addRipple(life, px, py, 0.32);
+      life.lastPointer = { x: px, y: py, t };
+    }
+  }
+
+  // Fresh ingredients due to land.
+  if (life.drops.length) {
+    life.drops = life.drops.filter(d => {
+      if (t < d.at) return true;
+      if (d.item.state === 'gone' || d.item.state === 'float') { if (!dropIn(scene, d.item, cam)) d.item.state = 'gone'; }
+      return false;
+    });
+  }
+
+  // Chopsticks.
+  if (t > life.nextPluck && dt > 0) {
+    if (startPluck(scene, cam)) life.nextPluck = t + 3 + Math.random() * 5;
+    else life.nextPluck = t + 1.5;
+  }
+  for (const p of life.sticks) stepSticks(scene, p, dt);
+
+  // Splashes run their course, then switch off.
+  for (const sp of life.splashes) if (sp.t0 > -50 && t - sp.t0 > 1.2) { scene.bodies[sp.body].params![2] = 0; sp.t0 = -99; }
+
+  const viewY = cam.scrollY + cam.viewH / 2;
+  const near = cam.viewH * 1.1 + 200;
+  // A coarse grid for keeping things apart.
+  const cell = 90 * s;
+  const grid = new Map<number, Item[]>();
+  const active: Item[] = [];
+  for (const it of life.items) {
+    if (it.state === 'gone') { scene.bodies[it.body].live = { c: PARKED, rot: scene.bodies[it.body].base }; continue; }
+    const cookTime = INGREDIENTS[it.kind].cook || VEG_DONE;
+    if (Math.abs(it.y - viewY) > near && it.state === 'float') { it.cook += (dt * 0.6) / cookTime; continue; }
+    active.push(it);
+    if (it.state !== 'float') continue;
+    const key = Math.floor(it.x / cell) + Math.floor(it.y / cell) * 4096;
+    const list = grid.get(key);
+    if (list) list.push(it); else grid.set(key, [it]);
+  }
+
+  for (const it of active) {
+    const b = scene.bodies[it.body];
+    if (it.state === 'falling') {
+      it.vz -= 1700 * dt;
+      it.fz += it.vz * dt;
+      it.ang += it.spin * dt;
+      const rest = -sinkOf(it) * s;
+      if (it.fz <= rest) {
+        it.state = 'float';
+        it.bump = -8 * s; it.vb = 0;
+        it.spin = (Math.random() - 0.5) * 0.4;
+        splashAt(scene, it.x, it.y);
+      }
+      poseItem(b, it, t, 1, s);
+      continue;
+    }
+    if (it.state === 'held') { poseItem(b, it, t, 0.3, s); continue; }
+
+    flowAt(life, it.x, it.y, t, flow);
+    // Light things follow the current closely, big ones lag.
+    const k = Math.min(1, dt * (it.R < 10 * s ? 2.5 : 1.2));
+    it.vx += (flow.vx - it.vx) * k;
+    it.vy += (flow.vy - it.vy) * k;
+    // The spoon.
+    if (pointer) {
+      const dx = it.x - px, dy = it.y - py;
+      const d = Math.hypot(dx, dy);
+      const reach = 70 * s + it.R;
+      if (d < reach && d > 0.01) {
+        const push = (1 - d / reach) * 260 * dt;
+        it.vx += (dx / d) * push * 4; it.vy += (dy / d) * push * 4;
+        it.spin += (Math.random() - 0.5) * push * 0.1;
+      }
+    }
+    it.x += it.vx * dt;
+    it.y += it.vy * dt;
+    it.ang += (it.spin + (flow.vx * 0.002)) * dt;
+    it.spin *= 1 - Math.min(1, dt * 0.3);
+    it.vb += (-it.bump * 40 - it.vb * 6) * dt;
+    it.bump += it.vb * dt;
+    it.cook += (dt * (0.5 + flow.heat * 0.6)) / (INGREDIENTS[it.kind].cook || VEG_DONE);
+
+    // Keep to its own broth, off the page's edges and off the hero's lettering.
+    const d = wallDist(wall, it.x, it.y);
+    const need = wall.half + it.R * 0.75;
+    if (it.side * d < need) { it.x += (need - it.side * d) * it.side * Math.min(1, dt * 8); it.vx *= 0.8; }
+    if (it.x < it.R * 0.5) it.vx += 40 * dt * s;
+    if (it.x > life.viewW - it.R * 0.5) it.vx -= 40 * dt * s;
+    if (it.y < it.R) it.vy += 40 * dt * s;
+    if (it.y > life.pageH - it.R) it.vy -= 40 * dt * s;
+    for (const c of life.clear) {
+      if (it.x > c.x - it.R && it.x < c.x + c.w + it.R && it.y > c.y - it.R && it.y < c.y + c.h + it.R) {
+        const out = [it.x - (c.x - it.R), c.x + c.w + it.R - it.x, it.y - (c.y - it.R), c.y + c.h + it.R - it.y];
+        const m = Math.min(...out);
+        const push = 50 * s * dt;
+        if (m === out[0]) it.x -= push; else if (m === out[1]) it.x += push; else if (m === out[2]) it.y -= push; else it.y += push;
+      }
+    }
+  }
+
+  // Jostling: overlapping things push apart, the smaller one more.
+  for (const it of active) {
+    if (it.state !== 'float') continue;
+    const cx = Math.floor(it.x / cell), cy = Math.floor(it.y / cell);
+    for (let gy = cy - 1; gy <= cy + 1; gy++) for (let gx = cx - 1; gx <= cx + 1; gx++) {
+      const list = grid.get(gx + gy * 4096);
+      if (!list) continue;
+      for (const o of list) {
+        if (o === it || o.body < it.body) continue;
+        const dx = o.x - it.x, dy = o.y - it.y;
+        const min = (it.R + o.R) * 0.82;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= min * min || d2 < 1e-4) continue;
+        const d = Math.sqrt(d2);
+        const over = (min - d) * Math.min(1, dt * 6);
+        const wa = o.R * o.R / (it.R * it.R + o.R * o.R);
+        it.x -= (dx / d) * over * wa; it.y -= (dy / d) * over * wa;
+        o.x += (dx / d) * over * (1 - wa); o.y += (dy / d) * over * (1 - wa);
+      }
+    }
+  }
+
+  for (const it of active) if (it.state === 'float') {
+    flowAt(life, it.x, it.y, t, flow);
+    poseItem(scene.bodies[it.body], it, t, flow.heat, s);
+  }
+
+  // Old rings fade out.
+  if (life.ripples.length && t - life.ripples[0].t0 > 3) life.ripples.shift();
+};
