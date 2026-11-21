@@ -120,23 +120,27 @@ export const mulberry = (seed: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-const hash = (x: number, y: number, z: number, s: number) => {
-  let h = Math.imul(x, 0x27d4eb2d) ^ Math.imul(y, 0x165667b1) ^ Math.imul(z, 0x9e3779b1) ^ Math.imul(s, 0x85ebca6b);
+// A lattice point's value: the hash of imul(x, A) ^ imul(y, B) ^ imul(z, C) ^ imul(seed, D).
+const mix = (h: number) => {
   h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
   h = Math.imul(h ^ (h >>> 12), 0x297a2d39);
   return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
 };
 const smooth = (t: number) => t * t * (3 - 2 * t);
+/** Value noise. Building a scene calls it millions of times, so each axis's products are worked out once and shared by the cell's eight corners. */
 export const vnoise = (x: number, y: number, z: number, s: number) => {
   const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
   const fx = smooth(x - ix), fy = smooth(y - iy), fz = smooth(z - iz);
-  const l = (a: number, b: number, t: number) => a + (b - a) * t;
-  const c = (dx: number, dy: number, dz: number) => hash(ix + dx, iy + dy, iz + dz, s);
-  return l(
-    l(l(c(0, 0, 0), c(1, 0, 0), fx), l(c(0, 1, 0), c(1, 1, 0), fx), fy),
-    l(l(c(0, 0, 1), c(1, 0, 1), fx), l(c(0, 1, 1), c(1, 1, 1), fx), fy),
-    fz,
-  );
+  const x0 = Math.imul(ix, 0x27d4eb2d), x1 = Math.imul(ix + 1, 0x27d4eb2d);
+  const y0 = Math.imul(iy, 0x165667b1), y1 = Math.imul(iy + 1, 0x165667b1);
+  const sh = Math.imul(s, 0x85ebca6b);
+  const z0 = Math.imul(iz, 0x9e3779b1) ^ sh, z1 = Math.imul(iz + 1, 0x9e3779b1) ^ sh;
+  const c000 = mix(x0 ^ y0 ^ z0), c100 = mix(x1 ^ y0 ^ z0), c010 = mix(x0 ^ y1 ^ z0), c110 = mix(x1 ^ y1 ^ z0);
+  const c001 = mix(x0 ^ y0 ^ z1), c101 = mix(x1 ^ y0 ^ z1), c011 = mix(x0 ^ y1 ^ z1), c111 = mix(x1 ^ y1 ^ z1);
+  const a0 = c000 + (c100 - c000) * fx, b0 = c010 + (c110 - c010) * fx;
+  const a1 = c001 + (c101 - c001) * fx, b1 = c011 + (c111 - c011) * fx;
+  const n0 = a0 + (b0 - a0) * fy, n1 = a1 + (b1 - a1) * fy;
+  return n0 + (n1 - n0) * fz;
 };
 /** Fractal noise, about 0..1 with mean 0.5. */
 export const fbm = (x: number, y: number, z: number, s: number, oct = 4) => {
