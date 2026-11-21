@@ -1052,7 +1052,11 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
   }
 
   // Last of all, nothing may overlap the divider: pushed straight back out, however it's turned.
-  for (const it of active) if (it.state === 'float') keepOffWall(life, it);
+  for (const it of active) if (it.state === 'float') {
+    keepOffWall(life, it);
+    it.x = Math.min(life.viewW, Math.max(0, it.x));
+    it.y = Math.min(life.pageH, Math.max(0, it.y));
+  }
 
   for (const it of active) if (it.state === 'float') poseItem(scene.bodies[it.body], it, t, it.heat, s);
 
