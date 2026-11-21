@@ -23,18 +23,23 @@ export const SAUCES = [
   { name: 'Black vinegar', mat: () => M.vinegar },
 ] as const;
 
-/** Where it sits in the window, in CSS px: the board's left edge and size (centred down the window), and each bowl's centre and radius on it. */
+/**
+ * Where it sits in the window, in CSS px at full size: the board's left edge and size (centred down the window), and
+ * each bowl's centre and radius on it. The bowls are sized like real dipping dishes beside the food in the pot.
+ */
 export const SAUCE_LAYOUT = {
-  left: 24, w: 100, h: 352,
-  bowls: [[50, 46], [50, 132], [50, 218], [50, 304]] as [number, number][],
-  r: 38,
+  left: 24, w: 172, h: 640,
+  bowls: [[86, 78], [86, 238], [86, 398], [86, 558]] as [number, number][],
+  r: 66,
 };
+/** How much it's shrunk to fit a window `viewH` tall (1: full size). */
+export const sauceScale = (viewH: number) => Math.max(0.55, Math.min(1, (viewH - 90) / SAUCE_LAYOUT.h));
 /** The board's top edge in a window `viewH` tall. */
-export const sauceTop = (viewH: number) => Math.round(viewH / 2 - SAUCE_LAYOUT.h / 2);
+export const sauceTop = (viewH: number) => Math.round(viewH / 2 - (SAUCE_LAYOUT.h * sauceScale(viewH)) / 2);
 /** How high above the broth the board is held. */
 const HEIGHT = 70;
 /** How far off the window's left edge it waits when it's put away. */
-const AWAY = 200;
+const AWAY = 260;
 /** Only on windows wide enough for it to sit clear of the content. */
 export const SAUCE_MIN_WIDTH = 1100;
 
@@ -58,6 +63,8 @@ export interface SauceBar {
   dipAt: V3 | null;
   /** The last splash of drops flung out, so they don't come every frame. */
   lastFling: number;
+  /** How much it was shrunk to fit the window it was built for. */
+  scale: number;
 }
 
 const sauceSurface = (u: number, v: number, R: number, kind: number, seed: number) => {
@@ -105,17 +112,18 @@ const buildPool = (B: Builder, obj: number, R: number, kind: number, rand: () =>
 
 const PARKED: V3 = [-1e5, -1e5, -2e4];
 
-export const populateSauce = (B: Builder, ctx: { rand: () => number; s: number; f: number }): SauceBar => {
+export const populateSauce = (B: Builder, ctx: { rand: () => number; s: number; f: number; viewH: number }): SauceBar => {
   const { rand, s, f } = ctx;
-  // Built at the size it should look from its height.
-  const k = (f - HEIGHT * s) / f;
+  const scale = sauceScale(ctx.viewH);
+  // Built at the size it should look from its height, shrunk to fit the window.
+  const k = ((f - HEIGHT * s) / f) * scale;
   const L = SAUCE_LAYOUT;
   const board = B.body({ kind: 'sauce', pos: PARKED });
   slab(B, board, (L.w / 2) * k, (L.h / 2) * k, SPACING, (u, v) => {
-    const plank = Math.floor((u / k + L.w / 2) / 25);
+    const plank = Math.floor((u / k + L.w / 2) / 28);
     const grain = fbm(u * 0.4, v * 0.05, plank, 31, 3);
     const edge = Math.max(Math.abs(u) / ((L.w / 2) * k), Math.abs(v) / ((L.h / 2) * k));
-    return { h: -14 * s - (edge > 0.95 ? (edge - 0.95) * 60 * s : 0), mat: M.wood, alb: 0.45 + (grain - 0.5) * 0.5 - ((u / k + L.w / 2) % 25 < 1.5 ? 0.2 : 0) };
+    return { h: -14 * s - (edge > 0.95 ? (edge - 0.95) * 60 * s : 0), mat: M.wood, alb: 0.45 + (grain - 0.5) * 0.5 - ((u / k + L.w / 2) % 28 < 1.5 ? 0.2 : 0) };
   }, -24 * s);
   const bowls: number[] = [], pools: number[] = [];
   SAUCES.forEach((_, i) => {
@@ -129,7 +137,7 @@ export const populateSauce = (B: Builder, ctx: { rand: () => number; s: number; 
   return {
     board, bowls, pools, open: 0, target: 0, hover: -1, pop: [1, 1, 1, 1],
     surface: bowls.map(() => PARKED), slosh: bowls.map(() => ({ tx: 0, ty: 0, vx: 0, vy: 0, wave: 0 })),
-    dipAt: null, lastFling: 0,
+    dipAt: null, lastFling: 0, scale,
   };
 };
 
@@ -144,7 +152,8 @@ export const bowlAt = (scene: HotpotScene, cam: HotpotCamera, sx: number, sy: nu
   if (scene.sauce.open < 0.9) return -1;
   const L = SAUCE_LAYOUT;
   const top = sauceTop(cam.viewH);
-  return L.bowls.findIndex(([bx, by]) => Math.hypot(sx - (L.left + bx), sy - (top + by)) < L.r * 1.1);
+  const q = scene.sauce.scale;
+  return L.bowls.findIndex(([bx, by]) => Math.hypot(sx - (L.left + bx * q), sy - (top + by * q)) < L.r * q * 1.1);
 };
 
 /**
@@ -162,19 +171,20 @@ export const stepSauce = (scene: HotpotScene, dt: number, t: number, cam: Hotpot
   const L = SAUCE_LAYOUT;
   const z = HEIGHT * s;
   const top = sauceTop(cam.viewH);
+  const q = S.scale;
   const slide = -AWAY * (1 - e);
-  scene.bodies[S.board].live = { c: hidden ? PARKED : fromScreen(scene, cam, L.left + L.w / 2 + slide, top + L.h / 2, z), rot: rotZ(0) };
+  scene.bodies[S.board].live = { c: hidden ? PARKED : fromScreen(scene, cam, L.left + (L.w / 2) * q + slide, top + (L.h / 2) * q, z), rot: rotZ(0) };
 
   // The food being carried, and the bowl (if any) it's over.
   const d = life.drag;
   const carried = d && d.pair.state === 'carry' ? d.item : null;
   S.hover = carried && pointer ? bowlAt(scene, cam, pointer.x, pointer.y) : -1;
   S.dipAt = null;
-  const R = L.r * ((scene.focal - z) / scene.focal) * 0.76;
+  const R = L.r * q * ((scene.focal - z) / scene.focal) * 0.76;
 
   S.bowls.forEach((bi, i) => {
     const [bx, by] = L.bowls[i];
-    const c = fromScreen(scene, cam, L.left + bx + slide, top + by, z);
+    const c = fromScreen(scene, cam, L.left + bx * q + slide, top + by * q, z);
     S.pop[i] += ((S.hover === i ? 1.08 : 1) - S.pop[i]) * Math.min(1, dt * 14);
     const b = scene.bodies[bi];
     b.live = { c: hidden ? PARKED : c, rot: rotZ(0) };

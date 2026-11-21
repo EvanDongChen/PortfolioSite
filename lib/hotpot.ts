@@ -832,7 +832,7 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, clear: C
 
   const life = populateLife(B, { rand, s, f, viewW, viewH, pageH, wall, plumes, clear });
   const events = populateEvents(B, { rand, s });
-  const sauce = populateSauce(B, { rand, s, f });
+  const sauce = populateSauce(B, { rand, s, f, viewH });
 
   return {
     solid: new Float32Array(B.solid),
