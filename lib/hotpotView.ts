@@ -265,7 +265,11 @@ float wallDist(vec2 w) {
 }
 
 /** The broth at page point w. */
+// Set by broth(): whether this point is on the chili oil (for reflections).
+bool g_oil = false;
+
 vec3 broth(vec2 w) {
+  g_oil = false;
   float t = u_time;
   float dist = wallDist(w);
   bool mala = dist < 0.0;
@@ -330,6 +334,7 @@ vec3 broth(vec2 w) {
       fieldL *= 1.0 - 0.85 * push * (1.0 - k * 0.6);
     }
     bool oily = oil > 0.64 || field > 1.0;
+    g_oil = oily;
     if (field > 1.0) {
       // A glossy bead: a lit crescent on the lamp's side of its edge, and a glint just in from it.
       col = hex(160., 38., 18.);
@@ -537,10 +542,26 @@ void main() {
     hs *= 1.45;
   }
   if (shadow > 0.75 || (shadow > 0.25 && bay < 0.5)) c *= 0.6;
+  // The glossy oil mirrors food floating beside it: a wavering copy, a few pixels up, every other row.
+  else if (g_oil && (p.y & 1) == 0) {
+    ivec2 q = p + ivec2(int(floor(sin(float(p.y) * 0.7 + u_time * 3.0) + 0.5)), 3);
+    vec4 rf = texelFetch(u_solid, q * 2, 0);
+    if (rf.a > 0.5 && (rf.b - 0.25) * 512.0 > -1.0) {
+      vec3 rc = texelFetch(u_ramps, ivec2(min(int(rf.g * 255.0 + 0.5), 3), int(rf.r * 255.0 + 0.5)), 0).rgb;
+      c = mix(c, rc, 0.45);
+    }
+  }
   vec3 g = vec3(0.0);
   for (int i = 0; i < 4; i++) g += texelFetch(u_glow, p * 2 + ivec2(i & 1, i >> 1), 0).rgb;
+  // Shafts of lamplight slanting down from the lamp's side, pinned to the pot. They only show where steam drifts
+  // through them: steam inside a shaft glows, steam between them is dimmer.
+  vec2 across = normalize(vec2(-u_light.y, u_light.x));
+  float sa = dot(w, across) / (110.0 * u_s);
+  float shaft = pow(0.5 + 0.5 * sin(sa + vn(vec2(sa * 0.25, u_time * 0.04)) * 4.0), 5.0) + 0.6 * pow(0.5 + 0.5 * sin(sa * 2.3 + 1.7 + u_time * 0.05), 8.0);
   // Steam shows over the dark chili broth; over the pale broth it would only speckle.
-  c += g * (wallDist(w) < 0.0 ? 0.25 : 0.1);
+  c += g * (wallDist(w) < 0.0 ? 0.25 : 0.1) * (0.45 + shaft * 2.2);
+  // And a faint haze of light in the shafts themselves, warmer over the chili oil.
+  c += shaft * (wallDist(w) < 0.0 ? vec3(0.07, 0.035, 0.015) : vec3(0.025, 0.02, 0.012));
   // Nearest two palette colours, and a Bayer choice between them.
   float d1 = 1e9, d2 = 1e9;
   vec3 c1 = c, c2 = c;
