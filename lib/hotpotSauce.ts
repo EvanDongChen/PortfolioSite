@@ -12,7 +12,7 @@
  * the page scrolls under it.
  */
 
-import { Builder, F, HotpotCamera, HotpotScene, M, SPACING, V3, fbm, rotZ, slab } from './hotpot';
+import { Builder, F, HotpotCamera, HotpotScene, INGREDIENTS, M, SPACING, V3, fbm, rotZ, slab } from './hotpot';
 import type { Chopsticks, Item } from './hotpotLife';
 
 /** The sauces, top to bottom, with what they're called and the colour they leave on food. */
@@ -59,7 +59,7 @@ export interface SauceBar {
   surface: V3[];
   /** Each pool's slosh: tilt (x, y) and its speed, and the height of the ripples running out from the food. */
   slosh: { tx: number; ty: number; vx: number; vy: number; wave: number }[];
-  /** Where the carried food should sit in the sauce, following the mouse (world). */
+  /** Where the carried food's lowest point should touch into the sauce, following the mouse (world). */
   dipAt: V3 | null;
   /** The last splash of drops flung out, so they don't come every frame. */
   lastFling: number;
@@ -156,6 +156,11 @@ export const bowlAt = (scene: HotpotScene, cam: HotpotCamera, sx: number, sy: nu
   return L.bowls.findIndex(([bx, by]) => Math.hypot(sx - (L.left + bx * q), sy - (top + by * q)) < L.r * q * 1.1);
 };
 
+/** Pieces too long to lie in a bowl are dipped end first. */
+export const isLong = (it: Item) => it.R > 26 * 1.1 || INGREDIENTS[it.kind].aspect < 0.7;
+/** How steeply a long piece is tipped as it's dipped. */
+export const DIP_PITCH = 0.95;
+
 /**
  * One frame of the bar: sliding out or away, held in place in the window; and, while food is carried over a bowl,
  * where it should sit in the sauce, how the sauce sloshes and ripples round it, and how much it picks up.
@@ -196,14 +201,18 @@ export const stepSauce = (scene: HotpotScene, dt: number, t: number, cam: Hotpot
     const sl = S.slosh[i];
     if (S.hover === i && carried && pointer && d) {
       // Where the mouse is, at the sauce's height, kept inside the bowl: the food pushes against its side.
+      // A long piece is dipped end first, tipped up out of the bowl to the right, so its end stays in the left part.
       let at = fromScreen(scene, cam, pointer.x, pointer.y, surface[2]);
-      const ox = at[0] - c[0], oy = at[1] - c[1], od = Math.hypot(ox, oy);
-      const lim = R * 0.72;
-      if (od > lim) at = [c[0] + (ox / od) * lim, c[1] + (oy / od) * lim, at[2]];
+      const long = isLong(carried);
+      const lim = long ? R * 0.55 : Math.max(0, R * 0.92 - carried.R);
+      const cx = long ? c[0] - R * 0.3 : c[0];
+      const ox = at[0] - cx, oy = at[1] - c[1], od = Math.hypot(ox, oy);
+      if (od > lim) at = [cx + (od ? (ox / od) * lim : 0), c[1] + (od ? (oy / od) * lim : 0), at[2]];
       S.dipAt = at;
       // Pushing through it: the sauce heaps up ahead and sloshes back, ripples run out, drops fly if it's hard.
       const speed = Math.hypot(d.vx, d.vy);
-      const deep = carried.fz < surface[2] + 4 * s;
+      // In the sauce when its lowest point is: the dipped end of a long piece, the bottom of a small one.
+      const deep = long ? carried.fz - carried.R * Math.sin(DIP_PITCH) < surface[2] + 2 * s : carried.fz < surface[2] + carried.R * 0.5;
       if (deep) {
         // The sauce heaps up the way it's pushed.
         sl.vx += (d.vx / R) * dt * 2.8;
@@ -212,7 +221,8 @@ export const stepSauce = (scene: HotpotScene, dt: number, t: number, cam: Hotpot
         // Coating: a little just for being in it, much more for swishing it about.
         const mat = SAUCES[i].mat();
         const had = carried.coat && carried.coat[0] === mat ? carried.coat[1] : (carried.coat?.[1] ?? 0) * 0.4;
-        carried.coat = [mat, Math.min(0.85, had + dt * 0.04 + speed * dt * 0.0016)];
+        // Never all over: some of the food always shows through.
+        carried.coat = [mat, Math.min(0.55, had + dt * 0.04 + speed * dt * 0.0016)];
         if (speed > 150 * s && t - S.lastFling > 0.3) {
           S.lastFling = t;
           flingDrops(scene, surface, d.vx, d.vy);

@@ -8,6 +8,7 @@
  * Runs on the main thread every frame (`stepLife`), writing each body's pose.
  */
 
+import { DIP_PITCH, isLong } from './hotpotSauce';
 import {
   Body, Builder, Clear, G, HotpotCamera, HotpotScene, INGREDIENTS, Ingredient, Plume, V3, Wall,
   IDENTITY, buildChopstick, buildIngredient, wallX, frameAlong, mul3, norm, rotAxis, rotZ, wallDist,
@@ -629,15 +630,30 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
     if (!d) { p.state = 'lift'; p.t = 0; p.from = [...p.tip] as V3; }
     else {
       // Over a sauce bowl it goes down into the sauce and follows the mouse there, slowly: the sauce is thick.
+      // A long piece is tipped up and dipped end first, so the rest of it stays above the rim; a small one just
+      // dips its bottom in. Anywhere else it's carried high enough to clear the board when the bar is out.
       const dip = scene.sauce.dipAt;
-      const goal: V3 = dip ? [dip[0], dip[1], dip[2] + top - 1 * s] : [d.x, d.y, 55 * s + top];
+      const long = dip ? isLong(it) : false;
+      const pitch = long ? DIP_PITCH : 0;
+      const goal: V3 = dip
+        ? long
+          ? [dip[0] + it.R * Math.cos(pitch), dip[1], dip[2] - 5 * s + it.R * Math.sin(pitch) + top]
+          : [dip[0], dip[1], dip[2] + it.R * 0.3 + top]
+        : [d.x, d.y, (scene.sauce.open > 0.01 ? 105 : 55) * s + top];
       const k = Math.min(1, dt * (dip ? 4.5 : 12));
       const ox = p.tip[0], oy = p.tip[1];
       p.tip = [p.tip[0] + (goal[0] - p.tip[0]) * k, p.tip[1] + (goal[1] - p.tip[1]) * k, p.tip[2] + (goal[2] - p.tip[2]) * k];
       if (dt > 0) { d.vx = (p.tip[0] - ox) / dt; d.vy = (p.tip[1] - oy) / dt; }
       it.x = p.tip[0]; it.y = p.tip[1]; it.fz = p.tip[2] - top;
-      // It swings behind as it's moved.
-      it.tx = Math.max(-0.5, Math.min(0.5, d.vy * 0.0015)); it.ty = Math.max(-0.5, Math.min(0.5, -d.vx * 0.0015));
+      // It swings behind as it's moved; dipped end first, it's turned along the bowl and tipped down to the left.
+      const swingX = Math.max(-0.5, Math.min(0.5, d.vy * 0.0015)), swingY = Math.max(-0.5, Math.min(0.5, -d.vx * 0.0015));
+      if (long) {
+        let da = -it.ang;
+        da = Math.atan2(Math.sin(da), Math.cos(da));
+        it.ang += da * Math.min(1, dt * 10);
+        it.tx += (swingX * 0.3 - it.tx) * Math.min(1, dt * 10);
+        it.ty += (-pitch + swingY * 0.2 - it.ty) * Math.min(1, dt * 10);
+      } else { it.tx = swingX; it.ty = swingY; }
       // Drips now and then while it hangs over the broth.
       if (Math.random() < dt * 2.5) addRipple(life, it.x, it.y, 0.25);
     }

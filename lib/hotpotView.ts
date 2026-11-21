@@ -61,6 +61,7 @@ void main() {
     ln = normalize(vec3(ln.x, ln.y - 2.0 * st.x * lp.y * ln.z, ln.z));
   }
   vec4 ct = texelFetch(u_obj, ivec2(o + 4, 0), 0);
+  bool coated = false;
   if ((flags & ${F.slosh}) != 0) {
     // Sauce: tipped as it sloshes, with rings running out from the food in it.
     float rr = length(lp.xy - ct.xy);
@@ -108,10 +109,11 @@ void main() {
   // Left in too long: a third ramp, in the same order.
   if ((flags & ${F.over}) != 0 && st.y > order) mat = a_info.y + 2.0;
   // Dipped in sauce: the parts facing up take its colour, more of them the more it's coated.
-  if ((flags & ${F.slosh}) == 0 && ct.y > 0.0 && n.z > -0.2 && 0.5 + 0.5 * sin(a_pos.x * 0.33 + a_pos.y * 0.21) * sin(a_pos.y * 0.29 - a_pos.x * 0.17 + 1.3) < ct.y * 1.15) mat = ct.x;
+  if ((flags & ${F.slosh}) == 0 && ct.y > 0.0 && n.z > -0.2 && 0.5 + 0.5 * sin(a_pos.x * 0.33 + a_pos.y * 0.21) * sin(a_pos.y * 0.29 - a_pos.x * 0.17 + 1.3) < ct.y) { mat = ct.x; coated = true; }
   v_mat = mat;
 
-  float alb = a_info.z;
+  // Sauce on food sits a shade darker than the sauce in the bowl, so a dipped piece keeps its shape.
+  float alb = a_info.z - (coated ? 0.2 : 0.0);
   if ((flags & ${F.emissive}) != 0) { v_shade = alb; return; }
   float lam = dot(n, u_light);
   if (twoSided) lam = abs(lam) * 0.85;
@@ -182,7 +184,8 @@ void main() {
     p.xy += vec2(sin(seed * 30.0 + u_time * 2.0), cos(seed * 20.0 + u_time * 1.7)) * 10.0 * u;
     radius *= 1.0 + u * 1.6;
     k *= sin(u * 3.14159);
-    v_over = 0.7;
+    // Only over the broth: dithered over the board and bowls it reads as a grid of dots.
+    v_over = 0.0;
   }
   if ((flags & ${G.splash}) != 0) {
     float age = u_time - st.w;
@@ -193,7 +196,8 @@ void main() {
     p.z += (150.0 + seed * 120.0) * age - 380.0 * age * age;
     if (p.z < -2.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
     k *= 1.0 - age / 1.1;
-    v_over = 1.0;
+    // Drops show against the broth; over solid things they would dither into a grid of dots.
+    v_over = 0.0;
   }
   if ((flags & ${G.flicker}) != 0) k *= 0.75 + 0.25 * sin(u_time * (2.0 + seed * 3.0) + seed * 40.0);
   vec3 w = vec3(dot(r0.xyz, p) + r0.w, dot(r1.xyz, p) + r1.w, dot(r2.xyz, p) + r2.w);
