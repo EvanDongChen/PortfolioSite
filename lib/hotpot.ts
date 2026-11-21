@@ -221,7 +221,7 @@ export const frameAlong = (x: V3): number[] => {
 
 // ---------------------------------------------------------------- objects ---
 
-export type BodyKind = 'wall' | 'steam' | 'splash' | 'chopstick' | 'ladle' | 'egg' | 'ribbon' | Ingredient;
+export type BodyKind = 'wall' | 'steam' | 'splash' | 'chopstick' | 'ladle' | 'egg' | 'ribbon' | 'strainer' | Ingredient;
 
 /** Everything that goes into the pot. */
 export type Ingredient =
