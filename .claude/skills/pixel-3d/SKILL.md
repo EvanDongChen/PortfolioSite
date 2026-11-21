@@ -1,6 +1,6 @@
 ---
 name: pixel-3d
-description: Build and improve real 3D scenes that are rendered as pixel art on Evan's portfolio site — the surfel ("pixel-art Gaussian splat") pipeline behind the deep-space page (lib/space*.ts, components/SpaceSky.tsx), and any new theme built the same way. Use this for anything on the space page (planets, aliens/blips, saucers, events like meteor showers or eclipses, the black hole, aurorae, the garden moon, its lettering or debug panel), for "make it 3D", "3D but pixel art", "like the space page", Gaussian-splat or voxel-looking ideas, for starting another 3D-to-pixel theme, and for fixing how such a scene looks or performs (things overlapping, features too small to read, colours snapping wrong, glows not showing). Use it alongside pixel-sim, which still holds Evan's taste and working rules; this skill holds the 3D technique.
+description: Build and improve real 3D scenes that are rendered as pixel art on Evan's portfolio site — the surfel ("pixel-art Gaussian splat") pipeline behind the deep-space page (lib/space*.ts, components/space/SpaceSky.tsx), and any new theme built the same way. Use this for anything on the space page (planets, aliens/blips, saucers, events like meteor showers or eclipses, the black hole, aurorae, the garden moon, its lettering or debug panel), for "make it 3D", "3D but pixel art", "like the space page", Gaussian-splat or voxel-looking ideas, for starting another 3D-to-pixel theme, and for fixing how such a scene looks or performs (things overlapping, features too small to read, colours snapping wrong, glows not showing). Use it alongside pixel-sim, which still holds Evan's taste and working rules; this skill holds the 3D technique.
 ---
 
 # 3D scenes as pixel art
@@ -30,14 +30,14 @@ in it happened once already.
 
 | File | Job |
 |---|---|
-| `lib/space.ts` | Builds the scene (`buildScene`, no DOM): palette ramps, flags, noise, surfel builders (`sphere`, `lumpy`, rings), the sun, planets, asteroids, comet, nebulae, galaxy, black hole, aurorae. `poseBodies` writes every body's transform each frame. Placement helpers (`screenClearance`, `obstaclesOf`, `pickClear`) and screen maths (`toScreen`, `fromScreen`, `uprightOn`) |
-| `lib/spaceAliens.ts` | The creatures: blips (`buildBlip`), saucers, colonies on rocks, the garden moon. `stepAliens` runs their behaviour every frame |
-| `lib/spaceEvents.ts` | Meteor showers, the solar flare, the eclipse; `events.light` carries their effect on the lighting |
-| `lib/spaceView.ts` | WebGL2 renderer: solid pass, glow pass, pixel pass. Calls `stepEvents`, `stepAliens`, `poseBodies` each frame |
-| `lib/spaceWorker.ts` | Builds the scene off the main thread (it takes about half a second) |
-| `components/SpaceSky.tsx` | The host: one fixed canvas, scroll-snapped camera, pointer lean, frame pacing, debug hooks (`window.__space` in dev) |
-| `components/SpaceDebugPanel.tsx` | Konami-code panel: events, jump-to, speed |
-| `SpaceApp.tsx`, `space-theme.css` | The page and its look (retro disco lettering) |
+| `lib/space/space.ts` | Builds the scene (`buildScene`, no DOM): palette ramps, flags, noise, surfel builders (`sphere`, `lumpy`, rings), the sun, planets, asteroids, comet, nebulae, galaxy, black hole, aurorae. `poseBodies` writes every body's transform each frame. Placement helpers (`screenClearance`, `obstaclesOf`, `pickClear`) and screen maths (`toScreen`, `fromScreen`, `uprightOn`) |
+| `lib/space/spaceAliens.ts` | The creatures: blips (`buildBlip`), saucers, colonies on rocks, the garden moon. `stepAliens` runs their behaviour every frame |
+| `lib/space/spaceEvents.ts` | Meteor showers, the solar flare, the eclipse; `events.light` carries their effect on the lighting |
+| `lib/space/spaceView.ts` | WebGL2 renderer: solid pass, glow pass, pixel pass. Calls `stepEvents`, `stepAliens`, `poseBodies` each frame |
+| `lib/space/spaceWorker.ts` | Builds the scene off the main thread (it takes about half a second) |
+| `components/space/SpaceSky.tsx` | The host: one fixed canvas, scroll-snapped camera, pointer lean, frame pacing, debug hooks (`window.__space` in dev) |
+| `components/space/SpaceDebugPanel.tsx` | Konami-code panel: events, jump-to, speed |
+| `pages/SpaceApp.tsx`, `styles/space-theme.css` | The page and its look (retro disco lettering) |
 
 ## How the world sits on the page
 
@@ -90,7 +90,7 @@ anything deeper parallaxes behind it. Keep that in mind for everything:
 ## Starting another 3D theme
 
 Copy the space files as the template (`space.ts`, `spaceView.ts`,
-`spaceWorker.ts`, `SpaceSky.tsx`, `SpaceApp.tsx`, the theme CSS and its
+`spaceWorker.ts`, `SpaceSky.tsx`, `pages/SpaceApp.tsx`, the theme CSS and its
 frames script) and wire the page in as pixel-sim's architecture reference
 describes (`ThemeContext` page and preload, `index.tsx` lazy load,
 `pageLoaders`, `pageTransition` colours, a `ThemeSwitch` stop with a pixel

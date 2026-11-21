@@ -1,6 +1,6 @@
 ---
 name: pixel-sim
-description: Build and improve the living pixel-art simulations on Evan's portfolio site (the reef, the pond, and any new one). Use this for adding species, plants, biomes, landmarks or events; for suggesting what to add next; for reactions like "it feels dead", "it's ugly", "doesn't match", "not to scale" or "I don't see the X"; for starting a new simulation theme; and for polishing or speeding up a simulation. Use it even for a small tweak to anything in lib/pond*, lib/pixelOcean*, the reef or pond engines or their panels, and whenever the user asks "what should we add next", even if they don't say "simulation". Not for the non-pixel aquarium (App.tsx) or for changing the portfolio's written content.
+description: Build and improve the living pixel-art simulations on Evan's portfolio site (the reef, the pond, and any new one). Use this for adding species, plants, biomes, landmarks or events; for suggesting what to add next; for reactions like "it feels dead", "it's ugly", "doesn't match", "not to scale" or "I don't see the X"; for starting a new simulation theme; and for polishing or speeding up a simulation. Use it even for a small tweak to anything in lib/pond*, lib/pixelOcean*, the reef or pond engines or their panels, and whenever the user asks "what should we add next", even if they don't say "simulation". Not for the non-pixel aquarium (pages/App.tsx) or for changing the portfolio's written content.
 ---
 
 # Pixel simulations
@@ -110,7 +110,7 @@ node .claude/skills/pixel-sim/scripts/bench.mjs pond --base HEAD
 node .claude/skills/pixel-sim/scripts/gif.mjs --out docs/media/x.gif --page hotpot --debug "Ladle swirl" --clip 100,200,320,300 --scale 2 --frames 70
 ```
 
-`shot.mjs --eval '<js>'` runs code in the page before the shots. The pond can run on the main thread with `--query pond-main`, which exposes the engine as `window.__pond` for spawning things or reading `drawCost`. The reef runs in a worker with no such hook, so to stage a reef scene, `--eval` can `import('/lib/pixelOcean.ts')` and build one directly.
+`shot.mjs --eval '<js>'` runs code in the page before the shots. The pond can run on the main thread with `--query pond-main`, which exposes the engine as `window.__pond` for spawning things or reading `drawCost`. The reef runs in a worker with no such hook, so to stage a reef scene, `--eval` can `import('/lib/reef/pixelOcean.ts')` and build one directly.
 
 Page cards cover the centre of the page, so judge the world from the gutters and the gaps between cards, as a visitor would.
 

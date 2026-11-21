@@ -50,7 +50,7 @@ Copy `buildBlip` and `newBlip`:
 
 ## An event
 
-In `lib/spaceEvents.ts`: add state, a `startEvent` case, scheduling in
+In `lib/space/spaceEvents.ts`: add state, a `startEvent` case, scheduling in
 `stepEvents` (first time soon after arrival, then every couple of minutes,
 not overlapping the other big ones), and its effect on `light`. Bodies an
 event uses are built once in `populateEvents` and parked at `PARKED` when
@@ -84,7 +84,7 @@ A soak, run with `--eval` on any page:
 
 ```js
 (async () => {
-  const s = await import('/lib/space.ts'), a = await import('/lib/spaceAliens.ts'), e = await import('/lib/spaceEvents.ts');
+  const s = await import('/lib/space/space.ts'), a = await import('/lib/space/spaceAliens.ts'), e = await import('/lib/space/spaceEvents.ts');
   const sc = s.buildScene(1440, 900, 6500); const out = new Float32Array(sc.bodies.length * 20);
   const cam = { viewW: 1440, viewH: 900, scrollY: 0, offX: 0, offY: 0 }; let t = 40;
   for (let i = 0; i < 6000; i++) { t += 0.1; e.stepEvents(sc, 0.1, cam); a.stepAliens(sc, t, 0.1, cam, i % 50 < 25 ? { x: 150, y: 500 } : null); s.poseBodies(sc, t, out); }

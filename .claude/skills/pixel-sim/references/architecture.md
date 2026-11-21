@@ -1,16 +1,16 @@
 # How the simulations are built
 
-The reef, the pond and the shrine forest (`lib/shrine*`, `ShrineApp.tsx`) share one design. Reuse it rather than inventing another: it is what keeps them smooth while filling a full page.
+The reef, the pond and the shrine forest (`lib/shrine*`, `pages/ShrineApp.tsx`) share one design. Reuse it rather than inventing another: it is what keeps them smooth while filling a full page.
 
 | Layer | Reef | Pond | Rule |
 |---|---|---|---|
-| Simulation | `lib/pixelOcean.ts` | `lib/pond.ts` | No DOM. Runs at `TICKS_PER_SECOND` (30), so it can be stepped in Node |
-| Renderer and camera | `lib/pixelOceanView.ts` | `lib/pondView.ts` | Floor, light and two sprite canvases that take turns, so sprites never jump |
-| Art | `lib/pixelOceanArt.ts` | `lib/pondArt.ts` | Sprites as character grids plus palettes, drawn once and cached |
-| Engine | `lib/reefEngine.ts` | `lib/pondEngine.ts` | Message-driven, no DOM: pacing, hover, click, adopt, debug, stats |
-| Worker | `lib/reefWorker.ts` | `lib/pondWorker.ts` | Hosts the engine with OffscreenCanvas where the browser allows |
-| Host | `components/PixelOcean.tsx` | `components/PondWater.tsx` | Places canvases, forwards scroll and pointer, shows what comes back |
-| Page and theme | `PixelApp.tsx`, `pixel-theme.css` | `PondApp.tsx`, `pond-theme.css` | Same portfolio content, restyled through marker classes |
+| Simulation | `lib/reef/pixelOcean.ts` | `lib/pond/pond.ts` | No DOM. Runs at `TICKS_PER_SECOND` (30), so it can be stepped in Node |
+| Renderer and camera | `lib/reef/pixelOceanView.ts` | `lib/pond/pondView.ts` | Floor, light and two sprite canvases that take turns, so sprites never jump |
+| Art | `lib/reef/pixelOceanArt.ts` | `lib/pond/pondArt.ts` | Sprites as character grids plus palettes, drawn once and cached |
+| Engine | `lib/reef/reefEngine.ts` | `lib/pond/pondEngine.ts` | Message-driven, no DOM: pacing, hover, click, adopt, debug, stats |
+| Worker | `lib/reef/reefWorker.ts` | `lib/pond/pondWorker.ts` | Hosts the engine with OffscreenCanvas where the browser allows |
+| Host | `components/reef/PixelOcean.tsx` | `components/pond/PondWater.tsx` | Places canvases, forwards scroll and pointer, shows what comes back |
+| Page and theme | `pages/PixelApp.tsx`, `styles/pixel-theme.css` | `pages/PondApp.tsx`, `styles/pond-theme.css` | Same portfolio content, restyled through marker classes |
 | Panels | `EcosystemPanel`, `ReefDebugPanel` | `PondCensus`, `PondDebugPanel` | Census closed by default; debug opens with the Konami code |
 
 Coordinates are world cells (`x`, `z`, and height `h`). The world spans the whole page and scrolls with it. Anything a visitor sees belongs to the world, so it must not be positioned in screen space.
@@ -20,16 +20,16 @@ Coordinates are world cells (`x`, `z`, and height `h`). The world spans the whol
 Follow an existing relative through the code. Searching for it across `lib/` and `components/` finds every place below. These lists were traced from `newt` in the pond and `lionfish` in the reef.
 
 **Pond:**
-1. `lib/pond.ts`: the `PondSpecies` union, `POND_SPECIES_LIST`, an entry in `POND_SPECIES` (speed, vision, metabolism, age, `cap`, names), a `case` in the think switch and a `think*` method. Add it to `WILD` with a placement in `spawnWild` if it needs a special spot, and to the arrivals list in the step loop if short-lived.
-2. `lib/pondArt.ts`: frames, palette, and a `case` in the icon function.
-3. `lib/pondView.ts`: body width in the width table, a `case` to draw it, and `SIZE` if needed.
-4. `components/PondCensus.tsx` and `components/PondDebugPanel.tsx`: the species lists and labels.
+1. `lib/pond/pond.ts`: the `PondSpecies` union, `POND_SPECIES_LIST`, an entry in `POND_SPECIES` (speed, vision, metabolism, age, `cap`, names), a `case` in the think switch and a `think*` method. Add it to `WILD` with a placement in `spawnWild` if it needs a special spot, and to the arrivals list in the step loop if short-lived.
+2. `lib/pond/pondArt.ts`: frames, palette, and a `case` in the icon function.
+3. `lib/pond/pondView.ts`: body width in the width table, a `case` to draw it, and `SIZE` if needed.
+4. `components/pond/PondCensus.tsx` and `components/pond/PondDebugPanel.tsx`: the species lists and labels.
 
 **Reef:**
-1. `lib/pixelOcean.ts`: the species union, an entry in `SPECIES`, a `think*` method and its dispatch, and any relationship tables, such as which hunters avoid it.
-2. `lib/pixelOceanArt.ts`: the sprite kinds, frames and `PALETTES`.
-3. `lib/pixelOceanView.ts`: body width, `SIZE`, the wake and shadow tables if it needs them, and a `case` to draw it.
-4. `components/EcosystemPanel.tsx` and `components/ReefDebugPanel.tsx`: the labels and lists.
+1. `lib/reef/pixelOcean.ts`: the species union, an entry in `SPECIES`, a `think*` method and its dispatch, and any relationship tables, such as which hunters avoid it.
+2. `lib/reef/pixelOceanArt.ts`: the sprite kinds, frames and `PALETTES`.
+3. `lib/reef/pixelOceanView.ts`: body width, `SIZE`, the wake and shadow tables if it needs them, and a `case` to draw it.
+4. `components/reef/EcosystemPanel.tsx` and `components/reef/ReefDebugPanel.tsx`: the labels and lists.
 
 **For every creature, decide:**
 - What eats it, what it eats, and how it flees.
