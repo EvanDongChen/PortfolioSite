@@ -104,6 +104,10 @@ node .claude/skills/pixel-sim/scripts/shot.mjs --out <scratchpad>/zoom --page po
 
 # Performance: step and draw ms, with step time compared to a git ref
 node .claude/skills/pixel-sim/scripts/bench.mjs pond --base HEAD
+
+# A GIF for the README (needs Python with Pillow): optionally press a debug-panel button, stage with --eval
+# (which may return { clip: [x, y, w, h], scale } to follow the action), then record --frames of the clip
+node .claude/skills/pixel-sim/scripts/gif.mjs --out docs/media/x.gif --page hotpot --debug "Ladle swirl" --clip 100,200,320,300 --scale 2 --frames 70
 ```
 
 `shot.mjs --eval '<js>'` runs code in the page before the shots. The pond can run on the main thread with `--query pond-main`, which exposes the engine as `window.__pond` for spawning things or reading `drawCost`. The reef runs in a worker with no such hook, so to stage a reef scene, `--eval` can `import('/lib/pixelOcean.ts')` and build one directly.

@@ -4,7 +4,7 @@
 
 **A personal portfolio that is also a living pixel-art ecosystem.**
 
-Scroll through my projects and experience while a whole reef, a pond or a moonlit shrine forest lives, hunts, plays and sleeps behind the page.
+Scroll through my projects and experience while a whole reef, a pond, a moonlit shrine forest, deep space, a sky of floating islands or a bubbling hot pot lives, hunts, plays and cooks behind the page.
 
 [![Live site](https://img.shields.io/badge/live-evanchen.info-f2b8cc?style=for-the-badge)](https://evanchen.info)
 
@@ -14,7 +14,7 @@ Scroll through my projects and experience while a whole reef, a pond or a moonli
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-38bdf8?logo=tailwindcss&logoColor=white)
 ![GitHub Pages](https://img.shields.io/badge/deployed%20on-GitHub%20Pages-222?logo=github)
 
-[Three worlds](#three-worlds-one-portfolio) · [Things to try](#things-to-try) · [How it works](#how-it-works) · [Run it locally](#run-it-locally) · [Adding a project](#adding-a-project)
+[Six worlds](#six-worlds-one-portfolio) · [Things to try](#things-to-try) · [How it works](#how-it-works) · [Run it locally](#run-it-locally) · [Adding a project](#adding-a-project)
 
 <img src="docs/media/hero-switch.gif" alt="The portfolio's hero over the pixel reef, dissolving in blocks into the pixel pond and back" width="720">
 
@@ -24,7 +24,7 @@ Scroll through my projects and experience while a whole reef, a pond or a moonli
 
 ---
 
-## Three worlds, one portfolio
+## Six worlds, one portfolio
 
 The content is the same everywhere: hero, experience, education, skills, projects and contact. Only the world behind it changes, from the buttons at the bottom right. The original aquarium is [archived](#archived-theme-the-aquarium), one click away in the settings panel.
 
@@ -34,13 +34,20 @@ The content is the same everywhere: hero, experience, education, skills, project
     <td width="33%" align="center"><img src="docs/media/pond.png" alt="The pixel pond theme"><br><b>The pond</b><br><sub>Field notes over a lily pond</sub></td>
     <td width="33%" align="center"><img src="docs/media/shrine.png" alt="The shrine forest theme"><br><b>The shrine forest</b><br><sub>Ema plaques in a lantern-lit forest</sub></td>
   </tr>
+  <tr>
+    <td width="33%" align="center"><img src="docs/media/space.png" alt="The deep space theme"><br><b>Deep space</b><br><sub>A flight log through the outer system</sub></td>
+    <td width="33%" align="center"><img src="docs/media/sky.png" alt="The sky islands theme"><br><b>The sky islands</b><br><sub>A traveller's journal above the clouds</sub></td>
+    <td width="33%" align="center"><img src="docs/media/hotpot.png" alt="The hot pot theme"><br><b>The hot pot</b><br><sub>A menu over a bubbling pot</sub></td>
+  </tr>
 </table>
+
+The first three are 2.5D sprite worlds; the last three are real 3D scenes drawn as pixel art (see [how it works](#the-3d-worlds)).
 
 ### 🪸 The reef
 
 <img src="docs/media/reef-life.gif" alt="Fish, crabs, jellyfish and an octopus moving over the reef between content cards" width="720">
 
-A pixel-art reef seen from slightly above, as tall as the page and scrolled with it. A depth gauge turns scrolling into a dive.
+A pixel-art reef seen from slightly above, as tall as the page and scrolled with it.
 
 - **A living seabed.** Every cell is simulated: nutrients seep, algae grows and sheds plankton, and blood stains the sand for a while.
 - **22 species that feed, flee, hunt, breed and die.** Pufferfish inflate when cornered, octopuses camouflage and escape in clouds of ink, morays strike from their dens, anglerfish lure minnows in the deep, mantis shrimp punch crabs, and hermit crabs queue by size to swap shells.
@@ -107,6 +114,91 @@ A moss-and-cedar forest under a permanent night, where the stone lanterns are wh
 - **Mischief and its consequences.** Crows land on disguised tanuki and peck them out; foxes circle a suspicious statue, sniff it and kick it over.
 - **Events.** Moon viewing, a disguise contest, the lantern festival and the night parade, which turns every lantern ghost blue.
 
+### 🪐 Deep space
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/space-saucer.gif" alt="A saucer hovering over a rock colony, its green tractor beam lifting a little round alien off its rock"></td>
+    <td width="50%"><img src="docs/media/space-eclipse.gif" alt="A dark moon sliding across the sun until only a ring of corona is left"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A saucer beams a blip off its rock to take it on a tour</sub></td>
+    <td align="center"><sub>An eclipse: the sun goes out behind a passing moon</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/space-gardenmoon.gif" alt="Two blips with watering cans walking the top of a small moon among glowing flowers"></td>
+    <td width="50%"><img src="docs/media/space-blackhole.gif" alt="A black hole with a churning disk of fire, the stars behind it bent round its edge"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Gardeners water the flowers on the garden moon</sub></td>
+    <td align="center"><sub>A black hole bends the light from behind it into a ring</sub></td>
+  </tr>
+</table>
+
+A real 3D scene: a sun in the top corner lights a system of planets set down the page, each a different world. The page's content sits at one depth; everything deeper scrolls a little slower, and your mouse leans the camera, so the whole system shifts with parallax.
+
+- **Worlds to fly past.** A ringed gas giant, a rust planet, an ice giant, an earthlike world with drifting clouds and aurorae over its pole, a lava world, a violet storm giant and an ice moon, all with moons on tilted orbits. An asteroid belt tumbles across the middle of the page, a comet's tails stream away from the sun, and nebulae and a spiral galaxy sit far behind.
+- **Blips.** Little round aliens live on rock colonies in the margins. They hop between rocks with a squash and a stretch, blink, wave at your cursor and play tag with it, and cover their eyes when meteors fly.
+- **Saucers.** Pink-piloted saucers swoop between planets and colonies, hover, and beam up a blip to take it on a tour past a planet or two, dangling in the beam, before dropping it off at a new home.
+- **The garden moon.** Two blips with watering cans walk its top, watering bare ground until glowing flowers sprout; old flowers wilt and are replanted.
+- **Events.** Meteor showers and lone shooting stars, a solar flare that frizzes every antenna, and an eclipse that dims the page.
+
+### ☁️ The sky islands
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/sky-dragon.gif" alt="A long red-and-gold dragon sweeping in and looping round an azure dragon by the floating islands"></td>
+    <td width="50%"><img src="docs/media/sky-storm.gif" alt="A thunderhead rolling in, the sky turning grey and rain falling over the islands"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>The dragons take turns chasing the flaming pearl</sub></td>
+    <td align="center"><sub>A thunderstorm rolls in (a rainbow follows)</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/sky-sheep.gif" alt="Grey, soaked cloud-sheep raining themselves out and turning white again on an island"></td>
+    <td width="50%"><img src="docs/media/sky-islands.gif" alt="Floating islands with waterfalls, rock pillars and hanging wisteria, two dragons looping through them"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Cloud-sheep soak up the damp and rain themselves out</sub></td>
+    <td align="center"><sub>Islands, waterfalls and rock pillars, with the dragons looping through</sub></td>
+  </tr>
+</table>
+
+Grass-topped islands float down the margins in daylight, each with trees and flowers, a pond spilling off its lip as a waterfall, and banded rock tapering to a point beneath. Clouds drift past and a sea of cloud waits at the bottom of the page.
+
+- **Two dragons and one pearl.** A red-and-gold dragon and an azure-and-white one take turns chasing a flaming pearl, while the other roams on its own. The pearl circles islands so the dragon loops in front of and behind them, threads the rock arches, follows your cursor, and darts off when caught (the catcher does a barrel roll).
+- **Cloud-sheep and their dog.** Herds of cloud-sheep drift apart, soak up damp until they go grey, then rain themselves out; they hop when your cursor comes near, and a shepherd dog rounds up the strays.
+- **Everyone else.** Puffball birds nest under the islands and fly sorties between them, a sky whale with a garden on its back cruises past spouting, shoals of paper koi kites scatter from the dragons, seed puffs drift down and grow flowers where they land, and curtains of wisteria swing as things pass through.
+- **Weather.** A thunderhead brings gloom, rain and lightning, and a rainbow follows it.
+
+### 🍲 The hot pot
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/hotpot-cook.gif" alt="Chopsticks lifting a raw red slice of beef, holding it under the broth while it browns from the edges in, then dropping it back cooked"></td>
+    <td width="50%"><img src="docs/media/hotpot-sauce.gif" alt="A slice of beef carried to the sauce bar, swished round the sesame paste and carried off coated"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Hold food under the broth and watch it cook</sub></td>
+    <td align="center"><sub>Swish it in the sauce bar yourself</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/media/hotpot-ladle.gif" alt="A ladle stirring a circle in the chili broth, leaving a spiral whirlpool that carries the food round"></td>
+    <td width="50%"><img src="docs/media/hotpot-erupt.gif" alt="Bubbles crowding up under a cluster of food until the boil erupts and throws it apart"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>The ladle leaves a whirlpool behind it</sub></td>
+    <td align="center"><sub>A rolling boil erupts and throws the food about</sub></td>
+  </tr>
+</table>
+
+A split pot seen from straight above: red mala on one side, milky bone broth on the other, divided by a steel wall that snakes down the page. Oil beads drift, merge and part on the chili side, golden fat floats on the bone side, bubbles grow and pop over the hot spots, and lamplight slants through the steam.
+
+- **Food that actually cooks.** Beef browns from the edges in and curls, shrimp turn from grey to pink, tofu and quail eggs soak up the chili oil, fish slices go from glassy to white, squid curls into a pinecone, and meat, seafood and dumplings sink when raw and rise as they cook. There are some 27 ingredients and garnishes, from enoki and lotus root to tripe, rice cakes and crab sticks, and leave anything in too long and it overcooks.
+- **Chopsticks come for what's done.** A pair hovers, fidgets, pinches a cooked piece, taps it on the divider and carries it off; a fresh, raw one drops back in with a splash later.
+- **A pot that moves.** Some spots simmer and some roll hard; now and then one erupts and throws the food up. A ladle stirs up a whirlpool, an egg drops in and spreads into silky ribbons, and a wire strainer sweeps through and scoops up a basketful.
+- **A sauce bar.** Pull out a board of four dipping bowls (sesame paste, chili oil, garlic and scallion, black vinegar) and swish food in them yourself: the sauce sloshes and ripples round it, and the food comes out coated.
+
 ## Things to try
 
 <table>
@@ -123,7 +215,9 @@ A moss-and-cedar forest under a permanent night, where the stone lanterns are wh
 - **Open the census** (bottom left) for live counts, including every stage of a frog's life, and a feed of what just happened.
 - **Move your mouse fast** near the frogs and watch them dive.
 - **Hold your cursor** near a disguised tanuki in the shrine forest to freeze it, and click to catch it out.
-- **Type the Konami code** (↑ ↑ ↓ ↓ ← → ← → B A) on the reef, the pond or the shrine for a hidden debug panel. It spawns any creature and starts any event.
+- **In the hot pot, pick food up.** Click a piece and the chopsticks take it away to eat; hold the mouse to carry it about, let go to drop it, let go mid-swing to throw it, flick to turn it over, shake hard to fling it back, or hold still to dunk it and cook it fast. Pull out the sauce bar (bottom left) to dip it.
+- **Move your mouse** in deep space to lean the camera and see the planets parallax, and chase the blips round their rocks. In the sky, the pearl follows a moving cursor and the sheep hop away from it.
+- **Type the Konami code** (↑ ↑ ↓ ↓ ← → ← → B A) on any of the pixel worlds for a hidden debug panel. It spawns creatures, starts any event and speeds time up.
 
     </td>
   </tr>
@@ -171,6 +265,15 @@ Measured in headless Chromium at a 1440 × 900 view, on a page 6000 px tall:
 
 The pages also respect the performance panel (quality tier and a 30/60 fps cap), and stop animating while the tab is hidden.
 
+### The 3D worlds
+
+Deep space, the sky islands and the hot pot are real 3D scenes rendered as pixel art, after [cobanov/pixelart-gaussiansplat](https://github.com/cobanov/pixelart-gaussiansplat).
+
+- **Everything is a cloud of discs.** Every surface (a planet, a dragon's scales, a slice of beef) is built from thousands of small flat discs, each with a position, a direction, a material and a shade. Light that glows (nebulae, steam, a tractor beam) is a second cloud of soft points.
+- **Three passes in WebGL2.** The discs are drawn at twice the art resolution, lit by the sun (or the lamp over the pot), each writing a material and a shade from a hand-picked colour ramp rather than a blended colour. Glows are added on top. A last pass turns each 2 × 2 block into one art pixel by vote, shades edges a step lighter or darker in their own colours (never with an outline), and snaps the background to a small palette with an ordered dither. Every pixel is a real palette colour, so it reads as hand-made pixel art rather than a blurry downscale.
+- **A camera that scrolls with the page.** The content sits at one depth and scrolls exactly with the scene there; deeper things scroll slower, and the mouse leans the camera, which is what makes it feel 3D.
+- **Behaviour on the CPU, drawing on the GPU.** Each scene is built once in a Web Worker; creatures, events and the hot pot's cooking then move whole bodies (position, rotation, squash) each frame, and the shaders do per-disc motion like antennae wobbling, beef curling and sauce sloshing. The hot pot's broth isn't geometry at all: the last pass paints it, with its oil, bubbles and ripples, wherever no food is.
+
 ## Run it locally
 
 You'll need [Node.js](https://nodejs.org/) 20 or newer.
@@ -192,15 +295,18 @@ npm run dev        # http://localhost:3000
 Pushes to the `update` branch also deploy automatically through GitHub Actions.
 
 > [!TIP]
-> In development, add `?pond-main` or `?shrine-main` to the URL to run the pond or the shrine forest on the main thread, where you can reach it from the console as `window.__pond` or `window.__shrine`.
+> In development, add `?pond-main` or `?shrine-main` to the URL to run the pond or the shrine forest on the main thread, where you can reach it from the console as `window.__pond` or `window.__shrine`. The 3D worlds are always reachable there, as `window.__space`, `window.__sky` and `window.__hotpot`.
 
 ## Project structure
 
 ```
-├── index.tsx              picks the page: reef, pond, shrine forest or aquarium
+├── index.tsx              picks the page: reef, pond, shrine forest, deep space, sky islands, hot pot or aquarium
 ├── PixelApp.tsx           the reef page
 ├── PondApp.tsx            the pond page
 ├── ShrineApp.tsx          the shrine-forest page
+├── SpaceApp.tsx           the deep-space page
+├── SkyApp.tsx             the sky-islands page
+├── HotpotApp.tsx          the hot-pot page
 ├── App.tsx                the aquarium page
 ├── components/            page content, buttons, panels, and the canvas hosts
 ├── contexts/              theme and performance settings
@@ -210,11 +316,17 @@ Pushes to the `update` branch also deploy automatically through GitHub Actions.
 │   ├── reefEngine.ts      runs the reef (in reefWorker.ts where possible)
 │   ├── pond*.ts           the pond: simulation, renderer, sprites, engine, worker
 │   ├── shrine*.ts         the shrine forest: simulation, renderer, sprites, engine, worker
+│   ├── space*.ts          deep space: scene builder, aliens, events, WebGL renderer, worker
+│   ├── sky*.ts            the sky islands: scene builder, dragons, critters, folk, events, renderer, worker
+│   ├── hotpot*.ts         the hot pot: scene and ingredients, cooking and chopsticks, events, sauce bar, renderer, worker
 │   ├── pageTransition.ts  the wave of pixel blocks between pages
 │   └── adoption.ts        your adopted creature, kept in localStorage
 ├── pixel-theme.css        the pixel UI (fonts, 9-slice frames, cursors)
 ├── pond-theme.css         the pond's colours and lettering over it
 ├── shrine-theme.css       the shrine's colours and lettering over it
+├── space-theme.css        deep space's colours and lettering over it
+├── sky-theme.css          the sky's colours and lettering over it
+├── hotpot-theme.css       the hot pot's colours and lettering over it
 └── public/images/         project thumbnails (960 px .webp)
 ```
 
@@ -231,8 +343,8 @@ The original page, from before the pixel worlds: smooth, full-colour fish that s
 
 ## Credits
 
-- Pixel fonts: [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P) and [VT323](https://fonts.google.com/specimen/VT323) (SIL Open Font License); [Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans) and [Jersey 15](https://fonts.google.com/specimen/Jersey+15) on the pond and [DotGothic16](https://fonts.google.com/specimen/DotGothic16) in the shrine forest (all SIL Open Font License); body text in [Poppins](https://fonts.google.com/specimen/Poppins).
-- All creatures, plants and scenery are original pixel art.
+- Pixel fonts: [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P) and [VT323](https://fonts.google.com/specimen/VT323) (SIL Open Font License); [Pixelify Sans](https://fonts.google.com/specimen/Pixelify+Sans) and [Jersey 15](https://fonts.google.com/specimen/Jersey+15) on the pond and [DotGothic16](https://fonts.google.com/specimen/DotGothic16) in the shrine forest, [Titan One](https://fonts.google.com/specimen/Titan+One) in deep space, [Cormorant Garamond](https://fonts.google.com/specimen/Cormorant+Garamond) in the sky and [Bungee](https://fonts.google.com/specimen/Bungee) and [Bungee Inline](https://fonts.google.com/specimen/Bungee+Inline) in the hot pot (all SIL Open Font License); body text in [Poppins](https://fonts.google.com/specimen/Poppins).
+- All creatures, plants and scenery are original pixel art. The 3D worlds' rendering is after [cobanov/pixelart-gaussiansplat](https://github.com/cobanov/pixelart-gaussiansplat).
 
 <div align="center">
 <br>
