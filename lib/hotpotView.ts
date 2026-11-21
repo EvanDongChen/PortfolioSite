@@ -60,6 +60,16 @@ void main() {
     lp.z += st.x * lp.y * lp.y;
     ln = normalize(vec3(ln.x, ln.y - 2.0 * st.x * lp.y * ln.z, ln.z));
   }
+  vec4 ct = texelFetch(u_obj, ivec2(o + 4, 0), 0);
+  if ((flags & ${F.slosh}) != 0) {
+    // Sauce: tipped as it sloshes, with rings running out from the food in it.
+    float rr = length(lp.xy - ct.xy);
+    float ring = st.z * sin(rr * 0.35 - u_time * 9.0) * exp(-rr * 0.02);
+    lp.z += st.x * lp.x + st.y * lp.y + ring;
+    float dr = st.z * cos(rr * 0.35 - u_time * 9.0) * 0.35 * exp(-rr * 0.02);
+    vec2 dir = rr > 0.01 ? (lp.xy - ct.xy) / rr : vec2(0.0);
+    ln = normalize(vec3(-st.x - dir.x * dr, -st.y - dir.y * dr, 1.0));
+  }
   if ((flags & ${F.ripple}) != 0) {
     float ph = lp.x * 0.13 + u_time * 2.4 + st.w;
     lp.z += sin(ph) * 2.6;
@@ -98,8 +108,7 @@ void main() {
   // Left in too long: a third ramp, in the same order.
   if ((flags & ${F.over}) != 0 && st.y > order) mat = a_info.y + 2.0;
   // Dipped in sauce: the parts facing up take its colour, more of them the more it's coated.
-  vec4 ct = texelFetch(u_obj, ivec2(o + 4, 0), 0);
-  if (ct.y > 0.0 && n.z > -0.2 && fract(float(gl_VertexID) * 0.6180339) < ct.y) mat = ct.x;
+  if ((flags & ${F.slosh}) == 0 && ct.y > 0.0 && n.z > -0.2 && 0.5 + 0.5 * sin(a_pos.x * 0.33 + a_pos.y * 0.21) * sin(a_pos.y * 0.29 - a_pos.x * 0.17 + 1.3) < ct.y * 1.15) mat = ct.x;
   v_mat = mat;
 
   float alb = a_info.z;
@@ -759,7 +768,7 @@ export class HotpotView {
     const scene = this.scene;
     if (!scene || !this.solidFbo || !this.glowFbo) return;
     stepEvents(scene, fr.time, fr.dt, fr);
-    stepSauce(scene, fr.dt, fr, fr.pointer);
+    stepSauce(scene, fr.dt, fr.time, fr, fr.pointer);
     stepLife(scene, fr.time, fr.dt, fr, fr.pointer);
     const life = scene.life;
     poseBodies(scene, this.pose);

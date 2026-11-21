@@ -8,7 +8,6 @@
  * Runs on the main thread every frame (`stepLife`), writing each body's pose.
  */
 
-import { SAUCES } from './hotpotSauce';
 import {
   Body, Builder, Clear, G, HotpotCamera, HotpotScene, INGREDIENTS, Ingredient, Plume, V3, Wall,
   IDENTITY, buildChopstick, buildIngredient, wallX, frameAlong, mul3, norm, rotAxis, rotZ, wallDist,
@@ -53,9 +52,7 @@ export interface Item {
 
 export interface Chopsticks {
   a: number; b: number;
-  state: 'idle' | 'down' | 'adjust' | 'pinch' | 'lift' | 'tap' | 'away' | 'carry' | 'leave' | 'dip';
-  /** The sauce bowl it's dunking food in. */
-  dipBowl?: number;
+  state: 'idle' | 'down' | 'adjust' | 'pinch' | 'lift' | 'tap' | 'away' | 'carry' | 'leave';
   /** Where the tap on the divider happens, if it's near enough. */
   tapAt: V3 | null;
   t: number;
@@ -631,8 +628,10 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
     const d = life.drag;
     if (!d) { p.state = 'lift'; p.t = 0; p.from = [...p.tip] as V3; }
     else {
-      const goal: V3 = [d.x, d.y, 55 * s + top];
-      const k = Math.min(1, dt * 12);
+      // Over a sauce bowl it goes down into the sauce and follows the mouse there, slowly: the sauce is thick.
+      const dip = scene.sauce.dipAt;
+      const goal: V3 = dip ? [dip[0], dip[1], dip[2] + top - 1 * s] : [d.x, d.y, 55 * s + top];
+      const k = Math.min(1, dt * (dip ? 4.5 : 12));
       const ox = p.tip[0], oy = p.tip[1];
       p.tip = [p.tip[0] + (goal[0] - p.tip[0]) * k, p.tip[1] + (goal[1] - p.tip[1]) * k, p.tip[2] + (goal[2] - p.tip[2]) * k];
       if (dt > 0) { d.vx = (p.tip[0] - ox) / dt; d.vy = (p.tip[1] - oy) / dt; }
@@ -642,19 +641,6 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
       // Drips now and then while it hangs over the broth.
       if (Math.random() < dt * 2.5) addRipple(life, it.x, it.y, 0.25);
     }
-  } else if (p.state === 'dip') {
-    // Over to the bowl, down into the sauce and a swish about, then up, coated, and off to be eaten.
-    const at = scene.sauce.surface[p.dipBowl ?? 0];
-    const mat = SAUCES[p.dipBowl ?? 0].mat();
-    const T = p.t;
-    let goal: V3;
-    if (T < 0.35) { const e = easeInOut(T / 0.35); goal = [p.from[0] + (at[0] - p.from[0]) * e, p.from[1] + (at[1] - p.from[1]) * e, p.from[2] + (at[2] + 40 * s + top - p.from[2]) * e]; }
-    else if (T < 0.6) goal = [at[0], at[1], at[2] + top * 0.85 + 40 * s * (1 - easeInOut((T - 0.35) / 0.25))];
-    else if (T < 0.95) { goal = [at[0] + Math.sin((T - 0.6) * 30) * 4 * s, at[1], at[2] + top * 0.85]; it.coat = [mat, Math.min(0.8, (T - 0.6) * 2.5)]; }
-    else goal = [at[0], at[1], at[2] + top * 0.85 + 60 * s * easeInOut(Math.min(1, (T - 0.95) / 0.3))];
-    p.tip = goal;
-    it.x = goal[0]; it.y = goal[1]; it.fz = goal[2] - top;
-    if (T >= 1.25) { p.state = 'away'; p.t = 0; p.from = [...p.tip] as V3; }
   } else if (p.state === 'lift') {
     // Up out of the broth, dripping.
     const u = Math.min(1, p.t / 0.5);
@@ -688,7 +674,7 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
   poseSticks(scene, p);
   // Hot food steams as it's carried up.
   const w = scene.bodies[p.wisp];
-  const carrying = (p.state === 'pinch' || p.state === 'lift' || p.state === 'tap' || p.state === 'away' || p.state === 'carry' || p.state === 'dip') && it.state === 'held';
+  const carrying = (p.state === 'pinch' || p.state === 'lift' || p.state === 'tap' || p.state === 'away' || p.state === 'carry') && it.state === 'held';
   w.live = { c: carrying ? [it.x, it.y, it.fz] : PARKED, rot: IDENTITY };
   w.params = [0, 0, carrying ? 1 : 0, 0];
 };

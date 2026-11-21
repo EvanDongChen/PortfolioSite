@@ -140,6 +140,8 @@ export const F = {
   ripple: 1 << 17,
   /** Curls along local y too, into a dome (squid scoring opening into a pinecone). */
   curl2: 1 << 18,
+  /** A pool of sauce: tilted by params[0..1] as it sloshes, rippling out from the point in the coat texel by params[2]. */
+  slosh: 1 << 19,
 } as const;
 export const cookOrder = (k: number) => Math.max(0, Math.min(15, Math.round(k * 15))) << 8;
 /** The piece a surfel breaks off with: 0 stays put; 1–8 head off at (piece - 1) × 45°. */

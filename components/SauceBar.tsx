@@ -43,12 +43,12 @@ const SauceBar: React.FC<SauceBarProps> = ({ open, onToggle }) => {
       </button>
       <div
         className={`sauce-bar-labels fixed z-[5] pointer-events-none ${open ? 'is-open' : ''}`}
-        style={{ left: L.left, bottom: L.bottom, width: L.w, height: L.h }}
+        style={{ left: L.left, top: `calc(50% - ${L.h / 2}px)`, width: L.w, height: L.h }}
         aria-hidden="true"
       >
-        <span className="sauce-bar-title">Sauce bar · drag food onto a bowl</span>
+        <span className="sauce-bar-title">Sauce bar · carry food in and swish it</span>
         {SAUCES.map((sauce, i) => (
-          <span key={sauce.name} className="sauce-bar-name" style={{ left: L.bowls[i][0], top: L.bowls[i][1] + L.r - 2 }}>
+          <span key={sauce.name} className="sauce-bar-name" style={{ left: L.w + 6, top: L.bowls[i][1] - 8 }}>
             {sauce.name}
           </span>
         ))}

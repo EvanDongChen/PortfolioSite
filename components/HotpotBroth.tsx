@@ -4,7 +4,7 @@ import { dragTo, foodAt, grabAt, pluckNow, pourIn, pressAt, releaseDrag, rolling
 import { HotpotDebugActions } from './HotpotDebugPanel';
 import { HotpotView } from '../lib/hotpotView';
 import { startEvent } from '../lib/hotpotEvents';
-import { dipInto } from '../lib/hotpotSauce';
+import { eatIfDipped } from '../lib/hotpotSauce';
 import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext';
 
 // Screen pixels per art pixel; phones get a finer grid so the ingredients keep their detail.
@@ -130,9 +130,8 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug, sauceOpen = f
     };
     const onUp = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse' || !view.scene?.life.drag) return;
-      // Let go over a sauce bowl and it's dunked; anywhere else it drops back in.
-      const sx = e.clientX, sy = e.clientY;
-      releaseDrag(view.scene, (it, p) => dipInto(view.scene!, camNow(), sx, sy, it, p));
+      // Let go of something you've dipped and it's eaten; anything else drops back in.
+      releaseDrag(view.scene, eatIfDipped);
       pinchTimer = window.setTimeout(() => document.documentElement.removeAttribute('data-hotpot-pinch'), 150);
     };
     window.addEventListener('pointerdown', onDown);
