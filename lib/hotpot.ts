@@ -375,35 +375,39 @@ export const tube = (B: Builder, obj: number, sp: number, at: (t: number) => { x
 
 // --------------------------------------------------------- the ingredients ---
 
-/** How big each ingredient is (half its longest side, CSS px at full size), how much of it sits under the broth, and how long it takes to cook (seconds; 0: it doesn't). */
-export const INGREDIENTS: Record<Ingredient, { r: number; sink: number; cook: number; rawSink?: number }> = {
-  beef: { r: 60, sink: 1, cook: 16 },
-  shrimp: { r: 40, sink: 4, cook: 22 },
-  tofu: { r: 34, sink: 12, cook: 38 },
-  fishball: { r: 21, sink: 6, cook: 30, rawSink: 24 },
-  dumpling: { r: 40, sink: 4, cook: 30, rawSink: 22 },
-  egg: { r: 16, sink: 5, cook: 40 },
-  bokchoy: { r: 56, sink: 1, cook: 24 },
-  shiitake: { r: 32, sink: 5, cook: 0 },
-  enoki: { r: 50, sink: 1, cook: 0 },
-  lotus: { r: 32, sink: 2, cook: 0 },
-  corn: { r: 36, sink: 10, cook: 0 },
-  woodear: { r: 32, sink: 1, cook: 0 },
-  chili: { r: 20, sink: 1, cook: 0 },
-  pepper: { r: 6, sink: 1, cook: 0 },
-  anise: { r: 14, sink: 1, cook: 0 },
-  goji: { r: 8, sink: 1, cook: 0 },
-  scallion: { r: 9, sink: 1, cook: 0 },
-  fish: { r: 44, sink: 1, cook: 14 },
-  noodles: { r: 44, sink: 2, cook: 26 },
-  quail: { r: 16, sink: 5, cook: 30 },
-  meatball: { r: 22, sink: 6, cook: 34, rawSink: 36 },
-  tripe: { r: 44, sink: 1, cook: 0 },
-  ricecake: { r: 26, sink: 4, cook: 28 },
-  puff: { r: 26, sink: 6, cook: 30 },
-  crab: { r: 34, sink: 3, cook: 20 },
-  squid: { r: 34, sink: 2, cook: 14 },
-  napa: { r: 60, sink: -3, cook: 22 },
+/**
+ * How big each ingredient is (half its longest side, CSS px at full size), how far its centre sits under the broth once
+ * cooked and, for those that sink when raw, before; how long it takes to cook (seconds; 0: it doesn't), and how wide it
+ * is for its length (for keeping it off the divider, whichever way it's turned).
+ */
+export const INGREDIENTS: Record<Ingredient, { r: number; sink: number; cook: number; rawSink?: number; aspect: number }> = {
+  beef: { r: 60, sink: 1, cook: 16, rawSink: 16, aspect: 0.55 },
+  shrimp: { r: 40, sink: 4, cook: 22, rawSink: 20, aspect: 0.8 },
+  tofu: { r: 34, sink: 12, cook: 38, aspect: 1 },
+  fishball: { r: 21, sink: 6, cook: 30, rawSink: 24, aspect: 1 },
+  dumpling: { r: 40, sink: 4, cook: 30, rawSink: 22, aspect: 0.62 },
+  egg: { r: 16, sink: 5, cook: 40, rawSink: 16, aspect: 0.78 },
+  bokchoy: { r: 56, sink: 1, cook: 24, aspect: 0.5 },
+  shiitake: { r: 32, sink: 5, cook: 0, aspect: 1 },
+  enoki: { r: 50, sink: 1, cook: 0, aspect: 0.75 },
+  lotus: { r: 32, sink: 2, cook: 0, aspect: 1 },
+  corn: { r: 36, sink: 10, cook: 0, aspect: 0.6 },
+  woodear: { r: 32, sink: 1, cook: 0, aspect: 0.9 },
+  chili: { r: 20, sink: 1, cook: 0, aspect: 0.35 },
+  pepper: { r: 6, sink: 1, cook: 0, aspect: 1 },
+  anise: { r: 14, sink: 1, cook: 0, aspect: 1 },
+  goji: { r: 8, sink: 1, cook: 0, aspect: 0.7 },
+  scallion: { r: 9, sink: 1, cook: 0, aspect: 1 },
+  fish: { r: 44, sink: 1, cook: 14, rawSink: 16, aspect: 0.48 },
+  noodles: { r: 44, sink: 2, cook: 26, rawSink: 12, aspect: 0.55 },
+  quail: { r: 16, sink: 5, cook: 30, rawSink: 20, aspect: 0.8 },
+  meatball: { r: 22, sink: 6, cook: 34, rawSink: 36, aspect: 1 },
+  tripe: { r: 44, sink: 1, cook: 0, rawSink: 14, aspect: 0.62 },
+  ricecake: { r: 26, sink: 4, cook: 28, rawSink: 18, aspect: 0.55 },
+  puff: { r: 26, sink: 6, cook: 30, aspect: 1 },
+  crab: { r: 34, sink: 3, cook: 20, rawSink: 18, aspect: 0.3 },
+  squid: { r: 34, sink: 2, cook: 14, rawSink: 16, aspect: 0.65 },
+  napa: { r: 60, sink: -3, cook: 22, aspect: 0.62 },
 };
 
 /** Builds one ingredient's surfels into `obj`, `s` times full size. */

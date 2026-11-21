@@ -418,6 +418,7 @@ void main() {
   ivec2 ab = p % 4;
   float bay = (BAYER[ab.y * 4 + ab.x] + 0.5) / 16.0;
   bool under = false;
+  float depth = 0.0;
   if (n >= 2) {
     int best = 0, bestVotes = 0;
     for (int i = 0; i < 4; i++) {
@@ -427,8 +428,10 @@ void main() {
       if (v > bestVotes) { bestVotes = v; best = i; }
     }
     float h = (s[best].b - 0.25) * 512.0;
-    // Under the surface it's only a shadow in the broth (see below).
-    under = h < -2.5;
+    // Just under the surface it shows through in its own colours, a step or two darker; deeper, it's only a
+    // darker patch of broth in its shape (see below). So something rising can be watched coming up.
+    depth = -h;
+    under = h < -11.0;
     if (!under) {
       int mat = int(s[best].r * 255.0 + 0.5);
       int shade = int(s[best].g * 255.0 + 0.5);
@@ -439,6 +442,7 @@ void main() {
       if (cover(p - ivec2(0, 1)) < 2) open++;
       // Never down to the darkest step, which would read as an outline.
       if (open > 0 && open < 4) shade = shade >= 3 ? min(shade + 1, ${SHADES - 1}) : max(shade - 1, 1);
+      if (h < -2.5) shade = max(min(shade, 3) - (h < -6.0 ? 2 : 1), 0);
       vec3 col = texelFetch(u_ramps, ivec2(shade, mat), 0).rgb;
       // Steam and spray that drift over it, dithered in as their own colour.
       vec4 ov = vec4(0.0);
@@ -457,7 +461,7 @@ void main() {
   }
   vec3 c = broth(w);
   // Something just under the surface: a darker patch of broth in its shape.
-  if (under) c *= 0.72;
+  if (under) c *= mix(0.55, 0.85, clamp((depth - 11.0) / 24.0, 0.0, 1.0));
   // Shadows of things above the broth, cast down and to the right, further the higher they are.
   vec2 dir = -u_light.xy / u_light.z;
   float hs = 4.0;

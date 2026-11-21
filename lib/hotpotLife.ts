@@ -195,14 +195,16 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
   };
 };
 
-/** How far below the surface an item's centre sits: dumplings and fish balls lie low until they're cooked, then float up. */
+/**
+ * How far below the surface an item's centre sits. Meat, seafood, dumplings and the like go in under the broth and rise
+ * as they cook, breaking the surface when they're about done; meatballs stay down until done, then come up all at once.
+ */
 const sinkOf = (it: Item) => {
   const g = INGREDIENTS[it.kind];
   // A tofu puff soaks up broth and settles lower.
   if (it.kind === 'puff') return g.sink + Math.min(1, it.cook) * 8;
   if (g.rawSink === undefined) return g.sink;
-  // Meatballs stay down until they're done, then come up all at once.
-  const u = it.kind === 'meatball' ? Math.min(1, Math.max(0, (it.cook - 1) / 0.06)) : Math.min(1, Math.max(0, (it.cook - 0.55) / 0.3));
+  const u = it.kind === 'meatball' ? Math.min(1, Math.max(0, (it.cook - 1) / 0.06)) : Math.min(1, Math.max(0, (it.cook - 0.2) / 0.75));
   return g.rawSink + (g.sink - g.rawSink) * u * u * (3 - 2 * u);
 };
 
@@ -314,6 +316,29 @@ export const splashAt = (scene: HotpotScene, x: number, y: number) => {
   b.live = { c: [x, y, 0], rot: rotZ(Math.random() * 6) };
   b.params = [0, 0, 1, life.time];
   addRipple(life, x, y, 1);
+};
+
+/** How far `it` reaches from its centre along direction (nx, ny), from its length, width and which way it's turned. */
+const reach = (it: Item, nx: number, ny: number) => {
+  const th = Math.atan2(ny, nx) - it.ang;
+  const a = INGREDIENTS[it.kind].aspect;
+  return it.R * Math.hypot(Math.cos(th), a * Math.sin(th));
+};
+
+/** Pushes `it` out of the divider, back onto its own side, and stops it moving into it. */
+const keepOffWall = (life: HotpotLife, it: Item) => {
+  const w = life.wall;
+  const slope = w.amp * w.k * Math.cos((it.y - w.y0) * w.k);
+  const inv = 1 / Math.sqrt(1 + slope * slope);
+  // The wall's normal, pointing to the bone broth's side.
+  const nx = inv, ny = -slope * inv;
+  const need = w.half + 2 * life.s + reach(it, nx, ny);
+  const d = it.side * wallDist(w, it.x, it.y);
+  if (d >= need) return;
+  it.x += nx * it.side * (need - d);
+  it.y += ny * it.side * (need - d);
+  const into = (it.vx * nx + it.vy * ny) * it.side;
+  if (into < 0) { it.vx -= nx * it.side * into; it.vy -= ny * it.side * into; }
 };
 
 /** Is page point (x, y) somewhere a visitor can see, clear of the middle column the cards cover? */
@@ -598,9 +623,7 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
     it.vty += (-it.ty * 30 - it.vty * 5) * dt; it.ty += it.vty * dt;
 
     // Keep to its own broth, off the page's edges and off the hero's lettering.
-    const d = wallDist(wall, it.x, it.y);
-    const need = wall.half + it.R * 0.75;
-    if (it.side * d < need) { it.x += (need - it.side * d) * it.side * Math.min(1, dt * 8); it.vx *= 0.8; }
+    keepOffWall(life, it);
     if (it.x < it.R * 0.5) it.vx += 40 * dt * s;
     if (it.x > life.viewW - it.R * 0.5) it.vx -= 40 * dt * s;
     if (it.y < it.R) it.vy += 40 * dt * s;
@@ -691,6 +714,9 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
       it.vx = o.vx = vx; it.vy = o.vy = vy;
     }
   }
+
+  // Last of all, nothing may overlap the divider: pushed straight back out, however it's turned.
+  for (const it of active) if (it.state === 'float') keepOffWall(life, it);
 
   for (const it of active) if (it.state === 'float') poseItem(scene.bodies[it.body], it, t, it.heat, s);
 
