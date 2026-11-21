@@ -1,4 +1,4 @@
-import { BUBBLE_GROW, stepLife } from './hotpotLife';
+import { BUBBLE_GROW, Item, stepLife } from './hotpotLife';
 import { stepEvents } from './hotpotEvents';
 import { BROTH_PALETTE, F, G, PALETTE_SIDE, GLOW_STRIDE, HotpotScene, OBJ_TEXELS, RAMPS, SHADES, SOLID_STRIDE, poseBodies } from './hotpot';
 
@@ -24,6 +24,7 @@ import { BROTH_PALETTE, F, G, PALETTE_SIDE, GLOW_STRIDE, HotpotScene, OBJ_TEXELS
 const MAX_PLUMES = 24;
 const MAX_RIPPLES = 12;
 const MAX_BUBBLES = 16;
+const MAX_WAKES = 24;
 
 const SOLID_VS = `#version 300 es
 precision highp float;
@@ -223,6 +224,10 @@ uniform int u_nRipples;
 // Big bubbles beside the food: x, y, age, radius.
 uniform vec4 u_bubbles[${MAX_BUBBLES}];
 uniform int u_nBubbles;
+// Food on the move: position and velocity, and how big it is; it trails a V of ripples.
+uniform vec4 u_wakes[${MAX_WAKES}];
+uniform float u_wakeR[${MAX_WAKES}];
+uniform int u_nWakes;
 // The ladle's whirlpool: centre, strength, size (strength 0: none).
 uniform vec4 u_vortex;
 uniform vec3 u_light;
@@ -418,6 +423,26 @@ vec3 broth(vec2 w) {
     }
   }
 
+  // Wakes: a V of ripples spreading behind whatever is moving quickly, brighter crests with a trough inside.
+  for (int i = 0; i < ${MAX_WAKES}; i++) {
+    if (i >= u_nWakes) break;
+    vec4 wk = u_wakes[i];
+    float sp = length(wk.zw);
+    vec2 dir = wk.zw / sp;
+    vec2 rel = w - wk.xy;
+    float R = u_wakeR[i];
+    float back = -dot(rel, dir) - R * 0.5;
+    float len = min(R * 1.5 + sp * 1.8, 170.0 * u_s);
+    if (back < 0.0 || back > len) continue;
+    float side = abs(rel.x * dir.y - rel.y * dir.x);
+    float arm = R * 0.7 + back * 0.42;
+    float dd = side - arm;
+    float amp = clamp((sp - 12.0 * u_s) / (40.0 * u_s), 0.0, 1.0) * (1.0 - back / len);
+    // Crests two art pixels wide, blended towards a clearly lighter broth so they survive the dither.
+    if (abs(dd) < 4.5 * u_s) col = mix(col, mala ? hex(200., 64., 22.) : hex(252., 248., 236.), amp * 0.85);
+    else if (dd < 0.0 && dd > -9.0 * u_s) col *= 1.0 - amp * (mala ? 0.3 : 0.1);
+  }
+
   // Rings where something landed, was lifted out, or the spoon went by.
   for (int i = 0; i < ${MAX_RIPPLES}; i++) {
     if (i >= u_nRipples) break;
@@ -486,21 +511,27 @@ void main() {
   vec3 c = broth(w);
   // Something just under the surface: a darker patch of broth in its shape.
   if (under) c *= mix(0.55, 0.85, clamp((depth - 11.0) / 24.0, 0.0, 1.0));
-  // Shadows of things above the broth, cast down and to the right, further the higher they are.
+  // Shadows of things above the broth, cast down and to the right, further the higher they are. Floating food
+  // throws a short soft one (as if the lamp were lower), so it reads as sitting on the broth; its edge is dithered.
   vec2 dir = -u_light.xy / u_light.z;
   float hs = 4.0;
+  float shadow = 0.0;
   for (int j = 0; j < 13; j++) {
-    vec2 off = dir * hs / u_px;
-    ivec2 q = ivec2(floor(vec2(float(p.x) - off.x, float(p.y) + off.y) + 0.5));
-    if (q.x >= 0 && q.y >= 0) {
+    for (int k = 0; k < 2; k++) {
+      vec2 off = dir * hs * (k == 0 ? 1.0 : 0.72) / u_px;
+      ivec2 q = ivec2(floor(vec2(float(p.x) - off.x, float(p.y) + off.y) + 0.5));
+      if (q.x < 0 || q.y < 0) continue;
       vec4 t = texelFetch(u_solid, q * 2, 0);
-      if (t.a > 0.5) {
-        float hh = (t.b - 0.25) * 512.0;
-        if (hh > hs * 0.68 && hh < hs * 1.5) { c *= 0.62; break; }
-      }
+      if (t.a < 0.5) continue;
+      float hh = (t.b - 0.25) * 512.0;
+      if (hh < -1.0) continue;
+      float he = hh * 1.6 + 6.0 * u_s;
+      if (he > hs * 0.68 && he < hs * 1.5) shadow = max(shadow, k == 0 ? 1.0 : 0.5);
     }
+    if (shadow >= 1.0) break;
     hs *= 1.45;
   }
+  if (shadow > 0.75 || (shadow > 0.25 && bay < 0.5)) c *= 0.6;
   vec3 g = vec3(0.0);
   for (int i = 0; i < 4; i++) g += texelFetch(u_glow, p * 2 + ivec2(i & 1, i >> 1), 0).rgb;
   // Steam shows over the dark chili broth; over the pale broth it would only speckle.
@@ -577,6 +608,9 @@ export class HotpotView {
   private plumeBuf = new Float32Array(MAX_PLUMES * 3);
   private rippleBuf = new Float32Array(MAX_RIPPLES * 4);
   private bubbleBuf = new Float32Array(MAX_BUBBLES * 4);
+  private wakeBuf = new Float32Array(MAX_WAKES * 4);
+  private wakeR = new Float32Array(MAX_WAKES);
+  private movers: Item[] = [];
   private uniforms = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>();
 
   constructor(private canvas: HTMLCanvasElement | OffscreenCanvas, public pixel: number) {
@@ -786,6 +820,20 @@ export class HotpotView {
       nb++;
     }
     gl.uniform4fv(this.u(post, 'u_bubbles'), this.bubbleBuf);
+    // The quickest-moving food in view trails wakes.
+    const movers = this.movers;
+    movers.length = 0;
+    const fast = 16 * scene.s;
+    for (const it of life.items) {
+      if (it.state !== 'float' || it.y < top + 300 || it.y > bottom - 300 || it.R < 9 * scene.s) continue;
+      if (Math.abs(it.vx) + Math.abs(it.vy) > fast) movers.push(it);
+    }
+    movers.sort((a, b) => Math.hypot(b.vx, b.vy) - Math.hypot(a.vx, a.vy));
+    const nw = Math.min(MAX_WAKES, movers.length);
+    for (let i = 0; i < nw; i++) { const it = movers[i]; this.wakeBuf.set([it.x, it.y, it.vx, it.vy], i * 4); this.wakeR[i] = it.R; }
+    gl.uniform4fv(this.u(post, 'u_wakes'), this.wakeBuf);
+    gl.uniform1fv(this.u(post, 'u_wakeR'), this.wakeR);
+    gl.uniform1i(this.u(post, 'u_nWakes'), nw);
     const vt = life.vortex;
     gl.uniform4f(this.u(post, 'u_vortex'), vt ? vt.x : 0, vt ? vt.y : 0, vt ? vt.k : 0, vt ? vt.R : 1);
     gl.uniform1i(this.u(post, 'u_nBubbles'), nb);
