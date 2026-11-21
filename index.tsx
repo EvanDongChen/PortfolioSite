@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import ReactDOM from 'react-dom/client';
-import PixelApp from './PixelApp';
+import PixelApp from './pages/PixelApp';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { PerformanceProvider } from './contexts/PerformanceContext';
 import { loadAquarium, loadPond, loadShrine, loadSky, loadSpace, loadHotpot } from './lib/pageLoaders';

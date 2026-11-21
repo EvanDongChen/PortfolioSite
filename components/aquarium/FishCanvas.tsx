@@ -1,0 +1,160 @@
+import React, { forwardRef, useImperativeHandle, useRef } from 'react';
+import { Fish as FishType } from '../../types';
+import { PerformanceTier } from '../../contexts/PerformanceContext';
+
+export interface FishCanvasRef {
+  setFishSnapshot: (fishes: FishType[]) => void;
+  setScrollY: (scrollY: number) => void;
+}
+
+interface FishCanvasProps {
+  enabled: boolean;
+  isDeepSea: boolean;
+  quality?: PerformanceTier;
+}
+
+// Mirrors FISH_DESPAWN_FADE_MS in App.tsx: how long a fish cut for exceeding
+// the fish limit takes to fade out before it's actually removed.
+const FISH_DESPAWN_FADE_MS = 500;
+
+const FishCanvas = forwardRef<FishCanvasRef, FishCanvasProps>(({ enabled, isDeepSea, quality = 'high' }, ref) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fishesRef = useRef<FishType[]>([]);
+  const scrollYRef = useRef(0);
+  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+
+  const getFishImage = (fish: FishType, isDeepSeaVariant: boolean, redraw: () => void) => {
+    // isDeepSea is baked into the key/SVG so the brightness/saturation/glow
+    // boost is rasterized once per color pair instead of being applied via
+    // ctx.filter + ctx.shadowBlur on every drawImage call (ctx.filter in
+    // particular forces a slow per-pixel software path in most browsers,
+    // and was previously paid for by every one of up to ~150 fish, every frame).
+    const key = `${fish.color1}|${fish.color2}|${isDeepSeaVariant ? 'deep' : 'normal'}`;
+    const cached = imageCacheRef.current.get(key);
+    if (cached) return cached;
+
+    const glowFilter = isDeepSeaVariant
+      ? `
+          <feColorMatrix in="SourceGraphic" type="saturate" values="2.2" result="saturated" />
+          <feComponentTransfer in="saturated" result="brightened">
+            <feFuncR type="linear" slope="1.6" />
+            <feFuncG type="linear" slope="1.6" />
+            <feFuncB type="linear" slope="1.6" />
+          </feComponentTransfer>
+          <feGaussianBlur in="brightened" stdDeviation="3" result="coloredBlur" />
+          <feMerge>
+            <feMergeNode in="coloredBlur" />
+            <feMergeNode in="brightened" />
+          </feMerge>
+        `
+      : `
+          <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="coloredBlur" />
+          <feMerge>
+            <feMergeNode in="coloredBlur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        `;
+
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" width="120" height="50" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="fishGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="${fish.color1}" stop-opacity="0.85" />
+            <stop offset="100%" stop-color="${fish.color2}" stop-opacity="0.7" />
+          </linearGradient>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            ${glowFilter}
+          </filter>
+        </defs>
+        <g filter="url(#glow)">
+          <path fill="url(#fishGradient)" d="M 90,25 C 80,10 30,5 10,25 C 30,45 80,40 90,25" />
+          <path fill="url(#fishGradient)" d="M 10,25 L 0,15 L 5,25 L 0,35 L 10,25" />
+          <circle cx="75" cy="22" r="2.2" fill="rgba(255, 255, 255, 0.95)" />
+        </g>
+      </svg>`;
+    const image = new Image();
+    image.onload = redraw;
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    imageCacheRef.current.set(key, image);
+    return image;
+  };
+
+  const draw = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!enabled) return;
+    const viewportTop = scrollYRef.current;
+
+    for (const fish of fishesRef.current) {
+      if (fish.variant && fish.variant !== 'default') continue;
+
+      const displayY = fish.y - viewportTop;
+      if (displayY < -100 || displayY > canvas.height + 100) continue;
+
+      const width = 120 * fish.scale;
+      const height = 50 * fish.scale;
+      const image = getFishImage(fish, isDeepSea, draw);
+      if (!image.complete || image.naturalWidth === 0) continue;
+
+      ctx.save();
+      if (fish.despawnAt) {
+        ctx.globalAlpha = Math.max(0, 1 - (performance.now() - fish.despawnAt) / FISH_DESPAWN_FADE_MS);
+      }
+      ctx.translate(fish.x + width / 2, displayY + height / 2);
+      ctx.rotate(fish.rotation * Math.PI / 180);
+      ctx.scale(1, fish.isFlipped ? -1 : 1);
+
+      ctx.drawImage(image, -width / 2, -height / 2, width, height);
+      ctx.restore();
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+    setFishSnapshot: (fishes) => {
+      fishesRef.current = fishes;
+      draw();
+    },
+    setScrollY: (scrollY) => {
+      scrollYRef.current = scrollY;
+      draw();
+    },
+  }), [enabled, isDeepSea]);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const resize = () => {
+      const maxPixelRatio = quality === 'low' ? 1 : 2;
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
+      canvas.width = window.innerWidth * pixelRatio;
+      canvas.height = window.innerHeight * pixelRatio;
+      canvas.style.width = `${window.innerWidth}px`;
+      canvas.style.height = `${window.innerHeight}px`;
+      canvas.getContext('2d')?.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      draw();
+    };
+
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [enabled, isDeepSea, quality]);
+
+  React.useEffect(() => {
+    draw();
+  }, [enabled, isDeepSea]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 pointer-events-none"
+      style={{ display: enabled ? 'block' : 'none' }}
+      aria-hidden="true"
+    />
+  );
+});
+
+export default React.memo(FishCanvas);

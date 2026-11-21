@@ -1,0 +1,1778 @@
+﻿import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from 'react';
+import Header from '../components/Header';
+import Section from '../components/Section';
+import ProjectCard from '../components/ProjectCard';
+import Bubble from '../components/aquarium/Bubble';
+import Fish from '../components/aquarium/Fish';
+import SandDune from '../components/SandDune';
+import GodRays from '../components/aquarium/GodRays';
+import FishCensus from '../components/aquarium/FishCensus';
+import LoveModeButton from '../components/aquarium/LoveModeButton';
+import BackToTopButton from '../components/BackToTopButton';
+import FishFoodButton from '../components/aquarium/FishFoodButton';
+import PortfolioContent from '../components/PortfolioContent';
+import ParticleCanvas, { ParticleCanvasRef } from '../components/aquarium/ParticleCanvas';
+import FishCanvas, { FishCanvasRef } from '../components/aquarium/FishCanvas';
+import GrabModeButton from '../components/aquarium/GrabModeButton';
+import TankToggleButton from '../components/aquarium/TankToggleButton';
+import TutorialButton from '../components/aquarium/TutorialButton';
+import PerformanceButton from '../components/PerformanceButton';
+import PerformancePanel from '../components/PerformancePanel';
+
+const FishTank = lazy(() => import('../components/aquarium/FishTank'));
+const TutorialPanel = lazy(() => import('../components/aquarium/TutorialPanel'));
+// These creatures never appear within seconds of first paint (whale/turtle
+// respawn after 6-16s, jellyfish after 1.5s+, angler fish only in deep-sea
+// theme), so deferring their code has no visible effect on load.
+const WhaleTurtleLayer = lazy(() => import('../components/aquarium/WhaleTurtleLayer'));
+const JellyfishLayer = lazy(() => import('../components/aquarium/JellyfishLayer'));
+const AnglerFishLayer = lazy(() => import('../components/aquarium/AnglerFishLayer'));
+
+import ThemeToggleButton from '../components/aquarium/ThemeToggleButton';
+import ThemeSwitch from '../components/ThemeSwitch';
+import { GitHubIcon, LinkedInIcon, MailIcon, SearchIcon } from '../components/Icons';
+import { Bubble as BubbleType, Fish as FishType, FishFood as FishFoodType, FishBehavior } from '../types';
+import { useTheme, useRestoreScrollAfterSwitch } from '../contexts/ThemeContext';
+import { filterProjects, experiences, education, skills } from '../data/portfolio';
+import { UNDERWATER_COLORS, DEEPSEA_COLORS } from '../lib/themeColors';
+import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext';
+
+const SCROLL_PARALLAX = 1.0;
+const DEFAULT_FISH_LIMIT = 75;
+const MIN_FISH_LIMIT = 5;
+const MAX_FISH_LIMIT = 150;
+// Starting fish count by device/perf tier. The slider still lets anyone go up
+// to MAX_FISH_LIMIT manually; this only picks a sane, cheap starting point so
+// lower-end devices don't get slammed with 75 fish before they can react.
+const TIER_DEFAULT_FISH_LIMIT: Record<PerformanceTier, number> = {
+  low: 25,
+  medium: 50,
+  high: DEFAULT_FISH_LIMIT,
+};
+// Refill the current viewport quickly enough to keep the aquarium lively after
+// the initial arrival burst, without increasing the maximum fish count.
+const FISH_SPAWN_INTERVAL_MS = 320;
+const FISH_DESPAWN_MARGIN = 140;
+const LOW_FISH_REFILL_THRESHOLD = 42;
+const REFILL_BURST_COUNT = 24;
+const REFILL_BURST_INTERVAL_MS = 110;
+const REFILL_BURST_COOLDOWN_MS = 7000;
+const PUFFER_FISH_CHANCE = 0.02;
+const RAINBOW_FISH_CHANCE = 0.005;
+const SCROLL_ACTIVE_WINDOW_MS = 140;
+const RIPPLE_CLICK_COOLDOWN_MS = 1000;
+const THEME_TRANSITION_MS = 900;
+const SILHOUETTE_FADE_MS = 460;
+// When the fish limit drops (e.g. switching to a lower performance tier), the
+// excess fish fade out over this window instead of vanishing instantly.
+const FISH_DESPAWN_FADE_MS = 500;
+
+interface JellyPopRing {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  durationMs: number;
+}
+
+const App: React.FC = () => {
+  useRestoreScrollAfterSwitch();
+  const { theme } = useTheme();
+  const [fishes, setFishes] = useState<FishType[]>([]);
+  const [bubbles, setBubbles] = useState<BubbleType[]>([]);
+  const [isThemeTransitionActive, setIsThemeTransitionActive] = useState(false);
+  const [themeTransitionDirection, setThemeTransitionDirection] = useState<'dive' | 'surface'>('dive');
+  const [silhouetteFishes, setSilhouetteFishes] = useState<FishType[]>([]);
+  const [showSilhouetteFishes, setShowSilhouetteFishes] = useState(false);
+  const fishesRef = useRef<FishType[]>([]);
+  const fishesByThemeRef = useRef<{ underwater: FishType[]; deepsea: FishType[] }>({ underwater: [], deepsea: [] });
+  const previousThemeRef = useRef<'underwater' | 'deepsea'>(theme);
+  const transitionTimerRef = useRef<number | null>(null);
+  const silhouetteTimerRef = useRef<number | null>(null);
+  useEffect(() => { fishesRef.current = fishes; }, [fishes]);
+  useEffect(() => {
+    // During a theme transition, this render still has previous theme's fish state.
+    // Skip writing until the transition effect has completed to avoid cross-theme bleed.
+    if (previousThemeRef.current !== theme) return;
+    fishesByThemeRef.current[theme] = fishes;
+  }, [theme, fishes]);
+  useEffect(() => {
+    const previousTheme = previousThemeRef.current;
+    if (previousTheme === theme) return;
+
+    const transitionDirection: 'dive' | 'surface' = theme === 'deepsea' ? 'dive' : 'surface';
+
+    setThemeTransitionDirection(transitionDirection);
+    particleCanvasRef.current?.emitTransitionBurst?.(transitionDirection);
+    setSilhouetteFishes(fishesRef.current);
+    setShowSilhouetteFishes(true);
+    setIsThemeTransitionActive(true);
+
+    if (silhouetteTimerRef.current !== null) {
+      window.clearTimeout(silhouetteTimerRef.current);
+      silhouetteTimerRef.current = null;
+    }
+    if (transitionTimerRef.current !== null) {
+      window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+    silhouetteTimerRef.current = window.setTimeout(() => {
+      setShowSilhouetteFishes(false);
+      silhouetteTimerRef.current = null;
+    }, SILHOUETTE_FADE_MS);
+    transitionTimerRef.current = window.setTimeout(() => {
+      setIsThemeTransitionActive(false);
+      setSilhouetteFishes([]);
+      transitionTimerRef.current = null;
+    }, THEME_TRANSITION_MS);
+
+    // Persist the old theme's fish set, then restore the newly selected theme's set.
+    fishesByThemeRef.current[previousTheme] = fishesRef.current;
+    setFishes(fishesByThemeRef.current[theme] ?? []);
+
+    setNibblingFishIds({});
+    previousThemeRef.current = theme;
+  }, [theme]);
+  useEffect(() => {
+    return () => {
+      if (silhouetteTimerRef.current !== null) window.clearTimeout(silhouetteTimerRef.current);
+      if (transitionTimerRef.current !== null) window.clearTimeout(transitionTimerRef.current);
+    };
+  }, []);
+  const [fishFoods, setFishFoods] = useState<FishFoodType[]>([]);
+  const [nibblingFishIds, setNibblingFishIds] = useState<Record<number, boolean>>({});
+  const { tier: rawPerformanceTier, reducedMotion, override: performanceOverride, frameRate } = usePerformance();
+  // A user who asked the OS for reduced motion wants less animation
+  // regardless of how capable their hardware actually is. A manual debug
+  // override always wins, so forcing 'high' can be used to test reduced-motion
+  // devices at full quality too.
+  const performanceTier: PerformanceTier = performanceOverride ?? (reducedMotion ? 'low' : rawPerformanceTier);
+  // Read via a ref inside the fish-sim RAF loop below so toggling 30/60fps
+  // doesn't need to tear down and rebuild that whole effect.
+  const fishSimulationFrameMsRef = useRef(1000 / frameRate);
+  fishSimulationFrameMsRef.current = 1000 / frameRate;
+  const [fishLimit, setFishLimit] = useState(() => TIER_DEFAULT_FISH_LIMIT[performanceTier]);
+  const hasManualFishLimitRef = useRef(false);
+  // Perf tier can change in either direction after mount (live FPS sampling
+  // can downgrade it, and forcing a tier via the debug panel can go either
+  // way), so follow it in both directions as long as the user hasn't already
+  // touched the slider themselves.
+  useEffect(() => {
+    if (hasManualFishLimitRef.current) return;
+    setFishLimit(TIER_DEFAULT_FISH_LIMIT[performanceTier]);
+  }, [performanceTier]);
+  const [highlightedBehavior, setHighlightedBehavior] = useState<FishBehavior | null>(null);
+  const [isFishFoodMode, setIsFishFoodMode] = useState(false);
+  const [isLoveMode, setIsLoveMode] = useState(false);
+  const [deepSeaOrbs, setDeepSeaOrbs] = useState<{id:number;left:string;top:string;size:string;color:string;duration:string;delay:string;}[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isGrabMode, setIsGrabMode] = useState(false);
+  const [grabbedFish, setGrabbedFish] = useState<FishType | null>(null);
+  const [tankFishes, setTankFishes] = useState<FishType[]>([]);
+  const [isTankOpen, setIsTankOpen] = useState(false);
+  // Mounts FishTank (and triggers its lazy chunk fetch) only once the user
+  // has actually opened it, instead of on every page load; tankFishes stays
+  // empty until then anyway, so this can't skip any state the tank needs.
+  const hasOpenedTankRef = useRef(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [isPerformancePanelOpen, setIsPerformancePanelOpen] = useState(false);
+  const particleCanvasRef = useRef<ParticleCanvasRef>(null);
+  const fishCanvasRef = useRef<FishCanvasRef>(null);
+  const nibblingFishIdsRef = useRef<Record<number, boolean>>({});
+  useEffect(() => { isGrabModeRef.current = isGrabMode; }, [isGrabMode]);
+  useEffect(() => { nibblingFishIdsRef.current = nibblingFishIds; }, [nibblingFishIds]);
+  useEffect(() => {
+    particleCanvasRef.current?.setThemeMode?.(theme === 'underwater' || theme === 'deepsea' ? theme : 'other');
+  }, [theme]);
+  const scrollYRef = useRef(0);
+  const worldLayerRef = useRef<HTMLDivElement>(null);
+  const worldLayerForegroundRef = useRef<HTMLDivElement>(null);
+  const scrollRafRef = useRef<number | null>(null);
+  const mousePosRef = useRef({ x: -1000, y: -1000 });
+  const fishFoodsRef = useRef<FishFoodType[]>([]);
+  const trailEmitRef = useRef<Record<number, number>>({});
+  const grabbedFishRef = useRef<HTMLDivElement>(null);
+  const fishNodesRef = useRef<Map<number, HTMLElement>>(new Map());
+  const nextEntityIdRef = useRef(1);
+  const lastRefillBurstRef = useRef(0);
+  const refillBurstActiveRef = useRef(false);
+  const fishLastFrameTimeRef = useRef(0);
+  const isPageHiddenRef = useRef(document.hidden);
+  const shockwavesRef = useRef<{ id: number; x: number; worldY: number; timestamp: number }[]>([]);
+  const lastRippleClickTimeRef = useRef(0);
+  const lastScrollTimestampRef = useRef(0);
+  const isGrabModeRef = useRef(isGrabMode);
+
+  const getNextEntityId = useCallback(() => {
+    const id = nextEntityIdRef.current;
+    nextEntityIdRef.current += 1;
+    return id;
+  }, []);
+
+  const filteredProjects = useMemo(() => filterProjects(searchTerm), [searchTerm]);
+
+  const createBubble = useCallback(() => {
+    if (theme === 'underwater') {
+      const id = getNextEntityId();
+      const size = Math.random() * 60 + 20;
+      const duration = Math.random() * 15 + 10;
+      const newBubble: BubbleType = {
+        id,
+        left: `${Math.random() * 100}%`,
+        size: `${size}px`,
+        duration: `${duration}s`,
+      };
+
+      setBubbles(prev => [...prev, newBubble]);
+
+      window.setTimeout(() => {
+        setBubbles(prev => prev.filter(bubble => bubble.id !== id));
+      }, duration * 1000 + 1000);
+      return;
+    }
+
+    particleCanvasRef.current?.emitAmbientBubble?.(theme === 'deepsea');
+  }, [theme, getNextEntityId]);
+
+  const createFish = useCallback((forceCurrentViewport = false) => {
+    const id = getNextEntityId();
+    const scale = Math.random() * 0.4 + 0.3;
+    const speed = (Math.random() * 1 + 1);
+
+    let x, y, vx, vy, isFlipped;
+
+    if (Math.random() > 0.5) {
+      x = -100;
+      vx = speed;
+      isFlipped = false;
+    } else {
+      x = window.innerWidth + 100;
+      vx = -speed;
+      isFlipped = true;
+    }
+
+    const viewportWorldTop = scrollYRef.current * SCROLL_PARALLAX;
+    const viewportWorldBottom = viewportWorldTop + window.innerHeight;
+    const spawnRoll = Math.random();
+
+    if (forceCurrentViewport) {
+      y = viewportWorldTop + window.innerHeight * (0.05 + Math.random() * 0.9);
+    } else if (spawnRoll < 0.6) {
+      // Most fish spawn within the current viewport.
+      y = viewportWorldTop + window.innerHeight * (0.05 + Math.random() * 0.9);
+    } else if (spawnRoll < 0.94) {
+      // Some fish spawn just above or below view to swim in naturally.
+      const band = window.innerHeight * (0.25 + Math.random() * 0.35);
+      y = Math.random() > 0.5 ? viewportWorldTop - band : viewportWorldBottom + band;
+    } else {
+      // Keep only a small number of fish distributed through the full world;
+      // most steady-state spawns should remain visible near the current view.
+      y = Math.random() * document.documentElement.scrollHeight;
+    }
+    vy = 0;
+    let initialVx = vx;
+
+    const underwaterPalette = [
+      ['#4facfe', '#00f2fe'],
+      ['#89f7fe', '#66a6ff'],
+      ['#DA22FF', '#9733EE'],
+      ['#00dbde', '#fc00ff'],
+      ['#5433FF', '#20BDFF'],
+      ['#48c6ef', '#6f86d6'],
+      ['#a779e9', '#4facfe'],
+    ];
+    const deepSeaPalette = [
+      ['#00d4ff', '#0077ff'],
+      ['#ff2fcf', '#9d00ff'],
+      ['#39ff14', '#00c853'],
+      ['#ffe600', '#ffb300'],
+    ];
+    const fishPalette = theme === 'deepsea' ? deepSeaPalette : underwaterPalette;
+
+    setFishes(() => {
+      const prev = fishesRef.current;
+      if (prev.length >= fishLimit) {
+        return prev;
+      }
+
+      const alreadyHasClown = prev.some(f => f.variant === 'clown');
+      const alreadyHasPuffer = prev.some(f => f.variant === 'puffer');
+      const variantRoll = Math.random();
+
+      const variant: FishType['variant'] = theme === 'deepsea'
+        ? 'default'
+        : (!alreadyHasClown
+          ? 'clown'
+          : (!alreadyHasPuffer
+            ? 'puffer'
+            : (variantRoll < RAINBOW_FISH_CHANCE
+              ? 'rainbow'
+              : (variantRoll < RAINBOW_FISH_CHANCE + PUFFER_FISH_CHANCE ? 'puffer' : 'default'))));
+      const [color1, color2] = fishPalette[Math.floor(Math.random() * fishPalette.length)];
+
+      // Weighted random behavior: 48% cruise, 10% dart, 5% loiter, 25% conga, 12% curious
+      const behaviorRoll = Math.random();
+      const behavior: FishBehavior =
+        behaviorRoll < 0.48 ? 'cruise' :
+          behaviorRoll < 0.58 ? 'dart' :
+            behaviorRoll < 0.63 ? 'loiter' :
+              behaviorRoll < 0.88 ? 'conga' : 'curious';
+      const behaviorPhase = Math.random() * Math.PI * 2;
+
+      // Conga line: join existing group or start a new one
+      let congaLeaderId: number | undefined;
+      let congaIndex: number | undefined;
+      if (behavior === 'conga') {
+        const CONGA_MAX_SIZE = 8;
+        // Find the group with most members that still has room
+        const groups = new Map<number, { maxIdx: number; tail: FishType }>();
+        for (const f of prev) {
+          if (f.behavior === 'conga' && f.congaLeaderId !== undefined) {
+            const g = groups.get(f.congaLeaderId);
+            if (!g || (f.congaIndex ?? 0) > g.maxIdx) {
+              groups.set(f.congaLeaderId, { maxIdx: f.congaIndex ?? 0, tail: f });
+            }
+          }
+        }
+        let joined = false;
+        for (const [leaderId, { maxIdx, tail }] of groups) {
+          const isTailOffscreen = tail.x < -20 || tail.x > window.innerWidth + 20;
+          if (maxIdx < CONGA_MAX_SIZE - 1 && isTailOffscreen) {
+            congaLeaderId = leaderId;
+            congaIndex = maxIdx + 1;
+            // Spawn just behind the current tail in its direction of travel
+            const predAngle = Math.atan2(tail.vy, tail.vx);
+            x = tail.x - Math.cos(predAngle) * 38;
+            y = tail.y - Math.sin(predAngle) * 38;
+            vx = tail.vx * 0.85;
+            vy = tail.vy * 0.85;
+            initialVx = tail.initialVx;
+            isFlipped = tail.isFlipped;
+            joined = true;
+            break;
+          }
+        }
+        if (!joined) {
+          // This fish becomes the leader of a new conga group
+          congaLeaderId = id;
+          congaIndex = 0;
+        }
+      }
+
+      const newFish: FishType = {
+        id, x, y, displayY: y, vx, vy, initialVx,
+        rotation: Math.atan2(vy, vx) * (180 / Math.PI),
+        scale, color1, color2,
+        isFlipped,
+        schoolId: (() => {
+          const xBand = Math.min(2, Math.floor((x / window.innerWidth) * 3));
+          const spawnDisplayY = y - scrollYRef.current * SCROLL_PARALLAX;
+          const yBand = spawnDisplayY < window.innerHeight / 2 ? 0 : 1;
+          return xBand * 2 + yBand; // 0â€“5
+        })(),
+        variant,
+        behavior,
+        behaviorPhase,
+        congaLeaderId,
+        congaIndex,
+      };
+
+      return [...prev, newFish];
+    });
+  }, [fishLimit, getNextEntityId, theme]);
+
+  // Keep fishFoodsRef in sync so animation loop can read it without stale closure
+  useEffect(() => {
+    fishFoodsRef.current = fishFoods;
+  }, [fishFoods]);
+
+  const emitTrailBubble = useCallback((x: number, worldY: number) => {
+    particleCanvasRef.current?.emitTrailBubble?.(x, worldY, theme === 'deepsea');
+  }, [theme]);
+
+  const emitFoodCrumbs = useCallback((x: number, worldY: number, isLove?: boolean) => {
+    particleCanvasRef.current?.emitFoodCrumbs?.(x, worldY, isLove);
+  }, []);
+
+  const emitHearts = useCallback((x: number, worldY: number) => {
+    particleCanvasRef.current?.emitHearts?.(x, worldY);
+  }, []);
+
+  const emitJellyfishPop = useCallback((x: number, y: number, scale: number) => {
+    particleCanvasRef.current?.emitJellyfishPop?.(x, y, scale);
+  }, []);
+
+  // Place fish food on click when food mode is active
+  useEffect(() => {
+    if (!isFishFoodMode) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      if (target.closest('button, a, input, [data-is-tank="true"], [data-is-tutorial="true"], [data-is-census="true"], [data-is-modal="true"]')) return;
+      const id = getNextEntityId();
+      const newFood: FishFoodType = {
+        id,
+        x: e.clientX,
+        worldY: e.clientY + scrollYRef.current * SCROLL_PARALLAX,
+        type: isLoveMode ? 'love' : 'default',
+      };
+      setFishFoods(prev => prev.length >= 10 ? prev : [...prev, newFood]);
+      // Auto-decay after 15 seconds if uneaten
+      setTimeout(() => {
+        setFishFoods(prev => prev.filter(f => f.id !== id));
+      }, 15000);
+    };
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, [isFishFoodMode, isLoveMode, getNextEntityId]);
+
+  // Global click ripples (only when not feeding fish)
+  useEffect(() => {
+    if (isFishFoodMode || isGrabMode) return;
+    const handleRippleClick = (e: MouseEvent) => {
+      const now = performance.now();
+      if (now - lastRippleClickTimeRef.current < RIPPLE_CLICK_COOLDOWN_MS) return;
+      lastRippleClickTimeRef.current = now;
+
+      const target = e.target as HTMLElement;
+      const pufferEl = target.closest('[data-is-puffer="true"]');
+      if (pufferEl) {
+        const id = Number(pufferEl.getAttribute('data-fish-id'));
+        setFishes(() => {
+          const next = fishesRef.current.map(f => f.id === id ? { ...f, isPuffed: true, puffStartTime: performance.now() } : f);
+          fishesRef.current = next;
+          return next;
+        });
+        return;
+      }
+
+      if (target.closest('button, a, input, [data-is-tank="true"], [data-is-tutorial="true"], [data-is-census="true"], [data-is-modal="true"]')) return;
+      const id = getNextEntityId();
+      particleCanvasRef.current?.emitClickRipple?.(e.clientX, e.clientY, theme);
+
+      shockwavesRef.current.push({
+        id,
+        x: e.clientX,
+        worldY: e.clientY + scrollYRef.current * SCROLL_PARALLAX,
+        timestamp: performance.now(),
+      });
+    };
+    window.addEventListener('click', handleRippleClick);
+    return () => window.removeEventListener('click', handleRippleClick);
+  }, [isFishFoodMode, isGrabMode, getNextEntityId, theme]);
+
+  // Crosshair cursor when food mode is active
+  useEffect(() => {
+    document.body.style.cursor = isFishFoodMode ? 'crosshair' : '';
+    return () => { document.body.style.cursor = ''; };
+  }, [isFishFoodMode]);
+
+  const handleScroll = useCallback(() => {
+    lastScrollTimestampRef.current = performance.now();
+    if (scrollRafRef.current !== null) return;
+
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollYRef.current = window.scrollY;
+      if (worldLayerRef.current) {
+        worldLayerRef.current.style.transform = `translate3d(0, ${-scrollYRef.current * SCROLL_PARALLAX}px, 0)`;
+      }
+      if (worldLayerForegroundRef.current) {
+        worldLayerForegroundRef.current.style.transform = `translate3d(0, ${-scrollYRef.current * SCROLL_PARALLAX}px, 0)`;
+      }
+      fishCanvasRef.current?.setScrollY(scrollYRef.current * SCROLL_PARALLAX);
+      scrollRafRef.current = null;
+    });
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    // Sync world-layer offset immediately (important when page loads not at top).
+    handleScroll();
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+    };
+  }, [handleScroll]);
+
+  // Position updates are applied directly to the fish nodes. React still owns
+  // fish appearance and interactions, but does not reconcile every SVG subtree
+  // just because a fish moved a few pixels.
+  const syncFishPositions = useCallback((fishList: FishType[]) => {
+    fishCanvasRef.current?.setFishSnapshot(fishList);
+    const layers = [worldLayerRef.current, worldLayerForegroundRef.current].filter(
+      (layer): layer is HTMLDivElement => layer !== null,
+    );
+
+    fishList.forEach(fish => {
+      let fishElement = fishNodesRef.current.get(fish.id);
+      if (!fishElement?.isConnected) {
+        fishElement = layers
+          .map(layer => layer.querySelector<HTMLElement>(`[data-fish-id="${fish.id}"]`))
+          .find(Boolean);
+        if (fishElement) fishNodesRef.current.set(fish.id, fishElement);
+      }
+      if (!fishElement) return;
+
+      const nibbleTilt = nibblingFishIdsRef.current[fish.id]
+        ? (fish.isFlipped ? -14 : 14)
+        : 0;
+      const nibbleScale = nibblingFishIdsRef.current[fish.id] ? 1.2 : 1;
+      const puffScale = fish.isPuffed ? 1.5 : 1;
+      fishElement.style.transform = `translate(${fish.x}px, ${fish.displayY}px) rotate(${fish.rotation + nibbleTilt}deg) scale(${nibbleScale * puffScale}) ${fish.isFlipped ? 'scaleY(-1)' : ''}`;
+    });
+
+    const activeIds = new Set(fishList.map(fish => fish.id));
+    fishNodesRef.current.forEach((_, id) => {
+      if (!activeIds.has(id)) fishNodesRef.current.delete(id);
+    });
+  }, []);
+
+  useEffect(() => {
+    syncFishPositions(fishes);
+  }, [fishes, syncFishPositions, nibblingFishIds]);
+
+  const handleGrabFish = useCallback((id: number, e?: React.MouseEvent) => {
+    if (!isGrabMode || grabbedFish) return;
+    e?.preventDefault();
+    const fishToGrab = fishesRef.current.find(f => f.id === id);
+    if (fishToGrab) {
+      setGrabbedFish(fishToGrab);
+      setFishes(prev => prev.filter(f => f.id !== id));
+    }
+  }, [isGrabMode, grabbedFish]);
+
+  const handleDropFish = useCallback((clientX?: number, clientY?: number) => {
+    if (!grabbedFish) return;
+
+    const tankElement = document.querySelector('[data-is-tank="true"]');
+    if (tankElement && clientX !== undefined && clientY !== undefined) {
+      const rect = tankElement.getBoundingClientRect();
+      if (clientX >= rect.left && clientX <= rect.right && 
+          clientY >= rect.top && clientY <= rect.bottom) {
+        // Drop into tank
+        const localX = clientX - rect.left;
+        const localY = clientY - rect.top;
+        setTankFishes(prev => [...prev, { ...grabbedFish, x: localX, y: localY }]);
+        setGrabbedFish(null);
+        return;
+      }
+    }
+
+    // Drop into ocean
+    if (clientX !== undefined && clientY !== undefined) {
+      setFishes(prev => [...prev, { 
+        ...grabbedFish, 
+        x: clientX, 
+        y: clientY + scrollYRef.current * SCROLL_PARALLAX,
+        displayY: clientY,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2
+      }]);
+    } else {
+      // Fallback if no coords (shouldn't happen with mouseup)
+      setFishes(prev => [...prev, grabbedFish]);
+    }
+    setGrabbedFish(null);
+  }, [grabbedFish]);
+
+  useEffect(() => {
+    isGrabModeRef.current = isGrabMode;
+  }, [isGrabMode]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      mousePosRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('mousemove', handleMouseMove, { passive: true });
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  useEffect(() => {
+    if (!grabbedFish) return;
+    
+    const handleGlobalMouseUp = (e: MouseEvent) => {
+      handleDropFish(e.clientX, e.clientY);
+    };
+    
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (grabbedFishRef.current) {
+        grabbedFishRef.current.style.transform = `translate(${e.clientX}px, ${e.clientY}px) translate(-50%, -50%) rotate(15deg)`;
+      }
+    };
+
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('mousemove', handleGlobalMouseMove, { passive: true });
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+    };
+  }, [grabbedFish, handleDropFish]);
+
+  const handleGrabFishFromTank = useCallback((fish: FishType) => {
+    if (!isGrabMode || grabbedFish) return;
+    setGrabbedFish(fish);
+    setTankFishes(prev => prev.filter(f => f.id !== fish.id));
+  }, [isGrabMode, grabbedFish]);
+
+  const handleFishBreed = useCallback((baby: FishType) => {
+    setTankFishes(prev => [...prev, baby]);
+  }, []);
+
+  useEffect(() => {
+    let animationFrameId: number;
+
+    fishLastFrameTimeRef.current = 0;
+
+    const animate = (timestamp: number) => {
+      if (isPageHiddenRef.current) { animationFrameId = 0; return; }
+      if (fishLastFrameTimeRef.current !== 0 && timestamp - fishLastFrameTimeRef.current < fishSimulationFrameMsRef.current) {
+        animationFrameId = requestAnimationFrame(animate);
+        return;
+      }
+      fishLastFrameTimeRef.current = timestamp;
+
+      const eatenFoodIds = new Set<number>();
+      const nibbleTriggers = new Set<number>();
+      const crumbBursts: Array<{ x: number; worldY: number, isLove?: boolean }> = [];
+      const matingTriggers = new Map<number, { partnerId: number, center: { x: number, y: number } }>();
+      const frameTimeSeconds = timestamp * 0.001;
+
+      const currentFishes = fishesRef.current;
+      const foods = fishFoodsRef.current;
+      const loveFoodAssignments = new Map<number, Set<number>>();
+      const spiralTriggers = new Set<number>();
+      const assignedForLove = new Set<number>();
+      for (const food of foods) {
+        if (food.type !== 'love') continue;
+
+        let firstId = -1;
+        let secondId = -1;
+        let firstDist = Infinity;
+        let secondDist = Infinity;
+
+        for (let i = 0; i < currentFishes.length; i++) {
+          const fish = currentFishes[i];
+          if (fish.behavior === 'mating' || assignedForLove.has(fish.id)) continue;
+          const dx = fish.x - food.x;
+          const dy = fish.y - food.worldY;
+          const dist = Math.hypot(dx, dy);
+          if (dist >= 450) continue;
+
+          if (dist < firstDist) {
+            secondDist = firstDist;
+            secondId = firstId;
+            firstDist = dist;
+            firstId = fish.id;
+          } else if (dist < secondDist) {
+            secondDist = dist;
+            secondId = fish.id;
+          }
+        }
+
+        if (firstId !== -1 && secondId !== -1) {
+          assignedForLove.add(firstId);
+          assignedForLove.add(secondId);
+
+          const assignedIds = new Set<number>([firstId, secondId]);
+          loveFoodAssignments.set(food.id, assignedIds);
+
+          const EAT_RADIUS = 35;
+          if (firstDist < EAT_RADIUS || secondDist < EAT_RADIUS) {
+            matingTriggers.set(firstId, { partnerId: secondId, center: { x: food.x, y: food.worldY } });
+            matingTriggers.set(secondId, { partnerId: firstId, center: { x: food.x, y: food.worldY } });
+            eatenFoodIds.add(food.id);
+          }
+        }
+      }
+
+      // â”€â”€ Per-frame acceleration structures â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // Map<id, fish> for O(1) partner / predecessor lookups.
+      const fishById = new Map<number, FishType>();
+      // Spatial grid (cell size = SCHOOL_RADIUS) for O(1) neighbor queries.
+      const CELL_SIZE = 140;
+      const spatialGrid = new Map<string, FishType[]>();
+      // Conga predecessor map: `${leaderId}_${index}` â†’ fish.
+      const congaPredMap = new Map<string, FishType>();
+
+      for (const f of currentFishes) {
+        fishById.set(f.id, f);
+        const cx = Math.floor(f.x / CELL_SIZE);
+        const cy = Math.floor(f.y / CELL_SIZE);
+        const key = `${cx},${cy}`;
+        const cell = spatialGrid.get(key);
+        if (cell) cell.push(f);
+        else spatialGrid.set(key, [f]);
+        if (f.behavior === 'conga' && f.congaLeaderId !== undefined && f.congaIndex !== undefined) {
+          congaPredMap.set(`${f.congaLeaderId}_${f.congaIndex}`, f);
+        }
+      }
+
+      // Coordinate spiral starts
+      currentFishes.forEach(fish => {
+        if (fish.behavior === 'mating' && fish.readyToSpiral && !fish.matingSpiralStartTime) {
+          const partner = fishById.get(fish.matingPartnerId!);
+          if (partner?.readyToSpiral) {
+            spiralTriggers.add(fish.id);
+            spiralTriggers.add(partner.id);
+          }
+        }
+      });
+
+      const DEFAULT_EAT_RADIUS = 30;
+      currentFishes.forEach(fish => {
+        if (fish.behavior === 'mating') return;
+        for (const food of foods) {
+          if (food.type === 'love' || eatenFoodIds.has(food.id)) continue;
+          const dist = Math.hypot(fish.x - food.x, fish.y - food.worldY);
+          if (dist < DEFAULT_EAT_RADIUS) {
+            eatenFoodIds.add(food.id);
+            nibbleTriggers.add(fish.id);
+            crumbBursts.push({ x: food.x, worldY: food.worldY, isLove: false });
+          }
+        }
+      });
+
+      // Simulation constants hoisted from the per-fish loop.
+      const SCARE_RADIUS = 150;
+      const FLEE_STRENGTH = 6;
+      const MAX_SPEED_FLEE = 5;
+      const MAX_SPEED_CRUISE = 2;
+      const FOOD_ATTRACT_RADIUS = 500;
+      const FOOD_ATTRACT_STRENGTH = 0.25;
+      const MAX_SPEED_FOOD = 3.5;
+      const TURN_SPEED = 0.1;
+      const RETURN_TO_HORIZONTAL_STRENGTH = 0.05;
+      const WANDER_STRENGTH = 0.1;
+      const SCHOOL_RADIUS = 140;
+      const SEPARATION_RADIUS = 68;
+      const ALIGN_STRENGTH = 0.015;
+      const COHESION_STRENGTH = 0.006;
+      const SEPARATION_STRENGTH = 0.12;
+      const MAX_NEIGHBORS_CONSIDERED = 8;
+      const SCHOOL_SPEED_BOOST = 0.55;
+      const MAX_SPEED_SCHOOL = 3.5;
+
+      const next = currentFishes.map(fish => {
+          const viewportTop = scrollYRef.current * SCROLL_PARALLAX;
+          const preloadMargin = window.innerHeight * 1.5;
+          const isFarOffscreen = fish.y < viewportTop - preloadMargin
+            || fish.y > viewportTop + window.innerHeight + preloadMargin;
+          let { x, y, vx, vy, rotation, initialVx, isFlipped } = fish;
+          let newBehavior = fish.behavior;
+          let newCuriousTimer = fish.curiousTimer || 0;
+          let newMatingStartTime = fish.matingStartTime;
+          let newMatingPartnerId = fish.matingPartnerId;
+          let newMatingCenter = fish.matingCenter;
+          let newMatingSpiralStartTime = fish.matingSpiralStartTime;
+          let newReadyToSpiral = fish.readyToSpiral;
+          let newIsPuffed = fish.isPuffed;
+          let newPuffStartTime = fish.puffStartTime;
+
+          // Keep distant fish moving, but defer food, mouse, schooling, and
+          // shockwave calculations until they approach the visible world.
+          if (isFarOffscreen) {
+            x += vx;
+            y += vy;
+            if (x < -FISH_DESPAWN_MARGIN || x > window.innerWidth + FISH_DESPAWN_MARGIN) return null;
+            const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
+            let delta = targetRotation - rotation;
+            if (delta > 180) delta -= 360;
+            if (delta < -180) delta += 360;
+            return {
+              ...fish,
+              x, y, displayY: y, vx, vy,
+              rotation: rotation + delta * 0.1,
+              isFlipped: vx < 0,
+            };
+          }
+
+          if (newIsPuffed && newPuffStartTime && (timestamp - newPuffStartTime > 3500)) {
+            newIsPuffed = false;
+            newPuffStartTime = undefined;
+          }
+
+          if (matingTriggers.has(fish.id)) {
+            const trigger = matingTriggers.get(fish.id)!;
+            newBehavior = 'mating';
+            newMatingStartTime = timestamp;
+            newMatingPartnerId = trigger.partnerId;
+            newMatingCenter = trigger.center;
+            newReadyToSpiral = false;
+            newMatingSpiralStartTime = undefined;
+          }
+          if (spiralTriggers.has(fish.id)) {
+            newMatingSpiralStartTime = timestamp;
+          }
+
+          const prevVx = vx;
+          const prevVy = vy;
+
+          const screenY = y - scrollYRef.current * SCROLL_PARALLAX;
+          const dxMouse = x - mousePosRef.current.x;
+          const dyMouse = screenY - mousePosRef.current.y;
+          const distanceMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
+
+          let isFleeing = false;
+
+          // Check physical shockwaves
+          if (!isGrabModeRef.current) {
+            for (const wave of shockwavesRef.current) {
+              const age = timestamp - wave.timestamp;
+              if (age < 500) {
+                const dx = x - wave.x;
+                const dy = y - wave.worldY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const BLAST_RADIUS = 350;
+                if (dist < BLAST_RADIUS) {
+                  const force = (1 - dist / BLAST_RADIUS) * 3.5;
+                  const angle = Math.atan2(dy, dx);
+                  vx += Math.cos(angle) * force;
+                  vy += Math.sin(angle) * force;
+                  isFleeing = true;
+                  if (fish.behavior === 'conga') {
+                    newBehavior = 'dart';
+                  }
+                }
+              }
+            }
+          }
+
+          if (!isGrabModeRef.current && fish.variant !== 'puffer' && fish.behavior !== 'curious' && fish.behavior !== 'mating' && distanceMouse < SCARE_RADIUS) {
+            const angle = Math.atan2(dyMouse, dxMouse);
+            vx += Math.cos(angle) * FLEE_STRENGTH;
+            vy += Math.sin(angle) * FLEE_STRENGTH;
+            isFleeing = true;
+          }
+
+          if (isFleeing) {
+            const fleeCap = MAX_SPEED_FLEE + 0.8;
+            const currentSpeed = Math.sqrt(vx * vx + vy * vy);
+            if (currentSpeed > fleeCap) {
+              vx = (vx / currentSpeed) * fleeCap;
+              vy = (vy / currentSpeed) * fleeCap;
+            }
+          } else {
+            // Find food
+            let closestFood: FishFoodType | null = null;
+            let closestDist = Infinity;
+            for (const food of foods) {
+              const fdx = food.x - x;
+              const fdy = food.worldY - y;
+              const dist = Math.sqrt(fdx * fdx + fdy * fdy);
+              if (food.type === 'love') {
+                const assigned = loveFoodAssignments.get(food.id);
+                if (!assigned || !assigned.has(fish.id)) continue;
+              }
+              if (dist < closestDist) {
+                closestDist = dist;
+                closestFood = food;
+              }
+            }
+
+            if (closestFood && closestDist < FOOD_ATTRACT_RADIUS) {
+              const fdx = closestFood.x - x;
+              const fdy = closestFood.worldY - y;
+              const angle = Math.atan2(fdy, fdx);
+              vx += Math.cos(angle) * FOOD_ATTRACT_STRENGTH;
+              vy += Math.sin(angle) * FOOD_ATTRACT_STRENGTH;
+              const currentSpeed = Math.sqrt(vx * vx + vy * vy);
+              if (currentSpeed > MAX_SPEED_FOOD) {
+                vx = (vx / currentSpeed) * MAX_SPEED_FOOD;
+                vy = (vy / currentSpeed) * MAX_SPEED_FOOD;
+              }
+              if (closestDist < DEFAULT_EAT_RADIUS && closestFood.type === 'love') {
+                nibbleTriggers.add(fish.id);
+                crumbBursts.push({ x: closestFood.x, worldY: closestFood.worldY, isLove: true });
+              }
+            } else if (fish.behavior === 'mating' && fish.matingStartTime && fish.matingCenter) {
+              if (fish.matingSpiralStartTime) {
+                const elapsed = timestamp - fish.matingSpiralStartTime;
+                const SPIRAL_DURATION = 4500;
+                const t = Math.min(1, elapsed / SPIRAL_DURATION);
+                if (t >= 1) {
+                  newBehavior = 'cruise';
+                  if (fish.matingPartnerId && fish.id < fish.matingPartnerId) {
+                    const cx = fish.matingCenter.x;
+                    const cy = fish.matingCenter.y;
+                    emitHearts(cx, cy);
+                    setTimeout(() => {
+                      const babyId = getNextEntityId();
+                      setFishes(prev => {
+                        // Much higher safety cap for mating births (250) to ensure babies usually spawn
+                        if (prev.length >= 250) return prev; 
+                        
+                        const babyFish: FishType = {
+                          ...fish,
+                          id: babyId,
+                          birthTime: timestamp,
+                          x: cx,
+                          y: cy,
+                          scale: fish.scale, // Base scale (adult size)
+                          behavior: 'cruise',
+                          behaviorPhase: Math.random() * Math.PI * 2,
+                          initialVx: (Math.random() > 0.5 ? 1 : -1) * (1.2 + Math.random() * 1.0),
+                          congaLeaderId: undefined,
+                          congaIndex: undefined,
+                          readyToSpiral: false,
+                          matingSpiralStartTime: undefined,
+                          matingStartTime: undefined,
+                          matingPartnerId: undefined
+                        };
+                        return [...prev, babyFish];
+                      });
+                    }, 50);
+                  }
+                } else {
+                  const START_RADIUS = 65;
+                  const END_RADIUS = 12;
+                  const currentRadius = START_RADIUS - (START_RADIUS - END_RADIUS) * t;
+                  const ORBIT_SPEED = 0.006 + (t * 0.005);
+                  const isTop = fish.id < (fish.matingPartnerId ?? 0);
+                  const angle = (elapsed * ORBIT_SPEED) + (isTop ? -Math.PI/2 : Math.PI/2);
+                  const tx = fish.matingCenter.x + Math.cos(angle) * currentRadius;
+                  const ty = fish.matingCenter.y + Math.sin(angle) * currentRadius;
+                  vx = (tx - x) * 0.55;
+                  vy = (ty - y) * 0.55;
+                  rotation = (angle + Math.PI / 2) * (180 / Math.PI);
+                }
+              } else {
+                const isTop = fish.id < (fish.matingPartnerId ?? 0);
+                const START_RADIUS = 65;
+                const tx = fish.matingCenter.x;
+                const ty = fish.matingCenter.y + (isTop ? -START_RADIUS : START_RADIUS);
+                const dx = tx - x;
+                const dy = ty - y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const MAX_STEER_SPEED = 4.5;
+                const STEER_STRENGTH = 0.3;
+                if (dist > 8) {
+                  const targetAngle = Math.atan2(dy, dx);
+                  vx += (Math.cos(targetAngle) * MAX_STEER_SPEED - vx) * STEER_STRENGTH;
+                  vy += (Math.sin(targetAngle) * MAX_STEER_SPEED - vy) * STEER_STRENGTH;
+                  (fish as any).isPreamble = true;
+                } else {
+                  vx = dx * 0.2;
+                  vy = dy * 0.2;
+                  (fish as any).isPreamble = false; // Stop following velocity rotation
+                  const targetTangent = isTop ? 0 : 180;
+                  let deltaH = targetTangent - rotation;
+                  if (deltaH > 180) deltaH -= 360;
+                  if (deltaH < -180) deltaH += 360;
+                  rotation += deltaH * 0.25;
+                  if (Math.abs(deltaH) < 5) {
+                    newReadyToSpiral = true;
+                  }
+                }
+              }
+            } else if (fish.behavior === 'conga') {
+              const CONGA_SPEED = 4.2;
+              const CONGA_GAP = 36;
+              if (fish.congaIndex === 0) {
+                vy += Math.sin(frameTimeSeconds * 1.6 + fish.behaviorPhase) * 0.22;
+                vx += (initialVx > 0 ? CONGA_SPEED : -CONGA_SPEED) * 0.12;
+                const leaderSpd = Math.sqrt(vx * vx + vy * vy);
+                if (leaderSpd > CONGA_SPEED) {
+                  vx = (vx / leaderSpd) * CONGA_SPEED;
+                  vy = (vy / leaderSpd) * CONGA_SPEED;
+                }
+              } else {
+                const pred = congaPredMap.get(`${fish.congaLeaderId}_${(fish.congaIndex ?? 1) - 1}`);
+                if (pred) {
+                  const predSpd = Math.sqrt(pred.vx * pred.vx + pred.vy * pred.vy);
+                  const predAngle = Math.atan2(pred.vy, pred.vx);
+                  const tx = pred.x - Math.cos(predAngle) * CONGA_GAP;
+                  const ty = pred.y - Math.sin(predAngle) * CONGA_GAP;
+                  const dx = tx - x;
+                  const dy = ty - y;
+                  const dist = Math.sqrt(dx * dx + dy * dy);
+                  vx += dx * 0.22;
+                  vy += dy * 0.22;
+                  const targetSpd = predSpd + (dist > CONGA_GAP * 1.5 ? 1.2 : 0);
+                  const mySpd = Math.sqrt(vx * vx + vy * vy);
+                  if (mySpd > 0.001) {
+                    vx = (vx / mySpd) * targetSpd;
+                    vy = (vy / mySpd) * targetSpd;
+                  }
+                } else {
+                  newBehavior = 'cruise';
+                }
+              }
+            } else if (fish.behavior === 'dart') {
+              const DART_PERIOD = 3.5;
+              const dartPhase = (frameTimeSeconds * (1 / DART_PERIOD) + fish.behaviorPhase) % 1;
+              if (dartPhase < 0.12) {
+                const burstStrength = Math.sin(dartPhase * (Math.PI / 0.12)) * 0.55;
+                const spd = Math.sqrt(vx * vx + vy * vy);
+                if (spd > 0.001) {
+                  vx += (vx / spd) * burstStrength;
+                  vy += (vy / spd) * burstStrength;
+                }
+              }
+              vy += Math.sin(frameTimeSeconds * 2.2 + fish.behaviorPhase) * 0.04;
+              vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
+              vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH * 0.6;
+              const dartSpd = Math.sqrt(vx * vx + vy * vy);
+              if (dartSpd > 4.5) {
+                vx = (vx / dartSpd) * 4.5;
+                vy = (vy / dartSpd) * 4.5;
+              }
+            } else if (fish.behavior === 'loiter') {
+              vx += Math.cos(frameTimeSeconds * 0.35 + fish.behaviorPhase) * 0.08;
+              vy += Math.sin(frameTimeSeconds * 0.70 + fish.behaviorPhase) * 0.12;
+              vx += (initialVx > 0 ? 0.12 : -0.12 - vx) * 0.08;
+              const loiterSpd = Math.sqrt(vx * vx + vy * vy);
+              if (loiterSpd > 1.4) {
+                vx = (vx / loiterSpd) * 1.4;
+                vy = (vy / loiterSpd) * 1.4;
+              }
+            } else if (fish.behavior === 'curious') {
+              if (distanceMouse < 320) {
+                const angleToward = Math.atan2(-dyMouse, -dxMouse);
+                vx += Math.cos(angleToward) * 0.18;
+                vy += Math.sin(angleToward) * 0.18;
+                newCuriousTimer++;
+              } else {
+                vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
+                vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
+                vy += (Math.random() - 0.5) * WANDER_STRENGTH;
+                if (newCuriousTimer > 0) newCuriousTimer--;
+              }
+              if (newCuriousTimer > 300) {
+                newBehavior = 'cruise';
+                newCuriousTimer = 0;
+              }
+              const curiousSpd = Math.sqrt(vx * vx + vy * vy);
+              if (curiousSpd > 3.8) {
+                vx = (vx / curiousSpd) * 3.8;
+                vy = (vy / curiousSpd) * 3.8;
+              }
+            } else {
+              // Cruise (schooling)
+              vx += (initialVx - vx) * RETURN_TO_HORIZONTAL_STRENGTH;
+              vy += (0 - vy) * RETURN_TO_HORIZONTAL_STRENGTH;
+              vy += (Math.random() - 0.5) * WANDER_STRENGTH;
+
+              const fishDisplayY = y - scrollYRef.current * SCROLL_PARALLAX;
+              const isOffscreen = fishDisplayY < -400 || fishDisplayY > window.innerHeight + 400;
+
+              let neighborCount = 0;
+              let alignX = 0, alignY = 0, centerX = 0, centerY = 0, separationX = 0, separationY = 0;
+
+              if (!isOffscreen) {
+                const fcx = Math.floor(x / CELL_SIZE);
+                const fcy = Math.floor(y / CELL_SIZE);
+                neighborScan:
+                for (let dcx = -1; dcx <= 1; dcx++) {
+                  for (let dcy = -1; dcy <= 1; dcy++) {
+                    const neighbors = spatialGrid.get(`${fcx + dcx},${fcy + dcy}`);
+                    if (!neighbors) continue;
+                    for (const other of neighbors) {
+                      if (other.id === fish.id) continue;
+                      const dx = other.x - x;
+                      const dy = other.y - y;
+                      const distSq = dx * dx + dy * dy;
+                      if (distSq > SCHOOL_RADIUS * SCHOOL_RADIUS) continue;
+                      const dist = Math.sqrt(distSq);
+                      if (dist < SEPARATION_RADIUS && dist > 0.001) {
+                        separationX -= dx / dist;
+                        separationY -= dy / dist;
+                      }
+                      if (other.schoolId === fish.schoolId) {
+                        neighborCount++;
+                        alignX += other.vx; alignY += other.vy;
+                        centerX += other.x; centerY += other.y;
+                        if (neighborCount >= MAX_NEIGHBORS_CONSIDERED) break neighborScan;
+                      }
+                    }
+                  }
+                }
+              }
+
+              vx += separationX * SEPARATION_STRENGTH;
+              vy += separationY * SEPARATION_STRENGTH;
+
+              if (neighborCount > 0) {
+                alignX = alignX / neighborCount - vx;
+                alignY = alignY / neighborCount - vy;
+                vx += alignX * ALIGN_STRENGTH;
+                vy += alignY * ALIGN_STRENGTH;
+                centerX /= neighborCount;
+                centerY /= neighborCount;
+                vx += (centerX - x) * COHESION_STRENGTH;
+                vy += (centerY - y) * COHESION_STRENGTH;
+
+                const pattern = fish.schoolId % 3;
+                if (pattern === 0) vy += Math.sin(frameTimeSeconds * 0.6 + fish.schoolId * 1.3) * 0.06;
+                else if (pattern === 1) {
+                  const surgePhase = (frameTimeSeconds * 0.25 + fish.schoolId * 0.7) % 1;
+                  if (surgePhase < 0.18) {
+                    const surgeStrength = Math.sin(surgePhase * (Math.PI / 0.18)) * 0.18;
+                    const spd = Math.sqrt(vx * vx + vy * vy);
+                    if (spd > 0.001) { vx += (vx / spd) * surgeStrength; vy += (vy / spd) * surgeStrength; }
+                  }
+                } else {
+                  vy += Math.sin(frameTimeSeconds * 1.4 + fish.schoolId * 2.1) * 0.09;
+                  vx += Math.cos(frameTimeSeconds * 0.9 + fish.schoolId * 1.7) * 0.025;
+                }
+
+                const speed = Math.sqrt(vx * vx + vy * vy);
+                const schoolTargetSpeed = Math.min(MAX_SPEED_CRUISE + SCHOOL_SPEED_BOOST, MAX_SPEED_SCHOOL);
+                if (speed > 0.001 && speed < schoolTargetSpeed) {
+                  vx += (vx / speed) * 0.12; vy += (vy / speed) * 0.12;
+                }
+                const finalSpeed = Math.sqrt(vx * vx + vy * vy);
+                if (finalSpeed > MAX_SPEED_SCHOOL) {
+                  vx = (vx / finalSpeed) * MAX_SPEED_SCHOOL;
+                  vy = (vy / finalSpeed) * MAX_SPEED_SCHOOL;
+                }
+              } else {
+                const currentSpeed = Math.sqrt(vx * vx + vy * vy);
+                if (currentSpeed > MAX_SPEED_CRUISE) {
+                  vx = (vx / currentSpeed) * MAX_SPEED_CRUISE;
+                  vy = (vy / currentSpeed) * MAX_SPEED_CRUISE;
+                }
+              }
+            }
+          }
+
+          if (newIsPuffed) {
+            vx *= 0.15;
+            vy = (vy * 0.15) - 0.12;
+          }
+
+          x += vx;
+          y += vy;
+
+          let delta = 0;
+          if (newBehavior !== 'mating' || (fish as any).isPreamble) {
+            const targetRotation = Math.atan2(vy, vx) * (180 / Math.PI);
+            delta = targetRotation - rotation;
+            if (delta > 180) delta -= 360;
+            if (delta < -180) delta += 360;
+            rotation += delta * TURN_SPEED;
+          }
+
+          // Leave tiny bubble trails when fish sharply turn or accelerate.
+          const accelMagnitude = Math.hypot(vx - prevVx, vy - prevVy);
+          const turnMagnitude = Math.abs(delta);
+          const now = timestamp;
+          const lastEmit = trailEmitRef.current[fish.id] ?? 0;
+          if ((theme === 'underwater' || theme === 'deepsea') && (accelMagnitude > 0.14 || turnMagnitude > 7.5) && now - lastEmit > 170 && Math.random() > 0.4) {
+            trailEmitRef.current[fish.id] = now;
+            const direction = vx === 0 ? (isFlipped ? -1 : 1) : Math.sign(vx);
+            emitTrailBubble(x - direction * (26 * fish.scale), y + (Math.random() - 0.5) * 6);
+          }
+
+          return { 
+            ...fish, 
+            behavior: newBehavior, 
+            curiousTimer: newCuriousTimer,
+            // The foreground layer already applies the world scroll offset.
+            // Keep the puffer in world coordinates to avoid scrolling twice.
+            x, y, displayY: y, vx, vy, rotation,
+            matingStartTime: newMatingStartTime,
+            matingPartnerId: newMatingPartnerId,
+            matingCenter: newMatingCenter,
+            matingSpiralStartTime: newMatingSpiralStartTime,
+            readyToSpiral: newReadyToSpiral,
+            isPuffed: newIsPuffed,
+            puffStartTime: newPuffStartTime,
+          };
+        }).filter((fish): fish is FishType => fish !== null)
+          .filter(fish => fish.x > -FISH_DESPAWN_MARGIN && fish.x < window.innerWidth + FISH_DESPAWN_MARGIN);
+
+        // Keep clown/puffer guarantees in underwater only.
+        if (theme === 'underwater' && next.length > 0 && !next.some(f => f.variant === 'clown')) {
+          const idx = Math.floor(Math.random() * next.length);
+          next[idx] = { ...next[idx], variant: 'clown' };
+        }
+
+        if (theme === 'underwater' && next.length > 0 && !next.some(f => f.variant === 'puffer')) {
+          // Prefer non-clown fish for puffer
+          const availableIdxs = next.map((f, i) => f.variant !== 'clown' ? i : -1).filter(i => i !== -1);
+          const targetIdx = availableIdxs.length > 0 ? availableIdxs[Math.floor(Math.random() * availableIdxs.length)] : Math.floor(Math.random() * next.length);
+          next[targetIdx] = { ...next[targetIdx], variant: 'puffer' };
+        }
+
+      const previousFishes = fishesRef.current;
+      fishesRef.current = next;
+      syncFishPositions(next);
+
+      // React only needs to know about structural or behavioral changes. The
+      // high-frequency position data remains in the ref and on the DOM nodes.
+      const hasMetadataChanges = next.length !== previousFishes.length
+        || next.some((fish, index) => {
+          const previous = previousFishes[index];
+          return !previous
+            || fish.id !== previous.id
+            || fish.behavior !== previous.behavior
+            || fish.variant !== previous.variant
+            || fish.isPuffed !== previous.isPuffed
+            || fish.readyToSpiral !== previous.readyToSpiral;
+        });
+      if (hasMetadataChanges) setFishes(next);
+
+      if (eatenFoodIds.size > 0) {
+        setFishFoods(prev => {
+          const next = prev.filter(f => !eatenFoodIds.has(f.id));
+          fishFoodsRef.current = next; // Sync ref immediately
+          return next;
+        });
+      }
+
+      if (nibbleTriggers.size > 0) {
+        const ids = Array.from(nibbleTriggers);
+        setNibblingFishIds(prev => {
+          const next = { ...prev };
+          ids.forEach(id => {
+            next[id] = true;
+          });
+          return next;
+        });
+
+        ids.forEach(id => {
+          setTimeout(() => {
+            setNibblingFishIds(prev => {
+              if (!prev[id]) return prev;
+              const next = { ...prev };
+              delete next[id];
+              return next;
+            });
+          }, 280);
+        });
+      }
+
+      if (crumbBursts.length > 0) {
+        crumbBursts.forEach(burst => emitFoodCrumbs(burst.x, burst.worldY, (burst as any).isLove));
+      }
+
+      // Cleanup old shockwaves with in-place compaction to avoid per-frame array allocation.
+      {
+        const waves = shockwavesRef.current;
+        let write = 0;
+        for (let i = 0; i < waves.length; i++) {
+          const wave = waves[i];
+          if (timestamp - wave.timestamp < 1000) {
+            waves[write] = wave;
+            write += 1;
+          }
+        }
+        waves.length = write;
+      }
+
+      particleCanvasRef.current?.setScrollY?.(scrollYRef.current);
+      particleCanvasRef.current?.setFishSnapshot?.(fishesRef.current);
+
+      animationFrameId = requestAnimationFrame(animate);
+    };
+    const handleVisibilityChange = () => {
+      isPageHiddenRef.current = document.hidden;
+      if (!document.hidden && animationFrameId === 0) {
+        fishLastFrameTimeRef.current = 0;
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    if (theme === 'underwater' || theme === 'deepsea') {
+      animationFrameId = requestAnimationFrame(animate);
+    }
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [theme, emitTrailBubble, emitFoodCrumbs]);
+
+  useEffect(() => {
+    if (theme === 'underwater') {
+      // --- Accelerating burst for first 3.5 seconds ---
+      const BURST_DURATION_MS = 3500;
+      const BURST_FISH_INTERVAL_MS = 45;
+      const BURST_BUBBLE_INTERVAL_MS = 75;
+
+      const burstFishInterval = setInterval(createFish, BURST_FISH_INTERVAL_MS);
+      const burstBubbleInterval = setInterval(createBubble, BURST_BUBBLE_INTERVAL_MS);
+
+      let steadyFishInterval: ReturnType<typeof setInterval>;
+      let steadyBubbleInterval: ReturnType<typeof setInterval>;
+
+      const burstTimeout = setTimeout(() => {
+        clearInterval(burstFishInterval);
+        clearInterval(burstBubbleInterval);
+        // Transition to normal steady-state intervals
+        steadyFishInterval = setInterval(createFish, FISH_SPAWN_INTERVAL_MS);
+        steadyBubbleInterval = setInterval(createBubble, 500);
+      }, BURST_DURATION_MS);
+
+      return () => {
+        clearTimeout(burstTimeout);
+        clearInterval(burstFishInterval);
+        clearInterval(burstBubbleInterval);
+        clearInterval(steadyFishInterval);
+        clearInterval(steadyBubbleInterval);
+      };
+    } else if (theme === 'deepsea') {
+      setBubbles([]);
+      // Burst of fish into the abyss, with darker ambient bubbles.
+      const BURST_DURATION_MS = 3500;
+      const BURST_FISH_INTERVAL_MS = 45;
+      const BURST_BUBBLE_INTERVAL_MS = 140;
+      const burstFishInterval = setInterval(createFish, BURST_FISH_INTERVAL_MS);
+      const burstBubbleInterval = setInterval(createBubble, BURST_BUBBLE_INTERVAL_MS);
+      let steadyFishInterval: ReturnType<typeof setInterval>;
+      let steadyBubbleInterval: ReturnType<typeof setInterval>;
+      const burstTimeout = setTimeout(() => {
+        clearInterval(burstFishInterval);
+        clearInterval(burstBubbleInterval);
+        steadyFishInterval = setInterval(createFish, FISH_SPAWN_INTERVAL_MS);
+        steadyBubbleInterval = setInterval(createBubble, 900);
+      }, BURST_DURATION_MS);
+      return () => {
+        clearTimeout(burstTimeout);
+        clearInterval(burstFishInterval);
+        clearInterval(burstBubbleInterval);
+        clearInterval(steadyFishInterval);
+        clearInterval(steadyBubbleInterval);
+      };
+    }
+  }, [theme, createBubble, createFish]);
+
+  // Recreate the sense of arrival after older fish have left the viewport,
+  // while keeping a cooldown and the normal fish cap as hard limits.
+  useEffect(() => {
+    if (theme !== 'underwater' && theme !== 'deepsea') return;
+
+    let burstInterval: ReturnType<typeof setInterval> | undefined;
+
+    const checkForRefill = () => {
+      const now = performance.now();
+      if (
+        refillBurstActiveRef.current
+        || now - lastRefillBurstRef.current < REFILL_BURST_COOLDOWN_MS
+        || fishesRef.current.length > LOW_FISH_REFILL_THRESHOLD
+      ) {
+        return;
+      }
+
+      lastRefillBurstRef.current = now;
+      refillBurstActiveRef.current = true;
+      let spawned = 0;
+
+      burstInterval = setInterval(() => {
+        if (fishesRef.current.length >= fishLimit || spawned >= REFILL_BURST_COUNT) {
+          if (burstInterval) clearInterval(burstInterval);
+          burstInterval = undefined;
+          refillBurstActiveRef.current = false;
+          return;
+        }
+
+        createFish(true);
+        spawned += 1;
+      }, REFILL_BURST_INTERVAL_MS);
+    };
+
+    const checkInterval = setInterval(checkForRefill, 1000);
+    return () => {
+      clearInterval(checkInterval);
+      if (burstInterval) clearInterval(burstInterval);
+      refillBurstActiveRef.current = false;
+    };
+  }, [theme, fishLimit, createFish]);
+
+  // Mark fish beyond the current limit to fade out instead of cutting them
+  // immediately, so lowering the performance tier doesn't make fish vanish in
+  // a single frame.
+  useEffect(() => {
+    if (fishesRef.current.length <= fishLimit) return;
+    const now = performance.now();
+    setFishes(prev => {
+      if (prev.length <= fishLimit) return prev;
+      let changed = false;
+      const next = prev.map((fish, i) => {
+        if (i >= fishLimit && !fish.despawnAt) {
+          changed = true;
+          return { ...fish, despawnAt: now };
+        }
+        return fish;
+      });
+      return changed ? next : prev;
+    });
+  }, [fishLimit]);
+
+  // Actually drop fish once their fade-out has finished.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (!fishesRef.current.some(f => f.despawnAt)) return;
+      const now = performance.now();
+      setFishes(prev => {
+        const next = prev.filter(f => !f.despawnAt || now - f.despawnAt < FISH_DESPAWN_FADE_MS);
+        return next.length === prev.length ? prev : next;
+      });
+    }, 150);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const DEEPSEA_ORB_COLORS = ['#00ff9f', '#ff006e', '#7b2fff', '#00e5ff', '#39ff14', '#ff4d6d', '#00b4d8', '#f72585'];
+  useEffect(() => {
+    if (theme === 'deepsea') {
+      const orbs = Array.from({ length: 28 }).map((_, i) => ({
+        id: i,
+        left: `${Math.random() * 100}vw`,
+        top: `${Math.random() * 100}vh`,
+        size: `${Math.random() * 6 + 2}px`,
+        color: DEEPSEA_ORB_COLORS[Math.floor(Math.random() * DEEPSEA_ORB_COLORS.length)],
+        duration: `${Math.random() * 5 + 4}s`,
+        delay: `${-Math.random() * 8}s`,
+      }));
+      setDeepSeaOrbs(orbs);
+    } else {
+      setDeepSeaOrbs([]);
+    }
+  }, [theme]);
+
+
+  // Keep this reference stable between animation frames so the static portfolio
+  // content can remain memoized while the aquarium simulation updates.
+  const colors = theme === 'underwater' ? UNDERWATER_COLORS : DEEPSEA_COLORS;
+
+
+  const worldTransitionClass = isThemeTransitionActive
+    ? (themeTransitionDirection === 'dive' ? 'theme-transition-world-dive' : 'theme-transition-world-surface')
+    : '';
+  const fishEnterClass = isThemeTransitionActive ? 'theme-fish-enter' : '';
+  const fishCanvasEnabled = (theme === 'underwater' || theme === 'deepsea')
+    && !isGrabMode
+    && highlightedBehavior === null
+    && Object.keys(nibblingFishIds).length === 0;
+  // Stable handler identities for the always-mounted UI buttons below. App
+  // re-renders ~30x/sec while fish are swimming; without useCallback these
+  // would be fresh inline closures every render, defeating each button's
+  // React.memo and forcing it to re-render in lockstep with the fish sim.
+  const toggleTutorial = useCallback(() => setIsTutorialOpen(prev => !prev), []);
+  const closeTutorial = useCallback(() => setIsTutorialOpen(false), []);
+  const togglePerformancePanel = useCallback(() => setIsPerformancePanelOpen(prev => !prev), []);
+  const closePerformancePanel = useCallback(() => setIsPerformancePanelOpen(false), []);
+
+  const toggleLoveMode = useCallback(() => {
+    if (isLoveMode) {
+      setIsLoveMode(false);
+      setIsFishFoodMode(false);
+    } else {
+      setIsLoveMode(true);
+      setIsFishFoodMode(true);
+    }
+  }, [isLoveMode]);
+
+  const toggleFishFoodMode = useCallback(() => {
+    if (isFishFoodMode && !isLoveMode) {
+      setIsFishFoodMode(false);
+    } else {
+      setIsFishFoodMode(true);
+      setIsLoveMode(false);
+      setIsGrabMode(false);
+    }
+  }, [isFishFoodMode, isLoveMode]);
+
+  const toggleGrabMode = useCallback(() => {
+    const nextMode = !isGrabMode;
+    setIsGrabMode(nextMode);
+    if (nextMode) {
+      hasOpenedTankRef.current = true;
+      setIsTankOpen(true); // Open tank when entering grab mode
+      setIsFishFoodMode(false);
+      setIsLoveMode(false);
+    }
+  }, [isGrabMode]);
+
+  const toggleTankOpen = useCallback(() => {
+    hasOpenedTankRef.current = true;
+    setIsTankOpen(prev => !prev);
+  }, []);
+  const closeTank = useCallback(() => setIsTankOpen(false), []);
+
+  return (
+    <div className={`relative min-h-screen text-white overflow-x-hidden transition-colors duration-1000 ${
+      grabbedFish ? 'select-none cursor-grabbing' : ''
+    } ${theme === 'underwater'
+      ? 'bg-gradient-to-br from-[#000428] via-[#004e92] to-[#1CB5E0]'
+      : 'bg-gradient-to-b from-[#000000] via-[#000508] to-[#000c14]'
+      }`}>
+      <style>{`
+      `}</style>
+      <ParticleCanvas ref={particleCanvasRef} quality={performanceTier} frameRate={frameRate} />
+      {/* Background Aquarium Layer: Environment and Large Creatures */}
+      <div className={`fixed inset-0 w-full h-full z-0 overflow-hidden pointer-events-none ${worldTransitionClass}`}>
+        {theme === 'underwater' ? (
+          <>
+            <GodRays />
+            {bubbles.map(bubble => (
+              <Bubble key={bubble.id} {...bubble} />
+            ))}
+          </>
+        ) : (
+          // Deep Sea: bioluminescent plankton orbs only.
+          <>
+            {deepSeaOrbs.map(orb => (
+              <div
+                key={orb.id}
+                className="bio-orb"
+                style={{
+                  left: orb.left,
+                  top: orb.top,
+                  width: orb.size,
+                  height: orb.size,
+                  backgroundColor: orb.color,
+                  boxShadow: `0 0 ${parseInt(orb.size) * 3}px ${parseInt(orb.size) * 2}px ${orb.color}55`,
+                  '--orb-duration': orb.duration,
+                  '--orb-delay': orb.delay,
+                } as React.CSSProperties}
+              />
+            ))}
+          </>
+        )}
+        {/* Own their position state locally so their ~30fps movement ticks
+            don't force this whole app to re-render; each renders nothing
+            when its creature isn't active for the current theme. */}
+        <Suspense fallback={null}>
+          <WhaleTurtleLayer theme={theme} scrollYRef={scrollYRef} getNextEntityId={getNextEntityId} />
+          <AnglerFishLayer theme={theme} scrollYRef={scrollYRef} getNextEntityId={getNextEntityId} mousePosRef={mousePosRef} />
+        </Suspense>
+      </div>
+      {isThemeTransitionActive && (
+        <div
+          className={`fixed inset-0 pointer-events-none z-[5] ${themeTransitionDirection === 'dive' ? 'theme-transition-sweep-dive' : 'theme-transition-sweep-surface'}`}
+        />
+      )}
+
+      {isThemeTransitionActive && showSilhouetteFishes && silhouetteFishes.length > 0 && (
+        <div className={`fixed inset-0 w-full h-full pointer-events-none z-[25] ${themeTransitionDirection === 'dive' ? 'theme-fish-silhouette-out' : 'theme-fish-silhouette-out'}`}>
+          {silhouetteFishes.map((fish) => {
+            const viewportY = fish.y - scrollYRef.current * SCROLL_PARALLAX;
+            if (viewportY < -220 || viewportY > window.innerHeight + 220) return null;
+            return (
+              <Fish
+                key={`silhouette-${fish.id}`}
+                {...fish}
+                displayY={viewportY}
+                isSilhouette
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Interaction Layer: Fish, Food, and Grab Mechanics */}
+      <div
+        className={`fixed inset-0 w-full h-full pointer-events-none ${worldTransitionClass} ${fishEnterClass} ${isGrabMode ? 'z-[50]' : 'z-20'}`}
+      >
+        {(theme === 'underwater' || theme === 'deepsea') && (() => {
+          // Optimization: Partition and cull fish in a single pass to avoid multiple filter/map operations in render
+          const viewportTop = scrollYRef.current * SCROLL_PARALLAX;
+          const bgFishes: JSX.Element[] = [];
+          const fgFishes: JSX.Element[] = [];
+          const isDeepSea = theme === 'deepsea';
+
+          fishes.forEach(fish => {
+            const worldY = fish.y - viewportTop;
+            if (worldY < -400 || worldY > window.innerHeight + 400) return;
+
+            // Ordinary fish are painted by one canvas when no interaction or
+            // highlighting requires individual DOM nodes.
+            if (fishCanvasEnabled && (!fish.variant || fish.variant === 'default')) return;
+
+            const element = (
+              <Fish
+                key={fish.id}
+                {...fish}
+                isNibbling={Boolean(nibblingFishIds[fish.id])}
+                isFaded={highlightedBehavior !== null && fish.behavior !== highlightedBehavior}
+                isHighlighted={highlightedBehavior !== null && fish.behavior === highlightedBehavior}
+                isDespawning={Boolean(fish.despawnAt)}
+                isGrabMode={isGrabMode}
+                isDeepSea={isDeepSea}
+                onMouseDown={handleGrabFish}
+              />
+            );
+
+            if (fish.variant === 'clown' || fish.variant === 'puffer' || fish.variant === 'rainbow') {
+              fgFishes.push(element);
+            } else {
+              bgFishes.push(element);
+            }
+          });
+
+          return (
+            <>
+              <FishCanvas
+                ref={fishCanvasRef}
+                enabled={fishCanvasEnabled}
+                isDeepSea={isDeepSea}
+                quality={performanceTier}
+              />
+              {/* Background World Layer: Regular fish swimming behind the content */}
+              <div
+                ref={worldLayerRef}
+                style={{ 
+                  position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', 
+                  willChange: 'transform', zIndex: 0
+                }}
+              >
+                {bgFishes}
+                {fishFoods.filter(f => f.type !== 'love').map(food => (
+                  <div
+                    key={food.id}
+                    className="absolute w-3 h-3 bg-amber-400 rounded-full blur-[1px] animate-bounce"
+                    style={{
+                      left: food.x,
+                      top: food.worldY,
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 1
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Foreground World Layer: Clown and Puffer fish swimming above the content */}
+              <div
+                ref={worldLayerForegroundRef}
+                style={{ 
+                  position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none', 
+                  willChange: 'transform', zIndex: isGrabMode ? 50 : 20
+                }}
+              >
+                {fgFishes}
+                {fishFoods.filter(f => f.type === 'love').map(food => (
+                  <div
+                    key={food.id}
+                    className="absolute w-6 h-6 text-pink-400 drop-shadow-[0_0_10px_rgba(244,114,182,0.8)] rounded-full blur-[1px] animate-bounce flex items-center justify-center"
+                    style={{
+                      left: food.x,
+                      top: food.worldY,
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 1
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                    </svg>
+                  </div>
+                ))}
+              </div>
+            </>
+          );
+        })()}
+      </div>
+
+      {theme === 'underwater' && (
+        <div className={`fixed inset-0 z-20 pointer-events-none ${worldTransitionClass}`}>
+          <Suspense fallback={null}>
+            <JellyfishLayer
+              theme={theme}
+              scrollYRef={scrollYRef}
+              getNextEntityId={getNextEntityId}
+              emitJellyfishPop={emitJellyfishPop}
+            />
+          </Suspense>
+        </div>
+      )}
+
+
+      <PortfolioContent
+        theme={theme}
+        colors={colors}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        filteredProjects={filteredProjects}
+        experiences={experiences}
+        education={education}
+        skills={skills}
+      />
+      <BackToTopButton />
+      <ThemeToggleButton />
+      <ThemeSwitch />
+      <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
+      <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
+      <TutorialButton isOpen={isTutorialOpen} onToggle={toggleTutorial} />
+      <Suspense fallback={null}>
+        <TutorialPanel isOpen={isTutorialOpen} onClose={closeTutorial} />
+      </Suspense>
+      {(theme === 'underwater' || theme === 'deepsea') && (
+        <>
+          <div className="fixed bottom-8 left-24 z-40 w-56 px-1 opacity-50">
+            <div className="mb-1 flex items-center justify-between text-xs text-cyan-100/90">
+              <span className="font-semibold tracking-wide">Fish Count</span>
+               <span className="font-semibold">{fishes.length} / {fishLimit}</span>
+            </div>
+            <input
+              type="range"
+              min={MIN_FISH_LIMIT}
+              max={MAX_FISH_LIMIT}
+              value={fishLimit}
+              onChange={(e) => {
+                hasManualFishLimitRef.current = true;
+                setFishLimit(Number(e.target.value));
+              }}
+              className="w-full accent-cyan-400 opacity-90 hover:opacity-100 transition-opacity"
+              aria-label="Fish spawn limit"
+            />
+          </div>
+          <FishCensus
+            fishesRef={fishesRef}
+            highlightedBehavior={highlightedBehavior}
+            onHighlightBehavior={setHighlightedBehavior} 
+          />
+          <LoveModeButton
+            isActive={isLoveMode}
+            onToggle={toggleLoveMode}
+          />
+        </>
+      )}
+      <FishFoodButton isActive={isFishFoodMode && !isLoveMode} onToggle={toggleFishFoodMode} />
+
+      <GrabModeButton isActive={isGrabMode} onToggle={toggleGrabMode} />
+
+      <TankToggleButton
+        isActive={isTankOpen}
+        onToggle={toggleTankOpen}
+        count={tankFishes.length}
+      />
+
+      {hasOpenedTankRef.current && (
+        <Suspense fallback={null}>
+          <FishTank
+            isOpen={isTankOpen}
+            onClose={closeTank}
+            tankFishes={tankFishes}
+            onDropFish={handleDropFish}
+            onGrabFishFromTank={handleGrabFishFromTank}
+            onFishBreed={handleFishBreed}
+            isGrabMode={isGrabMode}
+            hasGrabbedFish={!!grabbedFish}
+            isFishFoodMode={isFishFoodMode}
+            isLoveMode={isLoveMode}
+          />
+        </Suspense>
+      )}
+
+      {grabbedFish && (
+        <div 
+          ref={grabbedFishRef}
+          className="fixed pointer-events-none z-[100]"
+          style={{ 
+            left: 0, 
+            top: 0,
+            transform: `translate(${mousePosRef.current.x}px, ${mousePosRef.current.y}px) translate(-50%, -50%) rotate(15deg)`
+          }}
+        >
+          <Fish {...grabbedFish} x={0} displayY={0} rotation={0} />
+          {/* Net visual under the fish */}
+          <div className="absolute inset-0 bg-white/20 rounded-full blur-xl -z-10 scale-150"></div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;
