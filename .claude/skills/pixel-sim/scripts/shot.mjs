@@ -4,7 +4,7 @@
 //
 //   node shot.mjs --out <prefix> [--page reef|pond|shrine|aquarium] [--scroll 0,900,1800]
 //     [--size 1440x900] [--phone] [--wait 3000] [--query pond-main] [--eval <js>]
-//     [--zoom x,y,w,h,scale]
+//     [--zoom x,y,w,h,scale] [--port 3000]
 //
 // Writes <prefix>-<scrollY>.png for each scroll position. --phone is 390x844.
 // --eval runs in the page before the shots and prints what it returns.
@@ -54,7 +54,7 @@ const run = async expression => {
 let code = 0;
 try {
   await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: !!args.phone });
-  await send('Page.navigate', { url: `http://localhost:3000/${args.query ? `?${args.query}` : ''}` });
+  await send('Page.navigate', { url: `http://localhost:${args.port || 3000}/${args.query ? `?${args.query}` : ''}` });
   await sleep(wait);
   if (args.page && args.page !== 'reef') {
     const clicked = await run(`(() => {

@@ -28,6 +28,7 @@ const COLOURS: Record<Page, { ink: string; edge: string; glint: string }> = {
   shrine: { ink: '#0a1022', edge: '#3a2348', glint: '#ffc978' },
   space: { ink: '#04030a', edge: '#301c5a', glint: '#ec84a0' },
   sky: { ink: '#14284e', edge: '#3c78c4', glint: '#f8d052' },
+  hotpot: { ink: '#1e0406', edge: '#801a0e', glint: '#ffa040' },
   aquarium: { ink: '#000428', edge: '#0d3a6e', glint: '#7fdcff' },
 };
 

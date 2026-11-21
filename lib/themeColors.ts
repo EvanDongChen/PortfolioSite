@@ -66,6 +66,18 @@ export const SKY_COLORS: ThemeColors = {
   heroGradient: 'from-amber-100 to-amber-300', contactIcon: 'text-amber-200',
 };
 
+// Hot pot: content on dark chili-oil brown, with gold and chili-red accents.
+export const HOTPOT_COLORS: ThemeColors = {
+  ...UNDERWATER_COLORS,
+  text: 'text-orange-50', textLighter: 'text-orange-50/90', highlight: 'text-amber-300',
+  highlightStrong: 'text-amber-200', border: 'border-amber-400/25', timeline: 'bg-amber-400/30',
+  timelineDot: 'bg-red-500', timelineDotBorder: 'border-[#1e0406]',
+  cardBg: 'bg-[#1e0406]/80', tagBg: 'bg-red-950/60', tagHoverBg: 'hover:bg-red-900/70',
+  searchBg: 'bg-[#1e0406]/80', searchBorder: 'border-amber-400/30', searchRing: 'focus:ring-amber-400',
+  searchPlaceholder: 'placeholder-amber-200/50', periodBg: 'bg-[#4a0c0a]',
+  heroGradient: 'from-amber-200 to-orange-400', contactIcon: 'text-amber-300',
+};
+
 // Space: content on deep ink, with starlight violet and comet-teal accents.
 export const SPACE_COLORS: ThemeColors = {
   ...UNDERWATER_COLORS,
