@@ -4,6 +4,7 @@ import { dragTo, foodAt, grabAt, pluckNow, pourIn, pressAt, releaseDrag, rolling
 import { HotpotDebugActions } from './HotpotDebugPanel';
 import { HotpotView } from '../lib/hotpotView';
 import { startEvent } from '../lib/hotpotEvents';
+import { dipInto } from '../lib/hotpotSauce';
 import { usePerformance, PerformanceTier } from '../contexts/PerformanceContext';
 
 // Screen pixels per art pixel; phones get a finer grid so the ingredients keep their detail.
@@ -15,6 +16,8 @@ const REBUILD_MS = 250;
 
 interface HotpotBrothProps {
   onReady: () => void;
+  /** Whether the sauce bar is pulled out. */
+  sauceOpen?: boolean;
   /** Filled in with what the debug panel can do. */
   debug?: React.MutableRefObject<HotpotDebugActions | null>;
 }
@@ -36,7 +39,9 @@ const heroClear = (): Clear[] => {
  * pixels, so the broth's surface scrolls exactly with the content and
  * anything lifted out of it comes up towards the viewer.
  */
-const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
+const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug, sauceOpen = false }) => {
+  const sauceRef = useRef(sauceOpen);
+  sauceRef.current = sauceOpen;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { tier, reducedMotion, frameRate } = usePerformance();
   const settings = useRef({ tier, reducedMotion, frameRate });
@@ -125,7 +130,9 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
     };
     const onUp = (e: PointerEvent) => {
       if (e.pointerType !== 'mouse' || !view.scene?.life.drag) return;
-      releaseDrag(view.scene);
+      // Let go over a sauce bowl and it's dunked; anywhere else it drops back in.
+      const sx = e.clientX, sy = e.clientY;
+      releaseDrag(view.scene, (it, p) => dipInto(view.scene!, camNow(), sx, sy, it, p));
       pinchTimer = window.setTimeout(() => document.documentElement.removeAttribute('data-hotpot-pinch'), 150);
     };
     window.addEventListener('pointerdown', onDown);
@@ -186,6 +193,7 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
       const scroll = window.scrollY;
       const snapped = Math.floor(scroll / px) * px;
       if (snapped - scroll !== shownShift) { shownShift = snapped - scroll; canvas.style.transform = `translate3d(0, ${shownShift}px, 0)`; }
+      if (view.scene) view.scene.sauce.target = sauceRef.current ? 1 : 0;
       // Whatever is being carried follows the mouse, scrolling included.
       if (pointer && view.scene?.life.drag) dragTo(view.scene, pointer.x, pointer.y + window.scrollY);
       view.draw({ viewW: w, viewH: h, scrollY: snapped, offX: lean.x, offY: lean.y, time, dt: still ? 0 : dt, pointer });

@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import PortfolioContent from './components/PortfolioContent';
 import HotpotBroth from './components/HotpotBroth';
+import SauceBar from './components/SauceBar';
 import HotpotDebugPanel, { HotpotDebugActions } from './components/HotpotDebugPanel';
 import BackToTopButton from './components/BackToTopButton';
 import ThemeSwitch from './components/ThemeSwitch';
@@ -43,10 +44,12 @@ const HotpotApp: React.FC = () => {
   const filteredProjects = useMemo(() => filterProjects(searchTerm), [searchTerm]);
   const togglePerformancePanel = useCallback(() => setIsPerformancePanelOpen(open => !open), []);
   const closePerformancePanel = useCallback(() => setIsPerformancePanelOpen(false), []);
+  const [sauceOpen, setSauceOpen] = useState(false);
+  const toggleSauce = useCallback(() => setSauceOpen(open => !open), []);
 
   return (
     <div className="relative min-h-screen text-white overflow-x-hidden bg-[#1e0406]">
-      <HotpotBroth onReady={markPageReady} debug={debug} />
+      <HotpotBroth onReady={markPageReady} debug={debug} sauceOpen={sauceOpen} />
       <PortfolioContent
         theme="underwater"
         colors={HOTPOT_COLORS}
@@ -63,6 +66,7 @@ const HotpotApp: React.FC = () => {
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
       <ThemeSwitch />
+      <SauceBar open={sauceOpen} onToggle={toggleSauce} />
       <HotpotDebugPanel actions={debug} />
     </div>
   );

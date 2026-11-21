@@ -8,6 +8,7 @@
  * Runs on the main thread every frame (`stepLife`), writing each body's pose.
  */
 
+import { SAUCES } from './hotpotSauce';
 import {
   Body, Builder, Clear, G, HotpotCamera, HotpotScene, INGREDIENTS, Ingredient, Plume, V3, Wall,
   IDENTITY, buildChopstick, buildIngredient, wallX, frameAlong, mul3, norm, rotAxis, rotZ, wallDist,
@@ -44,13 +45,17 @@ export interface Item {
   jig: number; vjig: number; sq: number; vsq: number;
   /** Still under the surface, rising. */
   under: boolean;
+  /** Sauce it was dipped in: material, how much. */
+  coat: [number, number] | null;
   /** Its pose, kept and rewritten each frame. */
   pose?: { live: { c: V3; rot: number[] }; scale: number[]; params: number[] };
 }
 
 export interface Chopsticks {
   a: number; b: number;
-  state: 'idle' | 'down' | 'adjust' | 'pinch' | 'lift' | 'tap' | 'away' | 'carry' | 'leave';
+  state: 'idle' | 'down' | 'adjust' | 'pinch' | 'lift' | 'tap' | 'away' | 'carry' | 'leave' | 'dip';
+  /** The sauce bowl it's dunking food in. */
+  dipBowl?: number;
   /** Where the tap on the divider happens, if it's near enough. */
   tapAt: V3 | null;
   t: number;
@@ -169,7 +174,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
       // Some already done, some just in.
       cook: rand() * 1.3,
       state: 'float', fz: 0, vz: 0, bump: 0, vb: 0,
-      tx: 0, ty: 0, vtx: 0, vty: 0, roll: IDENTITY, stuck: [], popped: false, heat: 0.5, jig: 0, vjig: 0, sq: 0, vsq: 0, under: false,
+      tx: 0, ty: 0, vtx: 0, vty: 0, roll: IDENTITY, stuck: [], popped: false, heat: 0.5, jig: 0, vjig: 0, sq: 0, vsq: 0, under: false, coat: null,
     };
     items.push(it);
     poseItem(B.bodies[body], it, 0, 0.5, s);
@@ -301,6 +306,7 @@ const poseItem = (b: Body, it: Item, t: number, heat: number, s: number) => {
   P.scale[0] = sx; P.scale[1] = sy; P.scale[2] = sz;
   P.params[0] = curl; P.params[1] = over; P.params[2] = cook; P.params[3] = it.phase;
   b.scale = P.scale as V3;
+  b.coat = it.coat;
   b.params = P.params as [number, number, number, number];
 };
 
@@ -402,6 +408,7 @@ const dropIn = (scene: HotpotScene, it: Item, cam: HotpotCamera) => {
     it.x = x; it.y = y;
     it.vx = it.vy = 0;
     it.cook = 0;
+    it.coat = null;
     it.popped = false;
     for (const o of it.stuck) o.stuck = o.stuck.filter(q => q !== it);
     it.stuck = [];
@@ -499,7 +506,7 @@ export const dragTo = (scene: HotpotScene, x: number, y: number) => {
  * The mouse let go. A quick click sends the food off with the chopsticks as before; after holding it, the food is
  * dropped back in where it was let go (or `onRelease` takes it, say into a sauce bowl, by returning true).
  */
-export const releaseDrag = (scene: HotpotScene, onRelease?: (it: Item, x: number, y: number) => boolean) => {
+export const releaseDrag = (scene: HotpotScene, onRelease?: (it: Item, p: Chopsticks) => boolean) => {
   const life = scene.life;
   const d = life.drag;
   if (!d) return;
@@ -509,7 +516,7 @@ export const releaseDrag = (scene: HotpotScene, onRelease?: (it: Item, x: number
   const it = d.item;
   life.drag = null;
   if (life.time - d.t0 < 0.6 && d.moved < 12) { p.state = 'lift'; p.t = 0; p.from = [...p.tip] as V3; p.tapAt = null; return; }
-  if (onRelease?.(it, it.x, it.y)) return;
+  if (onRelease?.(it, p)) return;
   // Dropped: it falls from where it is into whichever broth is below, and the chopsticks leave empty.
   it.state = 'falling';
   it.vz = -60;
@@ -633,6 +640,19 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
       // Drips now and then while it hangs over the broth.
       if (Math.random() < dt * 2.5) addRipple(life, it.x, it.y, 0.25);
     }
+  } else if (p.state === 'dip') {
+    // Over to the bowl, down into the sauce and a swish about, then up, coated, and off to be eaten.
+    const at = scene.sauce.surface[p.dipBowl ?? 0];
+    const mat = SAUCES[p.dipBowl ?? 0].mat();
+    const T = p.t;
+    let goal: V3;
+    if (T < 0.35) { const e = easeInOut(T / 0.35); goal = [p.from[0] + (at[0] - p.from[0]) * e, p.from[1] + (at[1] - p.from[1]) * e, p.from[2] + (at[2] + 40 * s + top - p.from[2]) * e]; }
+    else if (T < 0.6) goal = [at[0], at[1], at[2] + top * 0.85 + 40 * s * (1 - easeInOut((T - 0.35) / 0.25))];
+    else if (T < 0.95) { goal = [at[0] + Math.sin((T - 0.6) * 30) * 4 * s, at[1], at[2] + top * 0.85]; it.coat = [mat, Math.min(0.8, (T - 0.6) * 2.5)]; }
+    else goal = [at[0], at[1], at[2] + top * 0.85 + 60 * s * easeInOut(Math.min(1, (T - 0.95) / 0.3))];
+    p.tip = goal;
+    it.x = goal[0]; it.y = goal[1]; it.fz = goal[2] - top;
+    if (T >= 1.25) { p.state = 'away'; p.t = 0; p.from = [...p.tip] as V3; }
   } else if (p.state === 'lift') {
     // Up out of the broth, dripping.
     const u = Math.min(1, p.t / 0.5);
@@ -666,7 +686,7 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
   poseSticks(scene, p);
   // Hot food steams as it's carried up.
   const w = scene.bodies[p.wisp];
-  const carrying = (p.state === 'pinch' || p.state === 'lift' || p.state === 'tap' || p.state === 'away' || p.state === 'carry') && it.state === 'held';
+  const carrying = (p.state === 'pinch' || p.state === 'lift' || p.state === 'tap' || p.state === 'away' || p.state === 'carry' || p.state === 'dip') && it.state === 'held';
   w.live = { c: carrying ? [it.x, it.y, it.fz] : PARKED, rot: IDENTITY };
   w.params = [0, 0, carrying ? 1 : 0, 0];
 };

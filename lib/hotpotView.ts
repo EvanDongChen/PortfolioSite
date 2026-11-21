@@ -1,5 +1,6 @@
 import { BUBBLE_GROW, stepLife } from './hotpotLife';
 import { stepEvents } from './hotpotEvents';
+import { stepSauce } from './hotpotSauce';
 import { BROTH_PALETTE, F, G, PALETTE_SIDE, GLOW_STRIDE, HotpotScene, OBJ_TEXELS, RAMPS, SHADES, SOLID_STRIDE, poseBodies } from './hotpot';
 
 /**
@@ -96,6 +97,9 @@ void main() {
   if (cooked) mat += 1.0;
   // Left in too long: a third ramp, in the same order.
   if ((flags & ${F.over}) != 0 && st.y > order) mat = a_info.y + 2.0;
+  // Dipped in sauce: the parts facing up take its colour, more of them the more it's coated.
+  vec4 ct = texelFetch(u_obj, ivec2(o + 4, 0), 0);
+  if (ct.y > 0.0 && n.z > -0.2 && fract(float(gl_VertexID) * 0.6180339) < ct.y) mat = ct.x;
   v_mat = mat;
 
   float alb = a_info.z;
@@ -750,6 +754,7 @@ export class HotpotView {
     const scene = this.scene;
     if (!scene || !this.solidFbo || !this.glowFbo) return;
     stepEvents(scene, fr.time, fr.dt, fr);
+    stepSauce(scene, fr.dt, fr, fr.pointer);
     stepLife(scene, fr.time, fr.dt, fr, fr.pointer);
     const life = scene.life;
     poseBodies(scene, this.pose);

@@ -14,6 +14,7 @@
 
 import { HotpotLife, populateLife } from './hotpotLife';
 import { HotpotEvents, populateEvents } from './hotpotEvents';
+import { SauceBar, populateSauce } from './hotpotSauce';
 
 export const FOV_Y = (45 * Math.PI) / 180;
 export const focalFor = (viewH: number) => viewH / 2 / Math.tan(FOV_Y / 2);
@@ -89,6 +90,12 @@ export const RAMPS: string[][] = [
   /* 54 napa rib     */ ['#4a4a3c', '#7e8068', '#b0b298', '#d6d8c0', '#eef0dc', '#fcfff2'],
   /* 55 rib limp     */ ['#34382c', '#565c48', '#7a8266', '#9ea688', '#bec6a6', '#dae0c4'],
   /* 56 egg ribbon   */ ['#5a4a1a', '#8a7430', '#bca24a', '#e2c86a', '#f6e294', '#fff6c8'],
+  /* 57 sesame      */ ['#3a2410', '#5e3c1c', '#86582c', '#ac7a44', '#cc9c62', '#e8c08a'],
+  /* 58 vinegar     */ ['#0c0604', '#1a0e08', '#2a160c', '#3c2214', '#52301e', '#6a4028'],
+  /* 59 garlic oil  */ ['#4a3008', '#7a5210', '#aa7a20', '#d4a238', '#ecc45c', '#fae290'],
+  /* 60 chili oil   */ ['#2a0404', '#4a0a08', '#7a140c', '#a8240e', '#d04418', '#f07a30'],
+  /* 61 porcelain   */ ['#3a4048', '#6a7684', '#a4aebc', '#d4dae2', '#eef2f6', '#ffffff'],
+  /* 62 glaze       */ ['#0e1a3a', '#1a2e66', '#2a4a96', '#3e6ac0', '#6c96dc', '#a8c4f0'],
 ];
 export const SHADES = 6;
 export const M = {
@@ -97,6 +104,7 @@ export const M = {
   scallion: 28, wood: 29, goji: 30, pepper: 31, fishball: 32, lacquer: 34,
   fish: 35, noodle: 38, shell: 40, speck: 41, meat: 42, tripe: 44, rice: 45, puff: 47,
   crab: 49, squid: 50, napa: 52, rib: 54, yolk: 56,
+  sesame: 57, vinegar: 58, garlic: 59, chilioil: 60, porcelain: 61, glaze: 62,
 } as const;
 
 /** What the broth, steam and splashes snap to: chili-oil reds, oil gold, bone-broth creams, a few garnish greens. */
@@ -153,8 +161,8 @@ export const G = {
 export const SOLID_STRIDE = 11;
 /** Floats per glow: x y z, radius, r g b, object, flags, seed, length. */
 export const GLOW_STRIDE = 11;
-/** Texels (RGBA floats) per object: three rows of a 3x4 matrix, then its state (curl, overcook, cook, phase). */
-export const OBJ_TEXELS = 4;
+/** Texels (RGBA floats) per object: three rows of a 3x4 matrix, its state (curl, overcook, cook, phase), then a coating (material, how much of it). */
+export const OBJ_TEXELS = 5;
 
 // ------------------------------------------------------------------ maths ---
 
@@ -221,7 +229,7 @@ export const frameAlong = (x: V3): number[] => {
 
 // ---------------------------------------------------------------- objects ---
 
-export type BodyKind = 'wall' | 'steam' | 'splash' | 'chopstick' | 'ladle' | 'egg' | 'ribbon' | 'strainer' | Ingredient;
+export type BodyKind = 'wall' | 'steam' | 'splash' | 'chopstick' | 'ladle' | 'egg' | 'ribbon' | 'strainer' | 'sauce' | Ingredient;
 
 /** Everything that goes into the pot. */
 export type Ingredient =
@@ -241,6 +249,8 @@ export interface Body {
   scale?: V3;
   /** Curl, overcook, cook, phase (see OBJ_TEXELS). */
   params?: [number, number, number, number];
+  /** Sauce on it: the sauce's material and how much of it is covered (0..1). */
+  coat?: [number, number] | null;
 }
 
 /** The yin-yang divider: x = cx + amp * sin((y - y0) * k). The left side holds the mala, the right the bone broth. */
@@ -273,6 +283,7 @@ export interface HotpotScene {
   plumes: Plume[];
   life: HotpotLife;
   events: HotpotEvents;
+  sauce: SauceBar;
 }
 
 export class Builder {
@@ -819,6 +830,7 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, clear: C
 
   const life = populateLife(B, { rand, s, f, viewW, viewH, pageH, wall, plumes, clear });
   const events = populateEvents(B, { rand, s });
+  const sauce = populateSauce(B, { rand, s, f });
 
   return {
     solid: new Float32Array(B.solid),
@@ -834,6 +846,7 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, clear: C
     plumes,
     life,
     events,
+    sauce,
   };
 };
 
@@ -863,5 +876,7 @@ export const poseBodies = (scene: HotpotScene, out: Float32Array) => {
     out[o + 8] = rot[6] * sc[0]; out[o + 9] = rot[7] * sc[1]; out[o + 10] = rot[8] * sc[2]; out[o + 11] = c[2];
     const p = b.params;
     out[o + 12] = p ? p[0] : 0; out[o + 13] = p ? p[1] : 0; out[o + 14] = p ? p[2] : 0; out[o + 15] = p ? p[3] : 0;
+    const ct = b.coat;
+    out[o + 16] = ct ? ct[0] : 0; out[o + 17] = ct ? ct[1] : 0; out[o + 18] = 0; out[o + 19] = 0;
   }
 };

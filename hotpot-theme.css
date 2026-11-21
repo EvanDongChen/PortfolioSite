@@ -162,3 +162,41 @@ html.pixel-theme.hotpot-theme .eyebrow {
 html.pixel-theme.hotpot-theme .hero-tagline { font-size: clamp(1.4rem, 3vw, 2rem); }
 html.pixel-theme.hotpot-theme .content-card h3 { font-size: 1.6rem; color: #ffcc6a; }
 html.pixel-theme.hotpot-theme .project-title { font-size: 1.7rem; color: #ffcc6a; }
+
+/* --- the sauce bar ---------------------------------------------------------------- */
+
+/* Its button, bottom left, and the names of the bowls, which slide out with the board drawn in the pot
+   (lib/hotpotSauce.ts). Only where there's room beside the content, and a mouse to carry food with. */
+.hotpot-theme .sauce-bar-btn { display: none; }
+.hotpot-theme .sauce-bar-labels {
+  font-family: var(--px-mono);
+  transform: translateX(-260px);
+  opacity: 0;
+  transition: transform 450ms cubic-bezier(0.22, 1, 0.36, 1), opacity 300ms;
+}
+.hotpot-theme .sauce-bar-labels.is-open { transform: none; opacity: 1; }
+.hotpot-theme .sauce-bar-title {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: #ffcc6a;
+  background: rgba(24, 4, 4, 0.85);
+  padding: 2px 6px;
+}
+.hotpot-theme .sauce-bar-name {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 0.6rem;
+  color: #fff2d0;
+  background: rgba(24, 4, 4, 0.8);
+  padding: 1px 4px;
+}
+@media (min-width: 1100px) and (pointer: fine) {
+  .hotpot-theme .sauce-bar-btn { display: block; }
+}
+@media (max-width: 1099px), (pointer: coarse) {
+  .hotpot-theme .sauce-bar-labels { display: none; }
+}
