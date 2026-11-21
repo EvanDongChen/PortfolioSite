@@ -16,9 +16,9 @@ const CLOSE_MS = 480;
 const OPEN_MS = 720;
 /** How long (as a share of a sweep) one block takes to grow or shrink. */
 const FADE = 0.34;
-/** The longest to wait, behind the cover, for the new page to load and for its world to appear. */
+/** The longest to wait, behind the cover, for the new page to load and for its world to appear (the 3D worlds build theirs first). */
 const MAX_PREPARE_MS = 2500;
-const MAX_READY_MS = 1500;
+const MAX_READY_MS = 6000;
 /** A frame that took longer than this only moves the wave on by this much, so a busy moment never makes it jump. */
 const MAX_STEP_MS = 34;
 
@@ -147,13 +147,50 @@ const run = async ({ to, origin, prepare, swap }: PageMove) => {
     }
   };
 
+  // The 3D worlds take a second or two to build their scene. Until the new page has
+  // drawn its world the cover stays, and if that takes a while a scattering of its
+  // blocks twinkles in the new theme's colours, so the wait reads as loading, not stuck.
+  const sparkles = Array.from({ length: starts.length }, (_, i) => i).filter(i => {
+    let h = Math.imul(i, 0x27d4eb2d);
+    h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
+    return ((h ^ (h >>> 12)) >>> 0) % 997 < 30;
+  });
+  const lit = new Uint8Array(sparkles.length);
+  const paintSparkle = (k: number, level: number) => {
+    const i = sparkles[k];
+    const x = (i % cols) * cell, y = Math.floor(i / cols) * cell;
+    ctx.fillStyle = ink;
+    ctx.fillRect(x, y, cell, cell);
+    if (!level) return;
+    const size = level === 2 ? cell / 2 : cell / 4;
+    ctx.fillStyle = level === 2 ? glint : edge;
+    ctx.fillRect(x + (cell - size) / 2, y + (cell - size) / 2, size, size);
+  };
+  const waitBehindCover = async (ready: () => boolean) => {
+    const t0 = performance.now();
+    while (!ready() && !document.hidden && performance.now() - t0 < MAX_READY_MS) {
+      await nextFrame();
+      const t = (performance.now() - t0) / 1000;
+      // Quick pages are back before anything twinkles.
+      if (t < 0.25) continue;
+      for (let k = 0; k < sparkles.length; k++) {
+        const wave = Math.sin(t * 2.6 + sparkles[k] * 0.71);
+        const level = wave > 0.92 ? 2 : wave > 0.7 ? 1 : 0;
+        if (level !== lit[k]) { lit[k] = level; paintSparkle(k, level); }
+      }
+    }
+    // Back to solid cover, as the opening sweep expects.
+    for (let k = 0; k < sparkles.length; k++) if (lit[k]) { lit[k] = 0; paintSparkle(k, 0); }
+  };
+
   // Whatever goes wrong, the cover must not stay over the page.
   try {
     await sweep(CLOSE_MS, true);
     await prepared;
-    const ready = new Promise<void>(resolve => { onReady = resolve; });
+    let isReady = false;
+    onReady = () => { isReady = true; };
     swap();
-    await within(ready, MAX_READY_MS);
+    await waitBehindCover(() => isReady);
     // Let what the new page has just done reach the screen before uncovering it.
     await nextFrame();
     await nextFrame();
