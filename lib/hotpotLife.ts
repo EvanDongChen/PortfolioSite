@@ -50,7 +50,7 @@ export interface Item {
 
 export interface Chopsticks {
   a: number; b: number;
-  state: 'idle' | 'down' | 'adjust' | 'pinch' | 'lift' | 'tap' | 'away';
+  state: 'idle' | 'down' | 'adjust' | 'pinch' | 'lift' | 'tap' | 'away' | 'carry' | 'leave';
   /** Where the tap on the divider happens, if it's near enough. */
   tapAt: V3 | null;
   t: number;
@@ -110,6 +110,8 @@ export interface HotpotLife {
   stickLen: number;
   /** A whirlpool the ladle left: centre, strength 0..1 and size (see hotpotEvents). */
   vortex: { x: number; y: number; k: number; R: number } | null;
+  /** Food someone is holding with the mouse: which pair has it, whether the button is still down, and where it's wanted. */
+  drag: { pair: Chopsticks; item: Item; down: boolean; t0: number; moved: number; x: number; y: number; vx: number; vy: number } | null;
   frame: number;
   /** What moved this frame: on screen or just off it. */
   active: Item[];
@@ -218,7 +220,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
   return {
     items, sticks, splashes, ripples: [], bubbles: [], rings: [], drops: [], time: 0, boil: 1, boilUntil: -1,
     nextPluck: 3.5, eager: false, lastPointer: null,
-    wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen, vortex: null, frame: 0, active: [],
+    wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen, vortex: null, frame: 0, active: [], drag: null,
   };
 };
 
@@ -472,6 +474,55 @@ export const foodAt = (scene: HotpotScene, x: number, y: number): Item | null =>
   return best;
 };
 
+/** The mouse pressed on food at page point (x, y): a pair comes straight down for it and, while the button is held, carries it wherever the mouse goes. */
+export const pressAt = (scene: HotpotScene, x: number, y: number) => {
+  const life = scene.life;
+  const it = foodAt(scene, x, y);
+  if (!it || life.drag || life.sticks.some(p => p.item === it)) return false;
+  const pair = life.sticks.find(p => p.state === 'idle') ?? life.sticks.find(p => p.state === 'down' && p.t < 0.5);
+  if (!pair) return false;
+  if (pair.item && pair.item.state === 'held') pair.item.state = 'float';
+  sendSticks(life, pair, it, 0.45);
+  life.drag = { pair, item: it, down: true, t0: life.time, moved: 0, x, y, vx: 0, vy: 0 };
+  return true;
+};
+
+/** Where the held food should go (page point). */
+export const dragTo = (scene: HotpotScene, x: number, y: number) => {
+  const d = scene.life.drag;
+  if (!d || !d.down) return;
+  d.moved += Math.hypot(x - d.x, y - d.y);
+  d.x = x; d.y = y;
+};
+
+/**
+ * The mouse let go. A quick click sends the food off with the chopsticks as before; after holding it, the food is
+ * dropped back in where it was let go (or `onRelease` takes it, say into a sauce bowl, by returning true).
+ */
+export const releaseDrag = (scene: HotpotScene, onRelease?: (it: Item, x: number, y: number) => boolean) => {
+  const life = scene.life;
+  const d = life.drag;
+  if (!d) return;
+  d.down = false;
+  const p = d.pair;
+  if (p.state !== 'carry') return; // still on the way down: it becomes an ordinary pluck
+  const it = d.item;
+  life.drag = null;
+  if (life.time - d.t0 < 0.6 && d.moved < 12) { p.state = 'lift'; p.t = 0; p.from = [...p.tip] as V3; p.tapAt = null; return; }
+  if (onRelease?.(it, it.x, it.y)) return;
+  // Dropped: it falls from where it is into whichever broth is below, and the chopsticks leave empty.
+  it.state = 'falling';
+  it.vz = -60;
+  // A little of the swing carries on as it drops.
+  const sp = Math.hypot(d.vx, d.vy), cap = 160 * life.s;
+  const k = sp > cap ? (cap / sp) * 0.3 : 0.3;
+  it.vx = d.vx * k; it.vy = d.vy * k;
+  const wd = wallDist(life.wall, it.x, it.y);
+  it.side = wd < 0 ? -1 : 1;
+  p.item = null;
+  p.state = 'leave'; p.t = 0; p.from = [...p.tip] as V3;
+};
+
 /** Someone clicked the food at page point (x, y): a free pair of chopsticks comes straight down for it, cooked or not. */
 export const grabAt = (scene: HotpotScene, x: number, y: number) => {
   const life = scene.life;
@@ -517,8 +568,23 @@ const poseSticks = (scene: HotpotScene, p: Chopsticks) => {
 const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
   const life = scene.life;
   const it = p.item;
+  if (p.state === 'leave') {
+    // Off up and away, empty-handed.
+    p.t += dt;
+    const u = Math.min(1, p.t / 1);
+    const e = easeIn(u);
+    p.tip = [p.from[0] + p.dir[0] * 700 * e, p.from[1] + p.dir[1] * 700 * e, p.from[2] + p.dir[2] * 700 * e];
+    p.gap = Math.min(40 * life.s, p.gap + dt * 60 * life.s);
+    if (u >= 1) p.state = 'idle';
+    poseSticks(scene, p);
+    const w = scene.bodies[p.wisp];
+    w.live = { c: PARKED, rot: IDENTITY };
+    w.params = [0, 0, 0, 0];
+    return;
+  }
   if (p.state === 'idle' || !it) { p.state = 'idle'; poseSticks(scene, p); return; }
   p.t += dt;
+  const dragging = life.drag?.pair === p;
   const top = it.R * 0.35 + 4 * life.s;
   const s = life.s;
   const open = it.R * 2.2 + 10 * s;
@@ -532,7 +598,7 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
     if (u >= 1) { p.state = 'adjust'; p.t = 0; }
   } else if (p.state === 'adjust') {
     // A moment's hesitation: they hover, shift round it and fidget open and shut, then settle on it.
-    const D = p.dur < 1 ? 0.28 : 0.5;
+    const D = dragging ? 0.12 : p.dur < 1 ? 0.28 : 0.5;
     const u = Math.min(1, p.t / D);
     const wob = Math.sin(u * Math.PI);
     p.tip = [it.x + Math.sin(p.t * 17) * 3 * s * wob, it.y + Math.cos(p.t * 13) * 2 * s * wob, it.z + top + 10 * s * (1 - u)];
@@ -541,12 +607,31 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
   } else if (p.state === 'pinch') {
     const u = Math.min(1, p.t / 0.3);
     p.gap = open - (open - it.R * 1.3) * ease(u);
-    if (u >= 1) {
+    if (u >= 1 && dragging && life.drag!.down) {
+      // Held: up a little, and it goes wherever the mouse does.
+      p.state = 'carry'; p.t = 0; addRipple(life, it.x, it.y, 0.8);
+    } else if (u >= 1) {
+      if (dragging) life.drag = null;
       p.state = 'lift'; p.t = 0; p.from = [...p.tip] as V3; addRipple(life, it.x, it.y, 0.8);
       // If the divider is close, they'll give it a tap on the way out.
       const wx = wallX(life.wall, it.y);
       const side = Math.sign(it.x - wx) || 1;
       p.tapAt = Math.abs(it.x - wx) < 260 * s ? [wx + side * (life.wall.half + 3 * s), it.y - 20 * s, 22 * s + life.wall.half + top] : null;
+    }
+  } else if (p.state === 'carry') {
+    const d = life.drag;
+    if (!d) { p.state = 'lift'; p.t = 0; p.from = [...p.tip] as V3; }
+    else {
+      const goal: V3 = [d.x, d.y, 55 * s + top];
+      const k = Math.min(1, dt * 12);
+      const ox = p.tip[0], oy = p.tip[1];
+      p.tip = [p.tip[0] + (goal[0] - p.tip[0]) * k, p.tip[1] + (goal[1] - p.tip[1]) * k, p.tip[2] + (goal[2] - p.tip[2]) * k];
+      if (dt > 0) { d.vx = (p.tip[0] - ox) / dt; d.vy = (p.tip[1] - oy) / dt; }
+      it.x = p.tip[0]; it.y = p.tip[1]; it.fz = p.tip[2] - top;
+      // It swings behind as it's moved.
+      it.tx = Math.max(-0.5, Math.min(0.5, d.vy * 0.0015)); it.ty = Math.max(-0.5, Math.min(0.5, -d.vx * 0.0015));
+      // Drips now and then while it hangs over the broth.
+      if (Math.random() < dt * 2.5) addRipple(life, it.x, it.y, 0.25);
     }
   } else if (p.state === 'lift') {
     // Up out of the broth, dripping.
@@ -581,7 +666,7 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
   poseSticks(scene, p);
   // Hot food steams as it's carried up.
   const w = scene.bodies[p.wisp];
-  const carrying = (p.state === 'pinch' || p.state === 'lift' || p.state === 'tap' || p.state === 'away') && it.state === 'held';
+  const carrying = (p.state === 'pinch' || p.state === 'lift' || p.state === 'tap' || p.state === 'away' || p.state === 'carry') && it.state === 'held';
   w.live = { c: carrying ? [it.x, it.y, it.fz] : PARKED, rot: IDENTITY };
   w.params = [0, 0, carrying ? 1 : 0, 0];
 };

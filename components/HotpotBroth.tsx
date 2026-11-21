@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Clear, HotpotScene, buildScene } from '../lib/hotpot';
-import { foodAt, grabAt, pluckNow, pourIn, rollingBoil } from '../lib/hotpotLife';
+import { dragTo, foodAt, grabAt, pluckNow, pourIn, pressAt, releaseDrag, rollingBoil } from '../lib/hotpotLife';
 import { HotpotDebugActions } from './HotpotDebugPanel';
 import { HotpotView } from '../lib/hotpotView';
 import { startEvent } from '../lib/hotpotEvents';
@@ -115,8 +115,24 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
       const food = !!view.scene && overBroth(e) && !!foodAt(view.scene, e.clientX, e.clientY + window.scrollY);
       if (food !== showingFood) { showingFood = food; document.documentElement.toggleAttribute('data-hotpot-food', food); }
     };
+    // With a mouse: press on food and the chopsticks take it; hold and drag to carry it, let go to drop it.
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0 || !view.scene || !overBroth(e)) return;
+      if (!pressAt(view.scene, e.clientX, e.clientY + window.scrollY)) return;
+      e.preventDefault();
+      clearTimeout(pinchTimer);
+      document.documentElement.setAttribute('data-hotpot-pinch', '');
+    };
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' || !view.scene?.life.drag) return;
+      releaseDrag(view.scene);
+      pinchTimer = window.setTimeout(() => document.documentElement.removeAttribute('data-hotpot-pinch'), 150);
+    };
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointerup', onUp);
+    // Touch: a tap sends the chopsticks for it.
     const onClick = (e: MouseEvent) => {
-      if (!view.scene || !overBroth(e)) return;
+      if ((e as PointerEvent).pointerType === 'mouse' || !view.scene || !overBroth(e)) return;
       // The cursor's chopsticks pinch shut as the real ones go for it.
       if (grabAt(view.scene, e.clientX, e.clientY + window.scrollY)) {
         document.documentElement.setAttribute('data-hotpot-pinch', '');
@@ -169,6 +185,8 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
       const scroll = window.scrollY;
       const snapped = Math.floor(scroll / px) * px;
       if (snapped - scroll !== shownShift) { shownShift = snapped - scroll; canvas.style.transform = `translate3d(0, ${shownShift}px, 0)`; }
+      // Whatever is being carried follows the mouse, scrolling included.
+      if (pointer && view.scene?.life.drag) dragTo(view.scene, pointer.x, pointer.y + window.scrollY);
       view.draw({ viewW: w, viewH: h, scrollY: snapped, offX: lean.x, offY: lean.y, time, dt: still ? 0 : dt, pointer });
       if (first) { first = false; readyRef.current(); }
     };
@@ -188,6 +206,8 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
       window.removeEventListener('pointermove', onPointer);
       window.removeEventListener('pointermove', onHover);
       window.removeEventListener('click', onClick);
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointerup', onUp);
       document.documentElement.removeAttribute('data-hotpot-food');
       document.documentElement.removeAttribute('data-hotpot-pinch');
       clearTimeout(pinchTimer);
