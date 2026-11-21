@@ -312,7 +312,8 @@ vec3 broth(vec2 w) {
   if (u_vortex.z > 0.01) {
     vec2 e = w - u_vortex.xy;
     float d = length(e);
-    swirl = u_vortex.z * exp(-d / u_vortex.w);
+    // Strong near the middle, gone a little past its edge.
+    swirl = u_vortex.z * exp(-(d * d) / (u_vortex.w * u_vortex.w));
     float a = swirl * (2.5 + t * 1.3);
     float ca = cos(a), sa = sin(a);
     wv = u_vortex.xy + vec2(ca * e.x - sa * e.y, sa * e.x + ca * e.y);
@@ -398,12 +399,12 @@ vec3 broth(vec2 w) {
   float sh = vn(wv / (34.0 * u_s) + vec2(t * 0.35, -t * 0.27) + warp * 3.0) + vn(wv / (21.0 * u_s) + vec2(-t * 0.22, t * 0.31) + 7.3);
   if (u_quality > 1 && abs(sh - 1.0) < 0.03) col *= mala ? 1.22 : 1.05;
   // Spiral arms of light round the whirlpool, and a dimple at its middle.
-  if (swirl > 0.02) {
+  if (swirl > 0.05) {
     vec2 e = w - u_vortex.xy;
     float d = length(e) + 1.0;
     float arm = sin(atan(e.y, e.x) * 3.0 + log(d) * 5.0 - t * 5.0);
     if (arm > 0.55) col *= 1.0 + swirl * (mala ? 0.6 : 0.12);
-    if (d < u_vortex.w * 0.12 * u_vortex.z) col *= mala ? 0.6 : 0.85;
+    if (d < u_vortex.w * 0.18 * u_vortex.z) col *= mala ? 0.6 : 0.85;
   }
   // The broth climbs the divider a little and catches the light there.
   float ad = abs(dist) - u_wallHalf;

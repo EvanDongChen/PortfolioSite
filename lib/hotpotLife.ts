@@ -355,7 +355,8 @@ export const flowAt = (life: HotpotLife, x: number, y: number, t: number, out: {
     const dx = x - vt.x, dy = y - vt.y;
     const d = Math.hypot(dx, dy) + 1;
     const u = d / vt.R;
-    const sp = vt.k * 120 * life.s * u * Math.exp(1 - u);
+    // Fastest at its edge (u = 1), dying away quickly beyond it.
+    const sp = vt.k * 120 * life.s * u * Math.exp((1 - u * u) / 2);
     out.vx += (-dy / d) * sp - (dx / d) * sp * 0.15;
     out.vy += (dx / d) * sp - (dy / d) * sp * 0.15;
   }
@@ -932,7 +933,7 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
     const vt = life.vortex;
     if (vt && vt.k > 0.05) {
       const dv = Math.hypot(it.x - vt.x, it.y - vt.y);
-      if (dv < vt.R * 2) it.ang += vt.k * 1.6 * Math.exp(-dv / vt.R) * dt;
+      if (dv < vt.R * 1.8) it.ang += vt.k * 1.6 * Math.exp(-(dv * dv) / (vt.R * vt.R)) * dt;
     }
     it.spin *= 1 - Math.min(1, dt * 0.3);
     it.vb += (-it.bump * 40 - it.vb * 6) * dt;

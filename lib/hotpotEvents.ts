@@ -24,7 +24,9 @@ interface Strainer {
   lastRing: number;
 }
 /** The basket's radius at full size, and how many it can carry. */
-const BASKET = 40, CATCH = 6;
+const BASKET = 26, CATCH = 4;
+/** Garnish isn't worth scooping out. */
+const GARNISH = new Set(['chili', 'pepper', 'anise', 'goji', 'scallion']);
 
 /** A rolling boil erupting: bubbles crowd up, then it surges and throws the food up out of the broth. */
 interface Eruption { on: boolean; t: number; x: number; y: number; surged: boolean; lastBubble: number }
@@ -62,7 +64,7 @@ export interface HotpotEvents {
 
 const PARKED: V3 = [-1e5, -1e5, -2e4];
 /** The ladle's bowl radius, the length of its handle, and how big the whirlpool it leaves is, at full size. */
-const BOWL = 34, HANDLE = 300, SWIRL = 170;
+const BOWL = 34, HANDLE = 300, SWIRL = 95;
 /** How long the egg's ribbons last before they sink out of sight. */
 const RIBBON_LIFE = 38;
 
@@ -86,7 +88,7 @@ const buildLadle = (B: Builder, obj: number, s: number) => {
 
 /** A wire strainer: a shallow round basket of mesh with a steel rim, on a long bamboo handle rising along +x. */
 const buildStrainer = (B: Builder, obj: number, s: number) => {
-  const R = BASKET * s, sp = SPACING * 0.8, cell = 11 * s, wire = 2.2 * s;
+  const R = BASKET * s, sp = SPACING * 0.8, cell = 9 * s, wire = 2.2 * s;
   // The mesh: wires both ways, a pixel of broth showing between them, dished down in the middle.
   for (let v = -R; v <= R; v += sp * 0.7) for (let u = -R; u <= R; u += sp * 0.7) {
     const r = Math.hypot(u, v);
@@ -98,7 +100,7 @@ const buildStrainer = (B: Builder, obj: number, s: number) => {
     B.surfel([u, v, z], [-(u / R) * 0.4, -(v / R) * 0.4, 1], sp * 0.6, M.steel, 0.4 + (mu && mv ? 0.1 : 0), obj, F.twoSided);
   }
   tube(B, obj, sp, t => ({ x: Math.cos(t * Math.PI * 2) * R, y: Math.sin(t * Math.PI * 2) * R, r: 3.4 * s }), () => ({ mat: M.steel, alb: 0.75 }));
-  const L = HANDLE * s * 1.1;
+  const L = HANDLE * s * 0.75;
   tube(B, obj, sp, t => ({ x: R + t * L * 0.45, y: 0, z: 2 + t * L * 0.85, r: (5.5 - t * 1.2) * s }), t => ({ mat: M.wood, alb: 0.5 + (Math.floor(t * 9) % 2) * 0.12 }));
 };
 
@@ -166,7 +168,7 @@ export const startEvent = (scene: HotpotScene, kind: HotpotEventKind, cam: Hotpo
     if (S.state !== 'idle') return false;
     // Through the thickest cluster of cooked food in view.
     const life = scene.life;
-    const ready = life.items.filter(it => it.state === 'float' && it.R > 9 * s && it.R < BASKET * s * 1.3 && it.cook >= 0.9
+    const ready = life.items.filter(it => it.state === 'float' && !GARNISH.has(it.kind) && it.R > 9 * s && it.R < BASKET * s * 1.3 && it.cook >= 0.9
       && it.y - cam.scrollY > cam.viewH * 0.15 && it.y - cam.scrollY < cam.viewH * 0.85);
     let best: typeof ready[number] | null = null, bestN = 0;
     for (const a of ready) {
@@ -385,7 +387,7 @@ const stepStrainer = (scene: HotpotScene, t: number, dt: number) => {
       if (it.state !== 'float') continue;
       const dx = it.x - S.pos[0], dy = it.y - S.pos[1];
       const d = Math.hypot(dx, dy) || 1;
-      const fits = it.R < R * 1.3 && S.caught.length < CATCH;
+      const fits = it.R < R * 1.3 && !GARNISH.has(it.kind) && S.caught.length < CATCH;
       if (fits && d < R + it.R * 0.4) {
         // Into the basket, settled somewhere inside it.
         const k = Math.min(1, (R * 0.5) / d);
@@ -400,12 +402,12 @@ const stepStrainer = (scene: HotpotScene, t: number, dt: number) => {
   } else if (S.state === 'lift') {
     // Up out of the broth, draining through the mesh.
     const u = Math.min(1, S.t / 0.8);
-    S.pos = [S.to[0], S.to[1], S.to[2] + 120 * s * (1 - (1 - u) ** 2)];
+    S.pos = [S.to[0], S.to[1], S.to[2] + 70 * s * (1 - (1 - u) ** 2)];
     if (t - S.lastRing > 0.09 && u < 0.85) { S.lastRing = t; addRipple(life, S.pos[0] + (Math.random() - 0.5) * R, S.pos[1] + (Math.random() - 0.5) * R, 0.3); }
     if (u >= 1) { S.state = 'away'; S.t = 0; S.from = [...S.pos] as V3; }
   } else if (S.state === 'away') {
     const u = Math.min(1, S.t / 1.1), e = u * u;
-    S.pos = [S.from[0] + Math.cos(S.heading) * 500 * e, S.from[1] + Math.sin(S.heading) * 300 * e, S.from[2] + 380 * e];
+    S.pos = [S.from[0] + Math.cos(S.heading) * 600 * e, S.from[1] + Math.sin(S.heading) * 360 * e, S.from[2] + 200 * e];
     if (u >= 1) {
       for (const c of S.caught) { c.item.state = 'gone'; life.drops.push({ item: c.item, at: t + 1.5 + Math.random() * 3 }); }
       S.caught = [];
