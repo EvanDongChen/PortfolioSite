@@ -802,7 +802,7 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, clear: C
   const step = 260 * s;
   for (let y = step * 0.5; y < pageH + step; y += step * (0.8 + rand() * 0.4)) {
     for (let x = step * 0.3 + rand() * step * 0.5; x < viewW; x += step * (0.8 + rand() * 0.5)) {
-      plumes.push([x + (rand() - 0.5) * step * 0.4, y + (rand() - 0.5) * step * 0.4, 0.45 + rand() * 0.55]);
+      plumes.push([x + (rand() - 0.5) * step * 0.4, y + (rand() - 0.5) * step * 0.4, rand() < 0.35 ? 1 + rand() * 0.4 : 0.22 + rand() * 0.3]);
     }
   }
 

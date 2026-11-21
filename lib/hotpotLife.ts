@@ -10,7 +10,7 @@
 
 import {
   Body, Builder, Clear, G, HotpotCamera, HotpotScene, INGREDIENTS, Ingredient, Plume, V3, Wall,
-  IDENTITY, buildChopstick, buildIngredient, frameAlong, mul3, norm, rotAxis, rotZ, wallDist,
+  IDENTITY, buildChopstick, buildIngredient, wallX, frameAlong, mul3, norm, rotAxis, rotZ, wallDist,
 } from './hotpot';
 
 export type Side = -1 | 1; // -1: the mala, 1: the bone broth
@@ -42,13 +42,17 @@ export interface Item {
   heat: number;
   /** A wobble (soft things jiggle when knocked) and a squash (flattened on landing), as springs. */
   jig: number; vjig: number; sq: number; vsq: number;
+  /** Still under the surface, rising. */
+  under: boolean;
   /** Its pose, kept and rewritten each frame. */
   pose?: { live: { c: V3; rot: number[] }; scale: number[]; params: number[] };
 }
 
 export interface Chopsticks {
   a: number; b: number;
-  state: 'idle' | 'down' | 'pinch' | 'lift';
+  state: 'idle' | 'down' | 'adjust' | 'pinch' | 'lift' | 'tap' | 'away';
+  /** Where the tap on the divider happens, if it's near enough. */
+  tapAt: V3 | null;
   t: number;
   item: Item | null;
   /** Up the sticks, from the tips towards the hand that isn't there. */
@@ -58,6 +62,7 @@ export interface Chopsticks {
   from: V3;
   /** Seconds to come down: quicker when someone asked for it. */
   dur: number;
+  lastTap?: number;
   /** Steam rising off what it's carrying. */
   wisp: number;
 }
@@ -68,6 +73,16 @@ export interface Ripple { x: number; y: number; t0: number; a: number }
 export interface Bubble { x: number; y: number; t0: number; r: number; popped: boolean }
 /** Seconds a bubble grows before it pops. */
 export const BUBBLE_GROW = 0.9;
+export const MAX_BUBBLES = 24;
+
+/** Throws `it` up out of the broth (an eruption): it tumbles and falls back in with a splash. */
+export const toss = (it: Item, vz: number) => {
+  if (it.state !== 'float') return;
+  it.state = 'falling';
+  it.fz = it.z;
+  it.vz = vz;
+  it.spin = (Math.random() - 0.5) * 7;
+};
 
 export interface HotpotLife {
   items: Item[];
@@ -75,6 +90,8 @@ export interface HotpotLife {
   splashes: { body: number; t0: number }[];
   ripples: Ripple[];
   bubbles: Bubble[];
+  /** Rings of broth peeling off things as they break the surface. */
+  rings: { x: number; y: number; t0: number; R: number }[];
   drops: { item: Item; at: number }[];
   time: number;
   /** Boil strength; a rolling boil raises it for a while. */
@@ -150,7 +167,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
       // Some already done, some just in.
       cook: rand() * 1.3,
       state: 'float', fz: 0, vz: 0, bump: 0, vb: 0,
-      tx: 0, ty: 0, vtx: 0, vty: 0, roll: IDENTITY, stuck: [], popped: false, heat: 0.5, jig: 0, vjig: 0, sq: 0, vsq: 0,
+      tx: 0, ty: 0, vtx: 0, vty: 0, roll: IDENTITY, stuck: [], popped: false, heat: 0.5, jig: 0, vjig: 0, sq: 0, vsq: 0, under: false,
     };
     items.push(it);
     poseItem(B.bodies[body], it, 0, 0.5, s);
@@ -186,7 +203,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
     buildChopstick(B, b, stickLen, s);
     const wisp = B.body({ kind: 'steam', pos: PARKED, params: [0, 0, 0, 0] });
     for (let k = 0; k < 12; k++) B.glowAt([(rand() - 0.5) * 30 * s, (rand() - 0.5) * 30 * s, 4], (12 + rand() * 8) * s, [0.6, 0.55, 0.5], wisp, G.wisp, rand(), (70 + rand() * 50) * s);
-    sticks.push({ a, b, state: 'idle', t: 0, item: null, dir: [0, 0, 1], tip: PARKED, gap: 0, from: PARKED, dur: 1.4, wisp });
+    sticks.push({ a, b, state: 'idle', t: 0, item: null, dir: [0, 0, 1], tip: PARKED, gap: 0, from: PARKED, dur: 1.4, wisp, tapAt: null });
   }
 
   // Splashes: droplets thrown out and back down where something lands.
@@ -199,7 +216,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
 
   ctx.plumes.sort((a, b) => a[1] - b[1]);
   return {
-    items, sticks, splashes, ripples: [], bubbles: [], drops: [], time: 0, boil: 1, boilUntil: -1,
+    items, sticks, splashes, ripples: [], bubbles: [], rings: [], drops: [], time: 0, boil: 1, boilUntil: -1,
     nextPluck: 3.5, eager: false, lastPointer: null,
     wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen, vortex: null, frame: 0, active: [],
   };
@@ -324,6 +341,7 @@ export const flowAt = (life: HotpotLife, x: number, y: number, t: number, out: {
 
 const ease = (u: number) => 1 - (1 - u) ** 3;
 const easeIn = (u: number) => u * u;
+const easeInOut = (u: number) => (u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2);
 
 /** Adds a ring to the broth. */
 export const addRipple = (life: HotpotLife, x: number, y: number, a: number) => {
@@ -380,6 +398,7 @@ const dropIn = (scene: HotpotScene, it: Item, cam: HotpotCamera) => {
     if ((d < 0 ? -1 : 1) !== it.side || Math.abs(d) < life.wall.half + it.R) continue;
     if (inClear(life.clear, x, y, it.R)) continue;
     it.x = x; it.y = y;
+    it.vx = it.vy = 0;
     it.cook = 0;
     it.popped = false;
     for (const o of it.stuck) o.stuck = o.stuck.filter(q => q !== it);
@@ -501,19 +520,53 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
   if (p.state === 'idle' || !it) { p.state = 'idle'; poseSticks(scene, p); return; }
   p.t += dt;
   const top = it.R * 0.35 + 4 * life.s;
+  const s = life.s;
+  const open = it.R * 2.2 + 10 * s;
   if (p.state === 'down') {
+    // Down to just above it, opening as they come.
     const u = Math.min(1, p.t / p.dur);
-    const goal: V3 = [it.x, it.y, it.z + top];
+    const goal: V3 = [it.x, it.y, it.z + top + 10 * s];
     const e = ease(u);
     p.tip = [p.from[0] + (goal[0] - p.from[0]) * e, p.from[1] + (goal[1] - p.from[1]) * e, p.from[2] + (goal[2] - p.from[2]) * e];
-    p.gap = 20 * life.s + (it.R * 2.2 + 10 * life.s - 20 * life.s) * Math.min(1, u * 1.5);
+    p.gap = 20 * s + (open - 20 * s) * Math.min(1, u * 1.5);
+    if (u >= 1) { p.state = 'adjust'; p.t = 0; }
+  } else if (p.state === 'adjust') {
+    // A moment's hesitation: they hover, shift round it and fidget open and shut, then settle on it.
+    const D = p.dur < 1 ? 0.28 : 0.5;
+    const u = Math.min(1, p.t / D);
+    const wob = Math.sin(u * Math.PI);
+    p.tip = [it.x + Math.sin(p.t * 17) * 3 * s * wob, it.y + Math.cos(p.t * 13) * 2 * s * wob, it.z + top + 10 * s * (1 - u)];
+    p.gap = open * (1 - 0.18 * Math.sin(u * Math.PI * 3) * wob);
     if (u >= 1) { p.state = 'pinch'; p.t = 0; it.state = 'held'; it.fz = it.z; addRipple(life, it.x, it.y, 0.5); }
   } else if (p.state === 'pinch') {
     const u = Math.min(1, p.t / 0.3);
-    p.gap = it.R * 2.2 + 10 * life.s - (it.R * 2.2 + 10 * life.s - it.R * 1.3) * ease(u);
-    if (u >= 1) { p.state = 'lift'; p.t = 0; p.from = [...p.tip] as V3; addRipple(life, it.x, it.y, 0.8); }
+    p.gap = open - (open - it.R * 1.3) * ease(u);
+    if (u >= 1) {
+      p.state = 'lift'; p.t = 0; p.from = [...p.tip] as V3; addRipple(life, it.x, it.y, 0.8);
+      // If the divider is close, they'll give it a tap on the way out.
+      const wx = wallX(life.wall, it.y);
+      const side = Math.sign(it.x - wx) || 1;
+      p.tapAt = Math.abs(it.x - wx) < 260 * s ? [wx + side * (life.wall.half + 3 * s), it.y - 20 * s, 22 * s + life.wall.half + top] : null;
+    }
   } else if (p.state === 'lift') {
-    const u = Math.min(1, p.t / 1.7);
+    // Up out of the broth, dripping.
+    const u = Math.min(1, p.t / 0.5);
+    p.tip = [p.from[0], p.from[1], p.from[2] + 70 * s * ease(u)];
+    it.x = p.tip[0]; it.y = p.tip[1]; it.fz = p.tip[2] - top;
+    if (u >= 1) { p.state = p.tapAt ? 'tap' : 'away'; p.t = 0; p.from = [...p.tip] as V3; }
+  } else if (p.state === 'tap') {
+    // Across to the divider, two quick taps on its top to shake off the drips, then away.
+    const T = p.tapAt!;
+    const move = Math.min(1, p.t / 0.35);
+    const e = easeInOut(move);
+    const tapT = Math.max(0, p.t - 0.35);
+    const hop = tapT < 0.5 ? Math.abs(Math.sin((tapT / 0.5) * Math.PI * 2)) * 14 * s : 0;
+    p.tip = [p.from[0] + (T[0] - p.from[0]) * e, p.from[1] + (T[1] - p.from[1]) * e, p.from[2] + (T[2] + hop - p.from[2]) * e + (move < 1 ? Math.sin(move * Math.PI) * 18 * s : 0)];
+    if (tapT > 0 && Math.abs(Math.sin((tapT / 0.5) * Math.PI * 2)) < 0.12 && tapT < 0.5 && p.t - (p.lastTap ?? 0) > 0.15) { p.lastTap = p.t; addRipple(life, T[0], T[1], 0.35); }
+    it.x = p.tip[0]; it.y = p.tip[1]; it.fz = p.tip[2] - top;
+    if (p.t >= 0.95) { p.state = 'away'; p.t = 0; p.from = [...p.tip] as V3; p.lastTap = 0; }
+  } else if (p.state === 'away') {
+    const u = Math.min(1, p.t / 1.4);
     const e = easeIn(u);
     const reach = 760;
     p.tip = [p.from[0] + p.dir[0] * reach * e, p.from[1] + p.dir[1] * reach * e, p.from[2] + p.dir[2] * reach * e];
@@ -528,7 +581,7 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
   poseSticks(scene, p);
   // Hot food steams as it's carried up.
   const w = scene.bodies[p.wisp];
-  const carrying = (p.state === 'pinch' || p.state === 'lift') && it.state === 'held';
+  const carrying = (p.state === 'pinch' || p.state === 'lift' || p.state === 'tap' || p.state === 'away') && it.state === 'held';
   w.live = { c: carrying ? [it.x, it.y, it.fz] : PARKED, rot: IDENTITY };
   w.params = [0, 0, carrying ? 1 : 0, 0];
 };
@@ -605,10 +658,18 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
       it.vz -= 1700 * dt;
       it.fz += it.vz * dt;
       it.ang += it.spin * dt;
+      // Drifting a little as it goes, and swaying over and back as it tumbles.
+      it.x += it.vx * dt * 0.6; it.y += it.vy * dt * 0.6;
+      it.vx *= 1 - Math.min(1, dt * 0.8); it.vy *= 1 - Math.min(1, dt * 0.8);
+      it.tx = Math.sin(it.fz * 0.021 + it.phase) * 0.55;
+      it.ty = Math.cos(it.fz * 0.017 + it.phase * 1.3) * 0.45;
+      it.vtx = Math.cos(it.fz * 0.021 + it.phase) * 0.55 * 0.021 * it.vz;
+      it.vty = -Math.sin(it.fz * 0.017 + it.phase * 1.3) * 0.45 * 0.017 * it.vz;
       const rest = -sinkOf(it) * s;
       if (it.fz <= rest) {
         it.state = 'float';
-        it.bump = -8 * s; it.vb = 0;
+        // In with a plunge that bounces back up before it settles, flattened by the impact.
+        it.bump = 0; it.vb = Math.max(-110 * s, it.vz * 0.07);
         it.sq = 0.55; it.vsq = 0;
         jiggle(it, 0.3);
         it.spin = (Math.random() - 0.5) * 0.4;
@@ -650,6 +711,11 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
     it.vb += (-it.bump * 40 - it.vb * 6) * dt;
     it.bump += it.vb * dt;
     it.cook += (dt * (0.5 + flow.heat * 0.6)) / (INGREDIENTS[it.kind].cook || VEG_DONE);
+    // Breaking the surface: a ring of broth peels away from it.
+    const g = INGREDIENTS[it.kind];
+    const under = g.rawSink !== undefined && sinkOf(it) > g.sink + (g.rawSink - g.sink) * 0.4;
+    if (it.under && !under) { life.rings.push({ x: it.x, y: it.y, t0: t, R: it.R }); if (life.rings.length > 8) life.rings.shift(); jiggle(it, 0.25); }
+    it.under = under;
     if (it.kind === 'meatball') {
       if (!it.popped && it.cook >= 1) { it.popped = true; it.vb = 70 * s; addRipple(life, it.x, it.y, 0.9); }
       const sp = Math.hypot(it.vx, it.vy);
@@ -713,7 +779,7 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
   // Big bubbles come up beside things where it's hot, and when they pop the things next to them get knocked about.
   if (dt > 0) {
     for (const it of active) {
-      if (it.state !== 'float' || it.R < 9 * s || life.bubbles.length >= 16) continue;
+      if (it.state !== 'float' || it.R < 9 * s || life.bubbles.length >= MAX_BUBBLES) continue;
       if (Math.random() > dt * 0.05 * it.heat) continue;
       const a = Math.random() * Math.PI * 2;
       const r = (18 + Math.random() * 12) * s;
@@ -764,4 +830,5 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
 
   // Old rings fade out.
   if (life.ripples.length && t - life.ripples[0].t0 > 3) life.ripples.shift();
+  if (life.rings.length && t - life.rings[0].t0 > 1.4) life.rings.shift();
 };

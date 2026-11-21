@@ -141,6 +141,7 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
         boil: () => { if (view.scene) rollingBoil(view.scene); },
         ladle: () => { if (view.scene) startEvent(view.scene, 'ladle', camNow()); },
         egg: () => { if (view.scene) startEvent(view.scene, 'egg', camNow()); },
+        erupt: () => { if (view.scene) startEvent(view.scene, 'erupt', camNow()); },
         setSpeed: s => { speed = s; },
       };
     }
@@ -177,7 +178,7 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
     };
     document.addEventListener('visibilitychange', onVisibility);
     raf = requestAnimationFrame(frame);
-    if (import.meta.env.DEV) (window as unknown as { __hotpot: unknown }).__hotpot = { view, build, setSpeed: (s: number) => { speed = s; }, event: (k: 'ladle' | 'egg') => view.scene && startEvent(view.scene, k, camNow()) };
+    if (import.meta.env.DEV) (window as unknown as { __hotpot: unknown }).__hotpot = { view, build, setSpeed: (s: number) => { speed = s; }, event: (k: 'ladle' | 'egg' | 'erupt') => view.scene && startEvent(view.scene, k, camNow()) };
 
     return () => {
       cancelAnimationFrame(raf);

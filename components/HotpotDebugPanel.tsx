@@ -7,6 +7,7 @@ export interface HotpotDebugActions {
   boil: () => void;
   ladle: () => void;
   egg: () => void;
+  erupt: () => void;
   setSpeed: (speed: number) => void;
 }
 
@@ -57,6 +58,7 @@ const HotpotDebugPanel: React.FC<HotpotDebugPanelProps> = ({ actions }) => {
         <button type="button" onClick={() => act?.boil()}>Rolling boil</button>
         <button type="button" onClick={() => act?.ladle()}>Ladle swirl</button>
         <button type="button" onClick={() => act?.egg()}>Egg drop</button>
+        <button type="button" onClick={() => act?.erupt()}>Boil eruption</button>
       </div>
       <p className="reef-debug-label">Simulation speed</p>
       <div className="reef-debug-speed" role="radiogroup" aria-label="Simulation speed">

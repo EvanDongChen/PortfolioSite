@@ -9,9 +9,14 @@
  */
 
 import { Builder, DISC, HotpotCamera, HotpotScene, M, SPACING, V3, ellipsoid, fbm, mul3, rotX, rotZ, slab, tube, wallDist } from './hotpot';
-import { addRipple, flowAt, jiggle, splashAt } from './hotpotLife';
+import { MAX_BUBBLES, addRipple, flowAt, jiggle, splashAt, toss } from './hotpotLife';
 
-export type HotpotEventKind = 'ladle' | 'egg';
+export type HotpotEventKind = 'ladle' | 'egg' | 'erupt';
+
+/** A rolling boil erupting: bubbles crowd up, then it surges and throws the food up out of the broth. */
+interface Eruption { on: boolean; t: number; x: number; y: number; surged: boolean; lastBubble: number }
+/** Seconds from the first bubbles to the surge, and to the end. */
+const SURGE = 0.6, ERUPT_LEN = 2.4;
 
 interface Ladle {
   body: number;
@@ -37,6 +42,7 @@ interface EggDrop {
 export interface HotpotEvents {
   ladle: Ladle;
   egg: EggDrop;
+  erupt: Eruption;
   next: Record<HotpotEventKind, number>;
 }
 
@@ -98,7 +104,8 @@ export const populateEvents = (B: Builder, ctx: { rand: () => number; s: number 
     ladle: { body: ladle, state: 'idle', t: 0, cx: 0, cy: 0, r: 0, dir: 1, a0: 0, heading: 0, pos: PARKED, lastRing: 0 },
     egg: { body: egg, state: 'idle', x: 0, y: 0, z: 0, vz: 0, spin: 0, ribbons },
     // The ladle first comes soon after arrival, the egg a little later.
-    next: { ladle: 22 + rand() * 10, egg: 45 + rand() * 15 },
+    erupt: { on: false, t: 0, x: 0, y: 0, surged: false, lastBubble: 0 },
+    next: { ladle: 22 + rand() * 10, egg: 45 + rand() * 15, erupt: 10 + rand() * 6 },
   };
 };
 
@@ -119,6 +126,26 @@ const pickSpot = (scene: HotpotScene, cam: HotpotCamera, room: number) => {
 export const startEvent = (scene: HotpotScene, kind: HotpotEventKind, cam: HotpotCamera) => {
   const ev = scene.events;
   const s = scene.s;
+  if (kind === 'erupt') {
+    const R = ev.erupt;
+    if (R.on) return false;
+    // At the hardest-rolling spot in view, the margins first.
+    const life = scene.life;
+    let best: [number, number, number] | null = null, bestScore = -Infinity;
+    for (const p of life.plumes) {
+      const sy = p[1] - cam.scrollY;
+      if (sy < cam.viewH * 0.15 || sy > cam.viewH * 0.85) continue;
+      if (life.clear.some(c => p[0] > c.x - 60 * s && p[0] < c.x + c.w + 60 * s && p[1] > c.y - 60 * s && p[1] < c.y + c.h + 60 * s)) continue;
+      // Where there's food to throw.
+      let food = 0;
+      for (const it of life.items) if (it.state === 'float' && it.R > 12 * s && Math.abs(it.x - p[0]) < 110 * s && Math.abs(it.y - p[1]) < 110 * s) food++;
+      const score = p[2] + Math.min(4, food) * 0.5 + (p[0] < scene.viewW * 0.22 || p[0] > scene.viewW * 0.78 ? 1 : 0) + Math.random() * 0.4;
+      if (score > bestScore) { bestScore = score; best = p; }
+    }
+    if (!best) return false;
+    Object.assign(R, { on: true, t: 0, x: best[0], y: best[1], surged: false, lastBubble: 0 });
+    return true;
+  }
   if (kind === 'ladle') {
     const L = ev.ladle;
     if (L.state !== 'idle') return false;
@@ -263,7 +290,37 @@ export const stepEvents = (scene: HotpotScene, t: number, dt: number, cam: Hotpo
       const busy = ev.ladle.state !== 'idle' || ev.egg.state === 'falling';
       ev.next[kind] = t + (busy || !startEvent(scene, kind, cam) ? 6 : kind === 'ladle' ? 55 + Math.random() * 30 : 70 + Math.random() * 30);
     }
+    if (t >= ev.next.erupt) ev.next.erupt = t + (startEvent(scene, 'erupt', cam) ? 20 + Math.random() * 15 : 4);
   }
   stepLadle(scene, t, dt);
   stepEgg(scene, t, dt);
+  stepErupt(scene, t, dt);
+};
+
+const stepErupt = (scene: HotpotScene, t: number, dt: number) => {
+  const R = scene.events.erupt;
+  if (!R.on) return;
+  const life = scene.life;
+  const s = scene.s;
+  R.t += dt;
+  const reach = 120 * s;
+  // Big bubbles crowding up, faster and faster.
+  if (R.t < ERUPT_LEN - 0.6 && t - R.lastBubble > (R.t < SURGE ? 0.12 : 0.07) && life.bubbles.length < MAX_BUBBLES) {
+    R.lastBubble = t;
+    const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * reach * 0.8;
+    life.bubbles.push({ x: R.x + Math.cos(a) * d, y: R.y + Math.sin(a) * d, t0: t - Math.random() * 0.4, r: (16 + Math.random() * 16) * s, popped: false });
+  }
+  if (!R.surged && R.t >= SURGE) {
+    // The surge: everything near is thrown up, the nearest highest.
+    R.surged = true;
+    splashAt(scene, R.x, R.y);
+    addRipple(life, R.x, R.y, 1.4);
+    for (const it of life.items) {
+      const d = Math.hypot(it.x - R.x, it.y - R.y);
+      if (d > reach + it.R * 0.5 || it.state !== 'float') continue;
+      toss(it, (240 + Math.random() * 220) * s * (1 - (d / reach) * 0.5));
+      it.vx += ((it.x - R.x) / (d || 1)) * 60 * s; it.vy += ((it.y - R.y) / (d || 1)) * 60 * s;
+    }
+  }
+  if (R.t >= ERUPT_LEN) R.on = false;
 };

@@ -23,7 +23,8 @@ import { BROTH_PALETTE, F, G, PALETTE_SIDE, GLOW_STRIDE, HotpotScene, OBJ_TEXELS
 
 const MAX_PLUMES = 24;
 const MAX_RIPPLES = 12;
-const MAX_BUBBLES = 16;
+const MAX_BUBBLES = 24;
+const MAX_RINGS = 8;
 
 const SOLID_VS = `#version 300 es
 precision highp float;
@@ -232,6 +233,9 @@ uniform int u_nRipples;
 // Big bubbles beside the food: x, y, age, radius.
 uniform vec4 u_bubbles[${MAX_BUBBLES}];
 uniform int u_nBubbles;
+// Rings peeling off food breaking the surface: x, y, age, its size.
+uniform vec4 u_rings[${MAX_RINGS}];
+uniform int u_nRings;
 // The ladle's whirlpool: centre, strength, size (strength 0: none).
 uniform vec4 u_vortex;
 uniform vec3 u_light;
@@ -374,6 +378,8 @@ vec3 broth(vec2 w) {
   float ad = abs(dist) - u_wallHalf;
   if (ad < 8.0 * u_s) col *= 1.0 + 0.28 * (1.0 - ad / (8.0 * u_s));
 
+  // Where it rolls hard, the surface churns.
+  if (heat > 0.8) col *= 1.0 + (vn(w / (14.0 * u_s) + vec2(t * 2.1, -t * 1.7)) - 0.5) * 0.4 * min(1.0, heat - 0.8);
   // Bubbles where it's hot: each cell may hold one, growing until it pops.
   float cs = 44.0 * u_s;
   vec2 c = floor(w / cs);
@@ -381,7 +387,8 @@ vec3 broth(vec2 w) {
   if (h21(c + 3.1) < (0.1 + heat * 0.6)) {
     vec2 ctr = (c + 0.3 + 0.4 * vec2(h21(c + 1.7), h21(c + 2.9))) * cs;
     float ph = fract(t * (0.3 + hb * 0.5) * (0.5 + heat) + hb * 9.0);
-    float rad = mix(6.0, 15.0, h21(c + 5.5)) * u_s;
+    // Small and quiet where it simmers, big where it rolls.
+    float rad = mix(3.5, 7.0, h21(c + 5.5)) * (1.0 + smoothstep(0.45, 1.2, heat) * 1.3) * u_s;
     vec2 rel = w - ctr;
     float l = length(rel);
     if (ph < 0.86) {
@@ -425,6 +432,20 @@ vec3 broth(vec2 w) {
       float rr = bb.w * (1.0 + k * 1.6);
       if (abs(l - rr) < 2.4 * u_s && h21(floor(rel * 0.25)) > k * 0.8) col *= mala ? 1.4 : 1.07;
     }
+  }
+
+  // Something breaking the surface: a bright ring of broth peels off its edge and spreads, breaking into arcs.
+  for (int i = 0; i < ${MAX_RINGS}; i++) {
+    if (i >= u_nRings) break;
+    vec4 rg = u_rings[i];
+    vec2 rel = w - rg.xy;
+    float k = rg.z / 1.3;
+    float rr = rg.w * 0.85 + rg.z * 40.0 * u_s;
+    float band = abs(length(rel) - rr);
+    if (k > 1.0 || band > 3.0 * u_s) continue;
+    float arc = h21(vec2(floor((atan(rel.y, rel.x) + 3.1416) * 2.2), rg.x));
+    if (arc < 0.25 + k * 0.6) continue;
+    col = mix(col, mala ? hex(220., 84., 24.) : hex(252., 248., 236.), (1.0 - k) * 0.9);
   }
 
   // Rings where something landed, was lifted out, or the spoon went by.
@@ -592,6 +613,7 @@ export class HotpotView {
   private plumeBuf = new Float32Array(MAX_PLUMES * 3);
   private rippleBuf = new Float32Array(MAX_RIPPLES * 4);
   private bubbleBuf = new Float32Array(MAX_BUBBLES * 4);
+  private ringBuf = new Float32Array(MAX_RINGS * 4);
   private uniforms = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>();
 
   constructor(private canvas: HTMLCanvasElement | OffscreenCanvas, public pixel: number) {
@@ -801,6 +823,14 @@ export class HotpotView {
       nb++;
     }
     gl.uniform4fv(this.u(post, 'u_bubbles'), this.bubbleBuf);
+    let ng = 0;
+    for (const r of life.rings) {
+      if (ng >= MAX_RINGS || r.y < top || r.y > bottom) continue;
+      this.ringBuf.set([r.x, r.y, fr.time - r.t0, r.R], ng * 4);
+      ng++;
+    }
+    gl.uniform4fv(this.u(post, 'u_rings'), this.ringBuf);
+    gl.uniform1i(this.u(post, 'u_nRings'), ng);
     const vt = life.vortex;
     gl.uniform4f(this.u(post, 'u_vortex'), vt ? vt.x : 0, vt ? vt.y : 0, vt ? vt.k : 0, vt ? vt.R : 1);
     gl.uniform1i(this.u(post, 'u_nBubbles'), nb);
