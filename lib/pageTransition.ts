@@ -56,6 +56,8 @@ export interface PageMove {
   prepare: () => Promise<unknown>;
   /** Swaps the page. */
   swap: () => void;
+  /** Start with the screen already covered (the first load), rather than sweeping over it. */
+  covered?: boolean;
 }
 
 export const movePage = (move: PageMove) => {
@@ -69,7 +71,17 @@ export const movePage = (move: PageMove) => {
   });
 };
 
-const run = async ({ to, origin, prepare, swap }: PageMove) => {
+/**
+ * A first visit that opens on a 3D world (they take a moment to build their scene):
+ * the screen starts covered, so nothing shows until the world is drawn, then
+ * uncovers with the same wave as a switch. Call before the page first renders.
+ */
+export const coverFirstLoad = (page: Page) => {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  movePage({ to: page, prepare: () => Promise.resolve(), swap: () => {}, covered: true });
+};
+
+const run = async ({ to, origin, prepare, swap, covered = false }: PageMove) => {
   // Fetching starts straight away, while the wave is still on its way across.
   const prepared = within(prepare(), MAX_PREPARE_MS);
   const canvas = document.createElement('canvas');
@@ -183,12 +195,14 @@ const run = async ({ to, origin, prepare, swap }: PageMove) => {
     for (let k = 0; k < sparkles.length; k++) if (lit[k]) { lit[k] = 0; paintSparkle(k, 0); }
   };
 
+  // Listening from the start: a first load's page can be ready before this would otherwise get to it.
+  let isReady = false;
+  onReady = () => { isReady = true; };
   // Whatever goes wrong, the cover must not stay over the page.
   try {
-    await sweep(CLOSE_MS, true);
+    if (covered) draw(1, true);
+    else await sweep(CLOSE_MS, true);
     await prepared;
-    let isReady = false;
-    onReady = () => { isReady = true; };
     swap();
     await waitBehindCover(() => isReady);
     // Let what the new page has just done reach the screen before uncovering it.

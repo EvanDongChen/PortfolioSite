@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useCallback, useLayoutEffect, ReactNode } from 'react';
 import { loadAquarium, loadPond, loadShrine, loadSky, loadSpace, loadHotpot } from '../lib/pageLoaders';
-import { movePage } from '../lib/pageTransition';
+import { coverFirstLoad, movePage } from '../lib/pageTransition';
 
 type Theme = 'underwater' | 'deepsea';
 /** The pages: the aquarium, the pixel reef, the pixel pond, the shrine forest, deep space, the sky islands and the hot pot. */
@@ -35,6 +35,8 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const WORLDS: Page[] = ['reef', 'pond', 'shrine', 'space', 'sky', 'hotpot'];
 /** Each visit opens on a world picked at random; the switch moves between them as before. */
 const firstPage: Page = WORLDS[Math.floor(Math.random() * WORLDS.length)];
+// The 3D worlds build their scene before they can draw, so a visit that opens on one starts covered.
+if (firstPage === 'space' || firstPage === 'sky' || firstPage === 'hotpot') coverFirstLoad(firstPage);
 
 // Switching pages remounts the content, so remember where the reader was.
 let pendingScrollY: number | null = null;
