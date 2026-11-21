@@ -237,6 +237,8 @@ uniform int u_nRipples;
 // Big bubbles beside the food: x, y, age, radius.
 uniform vec4 u_bubbles[${MAX_BUBBLES}];
 uniform int u_nBubbles;
+// How much finishing to do: 2 everything, 1 without the shimmer, reflections and light shafts, 0 also with simpler oil and shadows.
+uniform int u_quality;
 // Rings peeling off food breaking the surface: x, y, age, its size.
 uniform vec4 u_rings[${MAX_RINGS}];
 uniform int u_nRings;
@@ -317,7 +319,8 @@ vec3 broth(vec2 w) {
     // A step towards the lamp: where the field falls off that way is the rim facing the light.
     vec2 wl = wc + ld * 2.5 * u_s;
     float field = 0.0, fieldL = 0.0;
-    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    int span = u_quality > 0 ? 1 : 0;
+    for (int j = -span; j <= span; j++) for (int i = -span; i <= span; i++) {
       vec2 c = c0 + vec2(float(i), float(j));
       if (h21(c + 0.7) < 0.5) continue;
       float hr = h21(c + 4.4);
@@ -374,7 +377,7 @@ vec3 broth(vec2 w) {
   }
   // The surface shimmering: thin bright filaments where two drifting ripple fields cross, always moving.
   float sh = vn(wv / (34.0 * u_s) + vec2(t * 0.35, -t * 0.27) + warp * 3.0) + vn(wv / (21.0 * u_s) + vec2(-t * 0.22, t * 0.31) + 7.3);
-  if (abs(sh - 1.0) < 0.03) col *= mala ? 1.22 : 1.05;
+  if (u_quality > 1 && abs(sh - 1.0) < 0.03) col *= mala ? 1.22 : 1.05;
   // Spiral arms of light round the whirlpool, and a dimple at its middle.
   if (swirl > 0.02) {
     vec2 e = w - u_vortex.xy;
@@ -388,7 +391,7 @@ vec3 broth(vec2 w) {
   if (ad < 8.0 * u_s) col *= 1.0 + 0.28 * (1.0 - ad / (8.0 * u_s));
 
   // Where it rolls hard, the surface churns.
-  if (heat > 0.8) col *= 1.0 + (vn(w / (14.0 * u_s) + vec2(t * 2.1, -t * 1.7)) - 0.5) * 0.4 * min(1.0, heat - 0.8);
+  if (u_quality > 0 && heat > 0.8) col *= 1.0 + (vn(w / (14.0 * u_s) + vec2(t * 2.1, -t * 1.7)) - 0.5) * 0.4 * min(1.0, heat - 0.8);
   // Bubbles where it's hot: each cell may hold one, growing until it pops.
   float cs = 44.0 * u_s;
   vec2 c = floor(w / cs);
@@ -531,7 +534,7 @@ void main() {
   float hs = 4.0;
   float shadow = 0.0;
   for (int j = 0; j < 13; j++) {
-    for (int k = 0; k < 2; k++) {
+    for (int k = 0; k < (u_quality > 0 ? 2 : 1); k++) {
       vec2 off = dir * hs * (k == 0 ? 1.0 : 0.72) / u_px;
       ivec2 q = ivec2(floor(vec2(float(p.x) - off.x, float(p.y) + off.y) + 0.5));
       if (q.x < 0 || q.y < 0) continue;
@@ -547,7 +550,7 @@ void main() {
   }
   if (shadow > 0.75 || (shadow > 0.25 && bay < 0.5)) c *= 0.6;
   // The glossy oil mirrors food floating beside it: a wavering copy, a few pixels up, every other row.
-  else if (g_oil && (p.y & 1) == 0) {
+  else if (u_quality > 1 && g_oil && (p.y & 1) == 0) {
     ivec2 q = p + ivec2(int(floor(sin(float(p.y) * 0.7 + u_time * 3.0) + 0.5)), 3);
     vec4 rf = texelFetch(u_solid, q * 2, 0);
     if (rf.a > 0.5 && (rf.b - 0.25) * 512.0 > -1.0) {
@@ -561,11 +564,11 @@ void main() {
   // through them: steam inside a shaft glows, steam between them is dimmer.
   vec2 across = normalize(vec2(-u_light.y, u_light.x));
   float sa = dot(w, across) / (110.0 * u_s);
-  float shaft = pow(0.5 + 0.5 * sin(sa + vn(vec2(sa * 0.25, u_time * 0.04)) * 4.0), 5.0) + 0.6 * pow(0.5 + 0.5 * sin(sa * 2.3 + 1.7 + u_time * 0.05), 8.0);
+  float shaft = u_quality < 2 ? 0.25 : pow(0.5 + 0.5 * sin(sa + vn(vec2(sa * 0.25, u_time * 0.04)) * 4.0), 5.0) + 0.6 * pow(0.5 + 0.5 * sin(sa * 2.3 + 1.7 + u_time * 0.05), 8.0);
   // Steam shows over the dark chili broth; over the pale broth it would only speckle.
   c += g * (wallDist(w) < 0.0 ? 0.25 : 0.1) * (0.45 + shaft * 2.2);
   // And a faint haze of light in the shafts themselves, warmer over the chili oil.
-  c += shaft * (wallDist(w) < 0.0 ? vec3(0.07, 0.035, 0.015) : vec3(0.025, 0.02, 0.012));
+  if (u_quality > 1) c += shaft * (wallDist(w) < 0.0 ? vec3(0.07, 0.035, 0.015) : vec3(0.025, 0.02, 0.012));
   // Nearest two palette colours, and a Bayer choice between them.
   float d1 = 1e9, d2 = 1e9;
   vec3 c1 = c, c2 = c;
@@ -628,6 +631,8 @@ export class HotpotView {
   private depth: WebGLRenderbuffer | null = null;
   private solidFbo: WebGLFramebuffer | null = null;
   private glowFbo: WebGLFramebuffer | null = null;
+  /** How much finishing the broth gets: 2 on the high tier, 1 medium, 0 low (see the post shader). */
+  quality = 2;
   /** The scene being drawn, for the debug tools. */
   scene: HotpotScene | null = null;
   private pose = new Float32Array(0);
@@ -819,6 +824,7 @@ export class HotpotView {
     gl.uniform1f(this.u(post, 'u_artH'), this.artH);
     gl.uniform1f(this.u(post, 'u_s'), scene.s);
     gl.uniform1f(this.u(post, 'u_boil'), life.boil);
+    gl.uniform1i(this.u(post, 'u_quality'), this.quality);
     gl.uniform3f(this.u(post, 'u_light'), LIGHT[0], LIGHT[1], LIGHT[2]);
     const wl = scene.wall;
     gl.uniform4f(this.u(post, 'u_wall'), wl.cx, wl.amp, wl.y0, wl.k);

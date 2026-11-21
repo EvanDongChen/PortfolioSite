@@ -184,6 +184,9 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug, sauceOpen = f
       const w = window.innerWidth, h = window.innerHeight;
       const px = pixelFor(t, w);
       const { w: aw, h: ah } = view.resize(w, h, px);
+      // The costlier finishing touches drop away on the slower tiers.
+      view.quality = t === 'high' ? 2 : t === 'medium' ? 1 : 0;
+      if (view.scene) view.scene.life.bubbleRate = t === 'high' ? 1 : t === 'medium' ? 0.7 : 0.4;
       // Style writes only when something changed, so the page isn't restyled every frame.
       const size = `${aw * px}x${ah * px}`;
       if (size !== shownSize) { shownSize = size; canvas.style.width = `${aw * px}px`; canvas.style.height = `${ah * px}px`; }

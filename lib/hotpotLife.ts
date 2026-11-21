@@ -118,6 +118,8 @@ export interface HotpotLife {
   /** Food someone is holding with the mouse: which pair has it, whether the button is still down, and where it's wanted. */
   drag: { pair: Chopsticks; item: Item; down: boolean; t0: number; moved: number; x: number; y: number; vx: number; vy: number } | null;
   frame: number;
+  /** Fewer big bubbles on slower machines. */
+  bubbleRate: number;
   /** What moved this frame: on screen or just off it. */
   active: Item[];
 }
@@ -225,7 +227,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
   return {
     items, sticks, splashes, ripples: [], bubbles: [], rings: [], drops: [], time: 0, boil: 1, boilUntil: -1,
     nextPluck: 3.5, eager: false, lastPointer: null,
-    wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen, vortex: null, frame: 0, active: [], drag: null,
+    wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen, vortex: null, frame: 0, bubbleRate: 1, active: [], drag: null,
   };
 };
 
@@ -885,7 +887,7 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
   if (dt > 0) {
     for (const it of active) {
       if (it.state !== 'float' || it.R < 9 * s || life.bubbles.length >= MAX_BUBBLES) continue;
-      if (Math.random() > dt * 0.05 * it.heat) continue;
+      if (Math.random() > dt * 0.05 * it.heat * life.bubbleRate) continue;
       const a = Math.random() * Math.PI * 2;
       const r = (18 + Math.random() * 12) * s;
       life.bubbles.push({ x: it.x + Math.cos(a) * (it.R * 0.8 + r * 0.3), y: it.y + Math.sin(a) * (it.R * 0.8 + r * 0.3), t0: t, r, popped: false });
