@@ -16,9 +16,9 @@ Scroll through my projects and experience while a whole reef, a pond, a moonlit 
 
 [Six worlds](#six-worlds-one-portfolio) · [Things to try](#things-to-try) · [How it works](#how-it-works) · [Run it locally](#run-it-locally) · [Adding a project](#adding-a-project)
 
-<img src="docs/media/hero-switch.gif" alt="The portfolio's hero over the pixel reef, dissolving in blocks into the pixel pond and back" width="720">
+<img src="docs/media/hero-switch.gif" alt="The portfolio's hero dissolving in waves of pixel blocks through all six worlds: the reef, the pond, the shrine forest, deep space, the sky islands and the hot pot, then back to the reef" width="720">
 
-<sub>Switching from the reef to the pond and back. Every fish, frog and duck is simulated, not looped.</sub>
+<sub>Switching through all six worlds and back to the reef. Everything behind the page is simulated, not looped.</sub>
 
 </div>
 
