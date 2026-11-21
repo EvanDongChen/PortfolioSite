@@ -31,6 +31,11 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+/** The worlds a visit can open on; the archived aquarium is left out. */
+const WORLDS: Page[] = ['reef', 'pond', 'shrine', 'space', 'sky', 'hotpot'];
+/** Each visit opens on a world picked at random; the switch moves between them as before. */
+const firstPage: Page = WORLDS[Math.floor(Math.random() * WORLDS.length)];
+
 // Switching pages remounts the content, so remember where the reader was.
 let pendingScrollY: number | null = null;
 
@@ -57,13 +62,13 @@ const preparePage = async (page: Page) => {
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>('underwater');
-  // The pixel reef is the default look; the aquarium is one click away.
+  // The reef stays on underneath every world but the aquarium, which is one click away in settings.
   const [isPixelMode, setIsPixelMode] = useState(true);
-  const [isPondMode, setIsPondMode] = useState(false);
-  const [isShrineMode, setIsShrineMode] = useState(false);
-  const [isSpaceMode, setIsSpaceMode] = useState(false);
-  const [isSkyMode, setIsSkyMode] = useState(false);
-  const [isHotpotMode, setIsHotpotMode] = useState(false);
+  const [isPondMode, setIsPondMode] = useState(firstPage === 'pond');
+  const [isShrineMode, setIsShrineMode] = useState(firstPage === 'shrine');
+  const [isSpaceMode, setIsSpaceMode] = useState(firstPage === 'space');
+  const [isSkyMode, setIsSkyMode] = useState(firstPage === 'sky');
+  const [isHotpotMode, setIsHotpotMode] = useState(firstPage === 'hotpot');
 
   const toggleTheme = () => {
     if (!DEEP_SEA_MODE_ENABLED) return;

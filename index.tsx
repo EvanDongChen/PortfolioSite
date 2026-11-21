@@ -6,8 +6,8 @@ import { PerformanceProvider } from './contexts/PerformanceContext';
 import { loadAquarium, loadPond, loadShrine, loadSky, loadSpace, loadHotpot } from './lib/pageLoaders';
 import './index.css';
 
-// The pixel reef is the default page; the aquarium, the pond and the shrine are fetched
-// only when someone switches to them.
+// The reef is bundled with the entry; every other page's code is fetched when it's
+// needed (the first visit opens on a world picked at random, see ThemeContext).
 const App = lazy(loadAquarium);
 const PondApp = lazy(loadPond);
 const ShrineApp = lazy(loadShrine);
