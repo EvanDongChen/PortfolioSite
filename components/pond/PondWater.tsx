@@ -4,6 +4,7 @@ import { PondLayout } from '../../lib/pond/pondView';
 import { FromPond, PondAdoption, PondEngine, PondEngineInit, PondInspected, ToPond } from '../../lib/pond/pondEngine';
 import { POND_ADOPTION_KEY, displayName, loadAdoption, saveAdoption } from '../../lib/adoption';
 import PixelMeter from '../PixelMeter';
+import { useIsMobile } from '../../lib/useIsMobile';
 import PondDebugPanel, { PondDebugActions } from './PondDebugPanel';
 import { usePerformance, PerformanceTier } from '../../contexts/PerformanceContext';
 
@@ -91,6 +92,8 @@ const PondWater: React.FC<PondWaterProps> = ({ onStats }) => {
   const debugRef = useRef<PondDebugActions | null>(null);
   const [inspected, setInspected] = useState<PondInspected | null>(null);
   const [adoption, setAdoption] = useState<PondAdoption | null>(() => loadAdoption(POND_ADOPTION_KEY));
+  // Adopting is turned off on phones: the bar is too much clutter on a small screen.
+  const isMobile = useIsMobile();
   const [notice, setNotice] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const onStatsRef = useRef(onStats);
@@ -326,7 +329,7 @@ const PondWater: React.FC<PondWaterProps> = ({ onStats }) => {
       </div>
 
       <PondDebugPanel actions={debugRef} />
-      {(followedName || adoption || notice) && (
+      {!isMobile && (followedName || adoption || notice) && (
         <div className="adopt-bar" data-reef-ui role="region" aria-label="Your creature">
           {notice && <p className="adopt-notice" role="status">{notice}</p>}
           {followedName && inspected ? (
