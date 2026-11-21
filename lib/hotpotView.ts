@@ -93,7 +93,13 @@ void main() {
   float d = u_cam.z - w.z;
   vec3 toEye = normalize(u_cam - w);
   bool twoSided = (flags & ${F.twoSided}) != 0;
-  if (d < u_near || (!twoSided && dot(n, toEye) < -0.15)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  // Facing away: hidden, unless it's food that can be turned over, which shows its underside.
+  bool underside = false;
+  if (!twoSided && dot(n, toEye) < -0.15) {
+    if ((flags & ${F.back}) != 0) { n = -n; underside = true; }
+    else { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  }
+  if (d < u_near) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   float scale = u_f / d;
   vec2 s = u_half + (w.xy - u_cam.xy) * scale + u_off;
   vec2 clip = vec2(s.x / u_canvas.x * 2.0 - 1.0, 1.0 - s.y / u_canvas.y * 2.0);
@@ -113,7 +119,7 @@ void main() {
   v_mat = mat;
 
   // Sauce on food sits a shade darker than the sauce in the bowl, so a dipped piece keeps its shape.
-  float alb = a_info.z - (coated ? 0.2 : 0.0);
+  float alb = a_info.z - (coated ? 0.2 : 0.0) - (underside ? 0.15 : 0.0);
   if ((flags & ${F.emissive}) != 0) { v_shade = alb; return; }
   float lam = dot(n, u_light);
   if (twoSided) lam = abs(lam) * 0.85;

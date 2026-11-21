@@ -11,7 +11,7 @@
 import { DIP_PITCH, isLong } from './hotpotSauce';
 import {
   Body, Builder, Clear, G, HotpotCamera, HotpotScene, INGREDIENTS, Ingredient, Plume, V3, Wall,
-  IDENTITY, buildChopstick, buildIngredient, wallX, frameAlong, mul3, norm, rotAxis, rotZ, wallDist,
+  F, IDENTITY, SOLID_STRIDE, buildChopstick, buildIngredient, wallX, frameAlong, mul3, norm, rotAxis, rotZ, wallDist,
 } from './hotpot';
 
 export type Side = -1 | 1; // -1: the mala, 1: the bone broth
@@ -47,6 +47,10 @@ export interface Item {
   under: boolean;
   /** Sauce it was dipped in: material, how much. */
   coat: [number, number] | null;
+  /** Turned over by a flick: how far round it is (radians), the time left in the turn, when it was last flicked. */
+  flipA: number; flipT: number; lastFlick: number;
+  /** Thrown: flying further than a drop and landing with a bigger splash. */
+  thrown: boolean;
   /** Its pose, kept and rewritten each frame. */
   pose?: { live: { c: V3; rot: number[] }; scale: number[]; params: number[] };
 }
@@ -118,6 +122,8 @@ export interface HotpotLife {
     pair: Chopsticks; item: Item; down: boolean; t0: number; moved: number; x: number; y: number; vx: number; vy: number;
     /** For telling a shake: the way it was last going hard (each axis), and when it last snapped back. */
     sx: number; sy: number; flips: number[];
+    /** The mouse's own speed (the chopsticks lag it), where it was last frame, how long it's been held still, and whether the food is dunked. */
+    pvx: number; pvy: number; lx: number; ly: number; still: number; dunked: boolean; lastBubble: number;
   } | null;
   frame: number;
   /** While the sauce bar is out, the page x its board reaches to (food shaken off left of it would land on the board). */
@@ -173,14 +179,16 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
   const place = (kind: Ingredient, side: Side, x: number, y: number) => {
     const R = INGREDIENTS[kind].r * s;
     const body = B.body({ kind, pos: [x, y, 0], radius: R });
+    const first = B.solid.length;
     buildIngredient(B, body, kind, s, rand);
+    for (let i = first; i < B.solid.length; i += SOLID_STRIDE) B.solid[i + 10] = B.solid[i + 10] | F.back;
     const it: Item = {
       body, kind, side, R, x, y, z: 0, vx: 0, vy: 0,
       ang: rand() * Math.PI * 2, spin: (rand() - 0.5) * 0.3, phase: rand() * 10,
       // Some already done, some just in.
       cook: rand() * 1.3,
       state: 'float', fz: 0, vz: 0, bump: 0, vb: 0,
-      tx: 0, ty: 0, vtx: 0, vty: 0, roll: IDENTITY, stuck: [], popped: false, heat: 0.5, jig: 0, vjig: 0, sq: 0, vsq: 0, under: false, coat: null,
+      tx: 0, ty: 0, vtx: 0, vty: 0, roll: IDENTITY, stuck: [], popped: false, heat: 0.5, jig: 0, vjig: 0, sq: 0, vsq: 0, under: false, coat: null, flipA: 0, flipT: 0, lastFlick: 0, thrown: false,
     };
     items.push(it);
     poseItem(B.bodies[body], it, 0, 0.5, s);
@@ -289,8 +297,8 @@ const poseItem = (b: Body, it: Item, t: number, heat: number, s: number) => {
   it.z = z;
   const P = it.pose ?? (it.pose = { live: { c: [0, 0, 0], rot: new Array(9) }, scale: [1, 1, 1], params: [0, 0, 0, 0] });
   P.live.c[0] = it.x; P.live.c[1] = it.y; P.live.c[2] = z;
-  if (it.kind === 'meatball') P.live.rot = mul3(tiltXY(ax, ay, 0), it.roll);
-  else tiltXY(ax, ay, it.ang, P.live.rot);
+  if (it.kind === 'meatball') P.live.rot = mul3(tiltXY(ax + it.flipA, ay, 0), it.roll);
+  else tiltXY(ax + it.flipA, ay, it.ang, P.live.rot);
   b.live = P.live;
   const over = overOf(it);
   const done = Math.min(1, it.cook);
@@ -496,7 +504,7 @@ export const pressAt = (scene: HotpotScene, x: number, y: number) => {
   if (!pair) return false;
   if (pair.item && pair.item.state === 'held') pair.item.state = 'float';
   sendSticks(life, pair, it, 0.45);
-  life.drag = { pair, item: it, down: true, t0: life.time, moved: 0, x, y, vx: 0, vy: 0, sx: 0, sy: 0, flips: [] };
+  life.drag = { pair, item: it, down: true, t0: life.time, moved: 0, x, y, vx: 0, vy: 0, sx: 0, sy: 0, flips: [], pvx: 0, pvy: 0, lx: x, ly: y, still: 0, dunked: false, lastBubble: 0 };
   return true;
 };
 
@@ -526,15 +534,29 @@ export const releaseDrag = (scene: HotpotScene, onRelease?: (it: Item, p: Chopst
   // Dropped: it falls from where it is into whichever broth is below, and the chopsticks leave empty.
   it.state = 'falling';
   it.vz = -60;
-  // A little of the swing carries on as it drops.
-  const sp = Math.hypot(d.vx, d.vy), cap = 160 * life.s;
-  const k = sp > cap ? (cap / sp) * 0.3 : 0.3;
-  it.vx = d.vx * k; it.vy = d.vy * k;
+  // Let go while moving fast, it's thrown: up and away in an arc. Otherwise a little of the swing carries on as it drops.
+  const ps = Math.hypot(d.pvx, d.pvy);
+  if (ps > THROW_SPEED * life.s) {
+    const k = Math.min(1, (650 * life.s) / ps) * 0.6;
+    it.vx = d.pvx * k; it.vy = d.pvy * k;
+    it.vz = Math.min(560, 200 + ps * 0.3);
+    it.spin = (Math.random() - 0.5) * 10;
+    it.thrown = true;
+  } else {
+    const sp = Math.hypot(d.vx, d.vy), cap = 160 * life.s;
+    const k = sp > cap ? (cap / sp) * 0.3 : 0.3;
+    it.vx = d.vx * k; it.vy = d.vy * k;
+  }
   const wd = wallDist(life.wall, it.x, it.y);
   it.side = wd < 0 ? -1 : 1;
   p.item = null;
   p.state = 'leave'; p.t = 0; p.from = [...p.tip] as V3;
 };
+
+/** How fast (px/s) the mouse must be going for a flick to turn the food over, and to throw it when let go. */
+const FLICK_SPEED = 900, THROW_SPEED = 420;
+/** Seconds a flip takes: over, a look at the underside, and back. */
+const FLIP_TIME = 1.19;
 
 /** Speed (px/s) a jerk of the chopsticks has to reach to count towards a shake, and how many snaps back make one. */
 const SHAKE_SPEED = 260, SHAKE_FLIPS = 4;
@@ -677,12 +699,40 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
       const dip = scene.sauce.dipAt;
       const long = dip ? isLong(it) : false;
       const pitch = long ? DIP_PITCH : 0;
+      // The mouse's own speed, and how long it's been held still.
+      if (dt > 0) {
+        const k = Math.min(1, dt * 20);
+        d.pvx += ((d.x - d.lx) / dt - d.pvx) * k; d.pvy += ((d.y - d.ly) / dt - d.pvy) * k;
+        d.lx = d.x; d.ly = d.y;
+      }
+      const pspeed = Math.hypot(d.pvx, d.pvy);
+      d.still = pspeed < 30 * s ? d.still + dt : 0;
+      // (A dunk lasts while it stays still; any real move lifts it out.)
+      // Held still over the broth (not the sauce bar's board), the chopsticks lower it in to cook; moving lifts it out.
+      const overBoard = life.sauceBoard > 0 && d.x < life.sauceBoard;
+      const dunk = !dip && !overBoard && d.still > 0.45;
+      if (d.dunked && !dunk) { life.rings.push({ x: it.x, y: it.y, t0: life.time, R: it.R }); if (life.rings.length > 8) life.rings.shift(); jiggle(it, 0.3); }
+      if (!d.dunked && dunk) addRipple(life, it.x, it.y, 0.7);
+      d.dunked = dunk;
       const goal: V3 = dip
         ? long
           ? [dip[0] + it.R * Math.cos(pitch), dip[1], dip[2] - 5 * s + it.R * Math.sin(pitch) + top]
           : [dip[0], dip[1], dip[2] + it.R * 0.3 + top]
-        : [d.x, d.y, (scene.sauce.open > 0.01 ? 105 : 55) * s + top];
-      const k = Math.min(1, dt * (dip ? 4.5 : 12));
+        : dunk
+          ? [d.x, d.y, -6 * s - (it.R < 20 * s ? it.R * 0.4 : 0) + top]
+          : [d.x, d.y, (scene.sauce.open > 0.01 ? 105 : 55) * s + top];
+      const k = Math.min(1, dt * (dip ? 4.5 : dunk ? 6 : 12));
+      // Under the broth it cooks fast, bubbles streaming up round it.
+      if (dunk && it.fz < 2 * s) {
+        it.cook += (dt * 6) / (INGREDIENTS[it.kind].cook || VEG_DONE);
+        if (life.time - d.lastBubble > 0.11 && life.bubbles.length < MAX_BUBBLES) {
+          d.lastBubble = life.time;
+          const a = Math.random() * Math.PI * 2, rr = it.R * (0.5 + Math.random() * 0.6);
+          life.bubbles.push({ x: it.x + Math.cos(a) * rr, y: it.y + Math.sin(a) * rr, t0: life.time - BUBBLE_GROW * 0.5, r: (6 + Math.random() * 6) * s, popped: false });
+        }
+      }
+      // A sharp flick turns it over.
+      if (pspeed > FLICK_SPEED * s && life.time - it.lastFlick > 1 && it.flipT <= 0) { it.lastFlick = life.time; it.flipT = FLIP_TIME; jiggle(it, 0.3); }
       const ox = p.tip[0], oy = p.tip[1];
       p.tip = [p.tip[0] + (goal[0] - p.tip[0]) * k, p.tip[1] + (goal[1] - p.tip[1]) * k, p.tip[2] + (goal[2] - p.tip[2]) * k];
       if (dt > 0) { d.vx = (p.tip[0] - ox) / dt; d.vy = (p.tip[1] - oy) / dt; }
@@ -807,13 +857,23 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
 
   for (const it of active) {
     const b = scene.bodies[it.body];
+    // Turning over and back: over in a moment, a beat showing its underside, then back the way it was.
+    if (it.flipT > 0) {
+      it.flipT = Math.max(0, it.flipT - dt);
+      const e = FLIP_TIME - it.flipT;
+      const turn = 0.32, show = 0.55;
+      it.flipA = e < turn ? Math.PI * easeInOut(e / turn) : e < turn + show ? Math.PI : Math.PI * (1 + easeInOut(Math.min(1, (e - turn - show) / turn)));
+      if (it.flipT === 0) it.flipA = 0;
+    }
     if (it.state === 'falling') {
       it.vz -= 1700 * dt;
       it.fz += it.vz * dt;
       it.ang += it.spin * dt;
       // Drifting a little as it goes, and swaying over and back as it tumbles.
-      it.x += it.vx * dt * 0.6; it.y += it.vy * dt * 0.6;
-      it.vx *= 1 - Math.min(1, dt * 0.8); it.vy *= 1 - Math.min(1, dt * 0.8);
+      const drift = it.thrown ? 1 : 0.6, drag = it.thrown ? 0.15 : 0.8;
+      it.x += it.vx * dt * drift; it.y += it.vy * dt * drift;
+      it.vx *= 1 - Math.min(1, dt * drag); it.vy *= 1 - Math.min(1, dt * drag);
+      it.x = Math.min(life.viewW, Math.max(0, it.x));
       it.tx = Math.sin(it.fz * 0.021 + it.phase) * 0.55;
       it.ty = Math.cos(it.fz * 0.017 + it.phase * 1.3) * 0.45;
       it.vtx = Math.cos(it.fz * 0.021 + it.phase) * 0.55 * 0.021 * it.vz;
@@ -821,6 +881,20 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
       const rest = -sinkOf(it) * s;
       if (it.fz <= rest) {
         it.state = 'float';
+        it.side = wallDist(life.wall, it.x, it.y) < 0 ? -1 : 1;
+        if (it.thrown) {
+          // A big splash: a second burst of drops, a wide ring, and everything near rocked about.
+          it.thrown = false;
+          splashAt(scene, it.x + 8 * s, it.y - 6 * s);
+          addRipple(life, it.x, it.y, 1.8);
+          for (const o of life.items) {
+            if (o === it || o.state !== 'float') continue;
+            const dx = o.x - it.x, dy = o.y - it.y, dd = Math.hypot(dx, dy) || 1;
+            if (dd > it.R * 2.5 + 40 * s) continue;
+            const kk = 1 - dd / (it.R * 2.5 + 40 * s);
+            o.vx += (dx / dd) * 90 * s * kk; o.vy += (dy / dd) * 90 * s * kk; o.vb += 40 * s * kk; jiggle(o, 0.5 * kk);
+          }
+        }
         // In with a plunge that bounces back up before it settles, flattened by the impact.
         it.bump = 0; it.vb = Math.max(-110 * s, it.vz * 0.07);
         it.sq = 0.55; it.vsq = 0;
