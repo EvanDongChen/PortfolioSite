@@ -38,19 +38,50 @@ const Icon: React.FC<{ page: SwitchPage }> = ({ page }) => {
   );
 };
 
+/** Narrow or short screens, where the six stops would stand over the page's text. */
+const COMPACT = '(max-width: 767px), (max-height: 640px)';
+const useCompact = () => {
+  const [compact, setCompact] = useState(() => window.matchMedia?.(COMPACT).matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.(COMPACT);
+    if (!mq) return;
+    const update = () => setCompact(mq.matches);
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return compact;
+};
+
 /**
  * Switches between the pixel pages: a switch in the right-hand
  * stack, its stops on the stack's spacing. Click a page's icon and the
  * thumb springs over to it, then the page changes; arrow keys move between
  * the stops, Enter or Space picks one. On the archived aquarium no stop is
- * lit, and any of them leads back.
+ * lit, and any of them leads back. On a small screen it folds into one
+ * stack button showing the current world, which opens a menu of them all.
  */
 const ThemeSwitch: React.FC = () => {
   const { page, setPage } = useTheme();
   const [picked, setPicked] = useState<Page>(page);
   const timer = useRef(0);
   const stops = useRef<(HTMLButtonElement | null)[]>([]);
+  const compact = useCompact();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
   useEffect(() => () => clearTimeout(timer.current), []);
+
+  // The menu closes on a tap outside it or Escape, and when the screen grows back.
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); toggle.current?.focus(); } };
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', esc);
+    stops.current[Math.max(0, PAGES.findIndex(p => p.page === picked))]?.focus();
+    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  useEffect(() => { if (!compact) setOpen(false); }, [compact]);
 
   const pick = (to: Page) => {
     if (to === picked) return;
@@ -71,11 +102,57 @@ const ThemeSwitch: React.FC = () => {
   };
 
   const at = PAGES.findIndex(p => p.page === picked);
+  const bottom = page === 'aquarium' ? 'bottom-[12.5rem]' : 'bottom-[9rem]';
+
+  if (compact) {
+    const current = at >= 0 ? PAGES[at] : null;
+    return (
+      <div ref={box} className={`theme-switch-compact fixed right-8 ${bottom} z-[55]`}>
+        <button
+          ref={toggle}
+          type="button"
+          className="hud-btn theme-switch-toggle h-12 w-12 rounded-full border shadow-lg flex items-center justify-center"
+          aria-label={current ? `Choose a page (now ${current.label})` : 'Choose a page'}
+          aria-haspopup="true"
+          aria-expanded={open}
+          aria-pressed={open}
+          onClick={() => setOpen(o => !o)}
+        >
+          {current ? <Icon page={current.page} /> : <Icon page="reef" />}
+        </button>
+        {open && (
+          <div role="radiogroup" aria-label="Choose a page" className="theme-switch-menu">
+            {PAGES.map(({ page: p, label }, k) => (
+              <button
+                key={p}
+                ref={el => { stops.current[k] = el; }}
+                type="button"
+                role="radio"
+                aria-checked={p === picked}
+                aria-label={label}
+                tabIndex={p === picked || (at < 0 && k === 0) ? 0 : -1}
+                className={`theme-switch-item ${p === picked ? 'is-on' : ''}`}
+                onClick={() => { setOpen(false); pick(p); }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(false); pick(p); return; }
+                  onKeyDown(e, k);
+                }}
+              >
+                <Icon page={p} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       role="radiogroup"
       aria-label="Choose a page"
-      className={`theme-switch fixed right-8 ${page === 'aquarium' ? 'bottom-[12.5rem]' : 'bottom-[9rem]'} z-[55]`}
+      className={`theme-switch fixed right-8 ${bottom} z-[55]`}
       style={{ '--at': at } as React.CSSProperties}
     >
       {at >= 0 && <span className="theme-switch-thumb" aria-hidden="true" />}
