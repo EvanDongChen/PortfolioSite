@@ -4,7 +4,7 @@
 //
 //   node gif.mjs --out <file.gif> [--page reef|pond|shrine|space|sky|hotpot] [--scroll 0]
 //     [--size 1440x900] [--clip x,y,w,h] [--frames 70] [--interval 100] [--wait 6000]
-//     [--debug "Button text"] [--eval <js>] [--delay 0] [--port 3000] [--still <file.png>] [--scale 1]
+//     [--debug "Button text"] [--eval <js>] [--delay 0] [--port 3000] [--still <file.png>] [--scale 1] [--palette shared|frame]
 //
 // Opens the page (switching to --page), scrolls to --scroll, optionally opens the
 // hidden debug panel (the Konami code) and presses the button labelled --debug, runs
@@ -12,6 +12,7 @@
 // (x, y within the window) about --interval ms apart, enlarged --scale times. If --eval
 // returns { clip: [x, y, w, h], scale }, that crop is used instead (for action that
 // happens wherever a creature is). --still writes one full-window PNG instead of a GIF.
+// --palette frame gives each frame its own colours (for a GIF that crosses several worlds).
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -95,16 +96,16 @@ try {
     const py = `
 import sys, glob
 from PIL import Image
-d, out, dur = sys.argv[1], sys.argv[2], int(sys.argv[3])
+d, out, dur, mode = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
 frames = [Image.open(p).convert('RGB') for p in sorted(glob.glob(d + '/f*.png'))]
 sheet = Image.new('RGB', (frames[0].width, frames[0].height * min(len(frames), 12)))
 for i, f in enumerate(frames[::max(1, len(frames) // 12)][:12]): sheet.paste(f, (0, i * f.height))
 pal = sheet.quantize(colors=255, method=Image.Quantize.MEDIANCUT)
-q = [f.quantize(palette=pal, dither=Image.Dither.NONE) for f in frames]
+q = [f.quantize(colors=255, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE) if mode == 'frame' else f.quantize(palette=pal, dither=Image.Dither.NONE) for f in frames]
 q[0].save(out, save_all=True, append_images=q[1:], duration=dur, loop=0, optimize=True, disposal=1)
 print(out, len(q), 'frames', dur, 'ms')
 `;
-    const r = spawnSync('python', ['-c', py, dir, resolve(args.out), String(each)], { encoding: 'utf8' });
+    const r = spawnSync('python', ['-c', py, dir, resolve(args.out), String(each), args.palette || 'shared'], { encoding: 'utf8' });
     if (r.status !== 0) throw new Error(r.stderr);
     console.log(r.stdout.trim());
   }

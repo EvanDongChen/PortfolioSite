@@ -72,23 +72,6 @@ export interface FishFood {
   type?: 'default' | 'love';
 }
 
-export interface Star {
-  id: number;
-  left: string;
-  top: string;
-  size: string;
-  duration: string;
-}
-
-export interface ShootingStar {
-  id: number;
-  top: string;
-  left: string;
-  duration: string;
-  delay: string;
-  rotation: number;
-}
-
 export interface WhaleState {
   id: number;
   x: number;
@@ -135,26 +118,4 @@ export interface AnglerFishState {
   vx: number;
   scale: number;
   phase: number;
-}
-
-// Fix: Add missing Nebula and Planet type definitions.
-export interface Nebula {
-  id: number;
-  top: string;
-  left: string;
-  size: string;
-  color1: string;
-  color2: string;
-  rotation: number;
-  animationDelay: string;
-}
-
-export interface Planet {
-  id: number;
-  top: string;
-  left: string;
-  size: string;
-  gradientColors: string[];
-  shadowColor: string;
-  animationDelay: string;
 }

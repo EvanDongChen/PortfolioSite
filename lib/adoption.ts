@@ -1,4 +1,4 @@
-import { Species } from './pixelOcean';
+import { Species } from './reef/pixelOcean';
 
 // The visitor's adopted creature, remembered on this device only. The reef
 // itself restarts on every visit, so the creature is released afresh, and

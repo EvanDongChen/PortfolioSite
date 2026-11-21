@@ -27,7 +27,7 @@ const COLOURS = {
   'rgba(6,15,23,0.9)': 'rgba(12,14,32,0.9)',
 };
 
-const css = readFileSync(new URL('../pixel-theme.css', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../styles/pixel-theme.css', import.meta.url), 'utf8');
 const lines = css.split('\n').filter(l => /^ {2}--px-[a-z-]+: url\(/.test(l));
 const out = lines.map(l => l.replace(/%23[0-9a-fA-F]{6}|rgba\([0-9,. ]+\)/g, c => COLOURS[c] ?? c));
 console.log(out.join('\n'));

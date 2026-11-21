@@ -2,7 +2,7 @@
 
 ## Data
 
-**Bodies** (`Body` in `lib/space.ts`) are the moving things: a planet, its
+**Bodies** (`Body` in `lib/space/space.ts`) are the moving things: a planet, its
 ring, a blip, a blip's arm, a meteor. Every surfel and glow belongs to one
 body and is stored in that body's local frame. Each frame `poseBodies` writes
 `OBJ_TEXELS` (5) RGBA-float texels per body into a one-row texture:
@@ -57,7 +57,7 @@ The canvas is fixed, one art pixel taller than the window, sized in art
 pixels and scaled up with `image-rendering: pixelated`. It's nudged up by
 whatever part of the scroll the snapped camera left over.
 
-## The three passes (`lib/spaceView.ts`)
+## The three passes (`lib/space/spaceView.ts`)
 
 1. **Solid**: surfels as `gl.POINTS` into an RGBA8 target at 2× art
    resolution with a depth buffer. The vertex shader poses, culls back faces,

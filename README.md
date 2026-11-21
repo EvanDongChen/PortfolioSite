@@ -16,9 +16,9 @@ Scroll through my projects and experience while a whole reef, a pond, a moonlit 
 
 [Six worlds](#six-worlds-one-portfolio) · [Things to try](#things-to-try) · [How it works](#how-it-works) · [Run it locally](#run-it-locally) · [Adding a project](#adding-a-project)
 
-<img src="docs/media/hero-switch.gif" alt="The portfolio's hero over the pixel reef, dissolving in blocks into the pixel pond and back" width="720">
+<img src="docs/media/hero-switch.gif" alt="The portfolio's hero dissolving in waves of pixel blocks through all six worlds: the reef, the pond, the shrine forest, deep space, the sky islands and the hot pot, then back to the reef" width="720">
 
-<sub>Switching from the reef to the pond and back. Every fish, frog and duck is simulated, not looped.</sub>
+<sub>Switching through all six worlds and back to the reef. Everything behind the page is simulated, not looped.</sub>
 
 </div>
 
@@ -251,7 +251,7 @@ flowchart LR
 ```
 
 - **Off the main thread.** Each world hands its canvases to a Web Worker as `OffscreenCanvas`es, so the simulation and drawing never hold up scrolling. Browsers that can't do this run the same engine on the main thread.
-- **A DOM-free simulation.** `lib/pixelOcean.ts` (the reef), `lib/pond.ts` (the pond) and `lib/shrine.ts` (the shrine forest) step 30 times a second. Every species has its own `think*` method; populations are kept in balance by caps, breeding and newcomers arriving when numbers run low.
+- **A DOM-free simulation.** `lib/reef/pixelOcean.ts` (the reef), `lib/pond/pond.ts` (the pond) and `lib/shrine/shrine.ts` (the shrine forest) step 30 times a second. Every species has its own `think*` method; populations are kept in balance by caps, breeding and newcomers arriving when numbers run low.
 - **A 2.5D camera.** The world is seen from above at an angle. Height lifts a sprite up the screen and draws it a little bigger, with a shadow on the ground (or the water) below it. Sprites are depth-sorted with squash and stretch.
 - **Cheap where it counts.** The sea bed, the pond bed and the forest floor are painted once at one canvas pixel per cell and scrolled natively by the browser. Only a window around the view is redrawn, and plants are drawn as batched runs of rectangles. On slow devices the finishing touches drop out before the frame rate does.
 - **Pixel art made in code.** Sprites are character maps, sketched and previewed with a pixel-art tool, then drawn with no smoothing so every art pixel stays square.
@@ -301,13 +301,13 @@ Pushes to the `update` branch also deploy automatically through GitHub Actions.
 
 ```
 ├── index.tsx              picks the page: reef, pond, shrine forest, deep space, sky islands, hot pot or aquarium
-├── PixelApp.tsx           the reef page
-├── PondApp.tsx            the pond page
-├── ShrineApp.tsx          the shrine-forest page
-├── SpaceApp.tsx           the deep-space page
-├── SkyApp.tsx             the sky-islands page
-├── HotpotApp.tsx          the hot-pot page
-├── App.tsx                the aquarium page
+├── pages/PixelApp.tsx           the reef page
+├── pages/PondApp.tsx            the pond page
+├── pages/ShrineApp.tsx          the shrine-forest page
+├── pages/SpaceApp.tsx           the deep-space page
+├── pages/SkyApp.tsx             the sky-islands page
+├── pages/HotpotApp.tsx          the hot-pot page
+├── pages/App.tsx                the aquarium page
 ├── components/            page content, buttons, panels, and the canvas hosts
 ├── contexts/              theme and performance settings
 ├── data/portfolio.ts      projects, experience, education and skills
@@ -321,12 +321,12 @@ Pushes to the `update` branch also deploy automatically through GitHub Actions.
 │   ├── hotpot*.ts         the hot pot: scene and ingredients, cooking and chopsticks, events, sauce bar, renderer, worker
 │   ├── pageTransition.ts  the wave of pixel blocks between pages
 │   └── adoption.ts        your adopted creature, kept in localStorage
-├── pixel-theme.css        the pixel UI (fonts, 9-slice frames, cursors)
-├── pond-theme.css         the pond's colours and lettering over it
-├── shrine-theme.css       the shrine's colours and lettering over it
-├── space-theme.css        deep space's colours and lettering over it
-├── sky-theme.css          the sky's colours and lettering over it
-├── hotpot-theme.css       the hot pot's colours and lettering over it
+├── styles/pixel-theme.css        the pixel UI (fonts, 9-slice frames, cursors)
+├── styles/pond-theme.css         the pond's colours and lettering over it
+├── styles/shrine-theme.css       the shrine's colours and lettering over it
+├── styles/space-theme.css        deep space's colours and lettering over it
+├── styles/sky-theme.css          the sky's colours and lettering over it
+├── styles/hotpot-theme.css       the hot pot's colours and lettering over it
 └── public/images/         project thumbnails (960 px .webp)
 ```
 

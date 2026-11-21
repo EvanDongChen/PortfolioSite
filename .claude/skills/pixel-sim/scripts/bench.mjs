@@ -16,9 +16,9 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const SIMS = {
-  reef: { file: 'pixelOcean', sim: 'PixelOcean', viewFile: 'pixelOceanView', view: 'OceanView', make: 'new S(360, 2000)' },
-  pond: { file: 'pond', sim: 'Pond', viewFile: 'pondView', view: 'PondView', make: 'new S(320, 2000, { z0: 0, z1: 200 }, [])' },
-  shrine: { file: 'shrine', sim: 'Shrine', viewFile: 'shrineView', view: 'ShrineView', make: 'new S(360, 1600, { z0: 0, z1: 225 }, [])' },
+  reef: { dir: 'reef', file: 'pixelOcean', sim: 'PixelOcean', viewFile: 'pixelOceanView', view: 'OceanView', make: 'new S(360, 2000)' },
+  pond: { dir: 'pond', file: 'pond', sim: 'Pond', viewFile: 'pondView', view: 'PondView', make: 'new S(320, 2000, { z0: 0, z1: 200 }, [])' },
+  shrine: { dir: 'shrine', file: 'shrine', sim: 'Shrine', viewFile: 'shrineView', view: 'ShrineView', make: 'new S(360, 1600, { z0: 0, z1: 225 }, [])' },
 };
 const sim = SIMS[process.argv[2]];
 if (!sim) { console.error('usage: bench.mjs <reef|pond|shrine> [--base <ref>] [--steps n] [--no-draw]'); process.exit(1); }
@@ -40,14 +40,14 @@ async function stepMs(file) {
   return Math.min(...runs);
 }
 
-console.log(`step  working tree  ${(await stepMs(resolve(root, 'lib', `${sim.file}.ts`))).toFixed(3)} ms`);
+console.log(`step  working tree  ${(await stepMs(resolve(root, 'lib', sim.dir, `${sim.file}.ts`))).toFixed(3)} ms`);
 if (base) {
   // Beside the real lib, so that its relative imports resolve the same way.
-  const tmp = resolve(root, 'lib', '.bench-tmp');
+  const tmp = resolve(root, 'lib', sim.dir, '.bench-tmp');
   mkdirSync(tmp, { recursive: true });
   const file = join(tmp, `${sim.file}.ts`);
-  const source = execSync(`git show ${base}:lib/${sim.file}.ts`, { cwd: root, maxBuffer: 1 << 28 }).toString();
-  writeFileSync(file, source.replace(/from '\.\//g, "from '../"));
+  const source = execSync(`git show ${base}:lib/${sim.dir}/${sim.file}.ts`, { cwd: root, maxBuffer: 1 << 28 }).toString();
+  writeFileSync(file, source.replace(/from '(\.\.?\/)/g, "from '../$1"));
   try { console.log(`step  ${base.padEnd(12)}  ${(await stepMs(file)).toFixed(3)} ms`); }
   finally { rmSync(tmp, { recursive: true, force: true }); }
 }
@@ -74,8 +74,8 @@ if (!process.argv.includes('--no-draw')) {
   await sleep(2500);
   const { result } = await send('Runtime.evaluate', { awaitPromise: true, returnByValue: true, expression: `(async () => {
     document.body.innerHTML = '';
-    const S = (await import('/lib/${sim.file}.ts')).${sim.sim};
-    const V = (await import('/lib/${sim.viewFile}.ts')).${sim.view};
+    const S = (await import('/lib/${sim.dir}/${sim.file}.ts')).${sim.sim};
+    const V = (await import('/lib/${sim.dir}/${sim.viewFile}.ts')).${sim.view};
     const mk = () => document.createElement('canvas');
     const runs = [];
     for (let r = 0; r < 3; r++) {
