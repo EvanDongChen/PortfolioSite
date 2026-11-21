@@ -40,6 +40,10 @@ export interface Item {
   popped: boolean;
   /** How hot the broth is where it is, as of this frame. */
   heat: number;
+  /** A wobble (soft things jiggle when knocked) and a squash (flattened on landing), as springs. */
+  jig: number; vjig: number; sq: number; vsq: number;
+  /** Its pose, kept and rewritten each frame. */
+  pose?: { live: { c: V3; rot: number[] }; scale: number[]; params: number[] };
 }
 
 export interface Chopsticks {
@@ -54,6 +58,8 @@ export interface Chopsticks {
   from: V3;
   /** Seconds to come down: quicker when someone asked for it. */
   dur: number;
+  /** Steam rising off what it's carrying. */
+  wisp: number;
 }
 
 export interface Ripple { x: number; y: number; t0: number; a: number }
@@ -88,6 +94,8 @@ export interface HotpotLife {
   /** A whirlpool the ladle left: centre, strength 0..1 and size (see hotpotEvents). */
   vortex: { x: number; y: number; k: number; R: number } | null;
   frame: number;
+  /** What moved this frame: on screen or just off it. */
+  active: Item[];
 }
 
 /** What each broth is stocked with, and how often (relative). */
@@ -142,7 +150,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
       // Some already done, some just in.
       cook: rand() * 1.3,
       state: 'float', fz: 0, vz: 0, bump: 0, vb: 0,
-      tx: 0, ty: 0, vtx: 0, vty: 0, roll: IDENTITY, stuck: [], popped: false, heat: 0.5,
+      tx: 0, ty: 0, vtx: 0, vty: 0, roll: IDENTITY, stuck: [], popped: false, heat: 0.5, jig: 0, vjig: 0, sq: 0, vsq: 0,
     };
     items.push(it);
     poseItem(B.bodies[body], it, 0, 0.5, s);
@@ -176,7 +184,9 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
     buildChopstick(B, a, stickLen, s);
     const b = B.body({ kind: 'chopstick', pos: PARKED });
     buildChopstick(B, b, stickLen, s);
-    sticks.push({ a, b, state: 'idle', t: 0, item: null, dir: [0, 0, 1], tip: PARKED, gap: 0, from: PARKED, dur: 1.4 });
+    const wisp = B.body({ kind: 'steam', pos: PARKED, params: [0, 0, 0, 0] });
+    for (let k = 0; k < 12; k++) B.glowAt([(rand() - 0.5) * 30 * s, (rand() - 0.5) * 30 * s, 4], (12 + rand() * 8) * s, [0.6, 0.55, 0.5], wisp, G.wisp, rand(), (70 + rand() * 50) * s);
+    sticks.push({ a, b, state: 'idle', t: 0, item: null, dir: [0, 0, 1], tip: PARKED, gap: 0, from: PARKED, dur: 1.4, wisp });
   }
 
   // Splashes: droplets thrown out and back down where something lands.
@@ -191,7 +201,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
   return {
     items, sticks, splashes, ripples: [], bubbles: [], drops: [], time: 0, boil: 1, boilUntil: -1,
     nextPluck: 3.5, eager: false, lastPointer: null,
-    wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen, vortex: null, frame: 0,
+    wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen, vortex: null, frame: 0, active: [],
   };
 };
 
@@ -231,13 +241,12 @@ const overOf = (it: Item) => {
 };
 
 /** rotX(a) · rotY(b) · rotZ(c), in one go (this runs for every ingredient every frame). */
-const tiltXY = (a: number, b: number, c: number) => {
+const tiltXY = (a: number, b: number, c: number, out: number[] = new Array(9)) => {
   const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), cc = Math.cos(c), sc = Math.sin(c);
-  return [
-    cb * cc, -cb * sc, sb,
-    sa * sb * cc + ca * sc, -sa * sb * sc + ca * cc, -sa * cb,
-    -ca * sb * cc + sa * sc, ca * sb * sc + sa * cc, ca * cb,
-  ];
+  out[0] = cb * cc; out[1] = -cb * sc; out[2] = sb;
+  out[3] = sa * sb * cc + ca * sc; out[4] = -sa * sb * sc + ca * cc; out[5] = -sa * cb;
+  out[6] = -ca * sb * cc + sa * sc; out[7] = ca * sb * sc + sa * cc; out[8] = ca * cb;
+  return out;
 };
 
 const poseItem = (b: Body, it: Item, t: number, heat: number, s: number) => {
@@ -248,7 +257,11 @@ const poseItem = (b: Body, it: Item, t: number, heat: number, s: number) => {
   if (it.state === 'falling' || it.state === 'held') z = it.fz;
   else z = -sinkOf(it) * s + Math.sin(t * 1.7 + it.phase) * 1.2 * heat + it.bump;
   it.z = z;
-  b.live = { c: [it.x, it.y, z], rot: it.kind === 'meatball' ? mul3(tiltXY(ax, ay, 0), it.roll) : tiltXY(ax, ay, it.ang) };
+  const P = it.pose ?? (it.pose = { live: { c: [0, 0, 0], rot: new Array(9) }, scale: [1, 1, 1], params: [0, 0, 0, 0] });
+  P.live.c[0] = it.x; P.live.c[1] = it.y; P.live.c[2] = z;
+  if (it.kind === 'meatball') P.live.rot = mul3(tiltXY(ax, ay, 0), it.roll);
+  else tiltXY(ax, ay, it.ang, P.live.rot);
+  b.live = P.live;
   const over = overOf(it);
   const done = Math.min(1, it.cook);
   // Beef and squid curl as they cook; greens and napa droop as they wilt.
@@ -258,10 +271,18 @@ const poseItem = (b: Body, it: Item, t: number, heat: number, s: number) => {
   else if (it.kind === 'napa') curl = (-done * 0.3) / it.R;
   else if (it.kind === 'bokchoy' || it.kind === 'enoki') curl = (-over * 0.4) / it.R;
   // Fish balls puff up; overcooked beef shrinks; glass noodles pulse like a jellyfish.
-  if (it.kind === 'fishball') { const p = 1 + done * 0.14; b.scale = [p, p, p]; }
-  else if (it.kind === 'beef') { const p = 1 - over * 0.16; b.scale = [p, p, 1]; }
-  else if (it.kind === 'noodles') { const p = Math.sin(t * 1.9 + it.phase) * 0.07; b.scale = [1 + p, 1 - p, 1]; }
-  b.params = [curl, over, cook, it.phase];
+  let sx = 1, sy = 1, sz = 1;
+  if (it.kind === 'fishball') { const p = 1 + done * 0.14; sx = sy = sz = p; }
+  else if (it.kind === 'beef') { const p = 1 - over * 0.16; sx = sy = p; }
+  else if (it.kind === 'noodles') { const p = Math.sin(t * 1.9 + it.phase) * 0.07; sx = 1 + p; sy = 1 - p; }
+  // Jiggling: wider one way, narrower the other, and back; squashed flat and wide on landing.
+  sx *= (1 + it.jig) * (1 + it.sq * 0.5);
+  sy *= (1 - it.jig * 0.8) * (1 + it.sq * 0.5);
+  sz *= (1 - it.jig * 0.3) * (1 - it.sq);
+  P.scale[0] = sx; P.scale[1] = sy; P.scale[2] = sz;
+  P.params[0] = curl; P.params[1] = over; P.params[2] = cook; P.params[3] = it.phase;
+  b.scale = P.scale as V3;
+  b.params = P.params as [number, number, number, number];
 };
 
 /** The boil's currents at (x, y): out from each plume and turning a little, plus a slow wander. Also how hot it is there. */
@@ -505,7 +526,17 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
     }
   }
   poseSticks(scene, p);
+  // Hot food steams as it's carried up.
+  const w = scene.bodies[p.wisp];
+  const carrying = (p.state === 'pinch' || p.state === 'lift') && it.state === 'held';
+  w.live = { c: carrying ? [it.x, it.y, it.fz] : PARKED, rot: IDENTITY };
+  w.params = [0, 0, carrying ? 1 : 0, 0];
 };
+
+/** How much a kind wobbles when knocked: the soft ones most. */
+const SOFT: Partial<Record<Ingredient, number>> = { tofu: 1, fishball: 1, ricecake: 0.9, puff: 1.1, dumpling: 0.8, egg: 0.9, quail: 0.6, meatball: 0.5, squid: 0.5, tripe: 0.6 };
+/** Knocks `it` so it wobbles, by an amount 0..1. */
+export const jiggle = (it: Item, a: number) => { const k = SOFT[it.kind]; if (k) it.vjig += a * k * 2.2; };
 
 const flow = { vx: 0, vy: 0, heat: 0 };
 
@@ -554,7 +585,8 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
   // A coarse grid for keeping things apart.
   const cell = 90 * s;
   const grid = new Map<number, Item[]>();
-  const active: Item[] = [];
+  const active = life.active;
+  active.length = 0;
   for (const it of life.items) {
     if (it.state === 'gone') { scene.bodies[it.body].live = { c: PARKED, rot: scene.bodies[it.body].base }; continue; }
     const cookTime = INGREDIENTS[it.kind].cook || VEG_DONE;
@@ -577,6 +609,8 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
       if (it.fz <= rest) {
         it.state = 'float';
         it.bump = -8 * s; it.vb = 0;
+        it.sq = 0.55; it.vsq = 0;
+        jiggle(it, 0.3);
         it.spin = (Math.random() - 0.5) * 0.4;
         splashAt(scene, it.x, it.y);
       }
@@ -598,6 +632,7 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
       const reach = 70 * s + it.R;
       if (d < reach && d > 0.01) {
         const push = (1 - d / reach) * 260 * dt;
+        jiggle(it, push * 0.05);
         it.vx += (dx / d) * push * 4; it.vy += (dy / d) * push * 4;
         it.spin += (Math.random() - 0.5) * push * 0.1;
       }
@@ -620,6 +655,9 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
       const sp = Math.hypot(it.vx, it.vy);
       if (sp > 0.5 && dt > 0) it.roll = mul3(rotAxis([-it.vy / sp, it.vx / sp, 0], (sp * dt) / it.R), it.roll);
     }
+    // The wobble and squash spring back.
+    it.vjig += (-it.jig * 140 - it.vjig * 5) * dt; it.jig += it.vjig * dt;
+    it.vsq += (-it.sq * 200 - it.vsq * 9) * dt; it.sq += it.vsq * dt;
     // The tilt a bubble knocked in settles.
     it.vtx += (-it.tx * 30 - it.vtx * 5) * dt; it.tx += it.vtx * dt;
     it.vty += (-it.ty * 30 - it.vty * 5) * dt; it.ty += it.vty * dt;
@@ -664,6 +702,7 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
           it.stuck.push(o); o.stuck.push(it);
         }
         const over = (min - d) * Math.min(1, dt * 6);
+        if (over > 0.6 * s) { jiggle(it, over * 0.04 / s); jiggle(o, over * 0.04 / s); }
         const wa = o.R * o.R / (it.R * it.R + o.R * o.R);
         it.x -= (dx / d) * over * wa; it.y -= (dy / d) * over * wa;
         o.x += (dx / d) * over * (1 - wa); o.y += (dy / d) * over * (1 - wa);
@@ -693,6 +732,7 @@ export const stepLife = (scene: HotpotScene, t: number, dt: number, cam: HotpotC
         const k = 1 - d / reach;
         // Up, away and tipped over away from it.
         it.vb += 60 * s * k;
+        jiggle(it, 0.45 * k);
         it.vx += (dx / d) * 45 * s * k; it.vy += (dy / d) * 45 * s * k;
         it.vtx += (dy / d) * 2.2 * k; it.vty -= (dx / d) * 2.2 * k;
         it.spin += (Math.random() - 0.5) * 1.5 * k;

@@ -162,6 +162,15 @@ void main() {
     k *= pow(sin(u * 3.14159), 1.5) * u_steam;
     v_over = 0.25;
   }
+  if ((flags & ${G.wisp}) != 0) {
+    if (st.z < 0.5) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+    float u = fract(u_time * (0.7 + seed * 0.5) + seed * 7.0);
+    p.z += u * a_info.z;
+    p.xy += vec2(sin(seed * 30.0 + u_time * 2.0), cos(seed * 20.0 + u_time * 1.7)) * 10.0 * u;
+    radius *= 1.0 + u * 1.6;
+    k *= sin(u * 3.14159);
+    v_over = 0.7;
+  }
   if ((flags & ${G.splash}) != 0) {
     float age = u_time - st.w;
     if (st.z < 0.5 || age < 0.0 || age > 1.1) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
@@ -824,7 +833,7 @@ export class HotpotView {
     const movers = this.movers;
     movers.length = 0;
     const fast = 16 * scene.s;
-    for (const it of life.items) {
+    for (const it of life.active) {
       if (it.state !== 'float' || it.y < top + 300 || it.y > bottom - 300 || it.R < 9 * scene.s) continue;
       if (Math.abs(it.vx) + Math.abs(it.vy) > fast) movers.push(it);
     }

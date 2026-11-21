@@ -110,13 +110,19 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
     const OVER_UI = 'a, button, input, textarea, select, label, header, .content-card, .project-card, [data-reef-ui], [role="dialog"]';
     const overBroth = (e: MouseEvent) => !(e.target as Element | null)?.closest?.(OVER_UI);
     let showingFood = false;
+    let pinchTimer = 0;
     const onHover = (e: PointerEvent) => {
       const food = !!view.scene && overBroth(e) && !!foodAt(view.scene, e.clientX, e.clientY + window.scrollY);
       if (food !== showingFood) { showingFood = food; document.documentElement.toggleAttribute('data-hotpot-food', food); }
     };
     const onClick = (e: MouseEvent) => {
       if (!view.scene || !overBroth(e)) return;
-      grabAt(view.scene, e.clientX, e.clientY + window.scrollY);
+      // The cursor's chopsticks pinch shut as the real ones go for it.
+      if (grabAt(view.scene, e.clientX, e.clientY + window.scrollY)) {
+        document.documentElement.setAttribute('data-hotpot-pinch', '');
+        clearTimeout(pinchTimer);
+        pinchTimer = window.setTimeout(() => document.documentElement.removeAttribute('data-hotpot-pinch'), 350);
+      }
     };
     window.addEventListener('pointermove', onHover, { passive: true });
     window.addEventListener('click', onClick);
@@ -182,6 +188,8 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug }) => {
       window.removeEventListener('pointermove', onHover);
       window.removeEventListener('click', onClick);
       document.documentElement.removeAttribute('data-hotpot-food');
+      document.documentElement.removeAttribute('data-hotpot-pinch');
+      clearTimeout(pinchTimer);
       document.documentElement.removeEventListener('mouseleave', onLeave);
       document.removeEventListener('visibilitychange', onVisibility);
       worker?.terminate();

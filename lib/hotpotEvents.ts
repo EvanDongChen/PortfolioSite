@@ -9,7 +9,7 @@
  */
 
 import { Builder, DISC, HotpotCamera, HotpotScene, M, SPACING, V3, ellipsoid, fbm, mul3, rotX, rotZ, slab, tube, wallDist } from './hotpot';
-import { addRipple, flowAt, splashAt } from './hotpotLife';
+import { addRipple, flowAt, jiggle, splashAt } from './hotpotLife';
 
 export type HotpotEventKind = 'ladle' | 'egg';
 
@@ -183,6 +183,7 @@ const stepLadle = (scene: HotpotScene, t: number, dt: number) => {
       it.vx += (tx * 160 * s + (dx / d) * 80 * s) * dt * 6;
       it.vy += (ty * 160 * s + (dy / d) * 80 * s) * dt * 6;
       it.spin += L.dir * dt * 6;
+      jiggle(it, dt * 1.5);
     }
     if (u >= 1) { L.state = 'out'; L.t = 0; addRipple(life, L.pos[0], L.pos[1], 0.9); }
   } else if (L.state === 'out') {

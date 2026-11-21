@@ -145,6 +145,8 @@ export const G = {
   flicker: 2,
   /** Thrown out from the centre and back down, from the body's start time (params[3]); only while params[2] is on. */
   splash: 4,
+  /** A wisp of steam rising off food being carried: up and spreading, only while params[2] is on. */
+  wisp: 8,
 } as const;
 
 /** Floats per surfel: x y z, nx ny nz, radius, material, albedo, object, flags. */
