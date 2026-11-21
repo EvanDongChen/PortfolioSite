@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Mood, OceanStats, SPECIES, TICKS_PER_SECOND } from '../../lib/reef/pixelOcean';
 import { Adoption, displayName, loadAdoption, saveAdoption } from '../../lib/adoption';
 import PixelMeter from '../PixelMeter';
+import { useIsMobile } from '../../lib/useIsMobile';
 import ReefDebugPanel, { ReefDebugActions } from './ReefDebugPanel';
 import { ReefLayout } from '../../lib/reef/pixelOceanView';
 import { EngineInit, FromEngine, Inspected, ReefEngine, ToEngine } from '../../lib/reef/reefEngine';
@@ -112,6 +113,8 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ onStats }) => {
   const debugRef = useRef<ReefDebugActions | null>(null);
   const [inspected, setInspected] = useState<Inspected | null>(null);
   const [adoption, setAdoption] = useState<Adoption | null>(() => loadAdoption());
+  // Adopting is turned off on phones: the bar is too much clutter on a small screen.
+  const isMobile = useIsMobile();
   const [notice, setNotice] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const onStatsRef = useRef(onStats);
@@ -359,7 +362,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ onStats }) => {
       </div>
 
       <ReefDebugPanel actions={debugRef} />
-      {(followedName || adoption || notice) && (
+      {!isMobile && (followedName || adoption || notice) && (
         <div className="adopt-bar" data-reef-ui role="region" aria-label="Your creature">
           {notice && <p className="adopt-notice" role="status">{notice}</p>}
           {followedName && inspected ? (

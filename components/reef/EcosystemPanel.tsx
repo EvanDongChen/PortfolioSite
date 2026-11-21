@@ -3,6 +3,7 @@ import CensusSlots from '../CensusSlots';
 import { OceanStats, SPECIES_LIST, Species } from '../../lib/reef/pixelOcean';
 import { creatureSprite } from '../../lib/reef/pixelOceanArt';
 import PixelMeter from '../PixelMeter';
+import { useIsMobile } from '../../lib/useIsMobile';
 
 interface EcosystemPanelProps {
   stats: OceanStats | null;
@@ -58,6 +59,7 @@ const Row: React.FC<{ label: string; value: string | number; fill: number; color
 const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
   // Closed until the visitor opens it.
   const [isOpen, setIsOpen] = useState(false);
+  const isMobile = useIsMobile();
   if (!stats) return null;
   const { deaths } = stats;
   const icon = speciesIcons();
@@ -89,7 +91,7 @@ const EcosystemPanel: React.FC<EcosystemPanelProps> = ({ stats }) => {
             {stats.events.length === 0 && <li className="eco-feed-empty">Watching the reef…</li>}
           </ul>
           <p className="census-tally">So far: {stats.births} born, {deaths.eaten} eaten, {deaths.stung} stung, {deaths.starved} starved, {deaths.oldAge} of old age.</p>
-          <p className="eco-hint">Click any creature to follow it, or adopt it as yours.</p>
+          <p className="eco-hint">Click any creature to follow it{isMobile ? '.' : ', or adopt it as yours.'}</p>
         </div>
       )}
     </section>

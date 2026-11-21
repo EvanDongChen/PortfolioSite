@@ -4,6 +4,7 @@ import { ShrineLayout } from '../../lib/shrine/shrineView';
 import { FromShrine, ShrineAdoption, ShrineEngine, ShrineEngineInit, ShrineInspected, ToShrine } from '../../lib/shrine/shrineEngine';
 import { SHRINE_ADOPTION_KEY, displayName, loadAdoption, saveAdoption } from '../../lib/adoption';
 import PixelMeter from '../PixelMeter';
+import { useIsMobile } from '../../lib/useIsMobile';
 import ShrineDebugPanel, { ShrineDebugActions } from './ShrineDebugPanel';
 import { usePerformance, PerformanceTier } from '../../contexts/PerformanceContext';
 
@@ -88,6 +89,8 @@ const ShrineForest: React.FC<ShrineForestProps> = ({ onStats }) => {
   const debugRef = useRef<ShrineDebugActions | null>(null);
   const [inspected, setInspected] = useState<ShrineInspected | null>(null);
   const [adoption, setAdoption] = useState<ShrineAdoption | null>(() => loadAdoption(SHRINE_ADOPTION_KEY));
+  // Adopting is turned off on phones: the bar is too much clutter on a small screen.
+  const isMobile = useIsMobile();
   const [notice, setNotice] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const onStatsRef = useRef(onStats);
@@ -328,7 +331,7 @@ const ShrineForest: React.FC<ShrineForestProps> = ({ onStats }) => {
       </div>
 
       <ShrineDebugPanel actions={debugRef} />
-      {(followedName || adoption || notice) && (
+      {!isMobile && (followedName || adoption || notice) && (
         <div className="adopt-bar" data-reef-ui role="region" aria-label="Your creature">
           {notice && <p className="adopt-notice" role="status">{notice}</p>}
           {followedName && inspected ? (

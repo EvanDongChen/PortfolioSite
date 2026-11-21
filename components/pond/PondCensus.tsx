@@ -3,6 +3,7 @@ import CensusSlots from '../CensusSlots';
 import { FROG_STAGES, FrogStage, PondHappening, PondSpecies, PondStats } from '../../lib/pond/pond';
 import { pondIcon } from '../../lib/pond/pondArt';
 import PixelMeter from '../PixelMeter';
+import { useIsMobile } from '../../lib/useIsMobile';
 
 interface PondCensusProps {
   stats: PondStats | null;
@@ -45,6 +46,7 @@ const Row: React.FC<{ label: string; value: string | number; fill: number; color
 /** Live census of the pond, bottom left: a frog's life stage by stage, then everyone else. */
 const PondCensus: React.FC<PondCensusProps> = ({ stats }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const isMobile = useIsMobile();
   if (!stats) return null;
   const { deaths } = stats;
 
@@ -83,7 +85,7 @@ const PondCensus: React.FC<PondCensusProps> = ({ stats }) => {
             {stats.events.length === 0 && <li className="eco-feed-empty">Watching the pond…</li>}
           </ul>
           <p className="census-tally">So far: {stats.births} born, {deaths.eaten} eaten, {deaths.starved} starved, {deaths.oldAge} of old age, {stats.meals} flies caught.</p>
-          <p className="eco-hint">Click any creature to follow it, or adopt it as yours.</p>
+          <p className="eco-hint">Click any creature to follow it{isMobile ? '.' : ', or adopt it as yours.'}</p>
         </div>
       )}
     </section>
