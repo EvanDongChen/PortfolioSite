@@ -32,69 +32,71 @@ export const DISC = 0.85;
  * cooked and overcooked sit next to each other.
  */
 export const RAMPS: string[][] = [
-  /* 0 steel        */ ['#1a1414', '#3a3434', '#5e5a58', '#8a8682', '#bab6ae', '#f0ece2'],
-  /* 1 beef raw     */ ['#3a0a12', '#5e1018', '#861c24', '#ac2c34', '#cc4448', '#ec6c6a'],
-  /* 2 beef cooked  */ ['#2a1410', '#3e221a', '#563428', '#6e4836', '#8a5e48', '#a87a5c'],
-  /* 3 beef over    */ ['#24181a', '#382a2a', '#4e403c', '#665850', '#807268', '#9c8e84'],
-  /* 4 fat raw      */ ['#5a3a40', '#946e74', '#c4a2a4', '#e6cac8', '#f8e8e6', '#ffffff'],
-  /* 5 fat cooked   */ ['#4a3a30', '#6a5444', '#8a725a', '#a89072', '#c6ae8c', '#e2cca8'],
-  /* 6 fat over     */ ['#3e3630', '#5a5048', '#766a5e', '#928676', '#aca08e', '#c6baa6'],
-  /* 7 shrimp raw   */ ['#26283a', '#46485e', '#6c7086', '#989eac', '#c6cad2', '#eef0f2'],
-  /* 8 shrimp done  */ ['#5a1410', '#982a16', '#d44e28', '#f27e48', '#ffb486', '#ffe6cc'],
-  /* 9 tofu         */ ['#4a4030', '#887a5e', '#c2b28c', '#e4d8b6', '#f6eed6', '#fffcf0'],
-  /* 10 tofu stained*/ ['#5a2010', '#923e1c', '#c4682e', '#e6944a', '#f8be78', '#ffecc4'],
-  /* 11 dough raw   */ ['#5a5450', '#98928a', '#ccc6ba', '#ebe5d8', '#f9f5ec', '#ffffff'],
-  /* 12 dough done  */ ['#3e4234', '#767c62', '#aab292', '#d0d6b6', '#e8ecd2', '#f8faea'],
-  /* 13 leaf        */ ['#0e2a14', '#1a4a1e', '#2a7028', '#4a9a34', '#7cc448', '#c0ec7a'],
-  /* 14 leaf cooked */ ['#082010', '#103a18', '#185a22', '#24802c', '#46a83a', '#8cd060'],
-  /* 15 leaf over   */ ['#0e1408', '#1a240e', '#2a3614', '#3c4a1c', '#526226', '#6c7c34'],
-  /* 16 stem        */ ['#3a4a2a', '#6a8a4a', '#a0c078', '#cce4a4', '#e8f6cc', '#fbfff0'],
-  /* 17 shiitake    */ ['#1e0e08', '#3a1e10', '#5e341c', '#86502e', '#b07a4c', '#d8a878'],
-  /* 18 enoki       */ ['#4a4030', '#80745a', '#b8aa84', '#ddd2ac', '#f2eccc', '#fffbea'],
-  /* 19 enoki       */ ['#4a4030', '#80745a', '#b8aa84', '#ddd2ac', '#f2eccc', '#fffbea'],
-  /* 20 enoki limp  */ ['#3a3424', '#5e5640', '#82785a', '#a49a78', '#c2b896', '#dcd4b4'],
-  /* 21 lotus       */ ['#4a3a34', '#8a766a', '#bca898', '#ddccbc', '#f2e6d8', '#fffaf2'],
-  /* 22 corn        */ ['#4a2a04', '#8a5a08', '#c89014', '#f0c030', '#ffe060', '#fff4a8'],
-  /* 23 chili       */ ['#2a0404', '#5a0a0a', '#9a140e', '#d02a14', '#f0502a', '#ff9060'],
-  /* 24 wood ear    */ ['#0e0608', '#1e0c10', '#321418', '#4a2024', '#683230', '#8c4c40'],
-  /* 25 anise       */ ['#1a0a04', '#3a1a0a', '#5e2e14', '#844420', '#a86434', '#cc8a54'],
-  /* 26 scallion    */ ['#123a10', '#1e5a16', '#2e8420', '#4cac2e', '#86d44a', '#cef68a'],
-  /* 27 wood        */ ['#2a1408', '#4a2410', '#74401c', '#a0642c', '#c88c48', '#ecbc78'],
-  /* 28 goji        */ ['#3a0806', '#6a120a', '#a8200e', '#e03e16', '#ff6e2a', '#ffb070'],
-  /* 29 pepper      */ ['#1a0806', '#2e100a', '#46180e', '#602414', '#7a321c', '#984428'],
-  /* 30 fishball    */ ['#4a4a50', '#88888e', '#c2c2c0', '#e2e0da', '#f6f4ee', '#ffffff'],
-  /* 31 fishball pf */ ['#4a4438', '#8a8270', '#c4baa0', '#e4dcc4', '#f6f0e0', '#fffcf4'],
-  /* 32 lacquer     */ ['#2a0408', '#520a10', '#86121a', '#b82026', '#e04434', '#ff8060'],
-  /* 33 fish raw    */ ['#2e2a34', '#4a4652', '#6e6a76', '#948e98', '#bab4bc', '#dcd8de'],
-  /* 34 fish cooked */ ['#4a4440', '#86807a', '#bcb6ae', '#e0dcd4', '#f4f2ec', '#ffffff'],
-  /* 35 fish over   */ ['#4a4438', '#867e6c', '#bab09a', '#dcd4be', '#f0ead8', '#fcf8ee'],
-  /* 36 noodle raw  */ ['#4a4640', '#86827a', '#bcb8ae', '#dedad0', '#f2f0ea', '#ffffff'],
-  /* 37 noodle clear*/ ['#2e3a3e', '#46585c', '#6a8284', '#94acac', '#c4dcd8', '#f4fffc'],
-  /* 38 quail shell */ ['#4a3826', '#7a6040', '#a8885e', '#cbaa7e', '#e2c69c', '#f4e0be'],
-  /* 39 shell speck */ ['#1e140c', '#2e2016', '#3e2c1e', '#4e3a28', '#5e4832', '#70583e'],
-  /* 40 meat raw    */ ['#3a1a18', '#5e2c28', '#86443c', '#a8604e', '#c47e66', '#dca088'],
-  /* 41 meat cooked */ ['#26140c', '#3e2414', '#5a381e', '#78502c', '#946c3e', '#b08a56'],
-  /* 42 tripe       */ ['#3a3830', '#5e5a4e', '#86806e', '#aaa48e', '#c8c2aa', '#e2dcc4'],
-  /* 43 rice raw    */ ['#4a4844', '#82807a', '#b6b2aa', '#d8d4cc', '#ece8e0', '#f8f6f0'],
-  /* 44 rice glossy */ ['#40444a', '#767c84', '#aab0b6', '#d2d8dc', '#eef2f4', '#ffffff'],
-  /* 45 tofu puff   */ ['#4a2a08', '#7e4a14', '#b47224', '#d8963a', '#eeb858', '#fcd884'],
-  /* 46 puff soaked */ ['#2a1406', '#46220c', '#663614', '#864c20', '#a4642e', '#c08040'],
-  /* 47 crab red    */ ['#3a0a0a', '#6a1410', '#a02418', '#cc3c24', '#ec6038', '#ff9060'],
-  /* 48 squid raw   */ ['#3a2c34', '#5c4a54', '#806c76', '#a49098', '#c6b4ba', '#e4d8dc'],
-  /* 49 squid done  */ ['#4a4644', '#86827e', '#bcb8b2', '#e0ddd6', '#f4f2ee', '#ffffff'],
-  /* 50 napa        */ ['#2a3a1a', '#4a6430', '#74904a', '#a2bc70', '#cce098', '#ecf8c4'],
-  /* 51 napa limp   */ ['#26301e', '#3e4c32', '#5a6a48', '#788a60', '#98aa7c', '#b8c89a'],
-  /* 52 napa rib    */ ['#4a4a3c', '#7e8068', '#b0b298', '#d6d8c0', '#eef0dc', '#fcfff2'],
-  /* 53 rib limp    */ ['#34382c', '#565c48', '#7a8266', '#9ea688', '#bec6a6', '#dae0c4'],
-  /* 54 egg ribbon  */ ['#5a4a1a', '#8a7430', '#bca24a', '#e2c86a', '#f6e294', '#fff6c8'],
+  /* 0  steel        */ ['#1a1414', '#3a3434', '#5e5a58', '#8a8682', '#bab6ae', '#f0ece2'],
+  /* 1  beef raw     */ ['#3a0a12', '#5e1018', '#861c24', '#ac2c34', '#cc4448', '#ec6c6a'],
+  /* 2  beef cooked  */ ['#2a1410', '#3e221a', '#563428', '#6e4836', '#8a5e48', '#a87a5c'],
+  /* 3  beef over    */ ['#24181a', '#382a2a', '#4e403c', '#665850', '#807268', '#9c8e84'],
+  /* 4  fat raw      */ ['#5a3a40', '#946e74', '#c4a2a4', '#e6cac8', '#f8e8e6', '#ffffff'],
+  /* 5  fat cooked   */ ['#4a3a30', '#6a5444', '#8a725a', '#a89072', '#c6ae8c', '#e2cca8'],
+  /* 6  fat over     */ ['#3e3630', '#5a5048', '#766a5e', '#928676', '#aca08e', '#c6baa6'],
+  /* 7  shrimp raw   */ ['#26283a', '#46485e', '#6c7086', '#989eac', '#c6cad2', '#eef0f2'],
+  /* 8  shrimp done  */ ['#5a1410', '#982a16', '#d44e28', '#f27e48', '#ffb486', '#ffe6cc'],
+  /* 9  tofu         */ ['#4a4030', '#887a5e', '#c2b28c', '#e4d8b6', '#f6eed6', '#fffcf0'],
+  /* 10 tofu stained */ ['#5a2010', '#923e1c', '#c4682e', '#e6944a', '#f8be78', '#ffecc4'],
+  /* 11 dough raw    */ ['#5a5450', '#98928a', '#ccc6ba', '#ebe5d8', '#f9f5ec', '#ffffff'],
+  /* 12 dough done   */ ['#3e4234', '#767c62', '#aab292', '#d0d6b6', '#e8ecd2', '#f8faea'],
+  /* 13 leaf         */ ['#0e2a14', '#1a4a1e', '#2a7028', '#4a9a34', '#7cc448', '#c0ec7a'],
+  /* 14 leaf cooked  */ ['#082010', '#103a18', '#185a22', '#24802c', '#46a83a', '#8cd060'],
+  /* 15 leaf over    */ ['#0e1408', '#1a240e', '#2a3614', '#3c4a1c', '#526226', '#6c7c34'],
+  /* 16 stem         */ ['#3a4a2a', '#6a8a4a', '#a0c078', '#cce4a4', '#e8f6cc', '#fbfff0'],
+  /* 17 shiitake     */ ['#1e0e08', '#3a1e10', '#5e341c', '#86502e', '#b07a4c', '#d8a878'],
+  /* 18 enoki        */ ['#4a4030', '#80745a', '#b8aa84', '#ddd2ac', '#f2eccc', '#fffbea'],
+  /* 19 enoki        */ ['#4a4030', '#80745a', '#b8aa84', '#ddd2ac', '#f2eccc', '#fffbea'],
+  /* 20 enoki limp   */ ['#3a3424', '#5e5640', '#82785a', '#a49a78', '#c2b896', '#dcd4b4'],
+  /* 21 lotus        */ ['#4a3a34', '#8a766a', '#bca898', '#ddccbc', '#f2e6d8', '#fffaf2'],
+  /* 22 lotus soaked */ ['#4a2420', '#7a3a30', '#a8584a', '#c87a66', '#e09a84', '#f4bca4'],
+  /* 23 corn         */ ['#4a2a04', '#8a5a08', '#c89014', '#f0c030', '#ffe060', '#fff4a8'],
+  /* 24 corn soaked  */ ['#4a1a04', '#8a3a08', '#c05a14', '#e48030', '#f6a850', '#ffd080'],
+  /* 25 chili        */ ['#2a0404', '#5a0a0a', '#9a140e', '#d02a14', '#f0502a', '#ff9060'],
+  /* 26 wood ear     */ ['#0e0608', '#1e0c10', '#321418', '#4a2024', '#683230', '#8c4c40'],
+  /* 27 anise        */ ['#1a0a04', '#3a1a0a', '#5e2e14', '#844420', '#a86434', '#cc8a54'],
+  /* 28 scallion     */ ['#123a10', '#1e5a16', '#2e8420', '#4cac2e', '#86d44a', '#cef68a'],
+  /* 29 wood         */ ['#2a1408', '#4a2410', '#74401c', '#a0642c', '#c88c48', '#ecbc78'],
+  /* 30 goji         */ ['#3a0806', '#6a120a', '#a8200e', '#e03e16', '#ff6e2a', '#ffb070'],
+  /* 31 pepper       */ ['#1a0806', '#2e100a', '#46180e', '#602414', '#7a321c', '#984428'],
+  /* 32 fishball     */ ['#4a4a50', '#88888e', '#c2c2c0', '#e2e0da', '#f6f4ee', '#ffffff'],
+  /* 33 fishball pf  */ ['#4a4438', '#8a8270', '#c4baa0', '#e4dcc4', '#f6f0e0', '#fffcf4'],
+  /* 34 lacquer      */ ['#2a0408', '#520a10', '#86121a', '#b82026', '#e04434', '#ff8060'],
+  /* 35 fish raw     */ ['#2e2a34', '#4a4652', '#6e6a76', '#948e98', '#bab4bc', '#dcd8de'],
+  /* 36 fish cooked  */ ['#4a4440', '#86807a', '#bcb6ae', '#e0dcd4', '#f4f2ec', '#ffffff'],
+  /* 37 fish over    */ ['#4a4438', '#867e6c', '#bab09a', '#dcd4be', '#f0ead8', '#fcf8ee'],
+  /* 38 noodle raw   */ ['#4a4640', '#86827a', '#bcb8ae', '#dedad0', '#f2f0ea', '#ffffff'],
+  /* 39 noodle clear */ ['#2e3a3e', '#46585c', '#6a8284', '#94acac', '#c4dcd8', '#f4fffc'],
+  /* 40 quail shell  */ ['#4a3826', '#7a6040', '#a8885e', '#cbaa7e', '#e2c69c', '#f4e0be'],
+  /* 41 shell speck  */ ['#1e140c', '#2e2016', '#3e2c1e', '#4e3a28', '#5e4832', '#70583e'],
+  /* 42 meat raw     */ ['#3a1a18', '#5e2c28', '#86443c', '#a8604e', '#c47e66', '#dca088'],
+  /* 43 meat cooked  */ ['#26140c', '#3e2414', '#5a381e', '#78502c', '#946c3e', '#b08a56'],
+  /* 44 tripe        */ ['#3a3830', '#5e5a4e', '#86806e', '#aaa48e', '#c8c2aa', '#e2dcc4'],
+  /* 45 rice raw     */ ['#4a4844', '#82807a', '#b6b2aa', '#d8d4cc', '#ece8e0', '#f8f6f0'],
+  /* 46 rice glossy  */ ['#40444a', '#767c84', '#aab0b6', '#d2d8dc', '#eef2f4', '#ffffff'],
+  /* 47 tofu puff    */ ['#4a2a08', '#7e4a14', '#b47224', '#d8963a', '#eeb858', '#fcd884'],
+  /* 48 puff soaked  */ ['#2a1406', '#46220c', '#663614', '#864c20', '#a4642e', '#c08040'],
+  /* 49 crab red     */ ['#3a0a0a', '#6a1410', '#a02418', '#cc3c24', '#ec6038', '#ff9060'],
+  /* 50 squid raw    */ ['#3a2c34', '#5c4a54', '#806c76', '#a49098', '#c6b4ba', '#e4d8dc'],
+  /* 51 squid done   */ ['#4a4644', '#86827e', '#bcb8b2', '#e0ddd6', '#f4f2ee', '#ffffff'],
+  /* 52 napa         */ ['#2a3a1a', '#4a6430', '#74904a', '#a2bc70', '#cce098', '#ecf8c4'],
+  /* 53 napa limp    */ ['#26301e', '#3e4c32', '#5a6a48', '#788a60', '#98aa7c', '#b8c89a'],
+  /* 54 napa rib     */ ['#4a4a3c', '#7e8068', '#b0b298', '#d6d8c0', '#eef0dc', '#fcfff2'],
+  /* 55 rib limp     */ ['#34382c', '#565c48', '#7a8266', '#9ea688', '#bec6a6', '#dae0c4'],
+  /* 56 egg ribbon   */ ['#5a4a1a', '#8a7430', '#bca24a', '#e2c86a', '#f6e294', '#fff6c8'],
 ];
 export const SHADES = 6;
 export const M = {
   steel: 0, beef: 1, fat: 4, shrimp: 7, tofu: 9, dough: 11, leaf: 13, stem: 16,
-  shiitake: 17, enoki: 18, lotus: 21, corn: 22, chili: 23, woodear: 24, anise: 25,
-  scallion: 26, wood: 27, goji: 28, pepper: 29, fishball: 30, lacquer: 32,
-  fish: 33, noodle: 36, shell: 38, speck: 39, meat: 40, tripe: 42, rice: 43, puff: 45,
-  crab: 47, squid: 48, napa: 50, rib: 52, yolk: 54,
+  shiitake: 17, enoki: 18, lotus: 21, corn: 23, chili: 25, woodear: 26, anise: 27,
+  scallion: 28, wood: 29, goji: 30, pepper: 31, fishball: 32, lacquer: 34,
+  fish: 35, noodle: 38, shell: 40, speck: 41, meat: 42, tripe: 44, rice: 45, puff: 47,
+  crab: 49, squid: 50, napa: 52, rib: 54, yolk: 56,
 } as const;
 
 /** What the broth, steam and splashes snap to: chili-oil reds, oil gold, bone-broth creams, a few garnish greens. */
@@ -463,7 +465,7 @@ export const buildIngredient = (B: Builder, obj: number, kind: Ingredient, s: nu
         if (m > R) return null;
         const edge = Math.max(0, m - R * 0.78) / (R * 0.22);
         return { h: h * 0.55 - edge * edge * 5 + (n2(u, v, 0.3) - 0.5) * 1.2, mat: M.tofu, alb: 0.55 + (n2(u, v, 0.25, 2) - 0.5) * 0.3, flags: F.cook | cookOrder(1 - m / R * 0.8 - rand() * 0.2) };
-      }, h * 0.55 - 20 * s);
+      }, h * 0.55 - 20 * s, F.gloss);
       break;
     }
     case 'fishball':
@@ -548,8 +550,9 @@ export const buildIngredient = (B: Builder, obj: number, kind: Ingredient, s: nu
         const r = Math.hypot(x, y);
         if (r > 1) return null;
         if (holes.some(([hx, hy, hr]) => Math.hypot(x - hx, y - hy) < hr)) return null;
-        return { h: 3 + (n2(u, v, 0.4) - 0.5) * 0.8, mat: M.lotus, alb: r > 0.9 ? 0.32 : 0.55 + (n2(u, v, 0.3, 2) - 0.5) * 0.2 };
-      }, -2);
+        const edge = Math.min(1 - r, ...holes.map(([hx, hy, hr]) => Math.hypot(x - hx, y - hy) - hr));
+        return { h: 3 + (n2(u, v, 0.4) - 0.5) * 0.8, mat: M.lotus, alb: r > 0.9 ? 0.32 : 0.55 + (n2(u, v, 0.3, 2) - 0.5) * 0.2, flags: F.cook | cookOrder(Math.min(1, edge * 4) * 0.8 + rand() * 0.2) };
+      }, -2, F.gloss);
       break;
     }
     case 'corn': {
@@ -562,7 +565,7 @@ export const buildIngredient = (B: Builder, obj: number, kind: Ingredient, s: nu
         const ku = u - ki * 7.5 * s, ka = (a - kj * 0.36) * rr;
         const bump = Math.max(0, 1 - (ku * ku + ka * ka) / (4 * s) ** 2);
         const end = Math.abs(u) > R - 2;
-        return { h: Math.sqrt(rr * rr - v * v) * 0.8 + bump * 1.6, mat: M.corn, alb: end ? 0.3 : 0.32 + bump * 0.38 };
+        return { h: Math.sqrt(rr * rr - v * v) * 0.8 + bump * 1.6, mat: M.corn, alb: end ? 0.3 : 0.32 + bump * 0.38, flags: F.cook | cookOrder((1 - bump) * 0.6 + rand() * 0.4) };
       }, -2, F.gloss);
       break;
     }

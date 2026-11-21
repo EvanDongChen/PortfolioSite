@@ -210,6 +210,8 @@ const sinkOf = (it: Item) => {
 
 /** The cook state the shader sees: tofu and eggs only take colour from the chili oil. */
 const shownCook = (it: Item) => {
+  // Lotus root and corn slowly take on the chili oil's red the longer they sit in it.
+  if (it.kind === 'lotus' || it.kind === 'corn') return it.side < 0 ? Math.min(1, it.cook * 0.45) : 0;
   if (!INGREDIENTS[it.kind].cook) return 0;
   if ((it.kind === 'tofu' || it.kind === 'egg' || it.kind === 'quail') && it.side === 1) return 0;
   return Math.min(1, it.cook);

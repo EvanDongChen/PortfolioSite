@@ -103,7 +103,10 @@ void main() {
   if (twoSided) lam = abs(lam) * 0.85;
   lam = clamp(lam, 0.0, 1.0);
   float spec = 0.0;
-  if ((flags & ${F.gloss}) != 0) spec = pow(max(dot(reflect(-u_light, n), toEye), 0.0), 16.0) * 0.6;
+  if ((flags & ${F.gloss}) != 0) {
+    float r = max(dot(reflect(-u_light, n), toEye), 0.0);
+    spec = pow(r, 22.0) * 0.75 + pow(r, 90.0) * 0.6;
+  }
   v_shade = clamp(0.14 + pow(lam, 0.85) * 0.68 + (alb - 0.5) * 0.45 + spec, 0.0, 1.0);
 }`;
 
@@ -284,25 +287,43 @@ vec3 broth(vec2 w) {
     // Wide sheets of oil where the current gathers it, with a lip that catches the lamp.
     float oil = fbm2(r * 0.6 + vec2(-t * 0.02, t * 0.015) + 11.0);
     if (oil > 0.64) col = abs(oil - 0.64) < 0.014 ? hex(192., 56., 20.) : hex(128., 26., 14.);
-    // Rounds of red oil floating on top, each lit on one side with a glint.
+    // Beads of red oil drifting on top. Each is a blob in a shared field, so neighbours that wander close run
+    // together into one and part again; a popping bubble pushes the oil back from where it burst.
     float cs = 56.0 * u_s;
-    vec2 wc = w + warp * 70.0 * u_s;
-    vec2 c = floor(wc / cs);
-    if (h21(c + 0.7) > 0.66) {
-      vec2 ctr = (c + 0.3 + 0.4 * vec2(h21(c + 1.3), h21(c + 2.1))) * cs;
+    vec2 wc = w + warp * 50.0 * u_s;
+    vec2 c0 = floor(wc / cs);
+    vec2 ld = normalize(u_light.xy);
+    // A step towards the lamp: where the field falls off that way is the rim facing the light.
+    vec2 wl = wc + ld * 2.5 * u_s;
+    float field = 0.0, fieldL = 0.0;
+    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+      vec2 c = c0 + vec2(float(i), float(j));
+      if (h21(c + 0.7) < 0.5) continue;
       float hr = h21(c + 4.4);
-      float rr = (6.0 + 16.0 * hr * hr) * u_s;
-      vec2 rel = (wc - ctr) / rr;
-      float l = length(rel);
-      if (l < 1.0) {
-        vec2 ld = normalize(u_light.xy);
-        col = hex(160., 38., 18.);
-        if (l > 0.68 && dot(rel, ld) > 0.25) col = hex(220., 84., 24.);
-        if (length(rel - ld * 0.42) < 0.2) col = hex(255., 160., 64.);
-      }
+      vec2 ctr = (c + 0.5 + 0.32 * vec2(sin(t * (0.1 + hr * 0.12) + hr * 20.0), cos(t * (0.08 + hr * 0.1) + hr * 31.0))) * cs;
+      float rr = (7.0 + 12.0 * hr * hr) * u_s;
+      vec2 e = wc - ctr;
+      field += rr * rr / (dot(e, e) + 1.0);
+      e = wl - ctr;
+      fieldL += rr * rr / (dot(e, e) + 1.0);
+    }
+    for (int i = 0; i < ${MAX_BUBBLES}; i++) {
+      if (i >= u_nBubbles) break;
+      vec4 bb = u_bubbles[i];
+      float k = (bb.z - ${BUBBLE_GROW.toFixed(2)}) / 0.6;
+      if (k < 0.0 || k > 1.0) continue;
+      float push = 1.0 - smoothstep(0.0, bb.w * (1.4 + k * 2.2), length(w - bb.xy));
+      field *= 1.0 - 0.85 * push * (1.0 - k * 0.6);
+      fieldL *= 1.0 - 0.85 * push * (1.0 - k * 0.6);
+    }
+    bool oily = oil > 0.64 || field > 1.0;
+    if (field > 1.0) {
+      // A glossy bead: a lit crescent on the lamp's side of its edge, and a glint just in from it.
+      col = hex(160., 38., 18.);
+      if (field < 1.6 && fieldL < field * 0.86) col = hex(220., 84., 24.);
+      else if (field > 2.2 && field < 3.6 && fieldL < field * 0.93) col = hex(255., 160., 64.);
     }
     // The lamp glinting off the oil: sparks that come and go, drifting with it.
-    bool oily = oil > 0.64 || col == hex(160., 38., 18.) || col == hex(220., 84., 24.);
     if (oily) {
       vec2 gc = floor(wc / (7.0 * u_s));
       float gh = h21(gc + 17.0);
@@ -329,6 +350,9 @@ vec3 broth(vec2 w) {
       if (l < rr) col = l > rr - 1.8 * u_s ? hex(246., 214., 144.) : hex(242., 234., 212.);
     }
   }
+  // The surface shimmering: thin bright filaments where two drifting ripple fields cross, always moving.
+  float sh = vn(wv / (34.0 * u_s) + vec2(t * 0.35, -t * 0.27) + warp * 3.0) + vn(wv / (21.0 * u_s) + vec2(-t * 0.22, t * 0.31) + 7.3);
+  if (abs(sh - 1.0) < 0.03) col *= mala ? 1.22 : 1.05;
   // Spiral arms of light round the whirlpool, and a dimple at its middle.
   if (swirl > 0.02) {
     vec2 e = w - u_vortex.xy;
