@@ -116,6 +116,8 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug, sauceOpen = f
     const overBroth = (e: MouseEvent) => !(e.target as Element | null)?.closest?.(OVER_UI);
     let showingFood = false;
     let pinchTimer = 0;
+    // The mouse button is down on food the chopsticks have (or are going for).
+    let pressing = false;
     const onHover = (e: PointerEvent) => {
       const food = !!view.scene && overBroth(e) && !!foodAt(view.scene, e.clientX, e.clientY + window.scrollY);
       if (food !== showingFood) { showingFood = food; document.documentElement.toggleAttribute('data-hotpot-food', food); }
@@ -125,13 +127,16 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug, sauceOpen = f
       if (e.pointerType !== 'mouse' || e.button !== 0 || !view.scene || !overBroth(e)) return;
       if (!pressAt(view.scene, e.clientX, e.clientY + window.scrollY)) return;
       e.preventDefault();
+      pressing = true;
       clearTimeout(pinchTimer);
       document.documentElement.setAttribute('data-hotpot-pinch', '');
     };
     const onUp = (e: PointerEvent) => {
-      if (e.pointerType !== 'mouse' || !view.scene?.life.drag) return;
-      // Let go of something you've dipped and it's eaten; anything else drops back in.
-      releaseDrag(view.scene, eatIfDipped);
+      if (e.pointerType !== 'mouse') return;
+      pressing = false;
+      // Let go of something you've dipped and it's eaten; anything else drops back in. (Shaken off already: nothing to let go.)
+      if (view.scene?.life.drag) releaseDrag(view.scene, eatIfDipped);
+      clearTimeout(pinchTimer);
       pinchTimer = window.setTimeout(() => document.documentElement.removeAttribute('data-hotpot-pinch'), 150);
     };
     window.addEventListener('pointerdown', onDown);
@@ -198,6 +203,8 @@ const HotpotBroth: React.FC<HotpotBrothProps> = ({ onReady, debug, sauceOpen = f
       if (view.scene) view.scene.sauce.target = sauceRef.current ? 1 : 0;
       // Whatever is being carried follows the mouse, scrolling included.
       if (pointer && view.scene?.life.drag) dragTo(view.scene, pointer.x, pointer.y + window.scrollY);
+      // Shaken loose while the button's still down: the cursor's chopsticks open again.
+      else if (pressing && !view.scene?.life.drag) { pressing = false; document.documentElement.removeAttribute('data-hotpot-pinch'); }
       view.draw({ viewW: w, viewH: h, scrollY: snapped, offX: lean.x, offY: lean.y, time, dt: still ? 0 : dt, pointer });
       if (first) { first = false; readyRef.current(); }
     };

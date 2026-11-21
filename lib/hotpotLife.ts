@@ -114,8 +114,14 @@ export interface HotpotLife {
   /** A whirlpool the ladle left: centre, strength 0..1 and size (see hotpotEvents). */
   vortex: { x: number; y: number; k: number; R: number } | null;
   /** Food someone is holding with the mouse: which pair has it, whether the button is still down, and where it's wanted. */
-  drag: { pair: Chopsticks; item: Item; down: boolean; t0: number; moved: number; x: number; y: number; vx: number; vy: number } | null;
+  drag: {
+    pair: Chopsticks; item: Item; down: boolean; t0: number; moved: number; x: number; y: number; vx: number; vy: number;
+    /** For telling a shake: the way it was last going hard (each axis), and when it last snapped back. */
+    sx: number; sy: number; flips: number[];
+  } | null;
   frame: number;
+  /** While the sauce bar is out, the page x its board reaches to (food shaken off left of it would land on the board). */
+  sauceBoard: number;
   /** Fewer big bubbles on slower machines. */
   bubbleRate: number;
   /** What moved this frame: on screen or just off it. */
@@ -225,7 +231,7 @@ export const populateLife = (B: Builder, ctx: Ctx): HotpotLife => {
   return {
     items, sticks, splashes, ripples: [], bubbles: [], rings: [], drops: [], time: 0, boil: 1, boilUntil: -1,
     nextPluck: 3.5, eager: false, lastPointer: null,
-    wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen, vortex: null, frame: 0, bubbleRate: 1, active: [], drag: null,
+    wall, plumes: ctx.plumes, clear: ctx.clear, s, viewW, pageH, stickLen, vortex: null, frame: 0, sauceBoard: 0, bubbleRate: 1, active: [], drag: null,
   };
 };
 
@@ -490,7 +496,7 @@ export const pressAt = (scene: HotpotScene, x: number, y: number) => {
   if (!pair) return false;
   if (pair.item && pair.item.state === 'held') pair.item.state = 'float';
   sendSticks(life, pair, it, 0.45);
-  life.drag = { pair, item: it, down: true, t0: life.time, moved: 0, x, y, vx: 0, vy: 0 };
+  life.drag = { pair, item: it, down: true, t0: life.time, moved: 0, x, y, vx: 0, vy: 0, sx: 0, sy: 0, flips: [] };
   return true;
 };
 
@@ -528,6 +534,42 @@ export const releaseDrag = (scene: HotpotScene, onRelease?: (it: Item, p: Chopst
   it.side = wd < 0 ? -1 : 1;
   p.item = null;
   p.state = 'leave'; p.t = 0; p.from = [...p.tip] as V3;
+};
+
+/** Speed (px/s) a jerk of the chopsticks has to reach to count towards a shake, and how many snaps back make one. */
+const SHAKE_SPEED = 260, SHAKE_FLIPS = 4;
+
+/**
+ * Watches the carried food for a shake: quick jerks one way and back. Each snap back wobbles it; enough of them in
+ * half a second and it comes off and drops into the broth. True when it's been shaken off.
+ */
+const shake = (life: HotpotLife, d: NonNullable<HotpotLife['drag']>, it: Item, s: number) => {
+  const t = life.time;
+  const fast = SHAKE_SPEED * s;
+  for (const axis of [0, 1] as const) {
+    const v = axis === 0 ? d.vx : d.vy;
+    if (Math.abs(v) < fast) continue;
+    const sign = Math.sign(v);
+    const last = axis === 0 ? d.sx : d.sy;
+    if (last !== 0 && sign !== last) { d.flips.push(t); jiggle(it, 0.35); addRipple(life, it.x, it.y, 0.3); }
+    if (axis === 0) d.sx = sign; else d.sy = sign;
+  }
+  d.flips = d.flips.filter(f => t - f < 0.6);
+  if (d.flips.length < SHAKE_FLIPS) return false;
+  // Over the sauce bar's board it would land on the wood: it just wobbles there.
+  const S = life.sauceBoard;
+  if (S && d.x < S) return false;
+  const p = d.pair;
+  life.drag = null;
+  it.state = 'falling';
+  it.vz = 90;
+  const sp = Math.hypot(d.vx, d.vy), cap = 220 * s, k = sp > cap ? (cap / sp) * 0.5 : 0.5;
+  it.vx = d.vx * k; it.vy = d.vy * k;
+  it.spin = (Math.random() - 0.5) * 9;
+  it.side = wallDist(life.wall, it.x, it.y) < 0 ? -1 : 1;
+  p.item = null;
+  p.state = 'leave'; p.t = 0; p.from = [...p.tip] as V3;
+  return true;
 };
 
 /** Someone clicked the food at page point (x, y): a free pair of chopsticks comes straight down for it, cooked or not. */
@@ -654,6 +696,8 @@ const stepSticks = (scene: HotpotScene, p: Chopsticks, dt: number) => {
         it.tx += (swingX * 0.3 - it.tx) * Math.min(1, dt * 10);
         it.ty += (-pitch + swingY * 0.2 - it.ty) * Math.min(1, dt * 10);
       } else { it.tx = swingX; it.ty = swingY; }
+      // Shaken hard, it flies off the chopsticks and back into the broth (not over the sauce bar: it would land on the board).
+      if (!dip && shake(life, d, it, s)) return;
       // Drips now and then while it hangs over the broth.
       if (Math.random() < dt * 2.5) addRipple(life, it.x, it.y, 0.25);
     }

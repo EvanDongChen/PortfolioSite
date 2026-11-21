@@ -172,6 +172,8 @@ export const stepSauce = (scene: HotpotScene, dt: number, t: number, cam: Hotpot
   const target = cam.viewW >= SAUCE_MIN_WIDTH ? S.target : 0;
   S.open += Math.sign(target - S.open) * Math.min(Math.abs(target - S.open), dt / 0.45);
   const hidden = S.open <= 0.001 && target === 0;
+  // Where the board reaches across the window, for food shaken loose over it.
+  life.sauceBoard = S.open > 0.01 ? SAUCE_LAYOUT.left + SAUCE_LAYOUT.w * S.scale + 30 : 0;
   const e = 1 - (1 - S.open) ** 3;
   const L = SAUCE_LAYOUT;
   const z = HEIGHT * s;
