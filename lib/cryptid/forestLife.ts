@@ -111,8 +111,9 @@ export interface ForestLife {
   rest: { p: V3; t: number };
   /** Rings spreading on the ponds: x, y, radius, strength. */
   ripples: [number, number, number, number][];
-  /** A camera flash whitening everything, 0..1. */
+  /** A camera flash whitening everything, 0..1; it goes off the frame after a photo is taken, so the photo isn't washed out. */
   flash: number;
+  flashNext: boolean;
   bigfoot: Bigfoot[];
   crawlers: Crawler[];
   mothman: Mothman;
@@ -204,7 +205,7 @@ const expose = (scene: ForestScene, cam: ForestCamera, c: { exposure: number }, 
   if (c.exposure < 1.3) return false;
   c.exposure = -30; // a good while before the same one can be snapped again
   life.documented[kind]++;
-  life.flash = 1;
+  life.flashNext = true;
   const [x, y] = toScreen(scene, cam, p);
   life.snaps.push({ kind, x, y, r: r * scene.focal / (scene.focal - p[2]) });
   say(life, `${CRYPTID_NAME[kind]} documented!`, true);
@@ -610,7 +611,7 @@ export const populateLife = (B: Builder, ctx: LifeCtx): ForestLife => {
   return {
     beam: { x: viewW * 0.72, y: viewH * 0.62, r: Math.max(110, 150 * s), on: 1 },
     rest: { p: [0, 0, 0], t: 0 },
-    ripples: [], flash: 0,
+    ripples: [], flash: 0, flashNext: false,
     bigfoot, crawlers, mothman, devil, wendigo, nessie, owls, deer, raccoons,
     snack: { body: snackBody, pos: [...ctx.camp.spill] as V3, holder: -1, t: 0, raid: 6 },
     moths: { body: mothBody, density: 0, p: [0, 0, 0] },
@@ -1260,6 +1261,7 @@ const stepBeam = (scene: ForestScene, dt: number, cam: ForestCamera, pointer: { 
 export const stepLife = (scene: ForestScene, _t: number, dt: number, cam: ForestCamera, pointer: { x: number; y: number } | null, rand: () => number = Math.random) => {
   const life = scene.life;
   life.time += dt;
+  if (life.flashNext) { life.flash = 1; life.flashNext = false; }
   stepBeam(scene, dt, cam, pointer);
   for (const bf of life.bigfoot) stepBigfoot(scene, bf, dt, cam, rand);
   stepCrawlers(scene, dt, cam, rand);
@@ -1274,6 +1276,24 @@ export const stepLife = (scene: ForestScene, _t: number, dt: number, cam: Forest
   life.ripples = life.ripples.filter(r => r[3] > 0).slice(-8);
   life.flash = Math.max(0, life.flash - dt * 4);
 };
+
+// ------------------------------------------------------------------ stats ---
+
+export interface ForestStats {
+  documented: Record<CryptidKind, number>;
+  counts: { owl: number; deer: number; raccoon: number; firefly: number; moth: number };
+  events: FeedEvent[];
+}
+
+/** What the census shows. */
+export const forestStats = (life: ForestLife): ForestStats => ({
+  documented: { ...life.documented },
+  counts: {
+    owl: life.owls.length, deer: life.deer.length, raccoon: life.raccoons.length, firefly: life.fireflies,
+    moth: Math.round(life.moths.density * 46),
+  },
+  events: life.events.slice(0, 4),
+});
 
 // ------------------------------------------------------------------ debug ---
 

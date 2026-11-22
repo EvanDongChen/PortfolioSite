@@ -2,6 +2,8 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallba
 import PortfolioContent from '../components/PortfolioContent';
 import CryptidForest from '../components/cryptid/CryptidForest';
 import CryptidDebugPanel, { CryptidDebugActions } from '../components/cryptid/CryptidDebugPanel';
+import CryptidCensus, { CaseFile } from '../components/cryptid/CryptidCensus';
+import type { CryptidKind, ForestStats } from '../lib/cryptid/forestLife';
 import BackToTopButton from '../components/BackToTopButton';
 import ThemeSwitch from '../components/ThemeSwitch';
 import PerformanceButton from '../components/PerformanceButton';
@@ -15,6 +17,11 @@ import '../styles/pixel-theme.css';
 import '../styles/cryptid-theme.css';
 
 const BLINK_MS = 600;
+/** Where the visitor's case file is kept between visits. */
+const CASE_KEY = 'cryptid-case-file';
+const loadCase = (): CaseFile => {
+  try { return JSON.parse(localStorage.getItem(CASE_KEY) || '{}') as CaseFile; } catch { return {}; }
+};
 const HERO_EXTRA = <DiveCard />;
 
 /**
@@ -41,6 +48,16 @@ const CryptidApp: React.FC = () => {
   }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const debug = useRef<CryptidDebugActions | null>(null);
+  const [stats, setStats] = useState<ForestStats | null>(null);
+  const [photos, setPhotos] = useState<CaseFile>(loadCase);
+  // A new photo replaces that cryptid's old one, and the case file is kept.
+  const onPhoto = useCallback((kind: CryptidKind, url: string) => {
+    setPhotos(prev => {
+      const next = { ...prev, [kind]: { url, at: Date.now() } };
+      try { localStorage.setItem(CASE_KEY, JSON.stringify(next)); } catch { /* private mode: kept for this visit only */ }
+      return next;
+    });
+  }, []);
   const [isPerformancePanelOpen, setIsPerformancePanelOpen] = useState(false);
   const filteredProjects = useMemo(() => filterProjects(searchTerm), [searchTerm]);
   const togglePerformancePanel = useCallback(() => setIsPerformancePanelOpen(open => !open), []);
@@ -48,7 +65,7 @@ const CryptidApp: React.FC = () => {
 
   return (
     <div className="relative min-h-screen text-white overflow-x-hidden bg-[#06090c]">
-      <CryptidForest onReady={markPageReady} debug={debug} />
+      <CryptidForest onReady={markPageReady} onStats={setStats} onPhoto={onPhoto} debug={debug} />
       <PortfolioContent
         theme="underwater"
         colors={CRYPTID_COLORS}
@@ -65,6 +82,7 @@ const CryptidApp: React.FC = () => {
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
       <ThemeSwitch />
+      <CryptidCensus stats={stats} photos={photos} />
       <CryptidDebugPanel actions={debug} />
     </div>
   );

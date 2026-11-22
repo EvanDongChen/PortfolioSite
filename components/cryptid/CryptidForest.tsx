@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { ForestCamera, ForestScene, buildScene } from '../../lib/cryptid/forest';
-import { debugAction } from '../../lib/cryptid/forestLife';
+import { CryptidKind, ForestStats, debugAction, forestStats } from '../../lib/cryptid/forestLife';
 import type { CryptidDebugActions } from './CryptidDebugPanel';
 import { ForestView } from '../../lib/cryptid/forestView';
 import { usePerformance, PerformanceTier } from '../../contexts/PerformanceContext';
@@ -12,8 +12,16 @@ const pixelFor = (tier: PerformanceTier, w: number) => (w < 640 ? Math.max(3, PI
 const LEAN = 36;
 const REBUILD_MS = 250;
 
+const STATS_MS = 500;
+/** Art pixels across a case-file photo. */
+const PHOTO_PX = 40;
+
 interface CryptidForestProps {
   onReady: () => void;
+  /** The census's numbers, now and then. */
+  onStats?: (stats: ForestStats) => void;
+  /** A photo of a cryptid caught in the light, as a data URL of the pixel art round it. */
+  onPhoto?: (kind: CryptidKind, url: string) => void;
   /** Filled in with what the debug panel can do. */
   debug?: React.MutableRefObject<CryptidDebugActions | null>;
 }
@@ -26,13 +34,17 @@ interface CryptidForestProps {
  * exactly with the content and the treetops parallax over it. The cursor (or a
  * finger) is the flashlight; it also leans the camera a little, to show it's 3D.
  */
-const CryptidForest: React.FC<CryptidForestProps> = ({ onReady, debug }) => {
+const CryptidForest: React.FC<CryptidForestProps> = ({ onReady, onStats, onPhoto, debug }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { tier, reducedMotion, frameRate } = usePerformance();
   const settings = useRef({ tier, reducedMotion, frameRate });
   settings.current = { tier, reducedMotion, frameRate };
   const readyRef = useRef(onReady);
   readyRef.current = onReady;
+  const statsRef = useRef(onStats);
+  statsRef.current = onStats;
+  const photoRef = useRef(onPhoto);
+  photoRef.current = onPhoto;
   const debugRef = useRef(debug);
   debugRef.current = debug;
 
@@ -110,6 +122,7 @@ const CryptidForest: React.FC<CryptidForestProps> = ({ onReady, debug }) => {
       };
     }
     let first = true;
+    let lastStats = 0;
     let shownSize = '';
     let shownShift = NaN;
     const frame = (now: number) => {
@@ -135,6 +148,25 @@ const CryptidForest: React.FC<CryptidForestProps> = ({ onReady, debug }) => {
       if (snapped - scroll !== shownShift) { shownShift = snapped - scroll; canvas.style.transform = `translate3d(0, ${shownShift}px, 0)`; }
       view.draw({ viewW: w, viewH: h, scrollY: snapped, offX: lean.x, offY: lean.y, time, dt: still ? 0 : dt, pointer });
       if (first) { first = false; readyRef.current(); }
+      // Photos are taken from the frame just drawn, before it's shown (and before the flash goes off).
+      const snaps = view.scene?.life.snaps;
+      if (snaps?.length) {
+        for (const sn of snaps.splice(0)) {
+          try {
+            const shot = document.createElement('canvas');
+            shot.width = shot.height = PHOTO_PX;
+            const g = shot.getContext('2d');
+            if (!g) continue;
+            g.imageSmoothingEnabled = false;
+            const size = Math.max(PHOTO_PX * 0.8, (sn.r * 2.2) / px);
+            g.drawImage(canvas, sn.x / px - size / 2, sn.y / px - size / 2, size, size, 0, 0, PHOTO_PX, PHOTO_PX);
+            photoRef.current?.(sn.kind, shot.toDataURL('image/png'));
+          } catch {
+            // A photo that can't be taken is only a missed photo.
+          }
+        }
+      }
+      if (now - lastStats > STATS_MS && view.scene) { lastStats = now; statsRef.current?.(forestStats(view.scene.life)); }
     };
     const onVisibility = () => {
       cancelAnimationFrame(raf);
