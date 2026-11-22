@@ -46,7 +46,7 @@ const PortfolioContent: React.FC<PortfolioContentProps> = ({
   const isSearching = searchTerm.trim().length > 0;
 
   return (
-    <div className="relative z-10">
+    <div className="ui-content relative z-10">
       <Header />
       {/* Extra left padding below lg clears the fixed left-side button
           stack (tank/grab/census/love/food), which sits at the same
