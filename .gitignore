@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# cached portrait cutouts (themed-portrait skill)
+image-originals/*.cut.png
