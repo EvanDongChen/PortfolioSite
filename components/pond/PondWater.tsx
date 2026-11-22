@@ -308,7 +308,7 @@ const PondWater: React.FC<PondWaterProps> = ({ onStats }) => {
     <>
       <div ref={layerRef} className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
         {/* The top of the screen is further from the camera: a little haze over the far water. */}
-        <div className="fixed inset-0 bg-gradient-to-b from-[#0b1a14]/45 via-[#0b1a14]/10 to-transparent" />
+        <div className="ui-scrim fixed inset-0 bg-gradient-to-b from-[#0b1a14]/45 via-[#0b1a14]/10 to-transparent" />
       </div>
       <div ref={tipRef} className={`px-tooltip ${inspected ? '' : 'hidden'}`} aria-live="polite">
         {inspected && (

@@ -341,7 +341,7 @@ const PixelOcean: React.FC<PixelOceanProps> = ({ onStats }) => {
     <>
       <div ref={layerRef} className="absolute inset-0 z-0 overflow-hidden pointer-events-none" aria-hidden="true">
         {/* The top of the screen is further from the camera: fade it into the deep. */}
-        <div className="fixed inset-0 bg-gradient-to-b from-[#050d14]/60 via-[#050d14]/15 to-transparent" />
+        <div className="ui-scrim fixed inset-0 bg-gradient-to-b from-[#050d14]/60 via-[#050d14]/15 to-transparent" />
       </div>
       <div ref={tipRef} className={`px-tooltip ${inspected ? '' : 'hidden'}`} aria-live="polite">
         {inspected && (
