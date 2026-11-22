@@ -573,14 +573,22 @@ export const populateLife = (B: Builder, ctx: LifeCtx): ForestLife => {
   const fly = (c: V3, rad: number, n: number) => {
     for (let i = 0; i < n; i++) {
       const a = rand() * TAU, rr = Math.sqrt(rand()) * rad;
-      B.glowAt([c[0] + Math.cos(a) * rr, c[1] + Math.sin(a) * rr * 0.75, (8 + rand() * 40) * s], (5 + rand() * 3) * s, [0.85, 0.95, 0.3], 0, G.firefly, rand(), (18 + rand() * 24) * s);
+      B.glowAt([c[0] + Math.cos(a) * rr, c[1] + Math.sin(a) * rr * 0.75, (8 + rand() * 40) * s], (6 + rand() * 4) * s, [1.0, 0.92, 0.35], 0, G.firefly, rand(), (18 + rand() * 24) * s);
       fireflies++;
     }
   };
-  for (const cl of ctx.clearings) fly(cl.c, cl.r * 1.1, phone ? 16 : 26);
+  for (const cl of ctx.clearings) fly(cl.c, cl.r * 1.2, phone ? 24 : 40);
   for (const pd of ctx.ponds) fly(pd.c, pd.rx * 1.2, 12);
   // A few drifting through the gutters everywhere else.
-  for (let y = viewH * 0.4; y < pageH; y += 260) fly([gutterX(rand() < 0.5), y, 0], 120 * s, 3);
+  for (let y = viewH * 0.3; y < pageH; y += 200) fly([gutterX(rand() < 0.5), y, 0], 140 * s, 5);
+  // Eyes in the dark: pairs that open, blink and close again down the gutters, and are gone when the light comes near.
+  const eyeCols: V3[] = [[1, 0.25, 0.15], [0.5, 1, 0.4], [1, 0.8, 0.25]];
+  for (let y = viewH * 0.25; y < pageH; y += 170 + rand() * 120) {
+    const x = gutterX(rand() < 0.5), z = (6 + rand() * 40) * s, gap = (5 + rand() * 4) * s;
+    const col = eyeCols[Math.floor(rand() * eyeCols.length)];
+    const seed = rand();
+    for (const side of [-1, 1]) B.glowAt([x + side * gap, y, z], 4.5 * s, col, 0, G.eyes, seed, 0);
+  }
 
   // Bigfoot's tracks, leading out of the camp and away into the trees.
   {

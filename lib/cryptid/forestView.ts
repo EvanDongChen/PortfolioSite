@@ -190,12 +190,19 @@ void main() {
     k *= smoothstep(0.0, 0.08, ph) * smoothstep(0.32, 0.14, ph);
   }
   if ((flags & ${G.flicker}) != 0) k *= 0.75 + 0.25 * sin(u_time * (2.0 + sd * 3.0) + sd * 40.0);
+  if ((flags & ${G.eyes}) != 0) {
+    // Open for a while (blinking now and then), then shut for longer.
+    float ph = fract(u_time * (0.045 + sd * 0.04) + sd * 13.0);
+    k *= smoothstep(0.0, 0.03, ph) * smoothstep(0.42, 0.38, ph) * step(0.05, fract(u_time * (0.3 + sd * 0.2) + sd * 7.0)) * 2.2;
+  }
   float d = u_cam.z - w.z;
   if (d < u_near || k < 0.01) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   float scale = u_f / d;
   vec2 s = u_half + (w.xy - u_cam.xy) * scale + u_off;
   // Fireflies go dark in the flashlight's beam.
   if ((flags & ${G.firefly}) != 0) k *= 1.0 - beamAt(s) * 0.95;
+  // Whatever's watching shuts its eyes before the light reaches it.
+  if ((flags & ${G.eyes}) != 0) k *= smoothstep(u_beam.z * 1.1, u_beam.z * 2.2, length(s - u_beam.xy));
   gl_Position = vec4(s.x / u_canvas.x * 2.0 - 1.0, 1.0 - s.y / u_canvas.y * 2.0, (d - u_near) / (u_far - u_near) * 2.0 - 1.0, 1.0);
   float size = 2.0 * radius * scale * u_tpx;
   float big = min(size, u_maxPoint);
@@ -243,6 +250,7 @@ uniform vec4 u_ripples[${MAX_RIPPLES}];
 uniform int u_nRipples;
 // A camera flash: everything whitens for a moment.
 uniform float u_flash;
+uniform vec2 u_view;
 out vec4 o;
 const float BAYER[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
 ${BEAM_GLSL}
@@ -254,6 +262,21 @@ float vn(vec2 p) {
   return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y);
 }
 float fbm2(vec2 p) { return vn(p) * 0.55 + vn(p * 2.03 + 7.1) * 0.3 + vn(p * 4.1 + 3.3) * 0.15; }
+
+/**
+ * The flashlight's shaft through the night air, from the hand holding it (below the bottom
+ * of the window, a little right of middle) out to the spot: brightest near the spot.
+ */
+float coneAt(vec2 s) {
+  vec2 o = vec2(u_view.x * 0.62, u_view.y + 80.0);
+  vec2 ax = u_beam.xy - o;
+  float L2 = max(dot(ax, ax), 1.0);
+  float t = dot(s - o, ax) / L2;
+  if (t < 0.0 || t > 1.0) return 0.0;
+  float d = length(s - (o + ax * t));
+  float rad = mix(14.0, u_beam.z * 0.8, t);
+  return smoothstep(rad, rad * 0.55, d) * (0.25 + 0.75 * t) * smoothstep(1.0, 0.92, t) * u_beam.w;
+}
 
 int cover(ivec2 p) {
   int n = 0;
@@ -279,7 +302,7 @@ vec3 ground(vec2 w) {
   vec3 litter = vec3(0.42, 0.26, 0.14);
   vec3 c = mix(moss, litter, smoothstep(0.42, 0.62, big + (mid - 0.5) * 0.25));
   // Scattered leaves and twigs: a little lighter or darker here and there.
-  c *= 0.82 + fine * 0.3 + (mid > 0.72 ? 0.15 : 0.0);
+  c *= 0.9 + fine * 0.16 + (mid > 0.74 ? 0.14 : 0.0);
   // Clearings: open grass.
   for (int i = 0; i < ${MAX_CLEAR}; i++) {
     if (i >= u_nClear) break;
@@ -291,9 +314,11 @@ vec3 ground(vec2 w) {
   float dx = abs(w.x - pathX(w.y));
   float pw = u_pathW * (0.85 + (vn(vec2(w.y / (40.0 * S), 1.7)) - 0.5) * 0.5);
   if (dx < pw + (mid - 0.5) * 10.0 * S) {
-    vec3 dirt = vec3(0.4, 0.32, 0.22) * (0.85 + fine * 0.25);
-    if (h21(floor(w / (5.0 * S))) > 0.985) dirt = vec3(0.5, 0.5, 0.5);
-    c = mix(c, dirt, smoothstep(pw, pw * 0.6, dx));
+    vec3 dirt = vec3(0.62, 0.52, 0.38) * (0.9 + fine * 0.15);
+    // Pale stones scattered along it, and the worn middle a touch lighter still.
+    if (h21(floor(w / (6.0 * S))) > 0.975) dirt = vec3(0.75, 0.74, 0.72);
+    dirt *= 1.0 + smoothstep(pw * 0.5, 0.0, dx) * 0.12;
+    c = mix(c, dirt, smoothstep(pw, pw * 0.75, dx));
   }
   // Ponds: black water with a reedy margin.
   for (int i = 0; i < ${MAX_PONDS}; i++) {
@@ -339,9 +364,10 @@ void main() {
     if (open > 0 && open < 4 && shade >= 3) shade = min(shade + 1, ${SHADES - 1});
     // Glows in front of it (fireflies, sparks) light it a step or two; bright ones show as themselves.
     if (glum > 0.02 + bay * 0.05) shade = min(shade + 1, ${SHADES - 1});
+    if (coneAt(scr) * 0.5 > bay) shade = min(shade + 1, ${SHADES - 1});
     if (u_flash > bay) shade = min(shade + 3, ${SHADES - 1});
     vec3 col = texelFetch(u_ramps, ivec2(shade, mat), 0).rgb;
-    if (glum > 0.16 + bay * 0.2) {
+    if (glum > 0.1 + bay * 0.15) {
       vec3 gc = g.rgb / max(max(g.r, max(g.g, g.b)), 1e-3);
       float bd = 1e9; vec3 pk = gc;
       for (int i = 0; i < ${FLOOR_PALETTE.length}; i++) { vec3 e = u_pal[i] - gc; float dd = dot(e, e); if (dd < bd) { bd = dd; pk = u_pal[i]; } }
@@ -354,13 +380,15 @@ void main() {
   vec3 base = ground(w);
   float S = u_s;
   // Moonlight, dappled where it gets through the canopy, the patches drifting as the branches sway.
-  float dap = fbm2(w / (120.0 * S) + vec2(u_time * 0.012, -u_time * 0.008));
-  float moon = 0.17 + smoothstep(0.56, 0.74, dap) * 0.2;
-  vec3 light = vec3(0.55, 0.68, 1.0) * moon;
+  // Small, scattered shafts of moonlight: dapples where the canopy parts, drifting as the branches sway.
+  float dap = fbm2(w / (70.0 * S) + vec2(u_time * 0.01, -u_time * 0.007)) * 0.7 + fbm2(w / (400.0 * S) + 9.0) * 0.3;
+  float pool = smoothstep(0.66, 0.7, dap) + smoothstep(0.58, 0.66, dap) * 0.2;
+  float moon = 0.2 + pool * 0.42;
+  vec3 light = vec3(0.5, 0.62, 1.15) * moon;
   float spot = beamAt(scr);
   // The flashlight: warm white, hottest in the middle.
   float hot = smoothstep(u_beam.z * 0.5, 0.0, length(scr - u_beam.xy)) * u_beam.w;
-  light += vec3(1.0, 0.92, 0.76) * (spot * 0.8 + hot * 0.18);
+  light += vec3(1.0, 0.9, 0.7) * (spot * 0.78 + hot * 0.08);
   for (int i = 0; i < ${MAX_LIGHTS}; i++) {
     if (i >= u_nLights) break;
     float dl = length(w - u_lights[i].xy);
@@ -383,11 +411,18 @@ void main() {
   } else {
     c = base * light;
   }
-  // Low mist, lit where the light falls on it.
-  float mist = smoothstep(0.55, 0.85, fbm2(w / (260.0 * S) + vec2(u_time * 0.02, u_time * 0.004)));
-  c += vec3(0.22, 0.25, 0.32) * mist * (0.35 + spot * 0.9);
-  // Glows: fireflies, sparks, the mushrooms' light.
-  c += g.rgb * 0.55;
+  // Low fog drifting through, blue in the moonlight and glowing where the flashlight catches it.
+  float mist = smoothstep(0.45, 0.82, fbm2(w / (240.0 * S) + vec2(u_time * 0.025, u_time * 0.006)));
+  c += vec3(0.2, 0.25, 0.42) * mist * (0.35 + pool * 0.4) + vec3(0.9, 0.8, 0.55) * mist * spot * 0.35;
+  // The flashlight's shaft through the air, with dust and moths' scales drifting in it.
+  float cone = coneAt(scr);
+  if (cone > 0.0) {
+    c += vec3(0.95, 0.85, 0.6) * cone * (0.13 + mist * 0.3) * (0.8 + 0.2 * vn(scr / (40.0 * S) + vec2(0.0, u_time * 0.3)));
+    vec2 cell = floor(scr / (u_px * 1.0)) + vec2(0.0, floor(u_time * 6.0));
+    if (h21(cell + floor(u_time * 1.3) * 17.0) > 0.994 - cone * 0.004) c += vec3(1.0, 0.95, 0.8) * cone * 1.2;
+  }
+  // Glows: fireflies, sparks, the mushrooms' light, eyes.
+  c += g.rgb * 0.8;
   c += vec3(u_flash * 0.9);
   // Nearest two floor colours, and a Bayer choice between them.
   float d1 = 1e9, d2 = 1e9;
@@ -678,6 +713,7 @@ export class ForestView {
     gl.uniform4fv(this.u(this.postProg, 'u_ripples'), this.ripples);
     gl.uniform1i(this.u(this.postProg, 'u_nRipples'), nr);
     gl.uniform1f(this.u(this.postProg, 'u_flash'), life.flash ?? 0);
+    gl.uniform2f(this.u(this.postProg, 'u_view'), fr.viewW, fr.viewH);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.solidTex);
     gl.activeTexture(gl.TEXTURE1);

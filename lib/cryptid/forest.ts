@@ -78,9 +78,10 @@ export const FLOOR_PALETTE: string[] = (() => {
   ];
   const out: string[] = [];
   const hex = (c: V3) => '#' + c.map(v => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('');
-  out.push('#020308', '#05070e', '#080b14');
+  out.push('#020308', '#05070e', '#080b14', '#0c1024', '#141a36', '#1e2648', '#2a3460', '#3c4a7c', '#5a6c9e', '#8a9ac6');
   for (const g of grounds) {
     for (const k of [0.1, 0.17, 0.26, 0.36]) out.push(hex([g[0] * k * 0.7 + 0.01, g[1] * k * 0.85 + 0.015, g[2] * k + 0.04 * k / 0.36]));
+    for (const k of [0.3, 0.45, 0.62]) out.push(hex([g[0] * k * 0.55 + 0.03 * k, g[1] * k * 0.75 + 0.05 * k, g[2] * k + 0.28 * k]));
     for (const k of [0.55, 0.8, 1.05, 1.35]) out.push(hex([g[0] * k * 1.1, g[1] * k, g[2] * k * 0.8]));
     for (const k of [0.5, 0.85]) out.push(hex([g[0] * k * 1.6, g[1] * k * 0.95, g[2] * k * 0.5]));
   }
@@ -89,12 +90,12 @@ export const FLOOR_PALETTE: string[] = (() => {
     '#fff4d8', '#f4e2b4', '#a8b8d8', '#6e80a8',
     // Firelight and embers.
     '#ff9a3a', '#ffc860', '#e05a1a', '#8a2a10',
-    // Glowing mushrooms and foxfire.
-    '#3abcb4', '#7ae0d4', '#1a6a70',
-    // Fireflies.
-    '#e6f070', '#b4d044', '#fffcb0',
-    // Mist.
-    '#3a4458', '#5a6478', '#8a92a6',
+    // Glowing mushrooms and foxfire, and the floor in their light.
+    '#3abcb4', '#7ae0d4', '#1a6a70', '#0e3a40', '#165a58', '#2a8a78', '#bff6e6',
+    // Fireflies, and eyes watching from the dark.
+    '#e6f070', '#b4d044', '#fffcb0', '#ffd24a', '#c8f060',
+    // Mist, and the beam through it.
+    '#3a4458', '#5a6478', '#8a92a6', '#2c3450', '#46507a', '#c8b88a', '#7a6e58',
     // Eyes in the dark.
     '#ff4a3a', '#7ae07a',
   );
@@ -129,6 +130,8 @@ export const G = {
   firefly: 4,
   /** Only as bright as the object's state. */
   gate: 16,
+  /** One of a pair of eyes in the dark: open a while, blinking, then shut; never in the beam. */
+  eyes: 32,
 } as const;
 
 /** Floats per surfel: x y z, nx ny nz, radius, material, albedo, object, flags. */
@@ -838,10 +841,26 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 1
     } else {
       const glow = kind === 'glowcap';
       mushrooms(B, ground, (12 + rand() * 6) * s, glow, ctx);
-      if (glow) lights.push({ p: [x, y, 6 * s], r: 70 * s, col: [0.1, 0.42, 0.42], flicker: 0.15, kind: 'cap' });
+      if (glow) lights.push({ p: [x, y, 6 * s], r: 100 * s, col: [0.12, 0.5, 0.46], flicker: 0.15, kind: 'cap' });
     }
     place(B, from, gfrom, upright(yaw), [x, y, 0]);
     taken.push({ x, y, r: r * 0.5 });
+  }
+  // Glowing mushrooms on a steady rhythm down the page, in the gutters and beside the trail: the forest's lanterns.
+  for (let y = viewH * 0.35, k = 0; y < pageH - 60; y += (phone ? 300 : 230) + rand() * 120, k++) {
+    for (let tries = 0; tries < 8; tries++) {
+      const onTrail = k % 3 === 2;
+      const yy = y + (rand() - 0.5) * 80;
+      const x = onTrail ? pathX(yy) + (rand() < 0.5 ? -1 : 1) * (pathW + 22 * s) : viewW * (k % 2 ? 0.9 + rand() * 0.07 : 0.03 + rand() * 0.07);
+      if (!free(x, yy, 14 * s) || ponds.some(p => Math.hypot((p.c[0] - x) / (p.rx + 20), (p.c[1] - yy) / (p.ry + 20)) < 1)) continue;
+      if (inHero(x, yy, 10) && !onTrail) continue;
+      const from = B.solid.length, gfrom = B.glow.length;
+      mushrooms(B, ground, (13 + rand() * 7) * s, true, ctx);
+      place(B, from, gfrom, upright(rand() * 6), [x, yy, 0]);
+      taken.push({ x, y: yy, r: 14 * s });
+      lights.push({ p: [x, yy, 8 * s], r: (95 + rand() * 30) * s, col: [0.12, 0.5, 0.46], flicker: 0.12, kind: 'cap' });
+      break;
+    }
   }
   // A ring of glowing mushrooms in each clearing.
   for (const cl of clearings) {
@@ -855,7 +874,7 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 1
       mushrooms(B, ground, 8 * s, true, ctx);
       place(B, from, gfrom, upright(rand() * 6), p);
     }
-    lights.push({ p: [cl.c[0] + ox, cl.c[1] + oy, 8 * s], r: rr * 1.8, col: [0.1, 0.4, 0.4], flicker: 0.1, kind: 'cap' });
+    lights.push({ p: [cl.c[0] + ox, cl.c[1] + oy, 8 * s], r: rr * 2, col: [0.12, 0.5, 0.46], flicker: 0.1, kind: 'cap' });
   }
   lights.unshift({ p: [camp.fire[0], camp.fire[1], 14 * s], r: campR * 1.1, col: [1.0, 0.45, 0.14], flicker: 0.35, kind: 'fire' });
 
