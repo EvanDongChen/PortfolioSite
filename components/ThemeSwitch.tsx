@@ -17,6 +17,8 @@ const ICONS: Record<SwitchPage, string[]> = {
   sky: ['......XX....', '.....XXXX...', '......XX....', '......X.....', 'XXXXXXXXXXXX', '.XXXXXXXXXX.', '..XXXXXXXX..', '...XXOXXX...', '....XXXX....', '.....XX.....'],
   // A pot with steam rising off it.
   hotpot: ['..X...X...X.', '.X...X...X..', '..X...X...X.', '............', 'XXXXXXXXXXXX', '.XXXXXXXXXX.', '.XXXXXXXXXX.', '.XXXXXXXXXX.', '..XXXXXXXX..'],
+  // A pair of eyes peering out from between two pines.
+  cryptid: ['..X......X..', '..X......X..', '.XXX....XXX.', '.XXX....XXX.', 'XXXXX..XXXXX', '.XXX....XXX.', 'XXXXX..XXXXX', '..X..XX...X.', '..X.....X.X.', '..X......X..'],
   // A lily pad with a frog's eyes peeping over it.
   pond: ['...XX..XX...', '...XX..XX...', '............', '...XXXX.....', '.XXXXXXXX...', 'XXXXXXXXX..X', 'XXXXXXXXXXXX', '.XXXXXXXXXX.', '...XXXXXX...'],
 };
@@ -27,6 +29,7 @@ const PAGES: { page: SwitchPage; label: string }[] = [
   { page: 'space', label: 'Deep space' },
   { page: 'sky', label: 'Sky islands' },
   { page: 'hotpot', label: 'Hotpot' },
+  { page: 'cryptid', label: 'Cryptid forest' },
 ];
 
 const Icon: React.FC<{ page: SwitchPage }> = ({ page }) => {

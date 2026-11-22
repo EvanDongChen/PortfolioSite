@@ -1,10 +1,10 @@
 import React, { createContext, useState, useContext, useCallback, useLayoutEffect, ReactNode } from 'react';
-import { loadAquarium, loadPond, loadShrine, loadSky, loadSpace, loadHotpot } from '../lib/pageLoaders';
+import { loadAquarium, loadPond, loadShrine, loadSky, loadSpace, loadHotpot, loadCryptid } from '../lib/pageLoaders';
 import { coverFirstLoad, movePage } from '../lib/pageTransition';
 
 type Theme = 'underwater' | 'deepsea';
-/** The pages: the aquarium, the pixel reef, the pixel pond, the shrine forest, deep space, the sky islands and the hot pot. */
-export type Page = 'aquarium' | 'reef' | 'pond' | 'shrine' | 'space' | 'sky' | 'hotpot';
+/** The pages: the aquarium, the pixel reef, the pixel pond, the shrine forest, deep space, the sky islands, the hot pot and the cryptid forest. */
+export type Page = 'aquarium' | 'reef' | 'pond' | 'shrine' | 'space' | 'sky' | 'hotpot' | 'cryptid';
 
 // Keep deep-sea support available while it is temporarily disabled in the UI.
 export const DEEP_SEA_MODE_ENABLED = false;
@@ -24,6 +24,8 @@ interface ThemeContextType {
   isSkyMode: boolean;
   /** The hot pot replaces whichever page was showing while on. */
   isHotpotMode: boolean;
+  /** The cryptid forest replaces whichever page was showing while on. */
+  isCryptidMode: boolean;
   /** Which page is showing, and switching to another; the transition ripples out from `origin` if given. */
   page: Page;
   setPage: (page: Page, origin?: { x: number; y: number }) => void;
@@ -32,11 +34,11 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 /** The worlds a visit can open on; the archived aquarium is left out. */
-const WORLDS: Page[] = ['reef', 'pond', 'shrine', 'space', 'sky', 'hotpot'];
+const WORLDS: Page[] = ['reef', 'pond', 'shrine', 'space', 'sky', 'hotpot', 'cryptid'];
 /** Each visit opens on a world picked at random; the switch moves between them as before. */
 const firstPage: Page = WORLDS[Math.floor(Math.random() * WORLDS.length)];
 // The 3D worlds build their scene before they can draw, so a visit that opens on one starts covered.
-if (firstPage === 'space' || firstPage === 'sky' || firstPage === 'hotpot') coverFirstLoad(firstPage);
+if (firstPage === 'space' || firstPage === 'sky' || firstPage === 'hotpot' || firstPage === 'cryptid') coverFirstLoad(firstPage);
 
 // Switching pages remounts the content, so remember where the reader was.
 let pendingScrollY: number | null = null;
@@ -58,6 +60,9 @@ const preparePage = async (page: Page) => {
   } else if (page === 'hotpot') {
     await loadHotpot();
     await Promise.all([document.fonts?.load("16px 'Hotpot Display'"), document.fonts?.load("16px 'Hotpot Label'")]);
+  } else if (page === 'cryptid') {
+    await loadCryptid();
+    await Promise.all([document.fonts?.load("16px 'Cryptid Display'"), document.fonts?.load("16px 'Cryptid Label'")]);
   }
   else if (page === 'aquarium') await loadAquarium();
 };
@@ -71,24 +76,26 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [isSpaceMode, setIsSpaceMode] = useState(firstPage === 'space');
   const [isSkyMode, setIsSkyMode] = useState(firstPage === 'sky');
   const [isHotpotMode, setIsHotpotMode] = useState(firstPage === 'hotpot');
+  const [isCryptidMode, setIsCryptidMode] = useState(firstPage === 'cryptid');
 
   const toggleTheme = () => {
     if (!DEEP_SEA_MODE_ENABLED) return;
     setTheme(prevTheme => (prevTheme === 'underwater' ? 'deepsea' : 'underwater'));
   };
 
-  const page: Page = isHotpotMode ? 'hotpot' : isSkyMode ? 'sky' : isSpaceMode ? 'space' : isShrineMode ? 'shrine' : isPondMode ? 'pond' : isPixelMode ? 'reef' : 'aquarium';
+  const page: Page = isCryptidMode ? 'cryptid' : isHotpotMode ? 'hotpot' : isSkyMode ? 'sky' : isSpaceMode ? 'space' : isShrineMode ? 'shrine' : isPondMode ? 'pond' : isPixelMode ? 'reef' : 'aquarium';
 
   const setPage = useCallback((next: Page, origin?: { x: number; y: number }) => {
     const swap = () => {
       pendingScrollY = window.scrollY;
       // No page's look may outlive it (a hot reload can leave one behind); the next page adds its own.
-      document.documentElement.classList.remove('pond-theme', 'shrine-theme', 'space-theme', 'sky-theme', 'hotpot-theme');
+      document.documentElement.classList.remove('pond-theme', 'shrine-theme', 'space-theme', 'sky-theme', 'hotpot-theme', 'cryptid-theme');
       setIsPondMode(next === 'pond');
       setIsShrineMode(next === 'shrine');
       setIsSpaceMode(next === 'space');
       setIsSkyMode(next === 'sky');
       setIsHotpotMode(next === 'hotpot');
+      setIsCryptidMode(next === 'cryptid');
       if (next === 'reef' || next === 'aquarium') setIsPixelMode(next === 'reef');
     };
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { swap(); return; }
@@ -96,7 +103,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, isPixelMode, isPondMode, isShrineMode, isSpaceMode, isSkyMode, isHotpotMode, page, setPage }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, isPixelMode, isPondMode, isShrineMode, isSpaceMode, isSkyMode, isHotpotMode, isCryptidMode, page, setPage }}>
       {children}
     </ThemeContext.Provider>
   );

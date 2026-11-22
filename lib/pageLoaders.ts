@@ -8,3 +8,4 @@ export const loadShrine = () => import('../pages/ShrineApp');
 export const loadSpace = () => import('../pages/SpaceApp');
 export const loadSky = () => import('../pages/SkyApp');
 export const loadHotpot = () => import('../pages/HotpotApp');
+export const loadCryptid = () => import('../pages/CryptidApp');

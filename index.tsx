@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import PixelApp from './pages/PixelApp';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { PerformanceProvider } from './contexts/PerformanceContext';
-import { loadAquarium, loadPond, loadShrine, loadSky, loadSpace, loadHotpot } from './lib/pageLoaders';
+import { loadAquarium, loadPond, loadShrine, loadSky, loadSpace, loadHotpot, loadCryptid } from './lib/pageLoaders';
 import './index.css';
 
 // The reef is bundled with the entry; every other page's code is fetched when it's
@@ -14,9 +14,17 @@ const ShrineApp = lazy(loadShrine);
 const SpaceApp = lazy(loadSpace);
 const SkyApp = lazy(loadSky);
 const HotpotApp = lazy(loadHotpot);
+const CryptidApp = lazy(loadCryptid);
 
 const Page: React.FC = () => {
-  const { isPixelMode, isPondMode, isShrineMode, isSpaceMode, isSkyMode, isHotpotMode } = useTheme();
+  const { isPixelMode, isPondMode, isShrineMode, isSpaceMode, isSkyMode, isHotpotMode, isCryptidMode } = useTheme();
+  if (isCryptidMode) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-[#06090c]" />}>
+        <CryptidApp />
+      </Suspense>
+    );
+  }
   if (isHotpotMode) {
     return (
       <Suspense fallback={<div className="min-h-screen bg-[#1e0406]" />}>

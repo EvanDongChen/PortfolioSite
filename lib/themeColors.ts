@@ -66,6 +66,18 @@ export const SKY_COLORS: ThemeColors = {
   heroGradient: 'from-amber-100 to-amber-300', contactIcon: 'text-amber-200',
 };
 
+// Cryptid forest: content on night-black moss, with flashlight amber and foxfire-green accents.
+export const CRYPTID_COLORS: ThemeColors = {
+  ...UNDERWATER_COLORS,
+  text: 'text-stone-100', textLighter: 'text-stone-100/90', highlight: 'text-amber-300',
+  highlightStrong: 'text-amber-200', border: 'border-amber-300/20', timeline: 'bg-amber-300/30',
+  timelineDot: 'bg-emerald-400', timelineDotBorder: 'border-[#06090c]',
+  cardBg: 'bg-[#06090c]/80', tagBg: 'bg-[#1a2a22]/70', tagHoverBg: 'hover:bg-[#24382e]/80',
+  searchBg: 'bg-[#06090c]/85', searchBorder: 'border-amber-300/30', searchRing: 'focus:ring-amber-300',
+  searchPlaceholder: 'placeholder-stone-300/50', periodBg: 'bg-[#24382e]',
+  heroGradient: 'from-stone-100 to-amber-200', contactIcon: 'text-amber-300',
+};
+
 // Hot pot: content on dark chili-oil brown, with gold and chili-red accents.
 export const HOTPOT_COLORS: ThemeColors = {
   ...UNDERWATER_COLORS,

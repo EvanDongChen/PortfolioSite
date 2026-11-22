@@ -29,6 +29,7 @@ const COLOURS: Record<Page, { ink: string; edge: string; glint: string }> = {
   space: { ink: '#04030a', edge: '#301c5a', glint: '#ec84a0' },
   sky: { ink: '#14284e', edge: '#3c78c4', glint: '#f8d052' },
   hotpot: { ink: '#1e0406', edge: '#801a0e', glint: '#ffa040' },
+  cryptid: { ink: '#06090c', edge: '#24382e', glint: '#f2c14e' },
   aquarium: { ink: '#000428', edge: '#0d3a6e', glint: '#7fdcff' },
 };
 
