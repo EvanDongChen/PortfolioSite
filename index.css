@@ -38,6 +38,28 @@ body {
   font-family: 'Poppins', sans-serif;
 }
 
+/* Hide UI (HideUiButton): the content, header, fixed buttons and panels go,
+   leaving the world and the button that brings them back. Hidden with
+   visibility, so the page keeps its height (the worlds scroll with it) and
+   clicks fall through to the world. */
+.ui-content,
+.ui-scrim {
+  transition: opacity 250ms ease, visibility 250ms ease;
+}
+html.ui-hidden :is(
+  .ui-content,
+  .ui-scrim,
+  .hud-btn:not(.ui-toggle),
+  .hud-panel,
+  .theme-switch,
+  .theme-switch-compact,
+  .eco-hud
+) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 @keyframes rise {
   0% {
     transform: translateY(0) scale(1);
