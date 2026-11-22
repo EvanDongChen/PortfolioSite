@@ -5,6 +5,7 @@ import EcosystemPanel from '../components/reef/EcosystemPanel';
 import BackToTopButton from '../components/BackToTopButton';
 import ThemeSwitch from '../components/ThemeSwitch';
 import PerformanceButton from '../components/PerformanceButton';
+import HideUiButton from '../components/HideUiButton';
 import PerformancePanel from '../components/PerformancePanel';
 import DiveCard from '../components/DiveCard';
 import { OceanStats } from '../lib/reef/pixelOcean';
@@ -68,6 +69,7 @@ const PixelApp: React.FC = () => {
       <BackToTopButton />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
+      <HideUiButton />
       <ThemeSwitch />
       <EcosystemPanel stats={stats} />
     </div>

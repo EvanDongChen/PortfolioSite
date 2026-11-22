@@ -6,6 +6,7 @@ import HotpotDebugPanel, { HotpotDebugActions } from '../components/hotpot/Hotpo
 import BackToTopButton from '../components/BackToTopButton';
 import ThemeSwitch from '../components/ThemeSwitch';
 import PerformanceButton from '../components/PerformanceButton';
+import HideUiButton from '../components/HideUiButton';
 import PerformancePanel from '../components/PerformancePanel';
 import DiveCard from '../components/DiveCard';
 import { HOTPOT_COLORS } from '../lib/themeColors';
@@ -65,6 +66,7 @@ const HotpotApp: React.FC = () => {
       <BackToTopButton />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
+      <HideUiButton />
       <ThemeSwitch />
       <SauceBar open={sauceOpen} onToggle={toggleSauce} />
       <HotpotDebugPanel actions={debug} />

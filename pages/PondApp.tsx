@@ -4,6 +4,7 @@ import PondWater from '../components/pond/PondWater';
 import BackToTopButton from '../components/BackToTopButton';
 import ThemeSwitch from '../components/ThemeSwitch';
 import PerformanceButton from '../components/PerformanceButton';
+import HideUiButton from '../components/HideUiButton';
 import PerformancePanel from '../components/PerformancePanel';
 import DiveCard from '../components/DiveCard';
 import PondCensus from '../components/pond/PondCensus';
@@ -68,6 +69,7 @@ const PondApp: React.FC = () => {
       <BackToTopButton />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
+      <HideUiButton />
       <ThemeSwitch />
       <PondCensus stats={stats} />
     </div>

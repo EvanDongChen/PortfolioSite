@@ -102,7 +102,8 @@ const ThemeSwitch: React.FC = () => {
   };
 
   const at = PAGES.findIndex(p => p.page === picked);
-  const bottom = page === 'aquarium' ? 'bottom-[12.5rem]' : 'bottom-[9rem]';
+  // One slot above the tutorial button (aquarium) or the hide-UI button (every other page).
+  const bottom = 'bottom-[12.5rem]';
 
   if (compact) {
     const current = at >= 0 ? PAGES[at] : null;

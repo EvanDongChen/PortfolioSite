@@ -5,6 +5,7 @@ import SpaceDebugPanel, { SpaceDebugActions } from '../components/space/SpaceDeb
 import BackToTopButton from '../components/BackToTopButton';
 import ThemeSwitch from '../components/ThemeSwitch';
 import PerformanceButton from '../components/PerformanceButton';
+import HideUiButton from '../components/HideUiButton';
 import PerformancePanel from '../components/PerformancePanel';
 import DiveCard from '../components/DiveCard';
 import { SPACE_COLORS } from '../lib/themeColors';
@@ -62,6 +63,7 @@ const SpaceApp: React.FC = () => {
       <BackToTopButton />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
+      <HideUiButton />
       <ThemeSwitch />
       <SpaceDebugPanel actions={debug} />
     </div>

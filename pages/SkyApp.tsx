@@ -5,6 +5,7 @@ import SkyDebugPanel, { SkyDebugActions } from '../components/sky/SkyDebugPanel'
 import BackToTopButton from '../components/BackToTopButton';
 import ThemeSwitch from '../components/ThemeSwitch';
 import PerformanceButton from '../components/PerformanceButton';
+import HideUiButton from '../components/HideUiButton';
 import PerformancePanel from '../components/PerformancePanel';
 import DiveCard from '../components/DiveCard';
 import { SKY_COLORS } from '../lib/themeColors';
@@ -63,6 +64,7 @@ const SkyApp: React.FC = () => {
       <BackToTopButton />
       <PerformanceButton isOpen={isPerformancePanelOpen} onToggle={togglePerformancePanel} />
       <PerformancePanel isOpen={isPerformancePanelOpen} onClose={closePerformancePanel} />
+      <HideUiButton />
       <ThemeSwitch />
       <SkyDebugPanel actions={debug} />
     </div>
