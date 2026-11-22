@@ -1,11 +1,14 @@
 ﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { isPortraitWorld } from '../lib/portraitScenes';
+import PortraitScene from './PortraitScene';
 
 const BASE_URL = import.meta.env.BASE_URL;
+// The archived aquarium keeps the plain photo; each pixel world gets a live scene.
 const PHOTO_URL = `${BASE_URL}images/profile.webp`;
 
 const ProfilePhoto: React.FC = () => {
-  const { theme } = useTheme();
+  const { theme, page } = useTheme();
   const [photoRotation, setPhotoRotation] = useState(0);
   const photoSpinRef = useRef({ isDragging: false, lastX: 0, velocity: 0, rotation: 0, idleFrames: 0 });
   const photoAnimRef = useRef<number>(0);
@@ -96,14 +99,18 @@ const ProfilePhoto: React.FC = () => {
           transformStyle: 'preserve-3d',
         }}
       >
-        <img
-          src={PHOTO_URL}
-          alt="Evan Chen"
-          className="w-full h-full object-cover pointer-events-none"
-          fetchPriority="high"
-          decoding="async"
-          draggable={false}
-        />
+        {isPortraitWorld(page) ? (
+          <PortraitScene world={page} />
+        ) : (
+          <img
+            src={PHOTO_URL}
+            alt="Evan Chen"
+            className="w-full h-full object-cover pointer-events-none"
+            fetchPriority="high"
+            decoding="async"
+            draggable={false}
+          />
+        )}
       </div>
     </div>
   );

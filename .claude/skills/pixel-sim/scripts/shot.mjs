@@ -56,7 +56,7 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: !!args.phone });
   await send('Page.navigate', { url: `http://localhost:${args.port || 3000}/${args.query ? `?${args.query}` : ''}` });
   await sleep(wait);
-  if (args.page && args.page !== 'reef') {
+  if (args.page) {
     const clicked = await run(`(() => {
       const b = [...document.querySelectorAll('button')].find(b => (b.getAttribute('aria-label') || b.title || '').toLowerCase().includes(${JSON.stringify(args.page)}));
       if (b) b.click();
