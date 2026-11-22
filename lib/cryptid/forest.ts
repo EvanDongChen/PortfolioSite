@@ -190,9 +190,19 @@ export interface Clearing { c: V3; r: number }
 /** A light on the floor: position, reach, colour and how it flickers. */
 export interface Light { p: V3; r: number; col: V3; flicker: number; kind: 'fire' | 'cap' }
 
+/** Page height covered by each entry of `bands`. */
+export const BAND = 100;
+
 export interface ForestScene {
   solid: Float32Array;
   solidCount: number;
+  /**
+   * The scenery (the ground body's surfels) comes first, sorted down the page, so
+   * only the stretch near the view need be drawn: `bands[k]` is the first of them at
+   * or below page y = k·BAND, and `groundCount` how many there are. The creatures' come after.
+   */
+  bands: Int32Array;
+  groundCount: number;
   glow: Float32Array;
   glowCount: number;
   bodies: Body[];
@@ -750,7 +760,11 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 1
     else if (kind === 'birch') birch(B, ground, h, ctx, trees.length);
     else {
       const ps = deadTree(B, ground, h, ctx);
-      for (const pp of ps) perches.push({ p: standAt(foot, pp.p, yaw), out: pp.out, tree: trees.length });
+      // Only perches on the page, where whatever sits there can be seen.
+      for (const pp of ps) {
+        const p = standAt(foot, pp.p, yaw);
+        if (p[0] > viewW * 0.02 && p[0] < viewW * 0.98) perches.push({ p, out: pp.out, tree: trees.length });
+      }
     }
     place(B, from, gfrom, upright(yaw), foot);
     trees.push({ foot, h, r: kind === 'pine' ? h * 0.27 : h * 0.06, kind });
@@ -847,9 +861,29 @@ export const buildScene = (viewW: number, viewH: number, pageH: number, seed = 1
 
   const life = populateLife(B, { rand, s, f, viewW, viewH, pageH, phone, trees, perches, ponds, clearings, camp, pathX, pathW });
 
+  // Scenery first, in order down the page; everything that moves after it.
+  const count = B.solid.length / SOLID_STRIDE;
+  const still: number[] = [];
+  const moving: number[] = [];
+  for (let i = 0; i < count; i++) (B.solid[i * SOLID_STRIDE + 9] === 0 ? still : moving).push(i);
+  still.sort((a, b) => B.solid[a * SOLID_STRIDE + 1] - B.solid[b * SOLID_STRIDE + 1]);
+  const solid = new Float32Array(B.solid.length);
+  let w = 0;
+  for (const i of still) { for (let k = 0; k < SOLID_STRIDE; k++) solid[w + k] = B.solid[i * SOLID_STRIDE + k]; w += SOLID_STRIDE; }
+  for (const i of moving) { for (let k = 0; k < SOLID_STRIDE; k++) solid[w + k] = B.solid[i * SOLID_STRIDE + k]; w += SOLID_STRIDE; }
+  const nb = Math.ceil(pageH / BAND) + 2;
+  const bands = new Int32Array(nb + 1);
+  let gi = 0;
+  for (let k = 0; k <= nb; k++) {
+    while (gi < still.length && solid[gi * SOLID_STRIDE + 1] < k * BAND) gi++;
+    bands[k] = gi;
+  }
+
   return {
-    solid: new Float32Array(B.solid),
-    solidCount: B.solid.length / SOLID_STRIDE,
+    solid,
+    solidCount: count,
+    bands,
+    groundCount: still.length,
     glow: new Float32Array(B.glow),
     glowCount: B.glow.length / GLOW_STRIDE,
     bodies: B.bodies,

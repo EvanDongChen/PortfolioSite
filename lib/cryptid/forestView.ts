@@ -1,5 +1,5 @@
 import { stepLife } from './forestLife';
-import { F, FLOOR_PALETTE, ForestScene, G, GLOW_STRIDE, OBJ_TEXELS, RAMPS, SHADES, SOLID_STRIDE, UP, poseBodies } from './forest';
+import { BAND, F, FLOOR_PALETTE, ForestScene, G, GLOW_STRIDE, OBJ_TEXELS, RAMPS, SHADES, SOLID_STRIDE, UP, poseBodies } from './forest';
 
 /**
  * Draws the cryptid forest as pixel art, in the space page's three passes (see
@@ -640,7 +640,13 @@ export class ForestView {
     gl.uniform3fv(this.u(this.solidProg, 'u_lightCol'), this.lightCol);
     gl.uniform1i(this.u(this.solidProg, 'u_nLights'), nl);
     gl.bindVertexArray(this.solidVao);
-    gl.drawArrays(gl.POINTS, 0, scene.solidCount);
+    // Only the scenery near the view (with room for treetops leaning in from beyond it), then everything that moves.
+    const nb = scene.bands.length - 1;
+    const b0 = Math.max(0, Math.min(nb, Math.floor((fr.scrollY - 320) / BAND)));
+    const b1 = Math.max(0, Math.min(nb, Math.ceil((fr.scrollY + fr.viewH + 220) / BAND)));
+    const first = scene.bands[b0], last = b1 >= nb ? scene.groundCount : scene.bands[b1];
+    if (last > first) gl.drawArrays(gl.POINTS, first, last - first);
+    gl.drawArrays(gl.POINTS, scene.groundCount, scene.solidCount - scene.groundCount);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.glowFbo);
     gl.clear(gl.COLOR_BUFFER_BIT);

@@ -4,5 +4,5 @@ import { buildScene } from './forest';
 self.onmessage = (e: MessageEvent<{ id: number; w: number; h: number; page: number }>) => {
   const { id, w, h, page } = e.data;
   const scene = buildScene(w, h, page);
-  (self as unknown as Worker).postMessage({ id, scene }, [scene.solid.buffer, scene.glow.buffer]);
+  (self as unknown as Worker).postMessage({ id, scene }, [scene.solid.buffer, scene.glow.buffer, scene.bands.buffer]);
 };
