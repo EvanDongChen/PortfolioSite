@@ -30,7 +30,7 @@ export const RAMPS: string[][] = [
   /* 2 leaf     */ ['#060e12', '#0e2020', '#1a3a26', '#2c5a2c', '#4a8234', '#86b250'],
   /* 3 moss     */ ['#08120f', '#12261e', '#1e4228', '#346230', '#568a38', '#94bc56'],
   /* 4 stone    */ ['#0a0c18', '#171a28', '#282c3c', '#424656', '#666a76', '#9c9ea4'],
-  /* 5 fur      */ ['#0a0708', '#1a1012', '#2e1e1a', '#4a3022', '#704a30', '#9e6e46'],
+  /* 5 fur      */ ['#060406', '#120a0c', '#221214', '#3a1e1a', '#5a2e22', '#84482e'],
   /* 6 pale     */ ['#121628', '#2c3250', '#585f7e', '#9098ae', '#cad0dc', '#f4f6f8'],
   /* 7 moth     */ ['#08080e', '#131119', '#221e2a', '#36303e', '#544c5c', '#7a7080'],
   /* 8 redeye   */ ['#4a080c', '#7c1212', '#b81e1e', '#e8382a', '#ff6a48', '#ffb08a'],
@@ -118,6 +118,8 @@ export const F = {
   on: 256,
   /** Shown only while the object's state is off (folded wings). */
   off: 512,
+  /** A falling leaf: drifts down (local +y) and sways as the object's phase (seconds since it was shaken loose) runs. */
+  fall: 1024,
 } as const;
 /** Glow flags. */
 export const G = {
@@ -137,7 +139,7 @@ export const GLOW_STRIDE = 11;
 export const OBJ_TEXELS = 5;
 
 /** How far things standing on the floor lean towards the viewer, from the page's plane (radians). */
-export const TILT = 0.62;
+export const TILT = 0.36;
 /** Up, for something standing on the floor. */
 export const UP: V3 = [0, -Math.cos(TILT), Math.sin(TILT)];
 /** The rotation that stands something built upright (local -y up, facing +x) on the floor, turned by `yaw`. */

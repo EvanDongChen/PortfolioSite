@@ -72,6 +72,13 @@ void main() {
     float r = length(lp.xz);
     lp = vec3(cos(a) * r, lp.y + sin(u_time * 7.0 + sd * 30.0) * r * 0.25, sin(a) * r);
   }
+  if ((flags & ${F.fall}) != 0) {
+    float sd = hash1(float(gl_VertexID) * 2.71);
+    float t = st.w;
+    lp.y += t * (22.0 + sd * 26.0);
+    lp.x += sin(t * (2.0 + sd * 2.0) + sd * 30.0) * (6.0 + sd * 8.0);
+    lp.z += cos(t * (1.7 + sd * 1.5) + sd * 20.0) * 5.0;
+  }
   vec3 w = vec3(dot(r0.xyz, lp) + r0.w, dot(r1.xyz, lp) + r1.w, dot(r2.xyz, lp) + r2.w);
   vec3 n = normalize(vec3(dot(r0.xyz, a_nrm), dot(r1.xyz, a_nrm), dot(r2.xyz, a_nrm)));
   float d = u_cam.z - w.z;
@@ -91,13 +98,16 @@ void main() {
   float spot = beamAt(s);
   if ((flags & ${F.shine}) != 0) {
     // Eyeshine: two bright points where the beam finds the eyes, nothing out of it.
-    if (spot < 0.15) { v_mat = 13.0; v_shade = 0.1; return; }
+    if (spot < 0.15) {
+      if ((flags & ${F.emissive}) != 0) { v_shade = alb; return; }
+      v_mat = 13.0; v_shade = 0.1; return;
+    }
     v_shade = clamp(0.55 + spot * 0.5, 0.0, 1.0);
     return;
   }
   if ((flags & ${F.emissive}) != 0) {
     float fl = (flags & ${F.flame}) != 0 ? sin(u_time * 9.0 + float(gl_VertexID) * 1.7) * 0.14 + sin(u_time * 23.0 + float(gl_VertexID)) * 0.06 : sin(u_time * 2.0 + float(gl_VertexID) * 0.37) * 0.04;
-    v_shade = clamp(alb + fl + spot * 0.15, 0.0, 1.0);
+    v_shade = clamp(alb + fl + spot * 0.06, 0.0, 1.0);
     return;
   }
   float lam = dot(n, u_moon);
@@ -105,8 +115,10 @@ void main() {
   // The moon picks out a cold lit side on everything; the rest falls into the dark.
   float light = 0.09 + pow(max(lam, 0.0), 1.3) * 0.42;
   // The flashlight, from the viewer's hand: faces turned to the viewer catch it fully.
-  float face = twoSided ? 1.0 : clamp(dot(n, toEye), 0.0, 1.0) * 0.6 + 0.4;
-  light += spot * face * 0.92;
+  // The flashlight is held a little below and to the right of the eye, so forms model rather than flatten.
+  vec3 toLamp = normalize(u_cam + vec3(u_half.x * 0.5, u_half.y * 0.9, 0.0) - w);
+  float face = twoSided ? 0.9 : pow(clamp(dot(n, toLamp), 0.0, 1.0), 1.6) * 0.85 + 0.15;
+  light += spot * face * 1.05;
   for (int i = 0; i < ${MAX_LIGHTS}; i++) {
     if (i >= u_nLights) break;
     vec3 L = u_lights[i].xyz - w;
@@ -348,7 +360,7 @@ void main() {
   float spot = beamAt(scr);
   // The flashlight: warm white, hottest in the middle.
   float hot = smoothstep(u_beam.z * 0.5, 0.0, length(scr - u_beam.xy)) * u_beam.w;
-  light += vec3(1.0, 0.92, 0.76) * (spot * 1.05 + hot * 0.25);
+  light += vec3(1.0, 0.92, 0.76) * (spot * 0.8 + hot * 0.18);
   for (int i = 0; i < ${MAX_LIGHTS}; i++) {
     if (i >= u_nLights) break;
     float dl = length(w - u_lights[i].xy);
